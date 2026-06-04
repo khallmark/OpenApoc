@@ -967,10 +967,7 @@ void Agent::die(GameState &state, bool silent)
 		currentBuilding = nullptr;
 	}
 	// Remove home
-	if (currentBuilding)
-	{
-		homeBuilding = nullptr;
-	}
+	homeBuilding = nullptr;
 
 	// Remove from lab
 	if (lab_assigned)
