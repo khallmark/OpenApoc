@@ -789,76 +789,82 @@ def intercept_ufos(d: Driver) -> int:
     return 1
 
 
-def play_battle(d: Driver, budget_s: float = 300.0) -> str:
-    """Drive a tactical mission from briefing to debriefing without human input.
+def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
+    """Fight a tactical mission to a win, without cheats.
 
-    Real-time mode, max battle speed, and periodic move orders so units actually traverse the
-    map (exercising pathfinding, hazards and unit AI). If the mission has not resolved inside
-    the budget we use the engine's own debug retreat hotkey (F1 then Shift+K) to force an
-    ending rather than letting the run hang.
+    Units default to FirePermissionMode::AtWill (battleunit.h:271) and UnitAIDefault makes any
+    conscious unit engage a hostile it can see, so winning is a movement problem rather than a
+    per-shot targeting one: keep the squad advancing on the enemy and the engine does the
+    shooting. Battle::checkMissionEnd ends the mission by itself once no hostile organisation has
+    a conscious unit left -- so we must NOT abort, which is all the old driver ever did.
     """
-    t_start = time.time()
-    d.say("[battle] entering tactical mission")
+    t0 = time.time()
+    d.say("[battle] fighting for a win")
     entered = False
-    forced = False
-    while time.time() - t_start < budget_s:
+    last_foes = None
+    stalls = 0
+
+    while time.time() - t0 < budget_s:
         st = d.status()
+
         if st.stage == "BattleBriefing":
-            d.click_id("BUTTON_REAL_TIME", st)
-            time.sleep(1.0)
-            continue
+            # Leave the mode buttons alone: Battle::mode defaults to RealTime, and turn-based
+            # would need a completely different (unbuilt) per-shot driver.
+            d.click_id("BUTTON_REAL_TIME", st); time.sleep(1.0); continue
         if st.stage == "BattlePreStart":
-            d.click_id("BUTTON_OK", st)
-            time.sleep(1.0)
-            continue
+            d.click_id("BUTTON_OK", st); time.sleep(1.0); continue
         if st.stage == "BattleDebriefing":
-            d.shot("battle_debrief")
+            d.shot("battle_won")
             d.click_id("BUTTON_OK", st)
-            d.say(f"[battle] debriefing reached after {time.time()-t_start:.0f}s")
+            d.say(f"[battle] debriefing after {time.time()-t0:.0f}s")
             return "resolved"
-        if st.stage == "BattleView":
-            if not entered:
-                entered = True
-                d.shot("battle_start")
-                d.click_id("BUTTON_SPEED3", st)   # fastest real-time battle speed
-                time.sleep(0.5)
-            # Nudge the squad around the map so movement/pathing/hazards get exercised.
-            #
-            # NOTE: this used to send "Tab" here as a "cycle selected unit" hotkey, but in
-            # BattleView Tab is actually bound to BUTTON_TOGGLE_STRATMAP (see
-            # game/ui/tileview/battleview.cpp, SDLK_TAB case: it clicks the strategic-map
-            # toggle, not a unit-cycle command). Sending it every loop iteration was flipping
-            # the view between tactical and strategic roughly every 2s, so a large fraction of
-            # the "click cx cy right" move orders below were being issued into whichever map
-            # happened to be showing rather than reliably into the tactical view. There is no
-            # dedicated unit-cycle hotkey in this build, so just drop the erroneous keypress
-            # rather than mis-target a different one.
-            cx, cy = st.w // 2, int(st.h * 0.42)
-            d.h.send(f"click {cx} {cy} right")   # right click = move order
-            time.sleep(2.0)
-            if time.time() - t_start > budget_s * 0.7 and not forced:
-                forced = True
-                # Abort the mission the way the game offers it. The debug retreat hotkey
-                # (F1 then Shift+K) also works, but F1 latches debugHotkeyMode on for the rest
-                # of the session -- after which ordinary right-clicks start firing debug
-                # commands like "destroy selected vehicles", quietly corrupting the campaign.
-                d.say("[battle] budget nearly spent; aborting mission via options")
-                d.h.key("Escape")
-                time.sleep(0.6)
-                opts = d.status()
-                if opts.stage == "InGameOptions":
-                    if not d.click_id("BUTTON_EXIT_BATTLE", opts):
-                        d.click_id("BUTTON_OK", opts)
-                    time.sleep(0.8)
-            continue
-        if d.dismiss_modal(st):
-            continue
-        # Back in the city: the mission finished and we already cleared the debriefing.
-        if st.stage == "CityView":
-            d.say("[battle] returned to city")
+        if st.stage in ("CityView", "MainMenu", "VideoScreen"):
+            d.say(f"[battle] back at {st.stage}")
             return "returned"
-        time.sleep(0.5)
-    d.say("[battle] budget exhausted without resolution")
+        if st.stage != "BattleView":
+            if not d.dismiss_modal(st):
+                time.sleep(0.5)
+            continue
+
+        if not entered:
+            entered = True
+            b = d.h.gs("battle")
+            if b.get("mode") != "rt":
+                d.say(f"[battle] ABORT: mode is {b.get('mode')}, not real-time")
+                return "wrong-mode"
+            d.shot("battle_start")
+            d.click_id("BUTTON_SPEED3", st)      # fastest real-time battle speed
+            time.sleep(0.5)
+            d.say(f"[battle] {b}")
+
+        # Select a squad, then advance it toward a visible enemy.
+        d.h.key("1")
+        time.sleep(0.2)
+        foes = d.h.screen_craft("enemies_screen")
+        if foes:
+            fx, fy, _ = foes[0]
+            # Left-click near the enemy: orderMove. Auto-fire engages once LOS is gained.
+            d.h.click_xy(fx, fy)
+        else:
+            # Nothing in sight yet; push toward the middle of the map to find contact.
+            d.h.click_xy(st.w // 2, int(st.h * 0.40))
+        time.sleep(2.5)
+
+        b = d.h.gs("battle")
+        foes_alive = b.get("foes_alive")
+        mine_alive = b.get("mine_alive")
+        if mine_alive == "0":
+            d.say(f"[battle] squad wiped out: {b}")
+        if foes_alive == last_foes:
+            stalls += 1
+        else:
+            stalls = 0
+            d.say(f"  [battle] foes_alive={foes_alive} mine_alive={mine_alive}")
+        last_foes = foes_alive
+        if stalls and stalls % 12 == 0:
+            d.say(f"  [battle] no progress for a while: {b}")
+
+    d.say("[battle] budget exhausted without a decision")
     return "timeout"
 
 
@@ -880,7 +886,7 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
         elapsed += leg
         st = d.status()
         if st.stage in ("BattleBriefing", "BattlePreStart", "BattleView", "BaseDefenseScreen"):
-            outcome = play_battle(d)
+            outcome = win_battle(d)
             battles += 1
             d.checks[f"battle_{battles}"] = outcome
         snapshot(d, f"day~{elapsed:.0f}")
