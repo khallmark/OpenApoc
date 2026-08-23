@@ -792,11 +792,18 @@ def play_battle(d: Driver, budget_s: float = 300.0) -> str:
             time.sleep(2.0)
             if time.time() - t_start > budget_s * 0.7 and not forced:
                 forced = True
-                d.say("[battle] budget nearly spent; forcing retreat via debug hotkey")
-                d.h.key("F1")                       # arm debug hotkeys
-                d.h.ok("keydown Left Shift")
-                d.h.key("k")                        # Shift+K retreats all units
-                d.h.ok("keyup Left Shift")
+                # Abort the mission the way the game offers it. The debug retreat hotkey
+                # (F1 then Shift+K) also works, but F1 latches debugHotkeyMode on for the rest
+                # of the session -- after which ordinary right-clicks start firing debug
+                # commands like "destroy selected vehicles", quietly corrupting the campaign.
+                d.say("[battle] budget nearly spent; aborting mission via options")
+                d.h.key("Escape")
+                time.sleep(0.6)
+                opts = d.status()
+                if opts.stage == "InGameOptions":
+                    if not d.click_id("BUTTON_EXIT_BATTLE", opts):
+                        d.click_id("BUTTON_OK", opts)
+                    time.sleep(0.8)
             continue
         if d.dismiss_modal(st):
             continue
