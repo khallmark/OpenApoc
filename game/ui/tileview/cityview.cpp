@@ -31,6 +31,7 @@
 #include "game/state/city/vequipment.h"
 #include "game/state/gameevent.h"
 #include "game/state/gamestate.h"
+#include "framework/harness.h"
 #include "game/state/gamestateintrospect.h"
 #include "game/state/gametime.h"
 #include "game/state/message.h"
@@ -1197,6 +1198,7 @@ CityView::CityView(sp<GameState> state)
       selectionState(CitySelectionState::Normal)
 {
 	registerGameStateIntrospection(state);
+	registerCityViewIntrospection();
 	weaponType.resize(3);
 	weaponDisabled.resize(3, false);
 	weaponAmmo.resize(3, -1);
@@ -2072,6 +2074,60 @@ void CityView::render()
 	{
 		fw().renderer->draw(this->surface, {0, 0});
 	}
+}
+
+void CityView::registerCityViewIntrospection()
+{
+	// Chain in front of the GameState handler installed by registerGameStateIntrospection():
+	// view-space queries are answered here, everything else falls through unchanged.
+	auto stateHandler = getHarnessQueryHandler();
+	std::weak_ptr<GameState> weakState = state;
+	CityView *view = this;
+	setHarnessQueryHandler(
+	    [stateHandler, weakState, view](const UString &query) -> UString
+	    {
+		    const auto q = to_lower(query);
+		    auto gameState = weakState.lock();
+		    if (gameState && (q == "ufos_screen" || q == "vehicles_screen"))
+		    {
+			    const bool wantAliens = (q == "ufos_screen");
+			    const auto player = gameState->getPlayer();
+			    const auto aliens = gameState->getAliens();
+			    UString out;
+			    int count = 0;
+			    for (const auto &v : gameState->vehicles)
+			    {
+				    const auto &vehicle = v.second;
+				    if (!vehicle || !vehicle->owner || !vehicle->tileObject ||
+				        vehicle->city != gameState->current_city)
+				    {
+					    continue;
+				    }
+				    const bool isAlien = vehicle->owner.id == aliens.id;
+				    const bool isMine = vehicle->owner.id == player.id;
+				    if (wantAliens ? !isAlien : !isMine)
+				    {
+					    continue;
+				    }
+				    const auto screen =
+				        view->tileToOffsetScreenCoords<float>(vehicle->getPosition());
+				    // Only report craft actually on screen; the driver clicks these coordinates.
+				    const auto size = fw().displayGetSize();
+				    if (screen.x < 0 || screen.y < 0 || screen.x >= size.x || screen.y >= size.y)
+				    {
+					    continue;
+				    }
+				    if (count++ > 0)
+				    {
+					    out += ";";
+				    }
+				    out += format("{0},{1},{2}", (int)screen.x, (int)screen.y,
+				                  vehicle->crashed ? 1 : 0);
+			    }
+			    return format("count={0} at={1}", count, out.empty() ? UString("-") : out);
+		    }
+		    return stateHandler ? stateHandler(query) : UString("");
+	    });
 }
 
 void CityView::update()

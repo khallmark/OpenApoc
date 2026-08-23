@@ -135,6 +135,18 @@ class Harness:
         raw = self.ok(f"gs {query}")
         return dict(p.split("=", 1) for p in raw.split() if "=" in p)
 
+    def screen_craft(self, query: str) -> list[tuple[int, int, bool]]:
+        """Parse "count=N at=x,y,crashed;..." from the view-space craft queries."""
+        d = self.gs(query)
+        if d.get("at", "-") == "-":
+            return []
+        out = []
+        for item in d["at"].split(";"):
+            parts = item.split(",")
+            if len(parts) == 3:
+                out.append((int(parts[0]), int(parts[1]), parts[2] == "1"))
+        return out
+
     def click_xy(self, x: int, y: int) -> None:
         self.ok(f"click {x} {y}")
 
@@ -402,6 +414,7 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
     prev_ticks = start
     stalls = 0
     blocked_s = 0.0
+    last_intercept = 0.0
     while time.time() < deadline:
         st = d.status()
         if st.stage != "CityView":
@@ -419,6 +432,10 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
         else:
             blocked_s += 1.0
             d.h.key("4")
+            # Turbo is gated on there being no live hostiles; engage them rather than idling.
+            if int(turbo.get("hostiles", "0")) > 0 and time.time() - last_intercept > 8:
+                last_intercept = time.time()
+                d.checks["intercepts"] = d.checks.get("intercepts", 0) + intercept_ufos(d)
 
         time.sleep(1.0)
         now = int(d.h.gs("time")["ticks"])
@@ -526,6 +543,33 @@ def visit_ufopaedia(d: Driver) -> bool:
         d.h.key("Escape"); time.sleep(0.5)
     return ok
 
+
+
+def intercept_ufos(d: Driver) -> int:
+    """Send our craft after any UFO currently visible on the city map.
+
+    This is the event the driver used to ignore: while hostile craft are up, canTurbo() is false
+    and the campaign crawls, because the game expects the player to actually engage. Selecting an
+    interceptor and right-clicking a UFO issues the AttackVehicle mission.
+    """
+    ufos = d.h.screen_craft("ufos_screen")
+    live = [(x, y) for (x, y, crashed) in ufos if not crashed]
+    if not live:
+        return 0
+    mine = d.h.screen_craft("vehicles_screen")
+    if not mine:
+        return 0
+    ordered = 0
+    for i, (ux, uy) in enumerate(live[:3]):
+        mx, my, _ = mine[i % len(mine)]
+        d.h.click_xy(mx, my)          # select our craft
+        time.sleep(0.25)
+        d.h.send(f"click {ux} {uy} right")   # order attack
+        time.sleep(0.25)
+        ordered += 1
+    after = d.h.gs("turbo")
+    d.say(f"  [intercept] {len(live)} UFO(s) on screen, ordered {ordered} attack(s); {after}")
+    return ordered
 
 def play_battle(d: Driver, budget_s: float = 300.0) -> str:
     """Drive a tactical mission from briefing to debriefing without human input.

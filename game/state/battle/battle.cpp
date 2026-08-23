@@ -461,7 +461,7 @@ void Battle::initialMapPartRemoval(GameState &state)
 
 void Battle::initialMapPartLinkUp()
 {
-	LogWarning("Begun initial map parts link up!");
+	LogInfo("Begun initial map parts link up!");
 	auto &mapref = *map;
 
 	for (auto &s : this->map_parts)
@@ -482,7 +482,7 @@ void Battle::initialMapPartLinkUp()
 			}
 		}
 	}
-	LogWarning("Begun map parts link up cycle!");
+	LogInfo("Begun map parts link up cycle!");
 	bool foundSupport;
 	// Establish support based on existing supported map parts
 	do
@@ -508,12 +508,12 @@ void Battle::initialMapPartLinkUp()
 		if (mp->willCollapse())
 		{
 			auto pos = mp->tileObject->getOwningTile()->position;
-			LogWarning("MP {0} SBT {1} at {2} is UNLINKED", mp->type.id,
+			LogDebug("MP {0} SBT {1} at {2} is UNLINKED before final attach pass", mp->type.id,
 			           (int)mp->type->getVanillaSupportedById(), pos);
 		}
 	}
 
-	LogWarning("Attempting link up of unlinked parts");
+	LogInfo("Attempting link up of unlinked parts");
 	// Try to link to objects of same type first, then to anything
 	for (int iteration = 0; iteration <= 2; iteration++)
 	{
@@ -549,7 +549,7 @@ void Battle::initialMapPartLinkUp()
 	}
 
 	mapref.updateAllBattlescapeInfo();
-	LogWarning("Link up finished!");
+	LogInfo("Link up finished!");
 }
 
 enum class UnitSize

@@ -133,6 +133,9 @@ class CityView : public CityTileView
 	void resume() override;
 	void refreshBaseView();
 	void update() override;
+	// Installs a harness query handler that can answer view-space questions (where a UFO is on
+	// screen), which the GameState-only handler cannot: the projection lives on the view.
+	void registerCityViewIntrospection();
 	void render() override;
 	void eventOccurred(Event *e) override;
 	bool handleKeyDown(Event *e);
