@@ -2522,13 +2522,11 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 				// Played deposit animation fully, place aliens in building and retreat
 				case 1:
 				{
-					// Deposit aliens or subvert
+					// Deposit aliens or subvert. Successful micronoid rain force-takes
+					// the building's owner (UFO2P subversion mission).
 					if (subvert)
 					{
-						if (randBoundsExclusive(state.rng, 0, 100) < state.micronoidRainChance)
-						{
-							targetBuilding->owner->infiltrationValue = 200;
-						}
+						targetBuilding->owner->tryMicronoidRain(state, state.micronoidRainChance);
 					}
 					else
 					{

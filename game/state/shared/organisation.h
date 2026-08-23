@@ -170,6 +170,8 @@ class Organisation : public StateObject<Organisation>
 	StateRef<Building> pickRandomBuilding(GameState &state, StateRef<City> city) const;
 
 	void takeOver(GameState &state, bool forced = false);
+	// UFO subversion (micronoid rain). Chance is difficulty `micronoidRainChance`.
+	bool tryMicronoidRain(GameState &state, int chancePercent);
 
 	PurchaseResult canPurchaseFrom(GameState &state, const StateRef<Building> &buyer,
 	                               bool vehicle) const;
