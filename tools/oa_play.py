@@ -114,6 +114,8 @@ WORKING_STAGES = {
 # How many times to try a screen's engaging action before deciding the game is
 # refusing it and settling for acknowledgement.
 ACT_ATTEMPT_LIMIT = 4
+# How long to stop trying a refused action before giving it another go.
+ACT_COOLDOWN_S = 180.0
 
 
 class HarnessError(RuntimeError):
@@ -337,6 +339,7 @@ class Driver:
         self.responses: dict[str, int] = {}
         self.unknown_stages: dict[str, int] = {}
         self.act_counts: dict[str, int] = {}
+        self.act_reset_at = time.time()
 
     def say(self, msg: str) -> None:
         self.events.append(msg)
@@ -501,13 +504,21 @@ class Driver:
         # raid with no eligible squad returns BuildingScreen -> MessageBox -> BuildingScreen
         # forever. Changing stage is therefore not proof of progress; stop offering the action
         # once it has clearly stopped working and just acknowledge instead.
+        # A refusal is usually temporary -- BUTTON_EXTERMINATE is declined when no agents are
+        # free because they are already out on a mission, not because dispatch is broken. Making
+        # the cap permanent meant one busy afternoon disabled X-COM's response to alien incidents
+        # for the rest of the campaign; score collapsed and funding went to zero.
+        now = time.time()
+        if now - self.act_reset_at > ACT_COOLDOWN_S and self.act_counts:
+            self.act_counts.clear()
+            self.act_reset_at = now
         kinds = ("act", "ack")
         if self.act_counts.get(st.stage, 0) >= ACT_ATTEMPT_LIMIT:
             kinds = ("ack",)
             if self.act_counts.get(st.stage) == ACT_ATTEMPT_LIMIT:
                 self.act_counts[st.stage] += 1
-                self.say(f"  [event] {st.stage}: action refused {ACT_ATTEMPT_LIMIT}x, "
-                         f"acknowledging from now on")
+                self.say(f"  [event] {st.stage}: refused {ACT_ATTEMPT_LIMIT}x, backing off for "
+                         f"{ACT_COOLDOWN_S:.0f}s")
         elif policy.get("select"):
             selected = self.select_assignment_rows(st)
 
@@ -540,15 +551,18 @@ class Driver:
     def dismiss_modal(self, st: Status) -> bool:
         return self.respond_to_event(st)
 
-    def wait_for(self, stage: str, timeout: float = 90.0) -> Status:
+    def wait_for(self, stage: str | tuple[str, ...], timeout: float = 90.0) -> Status:
+        wanted = (stage,) if isinstance(stage, str) else tuple(stage)
         deadline = time.time() + timeout
         while time.time() < deadline:
             st = self.status()
-            if st.stage == stage:
+            if st.stage in wanted:
                 return st
             if not self.dismiss_modal(st):
                 time.sleep(0.4)
-        raise TimeoutError(f"stage {stage!r} not reached in {timeout}s (last={self.status().stage})")
+        raise TimeoutError(
+            f"stage {wanted!r} not reached in {timeout}s (last={self.status().stage})"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -799,9 +813,17 @@ def intercept_ufos(d: Driver) -> int:
     if lst is None or lst.w <= 0:
         d.say("  [intercept] vehicle list not resolvable")
         return 0
-    # Horizontal strip of craft icons; take the first slot.
-    d.h.click_xy(lst.x + 16, lst.y + lst.h // 2)
-    time.sleep(0.3)
+    # Horizontal strip of craft icons. Send the whole wing, not one craft: a lone interceptor
+    # loses to escorted UFOs, and a campaign that trades its fleet away without a single kill
+    # has no artifacts to research and no score to keep its funding.
+    ICON_W = 36
+    for slot in range(4):
+        x = lst.x + 16 + slot * ICON_W
+        if x >= lst.x + lst.w:
+            break
+        d.h.click_xy(x, lst.y + lst.h // 2)
+        time.sleep(0.15)
+    time.sleep(0.2)
 
     st = d.status()
     if not d.click_id("BUTTON_VEHICLE_ATTACK", st):
