@@ -916,7 +916,7 @@ bool BattleMap::generateMap(std::vector<sp<BattleMapSector>> &sec_map, Vec3<int>
 			continue;
 		}
 
-		LogWarning("Successfully completed map {0} with size {1}, {2}, {3} at attempt {4}", id,
+		LogInfo("Successfully completed map {0} with size {1}, {2}, {3} at attempt {4}", id,
 		           size.x, size.y, size.z, attempt_make_map);
 		return true;
 	}

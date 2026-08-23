@@ -267,6 +267,18 @@ UString describeStage(GameState &state)
 
 UString introspectGameState(GameState &state, const UString &query)
 {
+	// Checkpointing for long unattended runs: a multi-day campaign needs to survive a crash or a
+	// restart. Uses the synchronous low-level serializer rather than SaveManager, which is async
+	// and needs a LoadingScreen stage; resume by relaunching with --Game.Load=<path>.
+	if (query.size() > 5 && to_lower(query.substr(0, 5)) == "save ")
+	{
+		const auto path = query.substr(5);
+		if (!state.saveGame(path))
+		{
+			return "";
+		}
+		return format("saved={0}", path);
+	}
 	const auto q = to_lower(query);
 	if (q == "time")
 	{

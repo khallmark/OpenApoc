@@ -246,6 +246,18 @@ bool parseHarnessCommand(const UString &line, HarnessCommand &out)
 		}
 		return true;
 	}
+	if (verb == "SAVE")
+	{
+		out.type = HarnessCommand::Type::Save;
+		out.path = restAfter(0);
+		if (out.path.empty())
+		{
+			out.type = HarnessCommand::Type::Unknown;
+			out.error = "SAVE needs a path";
+			return false;
+		}
+		return true;
+	}
 	if (verb == "SCREENSHOT")
 	{
 		out.type = HarnessCommand::Type::Screenshot;
@@ -663,6 +675,22 @@ UString Harness::execute(const HarnessCommand &cmd, Framework &fw)
 				return format("ERR unknown query \"{0}\"", cmd.text);
 			}
 			// The reply protocol is strictly one line per command.
+			std::replace(reply.begin(), reply.end(), '\n', ' ');
+			return format("OK {0}", reply);
+		}
+		case HarnessCommand::Type::Save:
+		{
+			// Routed through the same game-layer hook as GS: framework cannot see GameState.
+			const auto handler = getHarnessQueryHandler();
+			if (!handler)
+			{
+				return "ERR no gamestate (query handler not installed yet)";
+			}
+			UString reply = handler("save " + cmd.path);
+			if (reply.empty())
+			{
+				return "ERR save failed";
+			}
 			std::replace(reply.begin(), reply.end(), '\n', ' ');
 			return format("OK {0}", reply);
 		}

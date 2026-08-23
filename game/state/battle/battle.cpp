@@ -3225,8 +3225,9 @@ void Battle::exitBattle(GameState &state)
 	// Bio loot remaining?
 	if (!leftoverBioLoot.empty())
 	{
-		// Bio loot is wasted if can't be loaded on player craft
-		LogWarning("Bio loot remaining");
+		// Bio loot is wasted if it cannot be loaded onto a player craft. An ordinary outcome of
+		// winning with full holds, not a fault.
+		LogInfo("Bio loot remaining");
 	}
 
 	// Cargo loot remaining?

@@ -23,6 +23,7 @@ class Framework;
 //   SCREENSHOT <path>
 //   STATUS
 //   GS <query>
+//   SAVE <path>
 //   QUIT
 //
 // Replies are one line: "OK ..." or "ERR ...".
@@ -51,6 +52,7 @@ struct HarnessCommand
 		Screenshot,
 		Status,
 		Query,
+		Save,
 		Quit,
 		Unknown
 	};

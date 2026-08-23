@@ -372,7 +372,7 @@ class Driver:
                 self.say(f"[campaign] terminal state reached: {st.stage}")
             return True
         try:
-            if self.h.gs("stage").get("defeated") == "1":
+            if self.h.gs("stage").get("defeated") == "1":  # noqa: SIM102
                 # The cutscene only fires on the next GameState tick; nudge the clock so the
                 # ending actually plays instead of the city sitting there paused.
                 if st.stage == "CityView":
@@ -528,7 +528,17 @@ def new_game(d: Driver, difficulty: int = 3) -> None:
 
 
 def snapshot(d: Driver, tag: str) -> dict[str, str]:
-    gs = d.h.gs("all")
+    """Dump game state, tolerating the campaign having ended.
+
+    Once the stage stack is replaced by the ending cutscene the GameState is released, so the
+    introspection handler has nothing to answer with. That is the campaign finishing, not a
+    harness failure, so do not let it abort the run.
+    """
+    try:
+        gs = d.h.gs("all")
+    except HarnessError:
+        d.say(f"[gs:{tag}] unavailable - no live GameState (campaign has ended)")
+        return {}
     d.say(f"[gs:{tag}] " + " ".join(f"{k}={v}" for k, v in gs.items()))
     return gs
 

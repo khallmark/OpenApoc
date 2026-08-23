@@ -480,7 +480,7 @@ void AgentMission::setPathTo(GameState &state [[maybe_unused]], Agent &a, StateR
 	auto key = Vec3<int>{(Vec3<int>)a.position * map.size + b->crewQuarters};
 	if (map.agentPathCache.find(key) != map.agentPathCache.end())
 	{
-		LogWarning("Found cached path from {0} to {1}, using it", a.position, b->crewQuarters);
+		LogInfo("Found cached path from {0} to {1}, using it", a.position, b->crewQuarters);
 		path = map.agentPathCache[key];
 	}
 	else
