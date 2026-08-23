@@ -35,6 +35,9 @@ from oa_play import (
 )
 
 BATTLE_STAGES = ("BattleBriefing", "BattlePreStart", "BattleView", "BaseDefenseScreen")
+CITY_STAGES = ("CityView",)
+MAX_RESTARTS = 8
+RESTART_COOLDOWN_S = 2.0
 
 
 class Campaign:
@@ -95,7 +98,7 @@ class Campaign:
         self.d.checks = {}
         if resume:
             self.say("resumed from checkpoint")
-            self.d.wait_for("CityView", 180)
+            self.d.wait_for(CITY_STAGES, 180)
         else:
             self.say(f"fresh campaign, difficulty {self.difficulty}")
             new_game(self.d, self.difficulty)
@@ -112,6 +115,9 @@ class Campaign:
 
     def restart(self) -> bool:
         """Bring the game back from the last checkpoint after a crash."""
+        if self.restarts >= MAX_RESTARTS:
+            self.say(f"too many restarts ({self.restarts}); giving up")
+            return False
         self.restarts += 1
         self.progress["restarts"] = self.progress.get("restarts", 0) + 1
         self.say(f"game died - restarting from checkpoint (restart #{self.restarts})")
@@ -123,6 +129,7 @@ class Campaign:
         if not self.checkpoint.exists():
             self.say("no checkpoint to resume from; cannot continue")
             return False
+        time.sleep(RESTART_COOLDOWN_S)
         try:
             self.start()
             return True
@@ -183,8 +190,19 @@ class Campaign:
                 self.save("leg complete")
                 snapshot(self.d, time.strftime("%H:%M"))
                 self.say(f"progress: {self.progress}")
-            except (OSError, HarnessError) as exc:
+            except HarnessError as exc:
                 self.say(f"harness error: {exc}")
+                if self.alive():
+                    text = str(exc).lower()
+                    if "unknown query" in text or "not installed" in text:
+                        self.say("binary does not speak this harness protocol; stopping")
+                        return 1
+                    time.sleep(1.0)
+                    continue
+                if not self.restart():
+                    return 1
+            except OSError as exc:
+                self.say(f"connection lost: {exc}")
                 if not self.restart():
                     return 1
         self.say(f"time budget reached; progress: {self.progress}")

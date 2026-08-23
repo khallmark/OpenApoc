@@ -703,26 +703,32 @@ def assign_research(d: Driver) -> bool:
         d.say(f"[research] research screen not reached (at {d.status().stage})"); return False
     d.shot("researchscreen")
 
-    started = 0
+    # Fill every lab, giving each a DIFFERENT topic. The original walked a fixed row count and
+    # always picked topic row 0, so it kept assigning one project over itself and five labs never
+    # got past two busy. Walk both lab lists, and advance the topic row on every attempt.
+    total_labs = int(before.get("labs", "0") or 0)
+    started, topic_row = 0, 0
+
     for list_id in ("LIST_LARGE_LABS", "LIST_SMALL_LABS"):
-        for row in range(3):
+        for row in range(max(total_labs, 4)):
             st = d.status()
             if st.stage != "ResearchScreen":
                 break
             if not click_list_row(d, list_id, row, st):
-                continue
-            time.sleep(0.4)
-            st = d.status()
-            d.click_id("BUTTON_RESEARCH_NEWPROJECT", st); time.sleep(0.6)
+                break
+            time.sleep(0.35)
+            d.click_id("BUTTON_RESEARCH_NEWPROJECT", d.status())
+            time.sleep(0.6)
             st = d.status()
             if st.stage != "ResearchSelect":
                 continue
-            d.shot(f"researchselect_{list_id}_{row}")
-            if click_list_row(d, "LIST", 0, st, item_h=20):
-                time.sleep(0.4)
-            st = d.status()
-            d.click_id("BUTTON_OK", st); time.sleep(0.8)
-            started += 1
+            picked = click_list_row(d, "LIST", topic_row, st, item_h=20)
+            topic_row += 1
+            time.sleep(0.35)
+            d.click_id("BUTTON_OK", d.status())
+            time.sleep(0.7)
+            if picked:
+                started += 1
 
     # Unwind back to the city.
     for _ in range(6):
@@ -947,8 +953,9 @@ def recover_crash_sites(d: Driver) -> int:
         return 0
     crashed = [(x, y) for (x, y, down) in d.h.screen_craft("ufos_screen") if down]
     if not crashed:
-        # Nothing visible; try to bring a wreck into view before giving up.
-        if d.h.gs("centre_on_ufo").get("centred") != "1":
+        # Nothing visible; bring a wreck into view. centre_on_ufo deliberately skips crashed
+        # craft, so recovery needs its own query or it can never see its target.
+        if d.h.gs("centre_on_crash").get("centred") != "1":
             return 0
         time.sleep(0.5)
         crashed = [(x, y) for (x, y, down) in d.h.screen_craft("ufos_screen") if down]

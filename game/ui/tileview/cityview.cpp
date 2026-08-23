@@ -2177,7 +2177,8 @@ void CityView::registerCityViewIntrospection()
 		    // "centre_on_ufo": bring the nearest live UFO into view so a driver can click it.
 		    // Craft off the visible area cannot be targeted at all, which made automated
 		    // interception a no-op whenever the camera sat over the player's base.
-		    if (gameState && (q == "centre_on_ufo" || q == "centre_on_own"))
+		    if (gameState && (q == "centre_on_ufo" || q == "centre_on_own" ||
+		                      q == "centre_on_crash"))
 		    {
 			    const auto aliens = gameState->getAliens();
 			    if (q == "centre_on_own")
@@ -2202,9 +2203,13 @@ void CityView::registerCityViewIntrospection()
 			    for (const auto &v : gameState->vehicles)
 			    {
 				    const auto &vehicle = v.second;
+				    // centre_on_crash wants exactly what centre_on_ufo skips: a downed wreck.
+				    // Recovering one is what starts a crash-site mission, and it is the only
+				    // source of the alien artifacts the whole research tree depends on.
+				    const bool wantCrashed = (q == "centre_on_crash");
 				    if (!vehicle || !vehicle->owner || !vehicle->tileObject ||
-				        vehicle->city != gameState->current_city || vehicle->crashed ||
-				        vehicle->owner.id != aliens.id)
+				        vehicle->city != gameState->current_city ||
+				        vehicle->crashed != wantCrashed || vehicle->owner.id != aliens.id)
 				    {
 					    continue;
 				    }
