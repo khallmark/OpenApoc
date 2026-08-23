@@ -413,6 +413,8 @@
     <value>BuildingDisabled</value>
     <value>MissionCompletedVehicle</value>
     <value>MissionCompletedBuildingAlien</value>
+    <value>AliensDefeated</value>
+    <value>XComDefeated</value>
     <value>None</value>
   </enum>
   <enum>

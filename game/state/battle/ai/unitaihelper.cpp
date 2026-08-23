@@ -156,19 +156,8 @@ sp<AIMovement> UnitAIHelper::getTakeCoverMovement(GameState &state, BattleUnit &
 		}
 	}
 
-	LogWarning("Implement take cover (for now proning instead)");
-
-	if (!u.agent->isBodyStateAllowed(BodyState::Prone))
-	{
-		return nullptr;
-	}
-
-	auto result = mksp<AIMovement>();
-	result->type = AIMovement::Type::ChangeStance;
-	result->movementMode = MovementMode::Prone;
-	result->kneelingMode = KneelingMode::None;
-
-	return result;
+	// Cover-tile search is not implemented. Callers fall through to kneel / prone (ai.txt).
+	return nullptr;
 }
 
 sp<AIMovement> UnitAIHelper::getKneelMovement(GameState &state, BattleUnit &u, bool forced)

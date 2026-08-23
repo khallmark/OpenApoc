@@ -20,6 +20,8 @@
 namespace OpenApoc
 {
 
+// Four engine hours. Engine ticks are VANILLA_TICKS_PER_SECOND * TICKS_MULTIPLIER.
+// City Speed1 now matches vanilla half-rate, so wall-clock training at Speed1 matches original.
 static const unsigned TICKS_PER_PHYSICAL_TRAINING = 4 * TICKS_PER_HOUR;
 static const unsigned TICKS_PER_PSI_TRAINING = 4 * TICKS_PER_HOUR;
 

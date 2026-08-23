@@ -48,8 +48,7 @@ static bool test_predicates()
 			dt.effectType = effect;
 			TEST_CHECK(dt.hasDamageDissipation() == expectedDissipation(block),
 			           "hasDamageDissipation mismatch");
-			TEST_CHECK(dt.doesImpactDamage() == expectedImpact(block),
-			           "doesImpactDamage mismatch");
+			TEST_CHECK(dt.doesImpactDamage() == expectedImpact(block), "doesImpactDamage mismatch");
 			TEST_CHECK(dt.alwaysImpactsHead() == (block == DamageType::BlockType::Gas),
 			           "alwaysImpactsHead mismatch");
 			TEST_CHECK(dt.ignoresArmorValue() == (effect == DamageType::EffectType::Smoke),

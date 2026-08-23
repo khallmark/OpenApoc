@@ -65,9 +65,11 @@
 #include "game/ui/components/locationscreen.h"
 #include "game/ui/general/aequipscreen.h"
 #include "game/ui/general/ingameoptions.h"
+#include "game/ui/general/mainmenu.h"
 #include "game/ui/general/messagebox.h"
 #include "game/ui/general/messagelogscreen.h"
 #include "game/ui/general/notificationscreen.h"
+#include "game/ui/general/videoscreen.h"
 #include "game/ui/ufopaedia/ufopaediacategoryview.h"
 #include "game/ui/ufopaedia/ufopaediaview.h"
 #include "library/sp.h"
@@ -2079,13 +2081,7 @@ void CityView::update()
 		case CityUpdateSpeed::Pause:
 			ticks = 0;
 			break;
-		/* POSSIBLE FIXME: 'vanilla' apoc appears to implement Speed1 as 1/2 speed - that is
-		 * only
-		 * every other call calls the update loop, meaning that the later update tick counts are
-		 * halved as well.
-		 * This effectively means that all openapoc tick counts count for 1/2 the value of
-		 * vanilla
-		 * apoc ticks */
+		// Vanilla Speed1 advances the city every other frame (half-rate vs later speeds).
 		case CityUpdateSpeed::Speed1:
 			ticks = 1;
 			break;
@@ -2111,6 +2107,15 @@ void CityView::update()
 			break;
 	}
 	baseForm->findControl("BUTTON_SPEED5")->Enabled = this->state->canTurbo();
+
+	if (this->updateSpeed == CityUpdateSpeed::Speed1)
+	{
+		skipSpeed1Tick = !skipSpeed1Tick;
+		if (skipSpeed1Tick)
+		{
+			ticks = 0;
+		}
+	}
 
 	if (turbo)
 	{
@@ -3991,6 +3996,8 @@ bool CityView::handleGameStateEvent(Event *e)
 			case GameEventType::MissionCompletedBuildingNormal:
 			case GameEventType::MissionCompletedBuildingRaid:
 			case GameEventType::MissionCompletedVehicle:
+			case GameEventType::AliensDefeated:
+			case GameEventType::XComDefeated:
 			{
 				// Never pause for these
 				break;
@@ -4422,6 +4429,20 @@ bool CityView::handleGameStateEvent(Event *e)
 		{
 			setUpdateSpeed(CityUpdateSpeed::Pause);
 			showWeeklyFundingReport();
+		}
+		break;
+		case GameEventType::AliensDefeated:
+		{
+			fw().stageQueueCommand(
+			    {StageCmd::Command::REPLACEALL,
+			     mksp<VideoScreen>("SMK:xcom3/smk/wingame2.smk", mksp<MainMenu>())});
+		}
+		break;
+		case GameEventType::XComDefeated:
+		{
+			fw().stageQueueCommand(
+			    {StageCmd::Command::REPLACEALL,
+			     mksp<VideoScreen>("SMK:xcom3/smk/lose1.smk", mksp<MainMenu>())});
 		}
 		break;
 		default:

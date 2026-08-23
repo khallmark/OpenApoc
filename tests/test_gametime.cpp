@@ -1,4 +1,5 @@
 #include "framework/configfile.h"
+#include "game/state/city/vehicle.h"
 #include "game/state/gametime.h"
 #include "tests/test_helpers.h"
 
@@ -82,6 +83,16 @@ static bool test_get_ticks_between_as_implemented()
 	return true;
 }
 
+static bool test_hardcoded_fuel_ticks_match_tps()
+{
+	TEST_REQUIRE(FUEL_TICKS_PER_SECOND == 144, "FUEL_TICKS_PER_SECOND is {0}",
+	             FUEL_TICKS_PER_SECOND);
+	TEST_REQUIRE(FUEL_TICKS_PER_SECOND == static_cast<int>(TICKS_PER_SECOND),
+	             "FUEL_TICKS_PER_SECOND {0} != TICKS_PER_SECOND {1}", FUEL_TICKS_PER_SECOND,
+	             TICKS_PER_SECOND);
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -94,5 +105,6 @@ int main(int argc, char **argv)
 	    {"midday", test_midday},
 	    {"add_ticks_flags", test_add_ticks_flags},
 	    {"get_ticks_between", test_get_ticks_between_as_implemented},
+	    {"hardcoded_fuel_ticks_match_tps", test_hardcoded_fuel_ticks_match_tps},
 	});
 }

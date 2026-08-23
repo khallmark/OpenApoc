@@ -21,7 +21,8 @@ This is a fork. Ghidra and decompiler output are allowed here and in the same se
 3. Confirm every extractor table at the non-4 file offset, then relocate the same bytes on the `4` build. Never assume a global slide.
 4. Import bound Linear Executables with the community LX loader. Do not unbind; extractor offsets are bound-file offsets.
 5. Seed labels from the matching rebase column. Walk strings, xrefs, and decompiler for systems OpenApoc still approximates.
-6. Record gaps in [openapoc-gap-matrix.md](openapoc-gap-matrix.md). Interactive compare: [compare-report.html](compare-report.html).
+6. Record gaps in [openapoc-gap-matrix.md](openapoc-gap-matrix.md). Interactive compare: [compare-report.html](compare-report.html). Extractor index: [extractor-tables.md](extractor-tables.md).
+7. After matrix or TODO changes: `python3 tools/regen_compare_report.py`.
 
 ## Spec template for binary notes
 

@@ -33,7 +33,8 @@ static bool test_factories()
 	TEST_REQUIRE(snooze.timeToSnooze == 50, "snooze ticks");
 
 	auto attackB = VehicleMission::attackBuilding(state, v, {});
-	TEST_REQUIRE(attackB.type == VehicleMission::MissionType::AttackBuilding, "attackBuilding type");
+	TEST_REQUIRE(attackB.type == VehicleMission::MissionType::AttackBuilding,
+	             "attackBuilding type");
 	return true;
 }
 

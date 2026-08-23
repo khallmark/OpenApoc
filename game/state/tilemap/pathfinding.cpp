@@ -6,7 +6,10 @@
 #include "game/state/city/vehicle.h"
 #include "game/state/city/vehiclemission.h"
 #include "game/state/gamestate.h"
+#include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/city/scenerytiletype.h"
+#include "game/state/shared/aequipment.h"
+#include "game/state/shared/agent.h"
 #include "game/state/tilemap/tilemap.h"
 #include "limits.h"
 #include <algorithm>
@@ -844,12 +847,10 @@ std::list<int> Battle::findLosBlockPath(int origin, int destination, BattleUnitT
 	return result;
 }
 
-// FIXME: Implement usage of teleporters in group move
 void Battle::groupMove(GameState &state, std::list<StateRef<BattleUnit>> &selectedUnits,
                        Vec3<int> targetLocation, int facingDelta, bool demandGiveWay,
                        bool useTeleporter)
 {
-	std::ignore = useTeleporter;
 	// Legend:
 	//
 	// (arrive from the southwest)						(arrive from the south)
@@ -948,6 +949,33 @@ void Battle::groupMove(GameState &state, std::list<StateRef<BattleUnit>> &select
 
 	if (selectedUnits.empty())
 	{
+		return;
+	}
+	if (useTeleporter)
+	{
+		static const Vec3<int> teleportOffsets[] = {
+		    {0, 0, 0},   {-1, 0, 0}, {1, 0, 0},  {0, -1, 0}, {0, 1, 0},  {-1, -1, 0},
+		    {1, -1, 0},  {-1, 1, 0}, {1, 1, 0},  {0, 0, 1},  {0, 0, -1}, {-2, 0, 0},
+		    {2, 0, 0},   {0, -2, 0}, {0, 2, 0},
+		};
+		size_t offsetIndex = 0;
+		for (auto &unit : selectedUnits)
+		{
+			auto item = unit->agent->getFirstItemByType(AEquipmentType::Type::Teleporter);
+			if (!item || item->ammo != item->type->max_ammo)
+			{
+				continue;
+			}
+			while (offsetIndex < sizeof(teleportOffsets) / sizeof(teleportOffsets[0]))
+			{
+				const auto dest = targetLocation + teleportOffsets[offsetIndex++];
+				auto *mission = BattleUnitMission::teleport(*unit, item, dest);
+				if (unit->setMission(state, mission) && !mission->cancelled)
+				{
+					break;
+				}
+			}
+		}
 		return;
 	}
 	if (selectedUnits.size() == 1)

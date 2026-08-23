@@ -1018,8 +1018,7 @@ void Building::collapse(GameState &state)
 
 void Building::buildingPartChange(GameState &state, Vec3<int> part, bool intact)
 {
-	// FIXME: Implement proper base / building dying when enough is destroyed
-	// Implement agents dying when building dies
+	// Base dies when no building-part tiles remain (isAlive). Crew die when quarters are gone.
 	if (intact)
 	{
 		buildingParts.insert(part);

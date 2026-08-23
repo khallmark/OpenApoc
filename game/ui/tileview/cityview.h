@@ -83,6 +83,7 @@ class CityView : public CityTileView
 	bool modifierRCtrl = false;
 
 	bool vanillaControls = false;
+	bool skipSpeed1Tick = false;
 
 	bool drawCity = true;
 	sp<Surface> surface;

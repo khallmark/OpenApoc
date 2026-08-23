@@ -33,6 +33,7 @@ Full setup: [docs/local-development.md](docs/local-development.md). Style:
 | Extractor | `cmake --build build --target extract-data` |
 | Ignore rules | `./tools/check_ignored_binaries.sh` |
 | Format | `./tools/lint.sh` |
+| Gap docs | `python3 tools/regen_compare_report.py` |
 
 ```sh
 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
@@ -55,7 +56,9 @@ disabled (`#if 0`); do not treat a green serialize test as a full roundtrip.
 | `game/ui/` | Screens / forms |
 | `tools/extractors/` | EXE table extractors (`common/ufo2p.*`, `tacp.*`) |
 | `docs/original-game/` | Gap matrix, binary notes, compare report |
-| `tests/` | Hand-rolled `ctest` mains (10 entries) |
+| `tests/` | Hand-rolled `ctest` mains + `test_helpers.h` |
+| `docs/original-game/extractor-tables.md` | Extractor table index (graph skip-lists `tools/`) |
+| `docs/solutions/` | Durable learnings |
 | Sibling lab | `/Users/khallmark/Desktop/Code/OpenSource/OpenApoc-og-research` |
 | `depot_7661/analysis/` | Private notes (gitignored; read via absolute path) |
 

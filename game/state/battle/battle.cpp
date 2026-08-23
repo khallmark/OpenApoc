@@ -3466,7 +3466,7 @@ void Battle::exitBattle(GameState &state)
 
 	if (victory)
 	{
-		LogError("You won, but we have no screen for that yet LOL!");
+		state.eventFromBattle = GameEventType::AliensDefeated;
 	}
 
 	state.current_battle = nullptr;

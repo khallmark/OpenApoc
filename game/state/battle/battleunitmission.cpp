@@ -1718,7 +1718,7 @@ void BattleUnitMission::update(GameState &state, BattleUnit &u, unsigned int tic
 			}
 			return;
 		default:
-			LogWarning("TODO: Implement update");
+			LogWarning("Unhandled battle unit mission update {0}", getName());
 			return;
 	}
 }
@@ -1781,7 +1781,7 @@ bool BattleUnitMission::isFinishedInternal(GameState &, BattleUnit &u)
 			// Is finished only when unit dies on timer
 			return false;
 		default:
-			LogWarning("TODO: Implement isfinishedinternal");
+			LogWarning("Unhandled battle unit mission isFinishedInternal {0}", getName());
 			return false;
 	}
 }
@@ -1981,7 +1981,7 @@ void BattleUnitMission::start(GameState &state, BattleUnit &u)
 		case Type::Snooze:
 			return;
 		default:
-			LogWarning("TODO: Implement start");
+			LogWarning("Unhandled battle unit mission start {0}", getName());
 			return;
 	}
 }

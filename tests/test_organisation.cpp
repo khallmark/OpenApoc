@@ -1,5 +1,6 @@
 #include "framework/configfile.h"
 #include "game/state/city/building.h"
+#include "game/state/city/vehicle.h"
 #include "game/state/gamestate.h"
 #include "game/state/shared/organisation.h"
 #include "library/sp.h"

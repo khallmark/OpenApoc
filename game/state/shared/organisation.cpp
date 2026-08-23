@@ -19,6 +19,17 @@
 namespace OpenApoc
 {
 
+static void settleMarketPurchase(Organisation &seller, StateRef<Organisation> buyer, int count,
+                                 int price)
+{
+	const int total = count * price;
+	buyer->balance -= total;
+	if (seller.id != buyer.id)
+	{
+		seller.balance += total;
+	}
+}
+
 // Returns 100% +- 25%, with a max of 20
 int Organisation::getGuardCount(GameState &state) const
 {
@@ -200,8 +211,7 @@ void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
 	                             StateRef<Organisation>{&state, id}, buyer);
 	LogWarning("PURCHASE: {0} bought {1}x{2} at {3} to {4} ", buyer->owner.id, count,
 	           vehicleEquipment.id, building.id, buyer.id);
-	auto owner = buyer->owner;
-	owner->balance -= count * price;
+	settleMarketPurchase(*this, buyer->owner, count, price);
 }
 
 void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
@@ -234,8 +244,7 @@ void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
 	                             StateRef<Organisation>{&state, id}, buyer);
 	LogWarning("PURCHASE: {0} bought {1}x{2} at {3} to {4} ", buyer->owner.id, count,
 	           vehicleAmmo.id, building.id, buyer.id);
-	auto owner = buyer->owner;
-	owner->balance -= count * price;
+	settleMarketPurchase(*this, buyer->owner, count, price);
 }
 
 void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
@@ -270,8 +279,7 @@ void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
 	    price, StateRef<Organisation>{&state, id}, buyer);
 	LogWarning("PURCHASE: {0} bought {1}x{2} at {3} to {4} ", buyer->owner.id, count,
 	           agentEquipment.id, building.id, buyer.id);
-	auto owner = buyer->owner;
-	owner->balance -= count * price;
+	settleMarketPurchase(*this, buyer->owner, count, price);
 }
 
 void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
@@ -305,8 +313,7 @@ void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
 	}
 	LogWarning("PURCHASE: {0} bought {1}x{2} at {3} to {4} ", buyer->owner.id, count,
 	           vehicleType.id, building.id, buyer.id);
-	auto owner = buyer->owner;
-	owner->balance -= count * price;
+	settleMarketPurchase(*this, buyer->owner, count, price);
 }
 
 void Organisation::setRaidMissions(GameState &state, StateRef<City> city)

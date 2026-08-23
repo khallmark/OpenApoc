@@ -83,7 +83,13 @@ cmake --build build -j$(sysctl -n hw.ncpu)
 ctest --test-dir build --output-on-failure
 ```
 
-Or run the Cursor task `openapoc: test`. Confirm depot/ISO stay untracked:
+Or run the Cursor task `openapoc: test`. After gap-matrix or TODO edits:
+
+```sh
+python3 tools/regen_compare_report.py
+```
+
+Confirm depot/ISO stay untracked:
 
 ```sh
 ./tools/check_ignored_binaries.sh

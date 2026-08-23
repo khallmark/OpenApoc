@@ -1766,6 +1766,12 @@ void GameState::updateAfterBattle()
 			fw().pushEvent(new GameEvent(eventFromBattle));
 			break;
 		}
+		case GameEventType::AliensDefeated:
+		case GameEventType::XComDefeated:
+		{
+			fw().pushEvent(new GameEvent(eventFromBattle));
+			break;
+		}
 		default:
 			break;
 	}

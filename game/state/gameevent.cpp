@@ -74,6 +74,10 @@ UString GameEvent::message()
 			return tr("X-COM returning from UFO mission.");
 		case GameEventType::BuildingDisabled:
 			return tr("Building has been disabled");
+		case GameEventType::AliensDefeated:
+			return tr("THE ALIENS ARE DEFEATED");
+		case GameEventType::XComDefeated:
+			return tr("X-COM IS DEFEATED");
 		default:
 			break;
 	}

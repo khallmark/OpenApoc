@@ -1573,6 +1573,13 @@ void BattleView::update()
 		}
 	}
 
+	if (config().getBool("Options.Misc.ActionMusic"))
+	{
+		const auto seenIdle = battle.ticksWithoutSeenAction[battle.currentPlayer];
+		fw().jukebox->play(seenIdle < TICKS_END_TURN ? JukeBox::PlayList::Action
+		                                             : JukeBox::PlayList::Tactical);
+	}
+
 	updateSelectedUnits();
 	updateSelectionMode();
 	updateSoldierButtons();
@@ -2826,6 +2833,12 @@ void BattleView::orderTeleport(Vec3<int> target, bool right)
 {
 	if (battle.battleViewSelectedUnits.empty())
 	{
+		return;
+	}
+	if (battle.battleViewSelectedUnits.size() > 1)
+	{
+		battle.groupMove(*state, battle.battleViewSelectedUnits, target, 0, false, true);
+		selectionState = BattleSelectionState::Normal;
 		return;
 	}
 	auto unit = battle.battleViewSelectedUnits.front();

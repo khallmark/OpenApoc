@@ -44,7 +44,8 @@ static bool test_week_one_returns_false()
 	state.rng.seed(1);
 	auto e = sampleEconomy();
 	e.weekAvailable = 1;
-	TEST_REQUIRE(e.update(state, true) == false, "week 1 should return false even if weekAvailable==1");
+	TEST_REQUIRE(e.update(state, true) == false,
+	             "week 1 should return false even if weekAvailable==1");
 	return true;
 }
 

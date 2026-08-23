@@ -36,7 +36,8 @@ Read [lx-import.md](lx-import.md) before the first import.
    + file offset. `FUN_*` names are fine with an offset.
 4. Edit OpenApoc. Match original behavior; do not invent hazard/TPS constants.
 5. Update the matrix row status. Keep listings in docs if they help the next pass.
-6. Verify:
+6. If the matrix or TODOs changed: `python3 tools/regen_compare_report.py`.
+7. Verify:
 
 ```sh
 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \

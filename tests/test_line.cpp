@@ -1,6 +1,7 @@
 #include "framework/configfile.h"
 #include "library/line.h"
 #include "tests/test_helpers.h"
+#include <algorithm>
 #include <vector>
 
 using namespace OpenApoc;
@@ -41,26 +42,40 @@ static bool test_axis_aligned()
 	return true;
 }
 
+static bool inBounds(const Vec3<int> &p, const Vec3<int> &a, const Vec3<int> &b)
+{
+	const int minX = std::min(a.x, b.x);
+	const int maxX = std::max(a.x, b.x);
+	const int minY = std::min(a.y, b.y);
+	const int maxY = std::max(a.y, b.y);
+	const int minZ = std::min(a.z, b.z);
+	const int maxZ = std::max(a.z, b.z);
+	return p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY && p.z >= minZ && p.z <= maxZ;
+}
+
 static bool test_diagonal_visits_voxels()
 {
-	auto nonCons = collectLine<false>({0, 0, 0}, {2, 2, 0});
-	auto cons = collectLine<true>({0, 0, 0}, {2, 2, 0});
-	TEST_REQUIRE(!nonCons.empty(), "non-conservative diagonal empty");
-	TEST_REQUIRE(!cons.empty(), "conservative diagonal empty");
-	TEST_REQUIRE(nonCons.front() == Vec3<int>(0, 0, 0), "non-conservative start");
-	TEST_REQUIRE(cons.front() == Vec3<int>(0, 0, 0), "conservative start");
+	const Vec3<int> start{0, 0, 0};
+	const Vec3<int> end{2, 2, 0};
+	auto nonCons = collectLine<false>(start, end);
+	auto cons = collectLine<true>(start, end);
+	TEST_REQUIRE(nonCons.size() >= 2, "non-conservative diagonal visited {0} voxels",
+	             (unsigned)nonCons.size());
+	TEST_REQUIRE(cons.size() >= 2, "conservative diagonal visited {0} voxels",
+	             (unsigned)cons.size());
+	TEST_REQUIRE(nonCons.front() == start, "non-conservative start");
+	TEST_REQUIRE(cons.front() == start, "conservative start");
 	TEST_REQUIRE(cons.size() >= nonCons.size(),
 	             "conservative diagonal should visit at least as many voxels ({0} vs {1})",
 	             (unsigned)cons.size(), (unsigned)nonCons.size());
-	bool sawNonConsEnd = false;
 	for (auto &p : nonCons)
 	{
-		if (p == Vec3<int>(2, 2, 0))
-		{
-			sawNonConsEnd = true;
-		}
+		TEST_CHECK(inBounds(p, start, end), "non-conservative left the segment box at {0}", p);
 	}
-	TEST_REQUIRE(sawNonConsEnd, "non-conservative diagonal never reached (2,2,0)");
+	for (auto &p : cons)
+	{
+		TEST_CHECK(inBounds(p, start, end), "conservative left the segment box at {0}", p);
+	}
 	return true;
 }
 

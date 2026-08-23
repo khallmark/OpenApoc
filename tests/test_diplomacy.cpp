@@ -74,7 +74,8 @@ static bool test_sign_treaty()
 	target->current_relations[otherRef] = -20.0f;
 	target->signTreatyWith(state, otherRef, 1000, false);
 	TEST_REQUIRE(target->getRelationTo(otherRef) == 0.0f,
-	             "negative relation treaty should go to 0, got {0}", target->getRelationTo(otherRef));
+	             "negative relation treaty should go to 0, got {0}",
+	             target->getRelationTo(otherRef));
 	TEST_REQUIRE(target->balance == 1000, "treaty bribe not applied");
 	TEST_REQUIRE(other->balance == 49000, "payer not charged");
 

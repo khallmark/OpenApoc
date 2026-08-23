@@ -58,6 +58,8 @@ add_openapoc_test(test_diplomacy)
 add_openapoc_test(test_research)
 add_openapoc_test(test_agent_mission)
 add_openapoc_test(test_vehicle_mission)
+add_openapoc_test(test_battle_hazard)
+add_openapoc_test(test_game_end)
 add_openapoc_test(test_city_rules ARGS
 		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
 		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
