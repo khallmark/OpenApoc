@@ -141,6 +141,14 @@ static bool test_fire_scheduler_state_machine()
 	TEST_REQUIRE(events.size() == 1 && events[0].contact,
 	             "zero-row map still performs contact pass");
 
+	int turnBasedContacts = 0;
+	scheduledCounter = 0;
+	Battle::runFireSchedulerTicks(
+	    400, 8, 8, scheduledY, scheduledZ, scheduledCounter, [](int, int) {},
+	    [&]() { turnBasedContacts++; });
+	TEST_REQUIRE(turnBasedContacts == 11, "400-iteration TB contact count {0}", turnBasedContacts);
+	TEST_REQUIRE(scheduledCounter == 4, "400-iteration TB counter phase {0}", scheduledCounter);
+
 	int rowY = 0;
 	int rowZ = 0;
 	Battle::advanceFireRowCursor(3, 2, rowY, rowZ);

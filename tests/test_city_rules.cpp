@@ -1707,6 +1707,121 @@ static bool test_ufo_incursion_follow_type()
 	return true;
 }
 
+static bool test_subversion_prefers_one_known_base()
+{
+	auto &state = *g_state;
+	auto alienCity = state.cities["CITYMAP_ALIEN"];
+	TEST_REQUIRE(alienCity && alienCity->size.z > 0, "alien city missing");
+
+	StateRef<Base> knownBase;
+	for (auto &entry : state.player_bases)
+	{
+		if (entry.second && entry.second->building && entry.second->building->isAlive())
+		{
+			knownBase = {&state, entry.first};
+			break;
+		}
+	}
+	TEST_REQUIRE(knownBase && knownBase->building, "live X-COM base missing");
+
+	std::map<UString, std::list<UFOIncursion::PrimaryMission>> savedLists;
+	for (auto &pref : state.ufo_mission_preference)
+	{
+		savedLists[pref.first] = pref.second->missionList;
+		pref.second->missionList = {UFOIncursion::PrimaryMission::Subversion};
+	}
+	const bool savedKnown = knownBase->knownToAliens;
+	knownBase->knownToAliens = true;
+
+	const UString customTypeId = "VEHICLETYPE_TEST_KNOWN_BASE_TARGET";
+	auto sourceType = state.vehicle_types.find("VEHICLETYPE_ALIEN_PROBE");
+	TEST_REQUIRE(sourceType != state.vehicle_types.end() && sourceType->second,
+	             "alien probe type missing");
+	auto customType = mksp<VehicleType>(*sourceType->second);
+	customType->id = customTypeId;
+	state.vehicle_types[customTypeId] = customType;
+
+	const UString incursionId = "UFO_INCURSION_TEST_KNOWN_BASE_TARGET";
+	auto incursion = mksp<UFOIncursion>();
+	incursion->primaryMission = UFOIncursion::PrimaryMission::Subversion;
+	incursion->priority = 0;
+	incursion->primaryList.emplace_back(customTypeId, 2);
+	incursion->primarySlots.emplace_back();
+	state.ufo_incursions[incursionId] = incursion;
+
+	const Vec3<float> pos = {42.0f, 42.0f, static_cast<float>(alienCity->size.z - 1)};
+	StateRef<Organisation> aliens{&state, "ORG_ALIEN"};
+	auto first = alienCity->placeVehicle(state, {&state, customTypeId}, aliens, pos, 0.0f);
+	auto second = alienCity->placeVehicle(state, {&state, customTypeId}, aliens, pos, 0.0f);
+	TEST_REQUIRE(first && second, "failed to place synthetic subversion fleet");
+
+	struct Restore
+	{
+		GameState &state;
+		StateRef<Base> base;
+		bool known;
+		std::map<UString, std::list<UFOIncursion::PrimaryMission>> preferences;
+		UString incursionId;
+		UString vehicleTypeId;
+		std::vector<sp<Vehicle>> vehicles;
+		~Restore()
+		{
+			for (auto &pref : state.ufo_mission_preference)
+			{
+				auto it = preferences.find(pref.first);
+				if (it != preferences.end())
+				{
+					pref.second->missionList = it->second;
+				}
+			}
+			if (base)
+			{
+				base->knownToAliens = known;
+			}
+			state.ufo_incursions.erase(incursionId);
+			for (auto &vehicle : vehicles)
+			{
+				if (vehicle->tileObject)
+				{
+					vehicle->removeFromMap(state);
+				}
+				state.vehicles.erase(vehicle->id);
+			}
+			state.vehicle_types.erase(vehicleTypeId);
+		}
+	} restore{state,       knownBase,    savedKnown,     std::move(savedLists),
+	          incursionId, customTypeId, {first, second}};
+
+	state.invasion();
+
+	int subversionMissions = 0;
+	int targetedKnownBase = 0;
+	int fallbackTargets = 0;
+	for (auto &vehicle : restore.vehicles)
+	{
+		for (const auto &mission : vehicle->missions)
+		{
+			if (mission.type != VehicleMission::MissionType::InfiltrateSubvert || !mission.subvert)
+			{
+				continue;
+			}
+			subversionMissions++;
+			if (mission.targetBuilding == knownBase->building)
+			{
+				targetedKnownBase++;
+			}
+			else if (!mission.targetBuilding)
+			{
+				fallbackTargets++;
+			}
+		}
+	}
+	TEST_REQUIRE(subversionMissions == 2, "subversion mission count {0}", subversionMissions);
+	TEST_REQUIRE(targetedKnownBase == 1, "known-base target count {0}", targetedKnownBase);
+	TEST_REQUIRE(fallbackTargets == 1, "fallback target count {0}", fallbackTargets);
+	return true;
+}
+
 static bool test_militarized_from_org_type()
 {
 	TEST_REQUIRE(!Organisation::militarizedFromType(0), "type 0");
@@ -2541,6 +2656,7 @@ int main(int argc, char **argv)
 	    {"ufo_incursion_table", test_ufo_incursion_table},
 	    {"ufo_incursion_spawn_xy", test_ufo_incursion_spawn_xy},
 	    {"ufo_incursion_follow_type", test_ufo_incursion_follow_type},
+	    {"subversion_prefers_one_known_base", test_subversion_prefers_one_known_base},
 	    {"militarized_from_org_type", test_militarized_from_org_type},
 	    {"nearby_intact_buildings", test_nearby_intact_buildings},
 	    {"unmanned_ufo_loot", test_unmanned_ufo_loot},

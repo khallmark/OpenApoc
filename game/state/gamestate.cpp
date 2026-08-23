@@ -790,6 +790,25 @@ void GameState::fillPlayerStartingProperty()
 	bld->city->cityViewScreenCenter = {buildingCenter.x, buildingCenter.y, 1.0f};
 }
 
+int GameState::selectKnownBaseSlot(const std::array<bool, UFO2P_BASE_SLOT_COUNT> &active,
+                                   const std::array<bool, UFO2P_BASE_SLOT_COUNT> &knownToAliens,
+                                   int startSlot)
+{
+	if (startSlot < 0 || startSlot >= UFO2P_BASE_SLOT_COUNT)
+	{
+		return -1;
+	}
+	for (int scanned = 0; scanned < UFO2P_BASE_SLOT_COUNT; scanned++)
+	{
+		const int slot = (startSlot + scanned) % UFO2P_BASE_SLOT_COUNT;
+		if (active[slot] && knownToAliens[slot])
+		{
+			return slot;
+		}
+	}
+	return -1;
+}
+
 void GameState::invasion()
 {
 	auto invadedCity = StateRef<City>{this, "CITYMAP_HUMAN"};
@@ -879,6 +898,37 @@ void GameState::invasion()
 		return;
 	}
 
+	StateRef<Building> preferredKnownBase;
+	if (missionType == UFOIncursion::PrimaryMission::Subversion)
+	{
+		std::array<StateRef<Base>, UFO2P_BASE_SLOT_COUNT> baseSlots;
+		std::array<bool, UFO2P_BASE_SLOT_COUNT> active{};
+		std::array<bool, UFO2P_BASE_SLOT_COUNT> known{};
+		const auto prefix = Base::getPrefix();
+		for (auto &entry : player_bases)
+		{
+			if (entry.first.find(prefix) != 0)
+			{
+				continue;
+			}
+			const int slot = Strings::toInteger(entry.first.substr(prefix.length())) - 1;
+			if (slot < 0 || slot >= UFO2P_BASE_SLOT_COUNT || !entry.second ||
+			    !entry.second->building)
+			{
+				continue;
+			}
+			baseSlots[slot] = {this, entry.first};
+			active[slot] = entry.second->building->isAlive();
+			known[slot] = entry.second->knownToAliens;
+		}
+		const int startSlot = randBoundsInclusive(rng, 0, UFO2P_BASE_SLOT_COUNT - 1);
+		const int slot = selectKnownBaseSlot(active, known, startSlot);
+		if (slot >= 0)
+		{
+			preferredKnownBase = baseSlots[slot]->building;
+		}
+	}
+
 	std::set<StateRef<Vehicle>> escorted;
 	for (size_t primaryIdx = 0; primaryIdx < currentIncursion->primaryList.size(); primaryIdx++)
 	{
@@ -913,9 +963,13 @@ void GameState::invasion()
 					    true);
 					break;
 				case UFOIncursion::PrimaryMission::Subversion:
-					invader->addMission(
-					    *this, VehicleMission::infiltrateOrSubvertBuilding(*this, *invader, true),
-					    true);
+					invader->addMission(*this,
+					                    VehicleMission::infiltrateOrSubvertBuilding(
+					                        *this, *invader, true, preferredKnownBase),
+					                    true);
+					// UFO2P DAT_000f3c80 permits only one preferred exposed-base target
+					// per incursion; later subversion craft use the untouched fallback.
+					preferredKnownBase = {};
 					break;
 				case UFOIncursion::PrimaryMission::Overspawn:
 					// Overspawn dumps aliens into buildings rather than bombing them.

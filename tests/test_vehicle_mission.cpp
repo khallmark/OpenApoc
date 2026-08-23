@@ -6,6 +6,7 @@
 #include "game/state/gamestate.h"
 #include "game/state/shared/organisation.h"
 #include "tests/test_helpers.h"
+#include <array>
 
 using namespace OpenApoc;
 using namespace OpenApoc::TestHelpers;
@@ -99,6 +100,27 @@ static bool test_alien_exposure_threshold()
 	return true;
 }
 
+static bool test_known_base_slot_selection()
+{
+	std::array<bool, GameState::UFO2P_BASE_SLOT_COUNT> active{};
+	std::array<bool, GameState::UFO2P_BASE_SLOT_COUNT> known{};
+	active[2] = true;
+	known[2] = true;
+	active[14] = true;
+	known[14] = true;
+	known[1] = true; // Inactive slots must be ignored.
+
+	TEST_REQUIRE(GameState::selectKnownBaseSlot(active, known, 3) == 14, "cyclic scan from slot 3");
+	TEST_REQUIRE(GameState::selectKnownBaseSlot(active, known, 15) == 2,
+	             "cyclic scan wraps at slot 15");
+	TEST_REQUIRE(GameState::selectKnownBaseSlot(active, known, 14) == 14,
+	             "start slot is considered first");
+	active[2] = false;
+	active[14] = false;
+	TEST_REQUIRE(GameState::selectKnownBaseSlot(active, known, 0) == -1, "no active known base");
+	return true;
+}
+
 static bool test_select_dimension_exit_portal()
 {
 	TEST_REQUIRE(Vehicle::selectDimensionExitPortal(0, 3) == 0, "index 0 of 3");
@@ -147,6 +169,7 @@ int main(int argc, char **argv)
 	     test_subversion_completion_exposes_base_without_takeover},
 	    {"ground_footprint_tiles", test_ground_footprint_tiles},
 	    {"alien_exposure_threshold", test_alien_exposure_threshold},
+	    {"known_base_slot_selection", test_known_base_slot_selection},
 	    {"select_dimension_exit_portal", test_select_dimension_exit_portal},
 	    {"noop_get_next_destination", test_noop_get_next_destination},
 	});

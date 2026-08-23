@@ -1705,6 +1705,15 @@ void Battle::updateFireScheduler(GameState &state, unsigned int ticks)
 		return;
 	}
 	const unsigned vanillaTicks = consumeVanillaFireTicks(fireSchedulerTicksAccumulated, ticks);
+	processFireSchedulerIterations(state, vanillaTicks);
+}
+
+void Battle::processFireSchedulerIterations(GameState &state, unsigned vanillaTicks)
+{
+	if (!map)
+	{
+		return;
+	}
 	runFireSchedulerTicks(
 	    vanillaTicks, map->size.y, map->size.z, fireSchedulerRowY, fireSchedulerRowZ,
 	    fireSchedulerContactCounter,
@@ -2489,6 +2498,9 @@ void Battle::endTurn(GameState &state)
 	auto it = ++std::find(participants.begin(), participants.end(), currentActiveOrganisation);
 	if (it == participants.end())
 	{
+		// TACP FUN_000b8c50 runs the global fire scheduler for 400 vanilla
+		// iterations when the turn-based organisation cycle wraps.
+		processFireSchedulerIterations(state, 400);
 		currentTurn++;
 		it = participants.begin();
 	}

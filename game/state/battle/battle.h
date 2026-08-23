@@ -261,6 +261,7 @@ class Battle : public std::enable_shared_from_this<Battle>
 
 	void update(GameState &state, unsigned int ticks);
 	void updateFireScheduler(GameState &state, unsigned int ticks);
+	void processFireSchedulerIterations(GameState &state, unsigned vanillaTicks);
 	static int fireRowsPerVanillaTick(int mapSizeY, int mapSizeZ);
 	static void advanceFireRowCursor(int mapSizeY, int mapSizeZ, int &rowY, int &rowZ);
 	static bool advanceFireContactCounter(unsigned &counter);

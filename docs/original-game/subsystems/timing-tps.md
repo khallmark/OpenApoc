@@ -11,7 +11,8 @@ Issue [997](https://github.com/OpenApoc/OpenApoc/issues/997) is a per-mechanic a
 Recovered TACP fire overlays now use a global real-time scheduler matching
 `FUN_0007b7f8`: every four OpenApoc ticks become one vanilla scheduler
 iteration; each iteration processes `(mapY×mapZ)/72` complete X rows before
-advancing the 36-count item-contact pass. Turn-based invocation, generic fire
-placement, spread RNG, and unit fire intensity are still unbound.
+advancing the 36-count item-contact pass. Turn-based round wrap runs the
+original 400-iteration batch with item contacts and without unit contacts.
+Generic fire placement, spread RNG, and unit fire intensity are still unbound.
 
 TACP strings `Fire rate` and the TU-reservation copy will skew if a given mechanic uses the wrong base.

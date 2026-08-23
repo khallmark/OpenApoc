@@ -10,6 +10,7 @@
 #include "library/sp.h"
 #include "library/strings.h"
 #include "library/xorshift.h"
+#include <array>
 #include <cstdint>
 #include <list>
 #include <map>
@@ -236,6 +237,10 @@ class GameState : public std::enable_shared_from_this<GameState>
 	// Fills out initial player property
 	void fillPlayerStartingProperty();
 
+	static constexpr int UFO2P_BASE_SLOT_COUNT = 16;
+	static int selectKnownBaseSlot(const std::array<bool, UFO2P_BASE_SLOT_COUNT> &active,
+	                               const std::array<bool, UFO2P_BASE_SLOT_COUNT> &knownToAliens,
+	                               int startSlot);
 	void invasion();
 
 	// Returns true if we can go at max speed (IE push all update loops to 5 minute intervals -
