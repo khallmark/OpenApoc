@@ -85,6 +85,86 @@ static bool test_fire_overlay_terrain_threshold()
 	return true;
 }
 
+static bool test_fire_scheduler_state_machine()
+{
+	unsigned accumulatedTicks = 0;
+	TEST_REQUIRE(Battle::consumeVanillaFireTicks(accumulatedTicks, 3) == 0 && accumulatedTicks == 3,
+	             "partial vanilla fire tick");
+	TEST_REQUIRE(Battle::consumeVanillaFireTicks(accumulatedTicks, 1) == 1 && accumulatedTicks == 0,
+	             "one vanilla fire tick");
+	TEST_REQUIRE(Battle::consumeVanillaFireTicks(accumulatedTicks, 7) == 1 && accumulatedTicks == 3,
+	             "batched vanilla fire ticks");
+
+	TEST_REQUIRE(Battle::fireRowsPerVanillaTick(100, 10) == 13, "100x10 row batch");
+	TEST_REQUIRE(Battle::fireRowsPerVanillaTick(8, 8) == 0, "8x8 preserves zero row batch");
+	TEST_REQUIRE(Battle::fireRowsPerVanillaTick(8, 9) == 1, "8x9 one row batch");
+	TEST_REQUIRE(Battle::fireRowsPerVanillaTick(17, 17) == 4, "17x17 four row batch");
+	TEST_REQUIRE(Battle::fireRowsPerVanillaTick(0, 10) == 0, "empty map row batch");
+
+	struct FireEvent
+	{
+		bool contact;
+		int y;
+		int z;
+	};
+	std::vector<FireEvent> events;
+	int scheduledY = 11;
+	int scheduledZ = 11;
+	unsigned scheduledCounter = 36;
+	Battle::runFireSchedulerTicks(
+	    1, 12, 12, scheduledY, scheduledZ, scheduledCounter, [&](int y, int z)
+	    { events.push_back({false, y, z}); }, [&]() { events.push_back({true, -1, -1}); });
+	TEST_REQUIRE(events.size() == 3, "two rows then contact");
+	TEST_REQUIRE(!events[0].contact && events[0].y == 11 && events[0].z == 11,
+	             "first scheduled row");
+	TEST_REQUIRE(!events[1].contact && events[1].y == 0 && events[1].z == 0,
+	             "wrapped scheduled row");
+	TEST_REQUIRE(events[2].contact, "contact follows row progression");
+	TEST_REQUIRE(scheduledY == 1 && scheduledZ == 0, "scheduled cursor persists");
+	TEST_REQUIRE(scheduledCounter == 1, "scheduled contact resets then increments");
+
+	events.clear();
+	scheduledY = 12;
+	scheduledZ = 12;
+	scheduledCounter = 0;
+	Battle::runFireSchedulerTicks(
+	    1, 12, 12, scheduledY, scheduledZ, scheduledCounter,
+	    [&](int y, int z) { events.push_back({false, y, z}); }, []() {});
+	TEST_REQUIRE(!events.empty() && events[0].y == 0 && events[0].z == 0,
+	             "stale cursors normalize before processing");
+
+	events.clear();
+	scheduledCounter = 36;
+	Battle::runFireSchedulerTicks(
+	    1, 8, 8, scheduledY, scheduledZ, scheduledCounter, [&](int y, int z)
+	    { events.push_back({false, y, z}); }, [&]() { events.push_back({true, -1, -1}); });
+	TEST_REQUIRE(events.size() == 1 && events[0].contact,
+	             "zero-row map still performs contact pass");
+
+	int rowY = 0;
+	int rowZ = 0;
+	Battle::advanceFireRowCursor(3, 2, rowY, rowZ);
+	TEST_REQUIRE(rowY == 1 && rowZ == 0, "cursor first row");
+	Battle::advanceFireRowCursor(3, 2, rowY, rowZ);
+	Battle::advanceFireRowCursor(3, 2, rowY, rowZ);
+	TEST_REQUIRE(rowY == 0 && rowZ == 1, "cursor wraps Y");
+	Battle::advanceFireRowCursor(3, 2, rowY, rowZ);
+	Battle::advanceFireRowCursor(3, 2, rowY, rowZ);
+	Battle::advanceFireRowCursor(3, 2, rowY, rowZ);
+	TEST_REQUIRE(rowY == 0 && rowZ == 0, "cursor wraps Z");
+
+	unsigned counter = 0;
+	for (int tick = 0; tick < 36; tick++)
+	{
+		TEST_REQUIRE(!Battle::advanceFireContactCounter(counter), "early contact pass at tick {0}",
+		             tick);
+	}
+	TEST_REQUIRE(counter == 36, "contact counter before threshold {0}", counter);
+	TEST_REQUIRE(Battle::advanceFireContactCounter(counter), "counter 0x24 contact pass");
+	TEST_REQUIRE(counter == 1, "counter resets then increments");
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -97,5 +177,6 @@ int main(int argc, char **argv)
 	    {"fire_hazard_item_resist", test_fire_hazard_item_resist},
 	    {"fire_overlay_power_progression", test_fire_overlay_power_progression},
 	    {"fire_overlay_terrain_threshold", test_fire_overlay_terrain_threshold},
+	    {"fire_scheduler_state_machine", test_fire_scheduler_state_machine},
 	});
 }

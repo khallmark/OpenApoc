@@ -669,6 +669,10 @@
     <member>doors</member>
     <member>explosions</member>
     <member>hazards</member>
+    <member>fireSchedulerTicksAccumulated</member>
+    <member>fireSchedulerRowY</member>
+    <member>fireSchedulerRowZ</member>
+    <member>fireSchedulerContactCounter</member>
     <member>participants</member>
     <member>leadershipBonus</member>
     <member>aiBlock</member>

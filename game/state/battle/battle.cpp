@@ -1621,6 +1621,127 @@ void Battle::updatePathfinding(GameState &, unsigned int ticks)
 	}
 }
 
+int Battle::fireRowsPerVanillaTick(int mapSizeY, int mapSizeZ)
+{
+	if (mapSizeY <= 0 || mapSizeZ <= 0)
+	{
+		return 0;
+	}
+	// TACP FUN_0007aba0/FUN_0007b7f8: complete X rows per tick.
+	return mapSizeY * mapSizeZ / 0x48;
+}
+
+void Battle::advanceFireRowCursor(int mapSizeY, int mapSizeZ, int &rowY, int &rowZ)
+{
+	if (mapSizeY <= 0 || mapSizeZ <= 0)
+	{
+		rowY = 0;
+		rowZ = 0;
+		return;
+	}
+	rowY++;
+	if (rowY >= mapSizeY)
+	{
+		rowY = 0;
+		rowZ++;
+		if (rowZ >= mapSizeZ)
+		{
+			rowZ = 0;
+		}
+	}
+}
+
+bool Battle::advanceFireContactCounter(unsigned &counter)
+{
+	const bool contactPass = counter == 0x24;
+	if (contactPass)
+	{
+		counter = 0;
+	}
+	counter++;
+	return contactPass;
+}
+
+unsigned Battle::consumeVanillaFireTicks(unsigned &accumulatedTicks, unsigned ticks)
+{
+	accumulatedTicks += ticks;
+	const unsigned vanillaTicks = accumulatedTicks / TICKS_MULTIPLIER;
+	accumulatedTicks %= TICKS_MULTIPLIER;
+	return vanillaTicks;
+}
+
+void Battle::runFireSchedulerTicks(unsigned vanillaTicks, int mapSizeY, int mapSizeZ, int &rowY,
+                                   int &rowZ, unsigned &contactCounter,
+                                   const FireRowCallback &processRow,
+                                   const FireContactCallback &processContact)
+{
+	if (rowY < 0 || rowY >= mapSizeY)
+	{
+		rowY = 0;
+	}
+	if (rowZ < 0 || rowZ >= mapSizeZ)
+	{
+		rowZ = 0;
+	}
+	for (unsigned tick = 0; tick < vanillaTicks; tick++)
+	{
+		const int rows = fireRowsPerVanillaTick(mapSizeY, mapSizeZ);
+		for (int row = 0; row < rows; row++)
+		{
+			processRow(rowY, rowZ);
+			advanceFireRowCursor(mapSizeY, mapSizeZ, rowY, rowZ);
+		}
+		if (advanceFireContactCounter(contactCounter))
+		{
+			processContact();
+		}
+	}
+}
+
+void Battle::updateFireScheduler(GameState &state, unsigned int ticks)
+{
+	if (!map || mode != Mode::RealTime)
+	{
+		return;
+	}
+	const unsigned vanillaTicks = consumeVanillaFireTicks(fireSchedulerTicksAccumulated, ticks);
+	runFireSchedulerTicks(
+	    vanillaTicks, map->size.y, map->size.z, fireSchedulerRowY, fireSchedulerRowZ,
+	    fireSchedulerContactCounter,
+	    [&](int rowY, int rowZ)
+	    {
+		    std::vector<sp<BattleHazard>> deadHazards;
+		    for (auto &hazard : hazards)
+		    {
+			    if (!hazard || BattleHazard::fireOverlayStage(hazard->fireOverlay) < 0 ||
+			        static_cast<int>(hazard->position.y) != rowY ||
+			        static_cast<int>(hazard->position.z) != rowZ)
+			    {
+				    continue;
+			    }
+			    if (hazard->advanceOriginalFireOverlay(state))
+			    {
+				    deadHazards.push_back(hazard);
+			    }
+		    }
+		    for (auto &hazard : deadHazards)
+		    {
+			    hazards.erase(hazard);
+		    }
+	    },
+	    [&]()
+	    {
+		    auto currentHazards = hazards;
+		    for (auto &hazard : currentHazards)
+		    {
+			    if (hazard && BattleHazard::fireOverlayStage(hazard->fireOverlay) >= 0)
+			    {
+				    hazard->applyOriginalFireItemEffect(state);
+			    }
+		    }
+	    });
+}
+
 void Battle::update(GameState &state, unsigned int ticks)
 {
 
@@ -1646,6 +1767,7 @@ void Battle::update(GameState &state, unsigned int ticks)
 			break;
 		}
 	}
+	updateFireScheduler(state, ticks);
 	updateProjectiles(state, ticks);
 	for (auto &o : this->doors)
 	{

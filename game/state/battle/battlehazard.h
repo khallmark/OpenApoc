@@ -67,6 +67,8 @@ class BattleHazard : public std::enable_shared_from_this<BattleHazard>
 	static int fireOverlayStage(uint8_t overlay);
 	static int fireOverlayPower(const std::vector<int> &powerTable, uint8_t overlay);
 	static bool advanceFireOverlay(const std::vector<int> &powerTable, uint8_t &overlay);
+	bool advanceOriginalFireOverlay(GameState &state);
+	void applyOriginalFireItemEffect(GameState &state);
 
 	// these return true if this hazard has died and needs to be deleted
 	bool update(GameState &state, unsigned int ticks);
@@ -94,9 +96,9 @@ We have 12 frames for fire. Let's number them 0 to 11 where 0 is full force fire
 
 Let "Stage" be the value that controls the fire's current state, and what frame we use.
 
-The visual age model below remains observational. The recovered type-2 overlay
-packing, power lookup, progression, and terrain threshold are represented by
-pure helpers; global row scheduling and unit intensity remain to be bound.
+The visual age model below remains observational. Recovered type-2 overlays use
+the serialized Battle global row/contact scheduler in real-time mode. Turn-based
+scheduling and unit fire intensity remain to be bound.
 
 When fire is applied (Incendiary missile or grenade), Stage = 10 - random[0-2] * 0,6
 (here [] are inclusive brackets, as in widely accepted math notation)

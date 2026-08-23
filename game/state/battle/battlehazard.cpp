@@ -60,6 +60,80 @@ bool BattleHazard::advanceFireOverlay(const std::vector<int> &powerTable, uint8_
 	return true;
 }
 
+bool BattleHazard::advanceOriginalFireOverlay(GameState &state)
+{
+	const int oldStage = fireOverlayStage(fireOverlay);
+	if (oldStage < 0 || fireOverlayPower(state.fireHazardPowerTable, fireOverlay) == 0 ||
+	    !tileObject)
+	{
+		return false;
+	}
+
+	auto tile = tileObject->getOwningTile();
+	sp<BattleMapPart> feature;
+	sp<BattleMapPart> ground;
+	for (auto &object : tile->ownedObjects)
+	{
+		if (object->getType() == TileObject::Type::Feature)
+		{
+			feature = std::static_pointer_cast<TileObjectBattleMapPart>(object)->getOwner();
+			break;
+		}
+		if (object->getType() == TileObject::Type::Ground)
+		{
+			ground = std::static_pointer_cast<TileObjectBattleMapPart>(object)->getOwner();
+		}
+	}
+	auto terrain = feature ? feature : ground;
+
+	const bool stageContinues = advanceFireOverlay(state.fireHazardPowerTable, fireOverlay);
+	const bool specialFeatureExtinguishes =
+	    feature && feature->type->height == 39 && feature->type->fire_resist == 255;
+
+	const bool terrainBurned =
+	    terrain && BattleMapPart::fireStageBurns(oldStage, terrain->type->fire_burn_time);
+	if (terrainBurned)
+	{
+		terrain->die(state);
+	}
+
+	if (!stageContinues || !terrain || specialFeatureExtinguishes || terrainBurned)
+	{
+		fireOverlay = 0;
+		die(state, true);
+		return true;
+	}
+	return false;
+}
+
+void BattleHazard::applyOriginalFireItemEffect(GameState &state)
+{
+	if (!tileObject)
+	{
+		return;
+	}
+	const int effectPower = fireOverlayPower(state.fireHazardPowerTable, fireOverlay);
+	if (effectPower == 0)
+	{
+		return;
+	}
+	auto tile = tileObject->getOwningTile();
+	auto objects = tile->ownedObjects;
+	for (auto &object : objects)
+	{
+		if (tile->ownedObjects.find(object) == tile->ownedObjects.end() ||
+		    object->getType() != TileObject::Type::Item)
+		{
+			continue;
+		}
+		auto item = std::static_pointer_cast<TileObjectBattleItem>(object)->getItem();
+		if (item)
+		{
+			item->applyFireHazard(state, effectPower);
+		}
+	}
+}
+
 BattleHazard::BattleHazard(GameState &state, StateRef<DamageType> damageType, bool delayVisibility)
     : damageType(damageType), hazardType(damageType->hazardType)
 {
@@ -550,6 +624,12 @@ bool BattleHazard::update(GameState &state, unsigned int ticks)
 		frameChangeTicksAccumulated -= TICKS_PER_HAZARD_UPDATE;
 		frame++;
 		frame %= hazardType->fire ? 2 : HAZARD_FRAME_COUNT;
+	}
+
+	if (realTime && fireOverlayStage(fireOverlay) >= 0)
+	{
+		// TACP progresses recovered overlays globally in FUN_0007b7f8.
+		return false;
 	}
 
 	if (realTime)
