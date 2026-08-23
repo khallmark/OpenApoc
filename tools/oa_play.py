@@ -630,39 +630,55 @@ def visit_ufopaedia(d: Driver) -> bool:
 
 
 def intercept_ufos(d: Driver) -> int:
-    """Send our craft after a UFO on the city map.
+    """Order a craft to attack a UFO, the way a player would.
 
-    Two camera moves are needed and the order matters: select one of our craft first (it must be
-    on screen to be clicked), then bring the UFO into view to right-click it. Selection survives
-    the camera move; visibility does not.
+    Clicking our craft on the map does not work: at the start of a campaign every vehicle is
+    parked inside the base and has no tileObject, so it is not on the map to click. The vehicle
+    tab lists them regardless of where they are, which is the route the game intends -- pick the
+    craft from the list, arm the attack order, then click the target.
     """
-    def on_screen(kind: str, centre_query: str):
-        found = d.h.screen_craft(kind)
-        if found:
-            return found
-        if d.h.gs(centre_query).get("centred") != "1":
-            return []
-        time.sleep(0.5)
-        return d.h.screen_craft(kind)
-
-    mine = on_screen("vehicles_screen", "centre_on_own")
-    if not mine:
-        d.say("  [intercept] no craft of ours on the map; skipping")
+    st = d.status()
+    if st.stage != "CityView":
         return 0
-    mx, my, _ = mine[0]
-    d.h.click_xy(mx, my)          # select
+    if not d.click_id("BUTTON_TAB_2", st):
+        d.say("  [intercept] no vehicle tab")
+        return 0
+    time.sleep(0.4)
+    st = d.status()
+    lst = d.controls(st).get("OWNED_VEHICLE_LIST")
+    if lst is None or lst.w <= 0:
+        d.say("  [intercept] vehicle list not resolvable")
+        return 0
+    # Horizontal strip of craft icons; take the first slot.
+    d.h.click_xy(lst.x + 16, lst.y + lst.h // 2)
     time.sleep(0.3)
 
-    ufos = on_screen("ufos_screen", "centre_on_ufo")
+    st = d.status()
+    if not d.click_id("BUTTON_VEHICLE_ATTACK", st):
+        d.say("  [intercept] no attack-order button")
+        return 0
+    time.sleep(0.3)
+
+    # Bring a UFO into view and click it as the target of the armed attack order.
+    ufos = d.h.screen_craft("ufos_screen")
     live = [(x, y) for (x, y, crashed) in ufos if not crashed]
     if not live:
-        d.say("  [intercept] no live UFO reachable on screen")
+        if d.h.gs("centre_on_ufo").get("centred") != "1":
+            d.say("  [intercept] no UFO on the city map")
+            d.h.key("Escape")
+            return 0
+        time.sleep(0.5)
+        live = [(x, y) for (x, y, crashed) in d.h.screen_craft("ufos_screen") if not crashed]
+    if not live:
+        d.say("  [intercept] UFO centred but not resolvable on screen")
+        d.h.key("Escape")
         return 0
+
     ux, uy = live[0]
-    d.h.send(f"click {ux} {uy} right")   # order attack
-    time.sleep(0.4)
+    d.h.click_xy(ux, uy)
+    time.sleep(0.5)
     after = d.h.gs("turbo")
-    d.say(f"  [intercept] ordered attack on UFO at {ux},{uy}; {after}")
+    d.say(f"  [intercept] attack ordered on UFO at {ux},{uy}; {after}")
     return 1
 
 
