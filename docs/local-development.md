@@ -66,7 +66,33 @@ Re-run extraction after changing the extractor or replacing `cd.iso`:
 cmake --build build --target extract-data
 ```
 
-On macOS, the build also copies `data/` into `build/bin/OpenApoc.app/Contents/Resources/data`. If `open` launches an empty bundle, run `extract-data` again after the `.app` exists.
+On macOS, the build copies OpenApoc `data/` into `OpenApoc.app/Contents/Resources/data` and **excludes** `cd.iso` / `*.iso` / `*.cue` / `*.bin` (the original game must stay user-supplied). If `open` launches an empty bundle, run `extract-data` again after the `.app` exists.
+
+Finder launch (`open ./build/bin/OpenApoc.app`) uses Resources for OpenApoc data and `~/Library/Application Support/OpenApoc/OpenApoc/` for settings, saves, and the CD path. The first run opens a file panel if the CD is missing. CLI `--Framework.Data` / `--Framework.CD` still override. `portable.txt` keeps the cwd-relative layout for terminal work.
+
+### Signed Mac app (Developer ID)
+
+```sh
+cmake --preset macos-signed \
+  -DAPPLE_CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+cmake --build --preset macos-signed -j$(sysctl -n hw.ncpu)
+# or, after a normal Homebrew build:
+./cmake/macos/sign.sh build/bin/OpenApoc.app "Developer ID Application: Your Name (TEAMID)"
+```
+
+`macos-signed` expects `VCPKG_ROOT` and static `arm64-osx-static` (see `cmake/vcpkg-triplets/`). Do not use `codesign --deep`. Notarization is optional for machines you already trust.
+
+### iPad / iPhone (Apple Development)
+
+```sh
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+cmake --preset ios-device -DAPPLE_TEAM_ID=YOURTEAMID
+cmake --build --preset ios-device --config RelWithDebInfo
+```
+
+The iOS preset sets `DEVELOPER_DIR` to Xcode.app so Homebrew CMake can see the `iphoneos` SDK. `VCPKG_ROOT` must be set for SDL2/Boost/libvorbis (`arm64-ios`).
+
+Install from the generated Xcode project / archive onto a registered device. Copy the original ISO into the app Documents folder via the Files app (File Sharing is enabled), or use the in-app picker. The same binary targets iPhone and iPad (`UIDeviceFamily` 1,2), landscape only. OpenGL ES 3.0 is required. Developer ID certificates cannot install on iOS.
 
 ## Testing
 

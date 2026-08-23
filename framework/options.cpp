@@ -1,6 +1,9 @@
 #include "framework/options.h"
 #include "framework/logger.h"
 #include "library/strings_format.h"
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 
 namespace
 {
@@ -477,7 +480,7 @@ ConfigOptionFloat optionStatGrowthMultiplierCheat("OpenApoc.Cheat", "StatGrowthM
 
 ConfigOptionBool optionEnableTouchEvents("Framework", "EnableTouchEvents",
                                          tr("Enable touch events"),
-#ifdef ANDROID
+#if defined(ANDROID) || (defined(__APPLE__) && TARGET_OS_IPHONE)
                                          true
 #else
                                          false

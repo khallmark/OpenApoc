@@ -11,6 +11,8 @@
 #include "framework/logger_file.h"
 #include "framework/logger_sdldialog.h"
 #include "framework/options.h"
+#include "framework/os/app_paths.h"
+#include "framework/os/file_picker.h"
 #include "framework/renderer.h"
 #include "framework/renderer_interface.h"
 #include "framework/sound_interface.h"
@@ -28,8 +30,7 @@
 #include <vector>
 
 #ifdef __APPLE__
-// Used for NASTY chdir() app bundle hacks
-#include <unistd.h>
+#include <TargetConditionals.h>
 #endif
 
 // SDL_syswm includes windows.h on windows, which does all kinds of polluting
@@ -80,6 +81,7 @@ class FrameworkPrivate
 	Vec2<int> windowSize;
 
 	sp<Surface> scaleSurface;
+	Vec2<int> drawableSize;
 	up<ThreadPool> threadPool;
 	up<Harness> harness;
 
@@ -89,7 +91,8 @@ class FrameworkPrivate
 	Vec2<int> toolTipPosition;
 
 	FrameworkPrivate()
-	    : quitProgram(false), window(nullptr), context(0), displaySize(0, 0), windowSize(0, 0)
+	    : quitProgram(false), window(nullptr), context(0), displaySize(0, 0), windowSize(0, 0),
+	      drawableSize(0, 0)
 	{
 		int threadPoolSize = Options::threadPoolSizeOption.get();
 		if (threadPoolSize > 0)
@@ -123,26 +126,6 @@ Framework::Framework(const UString programName, bool createWindow)
 
 	this->instance = this;
 
-#ifdef __APPLE__
-	{
-		// FIXME: A hack to set the working directory to the Resources directory in the app bundle.
-		char *basePath = SDL_GetBasePath();
-		// FIXME: How to check we're being run from the app bundle and not directly from the
-		// terminal? On my testing (macos 10.15.1 19B88) it seems to have a "/" working directory,
-		// which is unlikely in terminal use, so use that?
-		if (fs::current_path() == "/")
-		{
-			LogWarning("Setting working directory to \"{0}\"", basePath);
-			chdir(basePath);
-		}
-		else
-		{
-			LogInfo("Leaving default working directory \"{0}\"", fs::current_path().string());
-		}
-		SDL_free(basePath);
-	}
-#endif
-
 	if (!PHYSFS_isInit())
 	{
 		if (PHYSFS_init(programName.c_str()) == 0)
@@ -154,6 +137,13 @@ Framework::Framework(const UString programName, bool createWindow)
 	}
 #ifdef ANDROID
 	SDL_SetHint(SDL_HINT_ANDROID_SEPARATE_MOUSE_AND_TOUCH, "1");
+	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+#endif
+#ifdef __APPLE__
+#if TARGET_OS_IPHONE
+	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+#endif
 #endif
 	// Initialize subsystems separately?
 	if (SDL_Init(SDL_INIT_EVENTS | SDL_INIT_TIMER) < 0)
@@ -170,6 +160,18 @@ Framework::Framework(const UString programName, bool createWindow)
 			LogError("Cannot init SDL_VIDEO - \"{0}\"", SDL_GetError());
 			p->quitProgram = true;
 			return;
+		}
+	}
+	applyAppBundlePathDefaults(programName);
+	if (createWindow && !cdPathLooksValid(Options::cdPathOption.get()))
+	{
+		LogWarning("CD path \"{0}\" is missing; prompting for original game files",
+		           Options::cdPathOption.get());
+		const UString picked = pickCdPath();
+		if (!picked.empty() && cdPathLooksValid(picked))
+		{
+			Options::cdPathOption.set(picked);
+			config().save();
 		}
 	}
 	LogInfo("Loading config\n");
@@ -262,6 +264,12 @@ Framework::Framework(const UString programName, bool createWindow)
 	}
 	audioInitialise(!createWindow);
 
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+	if (Options::harnessEnable.get())
+	{
+		LogWarning("Framework.Harness is disabled on iOS");
+	}
+#else
 	if (Options::harnessEnable.get())
 	{
 		p->harness.reset(new Harness(Options::harnessPort.get()));
@@ -270,6 +278,7 @@ Framework::Framework(const UString programName, bool createWindow)
 			p->harness.reset();
 		}
 	}
+#endif
 }
 
 Framework::~Framework()
@@ -285,7 +294,10 @@ Framework::~Framework()
 	p->ProgramStages.clear();
 	LogInfo("Saving config");
 	if (config().getBool("Config.Save"))
+	{
+		revertBundleInternalPathsForSave();
 		config().save();
+	}
 
 	LogInfo("Shutdown");
 	// Make sure we destroy the data implementation before the renderer to ensure any possibly
@@ -417,7 +429,7 @@ void Framework::run(sp<Stage> initialStage)
 			{
 				RendererSurfaceBinding scaleBind(*this->renderer, p->defaultSurface);
 				this->renderer->clear();
-				this->renderer->drawScaled(p->scaleSurface, {0, 0}, p->windowSize);
+				this->renderer->drawScaled(p->scaleSurface, {0, 0}, p->drawableSize);
 			}
 			{
 				this->renderer->flush();
@@ -765,6 +777,12 @@ void Framework::displayInitialise()
 	}
 	LogInfo("Init display");
 	int display_flags = SDL_WINDOW_OPENGL;
+#ifdef SDL_WINDOW_ALLOW_HIGHDPI
+	display_flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+#endif
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+	display_flags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_BORDERLESS;
+#endif
 #ifdef OPENAPOC_GLES
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 #else
@@ -830,7 +848,16 @@ void Framework::displayInitialise()
 	p->context = SDL_GL_CreateContext(p->window);
 	if (!p->context)
 	{
-		LogInfo("GL context request unsupported by driver, retrying with a legacy context [SDLError: {0}]", SDL_GetError());
+#ifdef OPENAPOC_GLES
+		LogError("Failed to create OpenGL ES 3.0 context! [SDLerror: {0}]", SDL_GetError());
+		SDL_DestroyWindow(p->window);
+		exit(1);
+#else
+		// The first request is for a version macOS never grants, so this retry is the normal
+		// path there, not a fault. A genuine failure is the LogError + exit(1) just below.
+		LogInfo("GL context request unsupported by driver, retrying with a legacy context "
+		        "[SDLError: {0}]",
+		        SDL_GetError());
 		LogInfo("Attempting to create context by lowering the requested version");
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
@@ -841,6 +868,7 @@ void Framework::displayInitialise()
 			SDL_DestroyWindow(p->window);
 			exit(1);
 		}
+#endif
 	}
 	// Output the context parameters
 	LogInfo("Created OpenGL context, parameters:");
@@ -876,7 +904,7 @@ void Framework::displayInitialise()
 	SDL_ShowCursor(SDL_DISABLE);
 
 	p->registeredRenderers["GLES_3_0"].reset(getGLES30RendererFactory());
-#ifndef __ANDROID__ // GL2 is not available on Android
+#if !defined(__ANDROID__) && !defined(OPENAPOC_GLES)
 	p->registeredRenderers["GL_2_0"].reset(getGL20RendererFactory());
 #endif
 
@@ -908,6 +936,14 @@ void Framework::displayInitialise()
 	int width, height;
 	SDL_GetWindowSize(p->window, &width, &height);
 	p->windowSize = {width, height};
+	int drawW = width;
+	int drawH = height;
+	SDL_GL_GetDrawableSize(p->window, &drawW, &drawH);
+	p->drawableSize = {drawW, drawH};
+	if (p->drawableSize != p->windowSize)
+	{
+		LogInfo("HiDPI drawable size {0} from window size {1}", p->drawableSize, p->windowSize);
+	}
 
 	setMouseGrab();
 
@@ -924,12 +960,12 @@ void Framework::displayInitialise()
 		if (autoScale)
 		{
 			constexpr int referenceWidth = 1280;
-			scaleYFloat = scaleXFloat = (float)referenceWidth / p->windowSize.x;
+			scaleYFloat = scaleXFloat = (float)referenceWidth / p->drawableSize.x;
 			LogInfo("Autoscaling enabled, scaling by ({0},{1})", scaleXFloat, scaleYFloat);
 		}
 
-		p->displaySize.x = (int)((float)p->windowSize.x * scaleXFloat);
-		p->displaySize.y = (int)((float)p->windowSize.y * scaleYFloat);
+		p->displaySize.x = (int)((float)p->drawableSize.x * scaleXFloat);
+		p->displaySize.y = (int)((float)p->drawableSize.y * scaleYFloat);
 		if (p->displaySize.x < 640 || p->displaySize.y < 480)
 		{
 			LogWarning("Requested scaled size of {0} is lower than {{640,480}} and probably "
@@ -938,12 +974,12 @@ void Framework::displayInitialise()
 			p->displaySize.x = std::max(640, p->displaySize.x);
 			p->displaySize.y = std::max(480, p->displaySize.y);
 		}
-		LogInfo("Scaling from {0} to {1}", p->displaySize, p->windowSize);
+		LogInfo("Scaling from {0} to {1}", p->displaySize, p->drawableSize);
 		p->scaleSurface = mksp<Surface>(p->displaySize);
 	}
 	else
 	{
-		p->displaySize = p->windowSize;
+		p->displaySize = p->drawableSize;
 	}
 	this->cursor.reset(new ApocCursor(this->data->loadPalette("xcom3/tacdata/tactical.pal")));
 }

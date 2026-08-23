@@ -1752,13 +1752,26 @@ class OGLES30RendererFactory : public RendererFactory
 		{
 			LogAssert(gl == nullptr);
 			alreadyInitialised = true;
-			// First see if we're a direct OpenGL|ES context
+#ifdef OPENAPOC_GLES
+			// Real ES context: do not query GL_EXTENSIONS (invalid on ES 3).
+			if (GL::supported(false))
+			{
+				LogInfo("Using OpenGL|ES context");
+				gl.reset(new GL(false));
+			}
+			else
+			{
+				LogInfo("Failed to find ES3-compatible device");
+				return nullptr;
+			}
+#else
+			// First see if we're a desktop GL context with GL_ARB_ES3_compatibility
 			if (GL::supported(true))
 			{
 				LogInfo("Using OpenGL ES3 compatibility");
 				gl.reset(new GL(true));
 			}
-			// Then check for ES3 compatibility extension on desktop OpenGL
+			// Then check for a native OpenGL ES context
 			else if (GL::supported(false))
 			{
 				LogInfo("Using OpenGL|ES context");
@@ -1769,6 +1782,7 @@ class OGLES30RendererFactory : public RendererFactory
 				LogInfo("Failed to find ES3-compatible device");
 				return nullptr;
 			}
+#endif
 			return new OGLES30Renderer();
 		}
 		else

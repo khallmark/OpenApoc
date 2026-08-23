@@ -122,6 +122,11 @@ else()
 add_custom_target(extract-data DEPENDS ${EXTRACTOR_TARGET_LIST})
 endif()
 
-if (APPLE)
-add_custom_command(TARGET extract-data POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data ${CMAKE_BINARY_DIR}/bin/OpenApoc.app/Contents/Resources/data)
+if (APPLE AND NOT IOS)
+	add_custom_command(TARGET extract-data POST_BUILD
+		COMMAND ${CMAKE_COMMAND}
+			-D "SRC=${CMAKE_SOURCE_DIR}/data"
+			-D "DST=${CMAKE_BINARY_DIR}/bin/OpenApoc.app/Contents/Resources/data"
+			-P "${CMAKE_SOURCE_DIR}/cmake/apple/copy_bundle_data.cmake"
+		COMMENT "Copying OpenApoc data into app bundle (excluding ISO)")
 endif()
