@@ -232,7 +232,13 @@ void Base::startingBase(GameState &state)
 		{
 			for (int x = 0; x < this->SIZE; x++)
 			{
-				this->destroyFacility(state, {x, y});
+				// Only ask to destroy tiles that actually hold a removable facility. Sweeping
+				// blindly made every empty tile and the fixed access lift log a warning, which is
+				// thousands of lines per campaign start because placement legitimately retries.
+				if (this->canDestroyFacility(state, {x, y}) == BuildError::NoError)
+				{
+					this->destroyFacility(state, {x, y});
+				}
 			}
 		}
 		// There always must be a single 'access lift' base module even if everything else has been
@@ -378,7 +384,8 @@ Base::BuildError Base::canDestroyFacility(GameState &state, Vec2<int> pos) const
 
 	if (facility == nullptr)
 	{
-		return BuildError::OutOfBounds;
+		return pos.x < 0 || pos.y < 0 || pos.x >= SIZE || pos.y >= SIZE ? BuildError::OutOfBounds
+		                                                                : BuildError::NoFacility;
 	}
 
 	if (facility->type->fixed)

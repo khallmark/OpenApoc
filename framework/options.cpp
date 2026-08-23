@@ -176,6 +176,7 @@ void dumpOptionsToLog()
 	dumpOption(loadGameOption);
 	dumpOption(harnessEnable);
 	dumpOption(harnessPort);
+	dumpOption(harnessWarpCursor);
 
 	dumpOption(modList);
 	dumpOption(modPath);
@@ -524,6 +525,10 @@ ConfigOptionBool harnessEnable("Framework.Harness", "Enable",
                                "Listen on 127.0.0.1 for click/key/screenshot commands", false);
 ConfigOptionInt harnessPort("Framework.Harness", "Port", "Harness TCP port (localhost only)",
                             17321);
+ConfigOptionBool harnessWarpCursor("Framework.Harness", "WarpCursor",
+                                   "Move the OS cursor to follow injected harness input. Off by "
+                                   "default so automated runs do not hijack the physical mouse.",
+                                   false);
 
 ConfigOptionString modList("Game", "Mods",
                            tr("A colon-separated list of mods to load (relative to mod directory)"),

@@ -137,7 +137,7 @@ Framework::Framework(const UString programName, bool createWindow)
 		}
 		else
 		{
-			LogWarning("Leaving default working directory \"{0}\"", fs::current_path().string());
+			LogInfo("Leaving default working directory \"{0}\"", fs::current_path().string());
 		}
 		SDL_free(basePath);
 	}
@@ -493,7 +493,7 @@ void Framework::processEvents()
 							    }
 							    else
 							    {
-								    LogWarning("Wrote screenshot to \"{0}\"", screenshotName);
+								    LogInfo("Wrote screenshot to \"{0}\"", screenshotName);
 							    }
 						    });
 					}
@@ -830,8 +830,8 @@ void Framework::displayInitialise()
 	p->context = SDL_GL_CreateContext(p->window);
 	if (!p->context)
 	{
-		LogWarning("Could not create GL context! [SDLError: {0}]", SDL_GetError());
-		LogWarning("Attempting to create context by lowering the requested version");
+		LogInfo("GL context request unsupported by driver, retrying with a legacy context [SDLError: {0}]", SDL_GetError());
+		LogInfo("Attempting to create context by lowering the requested version");
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 		p->context = SDL_GL_CreateContext(p->window);
@@ -1178,7 +1178,7 @@ bool Framework::writeScreenshot(const UString &path)
 		LogWarning("Failed to write screenshot \"{0}\"", path);
 		return false;
 	}
-	LogWarning("Wrote screenshot to \"{0}\"", path);
+	LogInfo("Wrote screenshot to \"{0}\"", path);
 	return true;
 }
 
@@ -1187,7 +1187,7 @@ void Framework::setupModDataPaths()
 	auto mods = split(Options::modList.get(), ":");
 	for (const auto &modString : mods)
 	{
-		LogWarning("Loading mod data \"{0}\"", modString);
+		LogInfo("Loading mod data \"{0}\"", modString);
 		auto modPath = Options::modPath.get() + "/" + modString;
 		auto _modInfo = ModInfo::getInfo(modPath);
 		if (!_modInfo)

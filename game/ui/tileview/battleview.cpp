@@ -27,6 +27,7 @@
 #include "game/state/battle/battleunit.h"
 #include "game/state/gameevent.h"
 #include "game/state/gamestate.h"
+#include "game/state/gamestateintrospect.h"
 #include "game/state/message.h"
 #include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/battle/battlemapparttype.h"
@@ -82,6 +83,7 @@ BattleView::BattleView(sp<GameState> gameState)
       battle(*state->current_battle), followAgent(false),
       selectionState(BattleSelectionState::Normal)
 {
+	registerGameStateIntrospection(gameState);
 	motionScannerDirectionIcons.push_back(
 	    fw().data->loadImage(format("PCK:xcom3/tacdata/icons.pck:xcom3/tacdata/"
 	                                "icons.tab:{0}:xcom3/tacdata/tactical.pal",

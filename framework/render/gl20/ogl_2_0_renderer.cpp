@@ -726,7 +726,20 @@ class OGL20Renderer : public Renderer
 		                        gl20::DST_ALPHA);
 		renderer_dead = false;
 	}
-	~OGL20Renderer() override { renderer_dead = true; };
+	~OGL20Renderer() override
+	{
+		// Release the renderer's own GL-backed objects while renderer_dead is still false and the
+		// context is still current. Flipping the flag first (as this used to) meant the implicit
+		// member destructors ran afterwards, hit the "destroyed after renderer" guard and returned
+		// early -- so their textures and framebuffers were never actually deleted.
+		this->currentSurface.reset();
+		this->defaultSurface.reset();
+		this->currentPalette.reset();
+		this->rgbProgram.reset();
+		this->colourProgram.reset();
+		this->paletteProgram.reset();
+		renderer_dead = true;
+	};
 	void clear(Colour c = Colour{0, 0, 0, 0}) override
 	{
 		this->flush();

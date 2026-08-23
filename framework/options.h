@@ -155,6 +155,7 @@ extern ConfigOptionString loadGameOption;
 
 extern ConfigOptionBool harnessEnable;
 extern ConfigOptionInt harnessPort;
+extern ConfigOptionBool harnessWarpCursor;
 
 extern ConfigOptionString modList;
 extern ConfigOptionString modPath;

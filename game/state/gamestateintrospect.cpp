@@ -1,0 +1,271 @@
+#include "game/state/gamestateintrospect.h"
+#include "framework/harness.h"
+#include "game/state/battle/battle.h"
+#include "game/state/city/base.h"
+#include "game/state/city/city.h"
+#include "game/state/city/research.h"
+#include "game/state/city/vehicle.h"
+#include "game/state/city/vehiclemission.h"
+#include "game/state/gamestate.h"
+#include "game/state/gametime.h"
+#include "game/state/shared/agent.h"
+#include "game/state/shared/organisation.h"
+#include "library/strings_format.h"
+#include <memory>
+
+namespace OpenApoc
+{
+namespace
+{
+
+UString describeTime(GameState &state)
+{
+	const auto &t = state.gameTime;
+	return format("ticks={0} day={1} week={2} time={3} date={4}", t.getTicks(), t.getDay(),
+	              t.getWeek(), t.getShortTimeString(), t.getShortDateString());
+}
+
+UString describeFunds(GameState &state)
+{
+	const auto player = state.getPlayer();
+	if (!player)
+	{
+		return "balance=? income=? (no player organisation)";
+	}
+	return format("balance={0} income={1} score_total={2} score_week={3}", player->balance,
+	              player->income, state.totalScore.getTotal(), state.weekScore.getTotal());
+}
+
+UString describeBases(GameState &state)
+{
+	size_t facilities = 0;
+	for (const auto &b : state.player_bases)
+	{
+		if (b.second)
+		{
+			facilities += b.second->facilities.size();
+		}
+	}
+	return format("bases={0} facilities={1}", state.player_bases.size(), facilities);
+}
+
+UString describeResearch(GameState &state)
+{
+	size_t complete = 0;
+	size_t total = 0;
+	for (const auto &t : state.research.topics)
+	{
+		if (!t.second)
+		{
+			continue;
+		}
+		total++;
+		if (t.second->isComplete())
+		{
+			complete++;
+		}
+	}
+	size_t labs = 0;
+	size_t busyLabs = 0;
+	for (const auto &l : state.research.labs)
+	{
+		if (!l.second)
+		{
+			continue;
+		}
+		labs++;
+		if (l.second->current_project)
+		{
+			busyLabs++;
+		}
+	}
+	return format("topics={0} complete={1} labs={2} labs_busy={3}", total, complete, labs, busyLabs);
+}
+
+UString describeOrgs(GameState &state)
+{
+	const auto player = state.getPlayer();
+	size_t hostile = 0;
+	size_t allied = 0;
+	int infiltration = 0;
+	for (const auto &o : state.organisations)
+	{
+		if (!o.second || o.first == player.id)
+		{
+			continue;
+		}
+		infiltration += o.second->infiltrationValue;
+		const auto rel = o.second->isRelatedTo(player);
+		if (rel == Organisation::Relation::Hostile)
+		{
+			hostile++;
+		}
+		else if (rel == Organisation::Relation::Allied)
+		{
+			allied++;
+		}
+	}
+	return format("orgs={0} hostile={1} allied={2} infiltration_sum={3}", state.organisations.size(),
+	              hostile, allied, infiltration);
+}
+
+UString describeVehicles(GameState &state)
+{
+	const auto player = state.getPlayer();
+	const auto aliens = state.getAliens();
+	size_t mine = 0;
+	size_t ufos = 0;
+	size_t crashed = 0;
+	for (const auto &v : state.vehicles)
+	{
+		if (!v.second || !v.second->owner)
+		{
+			continue;
+		}
+		if (v.second->owner.id == player.id)
+		{
+			mine++;
+		}
+		else if (v.second->owner.id == aliens.id)
+		{
+			ufos++;
+			if (v.second->crashed)
+			{
+				crashed++;
+			}
+		}
+	}
+	return format("player_vehicles={0} ufos={1} ufos_crashed={2} next_invasion={3}", mine, ufos,
+	              crashed, state.nextInvasion);
+}
+
+// Turbo (city Speed5) is silently downgraded to Speed1 whenever canTurbo() is false, which is the
+// dominant reason an automated run stops making progress. Surface the gate and its causes so a
+// driver can react instead of stalling.
+UString describeTurbo(GameState &state)
+{
+	size_t hostileAggressive = 0;
+	size_t attackMissions = 0;
+	const auto player = state.getPlayer();
+	if (state.current_city)
+	{
+		for (const auto &v : state.vehicles)
+		{
+			const auto &vehicle = v.second;
+			if (!vehicle || vehicle->city != state.current_city || !vehicle->owner)
+			{
+				continue;
+			}
+			if (vehicle->isDead() || vehicle->crashed)
+			{
+				continue;
+			}
+			if (vehicle->owner->isRelatedTo(player) == Organisation::Relation::Hostile)
+			{
+				hostileAggressive++;
+			}
+			for (const auto &m : vehicle->missions)
+			{
+				if (m.type == VehicleMission::MissionType::AttackBuilding ||
+				    m.type == VehicleMission::MissionType::AttackVehicle)
+				{
+					attackMissions++;
+					break;
+				}
+			}
+		}
+	}
+	const size_t projectiles = state.current_city ? state.current_city->projectiles.size() : 0;
+	return format("can_turbo={0} hostiles={1} attack_missions={2} projectiles={3}",
+	              state.canTurbo() ? 1 : 0, hostileAggressive, attackMissions, projectiles);
+}
+
+UString describeAgents(GameState &state)
+{
+	const auto player = state.getPlayer();
+	size_t mine = 0;
+	for (const auto &a : state.agents)
+	{
+		if (a.second && a.second->owner && a.second->owner.id == player.id)
+		{
+			mine++;
+		}
+	}
+	return format("agents_total={0} agents_player={1}", state.agents.size(), mine);
+}
+
+UString describeStage(GameState &state)
+{
+	const bool inBattle = state.current_battle != nullptr;
+	return format("in_battle={0} city={1} defeated={2}", inBattle ? 1 : 0,
+	              state.current_city ? state.current_city.id : UString("none"),
+	              state.player_bases.empty() ? 1 : 0);
+}
+
+} // namespace
+
+UString introspectGameState(GameState &state, const UString &query)
+{
+	const auto q = to_lower(query);
+	if (q == "time")
+	{
+		return describeTime(state);
+	}
+	if (q == "funds")
+	{
+		return describeFunds(state);
+	}
+	if (q == "bases")
+	{
+		return describeBases(state);
+	}
+	if (q == "research")
+	{
+		return describeResearch(state);
+	}
+	if (q == "orgs")
+	{
+		return describeOrgs(state);
+	}
+	if (q == "vehicles")
+	{
+		return describeVehicles(state);
+	}
+	if (q == "agents")
+	{
+		return describeAgents(state);
+	}
+	if (q == "turbo")
+	{
+		return describeTurbo(state);
+	}
+	if (q == "stage")
+	{
+		return describeStage(state);
+	}
+	if (q == "all")
+	{
+		return describeTime(state) + " " + describeFunds(state) + " " + describeBases(state) + " " +
+		       describeResearch(state) + " " + describeOrgs(state) + " " + describeVehicles(state) +
+		       " " + describeAgents(state) + " " + describeTurbo(state) + " " +
+		       describeStage(state);
+	}
+	return "";
+}
+
+void registerGameStateIntrospection(const sp<GameState> &state)
+{
+	std::weak_ptr<GameState> weak = state;
+	setHarnessQueryHandler(
+	    [weak](const UString &query) -> UString
+	    {
+		    auto locked = weak.lock();
+		    if (!locked)
+		    {
+			    return "";
+		    }
+		    return introspectGameState(*locked, query);
+	    });
+}
+
+} // namespace OpenApoc

@@ -1754,7 +1754,7 @@ void City::groupMove(GameState &state, std::list<StateRef<Vehicle>> &selectedVeh
 
 void City::fillRoadSegmentMap(GameState &state [[maybe_unused]])
 {
-	LogWarning("Begun filling road segment map");
+	LogInfo("Begun filling road segment map");
 	// Expecting this to be done on clean intact map
 	tileToRoadSegmentMap.clear();
 	roadSegments.clear();
@@ -1833,7 +1833,7 @@ void City::fillRoadSegmentMap(GameState &state [[maybe_unused]])
 					{
 						if (roadSegments[nextSegmentToProcess].empty())
 						{
-							LogWarning("Skipping empty segment {0}", nextSegmentToProcess);
+							LogInfo("Skipping empty segment {0}", nextSegmentToProcess);
 							nextSegmentToProcess++;
 							continue;
 						}
@@ -2076,6 +2076,6 @@ void City::fillRoadSegmentMap(GameState &state [[maybe_unused]])
 	{
 		roadSegments[i].finalizeStats();
 	}
-	LogWarning("Finished filling road segment map");
+	LogInfo("Finished filling road segment map");
 }
 } // namespace OpenApoc

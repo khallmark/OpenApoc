@@ -1124,6 +1124,21 @@ void VehicleMover::updateFalling(GameState &state, unsigned int ticks)
 				break;
 			}
 		}
+		else if (newPosition.z <= 0.0f)
+		{
+			// Nothing to land on (open or destroyed terrain) and we have reached the map floor.
+			// The landing logic above only runs when the tile has scenery, so a vehicle falling
+			// here kept accelerating downwards past z=0 and TileObject::setPosition clamped it
+			// back and warned on every physics tick until something else destroyed it.
+			vehicle.falling = false;
+			vehicle.velocity = {0.0f, 0.0f, 0.0f};
+			vehicle.angularVelocity = 0.0f;
+			newPosition.z = 0.0f;
+			vehicle.setPosition(newPosition);
+			vehicle.goalPosition = vehicle.position;
+			vehicle.goalWaypoints.clear();
+			break;
+		}
 	}
 
 	vehicle.updateSprite(state);

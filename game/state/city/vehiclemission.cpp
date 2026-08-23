@@ -811,6 +811,28 @@ VehicleTargetHelper::adjustTargetToClosestFlying(GameState &state, Vehicle &v, V
 	midZ = midZ + maxDiff + 1 > map.size.z ? map.size.z - maxDiff - 1
 	                                       : (midZ - maxDiff < 0 ? maxDiff : midZ);
 
+	// A multi-tile craft occupies a footprint extending in +x/+y from the tile it enters, and
+	// FlyingVehicleTileHelper::canEnterTile rejects any tile whose footprint leaves the map. The
+	// candidate scan below must apply the same rule, otherwise it keeps nominating map-edge tiles
+	// that the pathfinder will never route into, and the mission re-plans onto them forever.
+	Vec2<int> footprint{1, 1};
+	for (const auto &s : v.type->size)
+	{
+		footprint.x = std::max(footprint.x, s.second.x);
+		footprint.y = std::max(footprint.y, s.second.y);
+	}
+	const auto footprintFitsOnMap = [&map, footprint](Vec3<int> pos)
+	{
+		for (const auto &tilePos : GroundVehicleTileHelper::footprintTiles(pos, footprint))
+		{
+			if (!map.tileIsValid(tilePos))
+			{
+				return false;
+			}
+		}
+		return true;
+	};
+
 	if (vehicleAvoidance == VehicleAvoidance::PickNearbyPoint)
 	{
 		Vec3<int> newTarget;
@@ -827,6 +849,11 @@ VehicleTargetHelper::adjustTargetToClosestFlying(GameState &state, Vehicle &v, V
 						if (x == midX - i || x == midX + i || y == midY - i || y == midY + i ||
 						    z == midZ - i || z == midZ + i)
 						{
+							if (!map.tileIsValid(x, y, z) ||
+							    !footprintFitsOnMap({x, y, z}))
+							{
+								continue;
+							}
 							auto t = map.getTile(x, y, z);
 							if (t->ownedObjects.empty())
 							{
@@ -841,8 +868,8 @@ VehicleTargetHelper::adjustTargetToClosestFlying(GameState &state, Vehicle &v, V
 		}
 		if (foundNewTarget)
 		{
-			LogWarning("Target {0},{1},{2} was unreachable, found new closest target {3},{4},{5}",
-			           target.x, target.y, target.z, newTarget.x, newTarget.y, newTarget.z);
+			LogDebug("Target {0},{1},{2} was unreachable, found new closest target {3},{4},{5}",
+			         target.x, target.y, target.z, newTarget.x, newTarget.y, newTarget.z);
 			target = newTarget;
 		}
 	}
@@ -871,7 +898,7 @@ VehicleTargetHelper::adjustTargetToClosestFlying(GameState &state, Vehicle &v, V
 		if (!sideStepLocations.empty())
 		{
 			auto newTarget = pickRandom(state.rng, sideStepLocations);
-			LogWarning("Target {0} was unreachable, side-stepping to  {1}.", target, newTarget);
+			LogDebug("Target {0} was unreachable, side-stepping to {1}.", target, newTarget);
 			target = newTarget;
 		}
 	}
@@ -2744,6 +2771,19 @@ void VehicleMission::setPathTo(GameState &state, Vehicle &v, Vec3<int> target, i
 				{
 					reRouteAttempts--;
 				}
+			}
+		}
+		else if (path.empty())
+		{
+			// Target too far for the "close enough to reach" heuristic above, and the search
+			// produced no usable path at all. This case used to consume no attempt, so
+			// GotoLocation re-planned from the same stale targetLocation every tick forever --
+			// observed as a single craft emitting hundreds of consecutive "target unreachable"
+			// warnings near a map-edge portal. Counting it lets the existing giveUpIfInvalid
+			// path (driven by reRouteAttempts hitting zero) terminate the mission instead.
+			if (reRouteAttempts > 0)
+			{
+				reRouteAttempts--;
 			}
 		}
 	}

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "library/strings.h"
+#include <functional>
 #include <vector>
 
 namespace OpenApoc
@@ -21,9 +22,18 @@ class Framework;
 //   TEXT <string>
 //   SCREENSHOT <path>
 //   STATUS
+//   GS <query>
 //   QUIT
 //
 // Replies are one line: "OK ..." or "ERR ...".
+
+// GS is answered by the game layer. framework/ sits below game/state/ in the link graph
+// (OpenApoc_GameState links OpenApoc_Framework, never the reverse), so the harness cannot name a
+// GameState type. The game layer installs a handler instead, mirroring how logger.h takes a
+// LogFunction. Returns a single line with no trailing newline; an empty return means "no answer".
+using HarnessQueryFunction = std::function<UString(const UString &query)>;
+void setHarnessQueryHandler(HarnessQueryFunction function);
+HarnessQueryFunction getHarnessQueryHandler();
 
 struct HarnessCommand
 {
@@ -40,6 +50,7 @@ struct HarnessCommand
 		Text,
 		Screenshot,
 		Status,
+		Query,
 		Quit,
 		Unknown
 	};

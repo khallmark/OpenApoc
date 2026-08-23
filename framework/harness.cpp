@@ -2,6 +2,7 @@
 #include "framework/event.h"
 #include "framework/framework.h"
 #include "framework/logger.h"
+#include "framework/options.h"
 #include "framework/stage.h"
 #include "library/strings_format.h"
 #include <SDL_keyboard.h>
@@ -145,7 +146,16 @@ void sendAll(HarnessSocket fd, const UString &text)
 	}
 }
 
+HarnessQueryFunction harnessQueryHandler;
+
 } // namespace
+
+void setHarnessQueryHandler(HarnessQueryFunction function)
+{
+	harnessQueryHandler = std::move(function);
+}
+
+HarnessQueryFunction getHarnessQueryHandler() { return harnessQueryHandler; }
 
 bool parseHarnessCommand(const UString &line, HarnessCommand &out)
 {
@@ -224,6 +234,18 @@ bool parseHarnessCommand(const UString &line, HarnessCommand &out)
 		}
 		return true;
 	}
+	if (verb == "GS")
+	{
+		out.type = HarnessCommand::Type::Query;
+		out.text = restAfter(0);
+		if (out.text.empty())
+		{
+			out.type = HarnessCommand::Type::Unknown;
+			out.error = "GS needs a query";
+			return false;
+		}
+		return true;
+	}
 	if (verb == "SCREENSHOT")
 	{
 		out.type = HarnessCommand::Type::Screenshot;
@@ -243,9 +265,12 @@ bool parseHarnessCommand(const UString &line, HarnessCommand &out)
 			out.error = "KEY needs a name";
 			return false;
 		}
-		if (!parseKeyName(parts[1], out.keyCode, out.scanCode))
+		// SDL key names can contain spaces ("Left Shift", "Page Down"), so take the whole
+		// remainder of the line rather than just the next token.
+		const UString keyName = restAfter(0);
+		if (!parseKeyName(keyName, out.keyCode, out.scanCode))
 		{
-			out.error = format("unknown key \"{0}\"", parts[1]);
+			out.error = format("unknown key \"{0}\"", keyName);
 			return false;
 		}
 		if (verb == "KEY")
@@ -332,7 +357,7 @@ Harness::Harness(int port)
 		LogError("Harness failed to listen on 127.0.0.1:{0}", port);
 		return;
 	}
-	LogWarning("Harness listening on 127.0.0.1:{0}", port);
+	LogInfo("Harness listening on 127.0.0.1:{0}", port);
 }
 
 Harness::~Harness()
@@ -537,6 +562,13 @@ void Harness::injectKey(Framework &fw, int keyCode, int scanCode, bool down)
 
 void Harness::warpCursor(Framework &fw, int x, int y)
 {
+	// The engine tracks the cursor from the injected event itself (ApocCursor::eventOccured), so
+	// warping the OS pointer is purely cosmetic -- and it steals the physical mouse from whoever is
+	// using the machine during a long automated run. Opt-in only.
+	if (!Options::harnessWarpCursor.get())
+	{
+		return;
+	}
 	auto *window = static_cast<SDL_Window *>(fw.getWindowHandle());
 	if (!window)
 	{
@@ -617,6 +649,22 @@ UString Harness::execute(const HarnessCommand &cmd, Framework &fw)
 			const auto size = fw.displayGetSize();
 			return format("OK stage={0} w={1} h={2} mouse={3},{4} port={5}",
 			              demangleStage(stage.get()), size.x, size.y, lastX, lastY, listenPort);
+		}
+		case HarnessCommand::Type::Query:
+		{
+			const auto handler = getHarnessQueryHandler();
+			if (!handler)
+			{
+				return "ERR no gamestate (query handler not installed yet)";
+			}
+			UString reply = handler(cmd.text);
+			if (reply.empty())
+			{
+				return format("ERR unknown query \"{0}\"", cmd.text);
+			}
+			// The reply protocol is strictly one line per command.
+			std::replace(reply.begin(), reply.end(), '\n', ' ');
+			return format("OK {0}", reply);
 		}
 		case HarnessCommand::Type::Quit:
 			fw.stageQueueCommand({StageCmd::Command::QUIT});

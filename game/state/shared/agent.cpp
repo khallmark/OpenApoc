@@ -910,18 +910,18 @@ bool Agent::popFinishedMissions(GameState &state)
 				break;
 			}
 		}
-		LogWarning("Agent {0} mission \"{1}\" finished", name, missions.front().getName());
+		LogInfo("Agent {0} mission \"{1}\" finished", name, missions.front().getName());
 		missions.pop_front();
 		popped = true;
 		if (!missions.empty())
 		{
-			LogWarning("Agent {0} mission \"{1}\" starting", name, missions.front().getName());
+			LogInfo("Agent {0} mission \"{1}\" starting", name, missions.front().getName());
 			missions.front().start(state, *this);
 			continue;
 		}
 		else
 		{
-			LogWarning("No next agent mission, going idle");
+			LogInfo("No next agent mission, going idle");
 			break;
 		}
 	}

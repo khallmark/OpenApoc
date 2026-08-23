@@ -31,6 +31,7 @@
 #include "game/state/city/vequipment.h"
 #include "game/state/gameevent.h"
 #include "game/state/gamestate.h"
+#include "game/state/gamestateintrospect.h"
 #include "game/state/gametime.h"
 #include "game/state/message.h"
 #include "game/state/rules/aequipmenttype.h"
@@ -1195,6 +1196,7 @@ CityView::CityView(sp<GameState> state)
       lastSpeed(CityUpdateSpeed::Pause), state(state), followVehicle(false),
       selectionState(CitySelectionState::Normal)
 {
+	registerGameStateIntrospection(state);
 	weaponType.resize(3);
 	weaponDisabled.resize(3, false);
 	weaponAmmo.resize(3, -1);

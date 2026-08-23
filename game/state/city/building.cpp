@@ -284,7 +284,7 @@ void Building::updateCargo(GameState &state)
 				v->provideService(state, true);
 				spawnedFerry = true;
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
-				LogWarning("Spawned cargo ferry {0} owned by {1} at {2}", v->type.id,
+				LogInfo("Spawned cargo ferry {0} owned by {1} at {2}", v->type.id,
 				           ferryCompany.id, thisRef.id);
 #endif
 				break;
@@ -333,7 +333,7 @@ void Building::updateCargo(GameState &state)
 				v->provideService(state, true);
 				spawnedFerry = true;
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
-				LogWarning("Spawned passenger ferry {0} owned by {1} at {2}", v->type.id,
+				LogInfo("Spawned passenger ferry {0} owned by {1} at {2}", v->type.id,
 				           ferryCompany.id, thisRef.id);
 #endif
 				break;
@@ -371,7 +371,7 @@ void Building::updateCargo(GameState &state)
 		if (c.type == Cargo::Type::Bio)
 		{
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
-			LogWarning("BIOCARGO: {0} needs to deliver {1} to {2}", thisRef.id,
+			LogInfo("BIOCARGO: {0} needs to deliver {1} to {2}", thisRef.id,
 			           c.count * c.space / c.divisor, c.destination.id);
 #endif
 			spaceNeeded[c.destination][sourceOrg][0] += std::max(1, c.count * c.space / c.divisor);
@@ -379,7 +379,7 @@ void Building::updateCargo(GameState &state)
 		else
 		{
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
-			LogWarning("CARGO: {0} needs to deliver {1} to {2}", thisRef.id,
+			LogInfo("CARGO: {0} needs to deliver {1} to {2}", thisRef.id,
 			           c.count * c.space / c.divisor, c.destination.id);
 #endif
 			spaceNeeded[c.destination][sourceOrg][1] += std::max(1, c.count * c.space / c.divisor);
@@ -397,7 +397,7 @@ void Building::updateCargo(GameState &state)
 			continue;
 		}
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
-		LogWarning("AGENT: {0} needs to deliver to {1}", thisRef.id,
+		LogInfo("AGENT: {0} needs to deliver to {1}", thisRef.id,
 		           a->missions.front().targetBuilding.id);
 #endif
 		spaceNeeded[a->missions.front().targetBuilding][a->owner].resize(3);
@@ -620,7 +620,7 @@ void Building::updateCargo(GameState &state)
 					if (reserved)
 					{
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
-						LogWarning(
+						LogInfo(
 						    "Ordered ferry {0} name {1} in {2} type {3} owned by {4} bound for {5}",
 						    DEBUG_CARGO && DEBUG_PASS ? "CA" : (DEBUG_CARGO ? "C" : "A"), v.first,
 						    !v.second->currentBuilding ? "" : v.second->currentBuilding.id,

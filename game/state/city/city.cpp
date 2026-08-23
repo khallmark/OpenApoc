@@ -127,7 +127,18 @@ void City::initCity(GameState &state)
 		LogInfo("Car: {0}", b->carEntranceLocation);
 		if (b->crewQuarters == Vec3<int>{-1, -1, -1})
 		{
-			LogWarning("Building {0} has no car exit?", b.id);
+			// Both carEntranceLocation and crewQuarters are derived from a Terminal road tile
+			// touching the building. The alien dimension has no road network at all, so every
+			// alien building legitimately lacks one; only flag it for the human city, where a
+			// missing car exit really would mean bad road/building data.
+			if (this->id == "CITYMAP_HUMAN")
+			{
+				LogWarning("Building {0} has no car exit?", b.id);
+			}
+			else
+			{
+				LogInfo("Building {0} has no car exit (no road network in {1})", b.id, this->id);
+			}
 			b->crewQuarters = {(b->bounds.p0.x + b->bounds.p1.x) / 2,
 			                   (b->bounds.p0.y + b->bounds.p1.y) / 2, 2};
 		}
@@ -802,7 +813,7 @@ void City::repairVehicles(GameState &state [[maybe_unused]])
 
 void City::initialSceneryLinkUp()
 {
-	LogWarning("Begun scenery link up!");
+	LogInfo("Begun scenery link up!");
 	auto &mapref = *map;
 
 	for (auto &s : this->scenery)
@@ -823,7 +834,7 @@ void City::initialSceneryLinkUp()
 			}
 		}
 	}
-	LogWarning("Begun scenery link up cycle!");
+	LogInfo("Begun scenery link up cycle!");
 	bool foundSupport;
 	// First support without clinging to establish proper links
 	do
@@ -866,11 +877,11 @@ void City::initialSceneryLinkUp()
 		if (mp->willCollapse())
 		{
 			auto pos = mp->tileObject->getOwningTile()->position;
-			LogWarning("SC {0} at {1} is UNLINKED", mp->type.id, pos);
+			LogDebug("SC {0} at {1} is UNLINKED before final attach pass", mp->type.id, pos);
 		}
 	}
 
-	LogWarning("Attempting link up of unlinked parts");
+	LogInfo("Attempting link up of unlinked parts");
 	do
 	{
 		foundSupport = false;
@@ -899,7 +910,7 @@ void City::initialSceneryLinkUp()
 	}
 
 	mapref.updateAllCityInfo();
-	LogWarning("Link up finished!");
+	LogInfo("Link up finished!");
 }
 
 sp<Doodad> City::placeDoodad(StateRef<DoodadType> type, Vec3<float> position)
