@@ -66,7 +66,7 @@ TACP::TACP(std::string file_name)
 	}
 
 	this->damage_type_names.reset(new StrTab(file, at(DAMAGE_TYPE_NAMES_OFFSET_START),
-	                                          at(DAMAGE_TYPE_NAMES_OFFSET_END), true));
+	                                         at(DAMAGE_TYPE_NAMES_OFFSET_END), true));
 
 	this->damage_types.reset(new DataChunk<DamageTypeData>(file, at(DAMAGE_TYPE_DATA_OFFSET_START),
 	                                                       at(DAMAGE_TYPE_DATA_OFFSET_END)));
@@ -80,14 +80,14 @@ TACP::TACP(std::string file_name)
 	this->agent_armor.reset(new DataChunk<AgentArmorData>(file, at(AGENT_ARMOR_DATA_OFFSET_START),
 	                                                      at(AGENT_ARMOR_DATA_OFFSET_END)));
 
-	this->agent_weapons.reset(new DataChunk<AgentWeaponData>(file, at(AGENT_WEAPON_DATA_OFFSET_START),
-	                                                         at(AGENT_WEAPON_DATA_OFFSET_END)));
+	this->agent_weapons.reset(new DataChunk<AgentWeaponData>(
+	    file, at(AGENT_WEAPON_DATA_OFFSET_START), at(AGENT_WEAPON_DATA_OFFSET_END)));
 
-	this->agent_general.reset(new DataChunk<AgentGeneralData>(file, at(AGENT_GENERAL_DATA_OFFSET_START),
-	                                                          at(AGENT_GENERAL_DATA_OFFSET_END)));
+	this->agent_general.reset(new DataChunk<AgentGeneralData>(
+	    file, at(AGENT_GENERAL_DATA_OFFSET_START), at(AGENT_GENERAL_DATA_OFFSET_END)));
 
-	this->agent_payload.reset(new DataChunk<AgentPayloadData>(file, at(AGENT_PAYLOAD_DATA_OFFSET_START),
-	                                                          at(AGENT_PAYLOAD_DATA_OFFSET_END)));
+	this->agent_payload.reset(new DataChunk<AgentPayloadData>(
+	    file, at(AGENT_PAYLOAD_DATA_OFFSET_START), at(AGENT_PAYLOAD_DATA_OFFSET_END)));
 
 	this->agent_equipment_set_built_in.reset(new DataChunk<AgentEquipmentSetBuiltInData>(
 	    file, at(AGENT_EQUIPMENT_SET_BUILTIN_DATA_OFFSET_START),
@@ -108,9 +108,9 @@ TACP::TACP(std::string file_name)
 
 	this->bullet_sprites.reset(new DataChunk<BulletSprite>(
 	    file, at(BULLETSPRITE_DATA_TACP_OFFSET_START), at(BULLETSPRITE_DATA_TACP_OFFSET_END)));
-	this->projectile_sprites.reset(new DataChunk<ProjectileSprites>(
-	    file, at(PROJECTILESPRITES_DATA_TACP_OFFSET_START),
-	    at(PROJECTILESPRITES_DATA_TACP_OFFSET_END)));
+	this->projectile_sprites.reset(
+	    new DataChunk<ProjectileSprites>(file, at(PROJECTILESPRITES_DATA_TACP_OFFSET_START),
+	                                     at(PROJECTILESPRITES_DATA_TACP_OFFSET_END)));
 }
 
 } // namespace OpenApoc

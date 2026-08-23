@@ -51,6 +51,12 @@ class InitialGameStateExtractor
 	void extract(GameState &state, Difficulty difficulty) const;
 	// After common_patch: overlay EXE org indices onto existing VAmmoType keys.
 	void applyCraftAmmoManufacturers(GameState &state) const;
+	// Re-write list tables after loadGame so a leftover section file cannot append.
+	void reapplyExeListTables(GameState &state) const;
+	// Re-extract EXE list tables after loadGame (serialize appends vectors / lists).
+	void applyUfoGrowth(GameState &state) const { extractUfoGrowth(state); }
+	void applyUfoIncursions(GameState &state) const { extractUfoIncursions(state); }
+	void applyUfoMissionPreference(GameState &state) const { extractUfoMissionPreference(state); }
 	/* extractBulletSprites() returns a list of images, so doesn't affect a GameState */
 	std::map<UString, sp<Image>> extractBulletSpritesCity() const;
 	std::map<UString, sp<Image>> extractBulletSpritesBattle() const;

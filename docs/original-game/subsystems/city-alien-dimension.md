@@ -2,7 +2,7 @@
 
 `UFO_mission_data` at file `0x13DDFC` (VA `0x1119FC`), `UFO_growth_rates` at `0x155010` (VA `0x128C10`), and `UFO_mission_patterns` at `0x155164` (VA `0x128D64`) are extracted (`ufoincursion.h`, `ufogrowth.h`, `ufomissionpattern.h`). Pattern slots: 3=Infiltration, 1=Attack, 2=Subversion, 5=Overspawn (19 weeks + DEFAULT). Do not XInclude the reference XMLs — serialize appends vectors and doubles weights. Do not use file `0x154710` for growth. Crew / drop-troop / alien-building-defense tables **are** extracted (`crew_ufo_downed` `0x13E560` / VA `0x112160`, P↔P4 identical). Bound Scenario Generator xrefs are empty.
 
-Implemented: dest-gate pairing (`destinationPortalIndex`), Overspawn `InfiltrateSubvert`, organic-factory growth gate. Reference EXE dumps live in [exe-tables](../exe-tables/).
+Implemented: dest-gate pairing (`destinationPortalIndex`), Overspawn `InfiltrateSubvert`, organic-factory growth gate, unmanned RecoverVehicle loot (probe/scout have no `battle_map`; `Vehicle::loot` from `loaded_equipment_slots`), and post-battle retreat / `alienMovement` housing (15 closest intact buildings within 15 tiles). Reference EXE dumps live in [exe-tables](../exe-tables/).
 
 Still missing or approximate in OpenApoc ([issue 264](https://github.com/OpenApoc/OpenApoc/issues/264)):
 
@@ -10,3 +10,4 @@ Still missing or approximate in OpenApoc ([issue 264](https://github.com/OpenApo
 - UFO mushrooms as next-week spawn feedback — **no printable `mushroom` in UFO2P**
 - Large-UFO bombing after first alien-dimension entry — no recovered trigger table
 - City-wide “Apocalypse” attack after the control centre dies — no recovered trigger table
+- Subversion-on-arrival — role 8 in `UFO_mission_data`; rain chance and `takeOver` are OpenApoc stand-ins (no bound consumer)

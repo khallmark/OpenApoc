@@ -4,7 +4,7 @@ Written from [openapoc-gap-matrix.md](openapoc-gap-matrix.md). Ghidra and decomp
 
 A row is not done until the lock test fails without the change. Remaining items have **no recovered constant or consumer** — do not invent one.
 
-Last lock: UFO subversion (micronoid rain) force-takes the building owner (`Organisation::tryMicronoidRain`, `test_organisation` `micronoid_rain_takeover`). `UFO_mission_patterns` `0x155164` is 20×10 uint16 (3=Infiltration, 1=Attack, 2=Subversion, 5=Overspawn), including week 13 (`test_city_rules` `ufo_mission_preference_loaded`). Also `unmanned_ufo_loot` and `nearby_intact_buildings`. `starting_available_UFOPaedia_entries` `0x19196A` is a 282-byte 0/1 blob (165 ones) with no proven entry-index map. `vehicle_park_spawn_table` `0x188F18` is 39×uint32-looking vehicle indices plus a leftover byte — no field map. Extractor 4-build CRCs/slides are in `exe_slide.h` (`ufo2p.cpp` / `tacp.cpp`).
+Last lock: `craft_ammo_manufacturers` at `0x13EB6A` (Zorium = X-COM) and `prereqType` 0/1 item gates. UFO mission patterns extracted; do not keep `ufo_mission_preference.xml` under `common_patch/gamestate/` (serialize appends `missionList`). `starting_available_UFOPaedia_entries` `0x19196A` and `vehicle_park_spawn_table` `0x188F18` stay unbound. `unknown2` is not Any/All.
 
 1. **Battle cover-tile / potshot ([issue 265](https://github.com/OpenApoc/OpenApoc/issues/265))** — no printable `cover` / `potshot`. `getTakeCoverMovement` stays null until a TACP cover metric exists.
    - Lock: `test_tactical_ai_retreat` (retreat + panic run only).
@@ -24,8 +24,11 @@ Last lock: UFO subversion (micronoid rain) force-takes the building owner (`Orga
 6. **Dead gadgets** — Mind Shield +30/cap 200 locked. MultiTracker / VortexAnalyzer / Disruptor `useItem` unbound.
    - Lock: `test_battle_use_item`.
    - Pass: no invented scan/UI formula.
-7. **UFO_mission_patterns** — extracted into `base_gamestate`. Do not XInclude a patch copy (serialize appends `missionList`).
+7. **UFO_mission_patterns** — extracted into `base_gamestate`. Do not XInclude a patch copy (serialize appends `missionList`). Bound xrefs to VA `0x128D64` are empty; IDs 3/1/2/5 are campaign first-appearance (weeks 1/4/5/7), not a recovered `FUN_*`.
    - Lock: `test_city_rules` (`ufo_mission_preference_loaded`).
+8. **Subversion arrival** — role 8 is a real incursion slot. `tryMicronoidRain` → `takeOver` is OpenApoc, not EXE. `FUN_0007fcc0` @ `0x7FCC0` is the weekly infiltration clamp (taken-over → 200), not rain-on-arrival. Do not invent a new percent.
+   - Lock: `test_organisation` (`micronoid_rain_takeover`) pins current stand-in only.
+   - Pass: Ghidra bind of role 8 at hover-complete.
 
 Extractor CRC: [exe_slide.h](../../tools/extractors/common/exe_slide.h) maps UFO2P `0xdbd3b41d` → `+0xE00` (except `crew_ufo_downed`, P↔P4 same file offset) and TACP `0x3ec9c268` → `−0x2200`. Unknown CRCs log and keep slide 0. Lock: `test_research` `exe_slide_crcs`.
 

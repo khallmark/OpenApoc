@@ -359,16 +359,7 @@ static bool test_ufo_mission_preference_loaded()
 	auto defIt = state.ufo_mission_preference.find("UFO_MISSION_PREFERENCE_DEFAULT");
 	TEST_REQUIRE(defIt != state.ufo_mission_preference.end() && defIt->second, "DEFAULT missing");
 	const auto &def = *defIt->second;
-	if (def.missionList.size() != 10)
-	{
-		UString dump;
-		for (auto &p : state.ufo_mission_preference)
-		{
-			dump += format(" {0}={1}", p.first,
-			               p.second ? (int)p.second->missionList.size() : -1);
-		}
-		TEST_REQUIRE(false, "DEFAULT slots {0} keys{1}", def.missionList.size(), dump);
-	}
+	TEST_REQUIRE(def.missionList.size() == 10, "DEFAULT slots {0}", def.missionList.size());
 	auto d = def.missionList.begin();
 	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Infiltration, "DEFAULT[0]");
 	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Attack, "DEFAULT[1]");
@@ -528,6 +519,22 @@ static bool test_overspawn_invasion()
 		savedLists[pref.first] = pref.second->missionList;
 		pref.second->missionList = {UFOIncursion::PrimaryMission::Overspawn};
 	}
+	struct RestorePrefs
+	{
+		GameState &state;
+		std::map<UString, std::list<UFOIncursion::PrimaryMission>> saved;
+		~RestorePrefs()
+		{
+			for (auto &pref : state.ufo_mission_preference)
+			{
+				auto it = saved.find(pref.first);
+				if (it != saved.end())
+				{
+					pref.second->missionList = it->second;
+				}
+			}
+		}
+	} restorePrefs{state, std::move(savedLists)};
 
 	auto alienCity = state.cities["CITYMAP_ALIEN"];
 	TEST_REQUIRE(alienCity && alienCity->size.z > 0, "alien city has no z size");
@@ -581,14 +588,6 @@ static bool test_overspawn_invasion()
 	             "front={0} back={1}",
 	             (int)invader->missions.front().type, (int)invader->missions.back().type);
 	TEST_REQUIRE(!sawAttackBuilding, "Overspawn mothership was given AttackBuilding");
-	for (auto &pref : state.ufo_mission_preference)
-	{
-		auto it = savedLists.find(pref.first);
-		if (it != savedLists.end())
-		{
-			pref.second->missionList = it->second;
-		}
-	}
 	return true;
 }
 
@@ -999,6 +998,7 @@ int main(int argc, char **argv)
 	}
 
 	return runTestSuite({
+	    {"ufo_mission_preference_loaded", test_ufo_mission_preference_loaded},
 	    {"org_park_funds", test_org_park_funds},
 	    {"org_park_sell_surplus", test_org_park_sell_surplus},
 	    {"purchase_deduct", test_purchase_deduct},
@@ -1006,7 +1006,6 @@ int main(int argc, char **argv)
 	    {"goto_building_fallback", test_goto_building_fallback},
 	    {"destination_gate", test_destination_gate},
 	    {"overspawn_invasion", test_overspawn_invasion},
-	    {"ufo_mission_preference_loaded", test_ufo_mission_preference_loaded},
 	    {"infiltration_display_percent", test_infiltration_display_percent},
 	    {"ufo_growth_rates_match_exe", test_ufo_growth_rates_match_exe},
 	    {"manufacture_dimension_probe", test_manufacture_dimension_probe},

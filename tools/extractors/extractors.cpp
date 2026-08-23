@@ -350,6 +350,13 @@ void InitialGameStateExtractor::extractCommon(GameState &state) const
 	this->extractSharedCityResources(state);
 }
 
+void InitialGameStateExtractor::reapplyExeListTables(GameState &state) const
+{
+	this->extractUfoGrowth(state);
+	this->extractUfoIncursions(state);
+	this->extractUfoMissionPreference(state);
+}
+
 void InitialGameStateExtractor::extract(GameState &state, Difficulty difficulty) const
 {
 	state.difficulty = (int)difficulty;

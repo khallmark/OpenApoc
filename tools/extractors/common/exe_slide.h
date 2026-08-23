@@ -2,6 +2,7 @@
 
 #include "tools/extractors/common/crew.h"
 #include <cstdint>
+#include <iosfwd>
 
 namespace OpenApoc
 {
@@ -49,7 +50,7 @@ inline bool tacpFileSlide(uint32_t crc, int32_t &slide)
 }
 
 // crew_ufo_downed @ 0x13E560 is byte-identical at the same file offset on 4-build (P↔P4).
-inline off_t ufo2pTableOffset(int32_t slide, off_t canonicalOffset)
+inline std::streamoff ufo2pTableOffset(int32_t slide, std::streamoff canonicalOffset)
 {
 	if (slide == 0xE00 && canonicalOffset >= CREW_UFO_DOWNED_OFFSET_START &&
 	    canonicalOffset < CREW_UFO_DOWNED_OFFSET_END)

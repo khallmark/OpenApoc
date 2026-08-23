@@ -13,6 +13,7 @@
 #include "game/state/rules/city/scenerytiletype.h"
 #include "library/strings.h"
 #include "library/vec.h"
+#include "library/xorshift.h"
 #include <algorithm>
 
 // Uncomment to turn off org missions
