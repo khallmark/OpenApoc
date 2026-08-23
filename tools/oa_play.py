@@ -48,7 +48,11 @@ STAGE_FORMS = {
     "ResearchScreen": "researchscreen",
     "ResearchSelect": "researchselect",
     "RecruitScreen": "recruitscreen",
+    # TransactionScreen is a base class; the concrete screens all share its form.
     "TransactionScreen": "transactionscreen",
+    "BuyAndSellScreen": "transactionscreen",
+    "TransferScreen": "transactionscreen",
+    "AlienContainmentScreen": "transactionscreen",
     "VEquipScreen": "vequipscreen",
     "AEquipScreen": "aequipscreen",
     "UfopaediaView": "ufopaediatitle",
@@ -649,19 +653,19 @@ def visit_economy(d: Driver) -> bool:
         return False
     d.click_id("BUTTON_BASE_BUYSELL", st); time.sleep(0.7)
     st = d.status()
-    ok = st.stage == "TransactionScreen"
+    ok = st.stage in ("BuyAndSellScreen", "TransactionScreen")
     if ok:
         d.shot("transactionscreen")
         for cat in ("BUTTON_FLYING", "BUTTON_GROUND", "BUTTON_AGENTS"):
             d.click_id(cat, st); time.sleep(0.35)
         d.say(f"[economy] transaction screen reached; funds {d.h.gs('funds')}")
     else:
-        d.say(f"[economy] expected TransactionScreen, got {st.stage}")
+        d.say(f"[economy] expected the buy/sell screen, got {st.stage}")
     for _ in range(6):
         st = d.status()
         if st.stage == "CityView":
             break
-        if st.stage in ("TransactionScreen", "BaseScreen"):
+        if st.stage in ("BuyAndSellScreen", "TransactionScreen", "BaseScreen"):
             d.click_id("BUTTON_OK", st); time.sleep(0.6)
         elif not d.dismiss_modal(st):
             d.h.key("Escape"); time.sleep(0.5)
