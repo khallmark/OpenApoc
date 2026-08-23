@@ -636,7 +636,16 @@ def intercept_ufos(d: Driver) -> int:
     ufos = d.h.screen_craft("ufos_screen")
     live = [(x, y) for (x, y, crashed) in ufos if not crashed]
     if not live:
-        return 0
+        # Nothing targetable on screen. Bring a UFO into view -- an off-screen craft cannot be
+        # clicked at all, which silently made interception a no-op.
+        centred = d.h.gs("centre_on_ufo")
+        if centred.get("centred") != "1":
+            return 0
+        time.sleep(0.5)
+        ufos = d.h.screen_craft("ufos_screen")
+        live = [(x, y) for (x, y, crashed) in ufos if not crashed]
+        if not live:
+            return 0
     mine = d.h.screen_craft("vehicles_screen")
     if not mine:
         return 0
@@ -686,7 +695,16 @@ def play_battle(d: Driver, budget_s: float = 300.0) -> str:
                 d.click_id("BUTTON_SPEED3", st)   # fastest real-time battle speed
                 time.sleep(0.5)
             # Nudge the squad around the map so movement/pathing/hazards get exercised.
-            d.h.key("Tab")            # cycle selected unit
+            #
+            # NOTE: this used to send "Tab" here as a "cycle selected unit" hotkey, but in
+            # BattleView Tab is actually bound to BUTTON_TOGGLE_STRATMAP (see
+            # game/ui/tileview/battleview.cpp, SDLK_TAB case: it clicks the strategic-map
+            # toggle, not a unit-cycle command). Sending it every loop iteration was flipping
+            # the view between tactical and strategic roughly every 2s, so a large fraction of
+            # the "click cx cy right" move orders below were being issued into whichever map
+            # happened to be showing rather than reliably into the tactical view. There is no
+            # dedicated unit-cycle hotkey in this build, so just drop the erroneous keypress
+            # rather than mis-target a different one.
             cx, cy = st.w // 2, int(st.h * 0.42)
             d.h.send(f"click {cx} {cy} right")   # right click = move order
             time.sleep(2.0)

@@ -7,6 +7,7 @@
 #include "game/state/city/research.h"
 #include "game/state/city/vehicle.h"
 #include "game/state/city/vehiclemission.h"
+#include "game/state/rules/city/vehicletype.h"
 #include "game/state/gamestate.h"
 #include "game/state/gametime.h"
 #include "game/state/shared/agent.h"
@@ -161,7 +162,10 @@ UString describeTurbo(GameState &state)
 			{
 				continue;
 			}
-			if (vehicle->owner->isRelatedTo(player) == Organisation::Relation::Hostile)
+			// Mirror GameState::canTurbo exactly: only aggressive hostile craft block turbo,
+			// so counting every hostile-owned vehicle would mislead the driver.
+			if (vehicle->type->aggressiveness > 0 &&
+			    vehicle->owner->isRelatedTo(player) == Organisation::Relation::Hostile)
 			{
 				hostileAggressive++;
 			}
