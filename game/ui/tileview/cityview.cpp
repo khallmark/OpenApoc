@@ -3922,10 +3922,10 @@ bool CityView::handleMouseDown(Event *e)
 				{
 					vehicle =
 					    std::dynamic_pointer_cast<TileObjectVehicle>(collision.obj)->getVehicle();
-					LogWarning("CLICKED VEHICLE {0} at {1}", vehicle->name, vehicle->position);
+					LogInfo("CLICKED VEHICLE {0} at {1}", vehicle->name, vehicle->position);
 					for (auto &m : vehicle->missions)
 					{
-						LogWarning("Mission {0}", m.getName());
+						LogInfo("Mission {0}", m.getName());
 					}
 					for (auto &c : vehicle->cargo)
 					{
@@ -3970,11 +3970,11 @@ bool CityView::handleMouseDown(Event *e)
 				{
 					vehicle = std::dynamic_pointer_cast<TileObjectVehicle>(collisionVehicle.obj)
 					              ->getVehicle();
-					LogWarning("SECONDARY CLICK ON VEHICLE {0} at {1}", vehicle->name,
+					LogInfo("SECONDARY CLICK ON VEHICLE {0} at {1}", vehicle->name,
 					           vehicle->position);
 					for (auto &m : vehicle->missions)
 					{
-						LogWarning("Mission {0}", m.getName());
+						LogInfo("Mission {0}", m.getName());
 					}
 					for (auto &c : vehicle->cargo)
 					{

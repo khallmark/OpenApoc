@@ -611,6 +611,43 @@ def assign_research(d: Driver) -> bool:
     return after.get("labs_busy", "0") != before.get("labs_busy", "0")
 
 
+def visit_economy(d: Driver) -> bool:
+    """Open the buy/sell screen and page its categories.
+
+    Exercises TransactionScreen construction and the transaction controls, which this branch
+    changed. Stops short of committing a purchase: the quantity steppers are runtime-populated
+    rows, and a half-understood click there would corrupt the campaign's finances rather than
+    test them.
+    """
+    st = d.wait_for("CityView", 60)
+    d.click_id("BUTTON_TAB_1", st); time.sleep(0.4)
+    if not d.click_id("BUTTON_SHOW_BASE", d.status()):
+        return False
+    try:
+        st = d.wait_for("BaseScreen", 30)
+    except TimeoutError:
+        return False
+    d.click_id("BUTTON_BASE_BUYSELL", st); time.sleep(0.7)
+    st = d.status()
+    ok = st.stage == "TransactionScreen"
+    if ok:
+        d.shot("transactionscreen")
+        for cat in ("BUTTON_FLYING", "BUTTON_GROUND", "BUTTON_AGENTS"):
+            d.click_id(cat, st); time.sleep(0.35)
+        d.say(f"[economy] transaction screen reached; funds {d.h.gs('funds')}")
+    else:
+        d.say(f"[economy] expected TransactionScreen, got {st.stage}")
+    for _ in range(6):
+        st = d.status()
+        if st.stage == "CityView":
+            break
+        if st.stage in ("TransactionScreen", "BaseScreen"):
+            d.click_id("BUTTON_OK", st); time.sleep(0.6)
+        elif not d.dismiss_modal(st):
+            d.h.key("Escape"); time.sleep(0.5)
+    return ok
+
+
 def visit_ufopaedia(d: Driver) -> bool:
     st = d.wait_for("CityView", 60)
     if not d.click_id("BUTTON_SHOW_UFOPAEDIA", st):
@@ -754,6 +791,7 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
 
     d.checks["research_started"] = assign_research(d)
     d.checks["ufopaedia_opened"] = visit_ufopaedia(d)
+    d.checks["economy_opened"] = visit_economy(d)
 
     battles = 0
     elapsed = 0.0
