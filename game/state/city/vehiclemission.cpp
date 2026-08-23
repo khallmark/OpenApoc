@@ -2779,8 +2779,18 @@ void VehicleMission::setPathTo(GameState &state, Vehicle &v, Vec3<int> target, i
 			// produced no usable path at all. This case used to consume no attempt, so
 			// GotoLocation re-planned from the same stale targetLocation every tick forever --
 			// observed as a single craft emitting hundreds of consecutive "target unreachable"
-			// warnings near a map-edge portal. Counting it lets the existing giveUpIfInvalid
-			// path (driven by reRouteAttempts hitting zero) terminate the mission instead.
+			// warnings near a map-edge portal.
+			//
+			// Terminate here rather than only decrementing: the caller decides giveUpIfInvalid
+			// from reRouteAttempts == 0, so a branch that merely decrements becomes a silent
+			// no-op once the budget is spent and never actually stops the loop. Cancel the
+			// mission but do NOT crash the craft -- unlike the permanently-blocked close target
+			// above, "I cannot plot a route that far" is a planning failure, not a collision.
+			if (giveUpIfInvalid)
+			{
+				cancelled = true;
+				return;
+			}
 			if (reRouteAttempts > 0)
 			{
 				reRouteAttempts--;

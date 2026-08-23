@@ -164,7 +164,8 @@ UString describeTurbo(GameState &state)
 		for (const auto &v : state.vehicles)
 		{
 			const auto &vehicle = v.second;
-			if (!vehicle || vehicle->city != state.current_city || !vehicle->owner)
+			if (!vehicle || vehicle->city != state.current_city || !vehicle->owner ||
+			    !vehicle->type)
 			{
 				continue;
 			}

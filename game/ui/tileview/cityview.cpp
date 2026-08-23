@@ -1829,7 +1829,14 @@ CityView::CityView(sp<GameState> state)
 #endif
 }
 
-CityView::~CityView() = default;
+CityView::~CityView()
+{
+	// Our harness handler captured a raw `this`. Normally the next gameplay stage re-registers
+	// and displaces it, but "Abandon Game" replaces the stack with MainMenu and nothing
+	// re-registers -- leaving a global std::function holding a dangling CityView. Put back
+	// whatever was installed before us.
+	setHarnessQueryHandler(previousHarnessHandler);
+}
 
 void CityView::begin()
 {
@@ -2080,7 +2087,8 @@ void CityView::registerCityViewIntrospection()
 {
 	// Chain in front of the GameState handler installed by registerGameStateIntrospection():
 	// view-space queries are answered here, everything else falls through unchanged.
-	auto stateHandler = getHarnessQueryHandler();
+	previousHarnessHandler = getHarnessQueryHandler();
+	auto stateHandler = previousHarnessHandler;
 	std::weak_ptr<GameState> weakState = state;
 	CityView *view = this;
 	setHarnessQueryHandler(
