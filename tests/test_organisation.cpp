@@ -103,6 +103,26 @@ static bool test_can_purchase_hostile()
 	return true;
 }
 
+static bool test_raid_relation_pressure()
+{
+	GameState state;
+	sp<Organisation> a;
+	sp<Organisation> b;
+	addOrg(state, "ORG_A", a);
+	addOrg(state, "ORG_B", b);
+	StateRef<Organisation> other{&state, "ORG_B"};
+	StateRef<Organisation> self{&state, "ORG_A"};
+
+	a->current_relations[other] = 0.0f;
+	a->long_term_relations[other] = 20.0f;
+	TEST_REQUIRE(a->raidRelationPressure(other) == 20.0f, "pressure before snapshot is {0}",
+	             a->raidRelationPressure(other));
+	a->updateRelations(self);
+	TEST_REQUIRE(a->raidRelationPressure(other) == 1.0f, "pressure after snapshot is {0}",
+	             a->raidRelationPressure(other));
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -115,5 +135,6 @@ int main(int argc, char **argv)
 	    {"relation_bands", test_relation_bands},
 	    {"adjust_clamp_and_sign", test_adjust_clamp_and_sign},
 	    {"can_purchase_hostile", test_can_purchase_hostile},
+	    {"raid_relation_pressure", test_raid_relation_pressure},
 	});
 }

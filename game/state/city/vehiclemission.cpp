@@ -24,6 +24,7 @@
 #include "game/state/tilemap/tileobject_scenery.h"
 #include "game/state/tilemap/tileobject_vehicle.h"
 #include "library/strings_format.h"
+#include <algorithm>
 #include <glm/glm.hpp>
 
 namespace OpenApoc
@@ -116,21 +117,29 @@ bool FlyingVehicleTileHelper::canEnterTile(Tile *from, Tile *to, bool, bool &, f
 		return false;
 	}
 
-	// Allow pathing into tiles with crashes
+	// Occupancy uses extracted vehicle_data size_x/size_y (same rule as GroundVehicleTileHelper).
 	bool foundCrash = false;
 	bool foundScenery = false;
 	const auto self = v.shared_from_this();
-	for (auto &obj : to->intersectingObjects)
+	Vec2<int> footprint{std::max(1, size.x), std::max(1, size.y)};
+	for (const auto &tilePos : GroundVehicleTileHelper::footprintTiles(toPos, footprint))
 	{
-		if (obj->getType() == TileObject::Type::Vehicle)
+		if (!map.tileIsValid(tilePos))
 		{
+			return false;
+		}
+		auto tile = map.getTile(tilePos);
+		for (auto &obj : tile->intersectingObjects)
+		{
+			if (obj->getType() != TileObject::Type::Vehicle)
+			{
+				continue;
+			}
 			auto vehicleTile = std::static_pointer_cast<TileObjectVehicle>(obj);
-			// Large vehicles span multiple tiles
 			if (vehicleTile->getVehicle() == self)
 			{
 				continue;
 			}
-			// Non-crashed can go into crashed
 			bool vehicleCrashed = vehicleTile->getVehicle()->crashed;
 			if (v.crashed || !vehicleCrashed)
 			{
@@ -141,11 +150,12 @@ bool FlyingVehicleTileHelper::canEnterTile(Tile *from, Tile *to, bool, bool &, f
 				foundCrash = true;
 			}
 		}
-	}
-	for (auto &obj : to->ownedObjects)
-	{
-		if (!foundScenery && obj->getType() == TileObject::Type::Scenery)
+		for (auto &obj : tile->ownedObjects)
 		{
+			if (foundScenery || obj->getType() != TileObject::Type::Scenery)
+			{
+				continue;
+			}
 			auto sceneryTile = std::static_pointer_cast<TileObjectScenery>(obj);
 			if (sceneryTile->scenery.lock()->type->isLandingPad)
 			{
@@ -159,25 +169,6 @@ bool FlyingVehicleTileHelper::canEnterTile(Tile *from, Tile *to, bool, bool &, f
 		return false;
 	}
 
-	// TODO: Try to block diagonal paths clipping past scenery:
-	//
-	// IE in a 2x2 'flat' case:
-	// 'f' = origin tile, 's' = scenery', 't' = target
-	//-------
-	// +-+
-	// |s| t
-	// +-+-+
-	// f |s|
-	//   +-+
-	//-------
-	// we clearly should disallow moving from v->t despite them being 'adjacent' and empty
-	// themselves
-	// TODO: Is this then OK for vehicles? as 'most' don't fill the tile?
-	// TODO: Can fix the above be fixed by restricting the 'bounds' to the actual voxel map,
-	// instead of a while tile? Then comparing against 'intersectingTiles' vehicle objects?
-
-	// FIXME: Handle 'large' vehicles interacting more than with just the 'owned' objects of a
-	// single tile?
 	cost = glm::length(Vec3<float>{fromPos} - Vec3<float>{toPos});
 	return true;
 }
@@ -3460,31 +3451,62 @@ bool GroundVehicleTileHelper::canEnterTile(Tile *from, Tile *to, bool, bool &, f
 		}
 	}
 
-	// One vehicle per road tile. Same intersectingObjects rule as FlyingVehicleTileHelper.
+	// Occupancy uses extracted vehicle_data size_x/size_y (same intersectingObjects rule as
+	// flyers).
 	if (v)
 	{
-		const auto self = v->shared_from_this();
-		for (auto &obj : to->intersectingObjects)
+		Vec2<int> footprint{1, 1};
+		for (const auto &s : v->type->size)
 		{
-			if (obj->getType() != TileObject::Type::Vehicle)
-			{
-				continue;
-			}
-			auto vehicleTile = std::static_pointer_cast<TileObjectVehicle>(obj);
-			if (vehicleTile->getVehicle() == self)
-			{
-				continue;
-			}
-			const bool vehicleCrashed = vehicleTile->getVehicle()->crashed;
-			if (v->crashed || !vehicleCrashed)
+			footprint.x = std::max(footprint.x, s.second.x);
+			footprint.y = std::max(footprint.y, s.second.y);
+		}
+		const auto self = v->shared_from_this();
+		for (const auto &tilePos : footprintTiles(toPos, footprint))
+		{
+			if (!map.tileIsValid(tilePos))
 			{
 				return false;
+			}
+			auto tile = map.getTile(tilePos);
+			for (auto &obj : tile->intersectingObjects)
+			{
+				if (obj->getType() != TileObject::Type::Vehicle)
+				{
+					continue;
+				}
+				auto vehicleTile = std::static_pointer_cast<TileObjectVehicle>(obj);
+				if (vehicleTile->getVehicle() == self)
+				{
+					continue;
+				}
+				const bool vehicleCrashed = vehicleTile->getVehicle()->crashed;
+				if (v->crashed || !vehicleCrashed)
+				{
+					return false;
+				}
 			}
 		}
 	}
 
 	cost = 1.0f;
 	return true;
+}
+
+std::vector<Vec3<int>> GroundVehicleTileHelper::footprintTiles(Vec3<int> origin, Vec2<int> size)
+{
+	std::vector<Vec3<int>> tiles;
+	const int sx = std::max(1, size.x);
+	const int sy = std::max(1, size.y);
+	tiles.reserve(static_cast<size_t>(sx * sy));
+	for (int y = 0; y < sy; y++)
+	{
+		for (int x = 0; x < sx; x++)
+		{
+			tiles.emplace_back(origin.x + x, origin.y + y, origin.z);
+		}
+	}
+	return tiles;
 }
 
 float GroundVehicleTileHelper::getDistance(Vec3<float> from, Vec3<float> to) const

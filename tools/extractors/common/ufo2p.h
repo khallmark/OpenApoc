@@ -19,6 +19,7 @@
 #include "tools/extractors/common/research.h"
 #include "tools/extractors/common/scenerytile.h"
 #include "tools/extractors/common/strtab.h"
+#include "tools/extractors/common/ufogrowth.h"
 #include "tools/extractors/common/ufopaedia.h"
 #include "tools/extractors/common/vehicle.h"
 #include "tools/extractors/common/vequipment.h"
@@ -54,6 +55,8 @@ class UFO2P
 	std::unique_ptr<DataChunk<OrgVehicleParkData>> vehicle_park;
 
 	std::unique_ptr<StrTab> ufopaedia_group;
+	std::unique_ptr<DataChunk<ManufacturingData>> manufacturing_data;
+	std::unique_ptr<StrTab> manufacturing_names;
 
 	std::unique_ptr<DataChunk<RawSoundData>> rawsound;
 	std::unique_ptr<DataChunk<BaseLayoutData>> baselayouts;
@@ -94,6 +97,7 @@ class UFO2P
 	std::unique_ptr<DataChunk<OrgInfiltrationSpeed>> infiltration_speed_org;
 	std::unique_ptr<DataChunk<AgentInfiltrationSpeed>> infiltration_speed_agent;
 	std::unique_ptr<DataChunk<BuildingInfiltrationSpeed>> infiltration_speed_building;
+	std::unique_ptr<DataChunk<UfoGrowthRates>> ufo_growth_rates;
 
 	UString getOrgId(int idx) const
 	{

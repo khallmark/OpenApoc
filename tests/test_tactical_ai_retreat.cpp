@@ -1,5 +1,6 @@
 #include "framework/configfile.h"
 #include "game/state/battle/ai/tacticalaivanilla.h"
+#include "game/state/battle/ai/unitailowmorale.h"
 #include "tests/test_helpers.h"
 
 using namespace OpenApoc;
@@ -25,6 +26,19 @@ static bool test_retreat_table()
 	return true;
 }
 
+static bool test_panic_run_farther_from_enemy()
+{
+	const Vec3<float> enemy{0.0f, 0.0f, 0.0f};
+	const Vec3<float> current{4.0f, 0.0f, 0.0f};
+	TEST_REQUIRE(UnitAILowMorale::isFartherFromEnemy({8.0f, 0.0f, 0.0f}, current, enemy),
+	             "farther block rejected");
+	TEST_REQUIRE(!UnitAILowMorale::isFartherFromEnemy({2.0f, 0.0f, 0.0f}, current, enemy),
+	             "closer block accepted");
+	TEST_REQUIRE(!UnitAILowMorale::isFartherFromEnemy(current, current, enemy),
+	             "same-distance block accepted");
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -34,5 +48,6 @@ int main(int argc, char **argv)
 	applyDeterministicTestConfig();
 	return runTestSuite({
 	    {"retreat_table", test_retreat_table},
+	    {"panic_run_farther_from_enemy", test_panic_run_farther_from_enemy},
 	});
 }

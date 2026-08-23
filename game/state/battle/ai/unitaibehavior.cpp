@@ -37,6 +37,7 @@ std::tuple<AIDecision, bool> UnitAIBehavior::think(GameState &state, BattleUnit 
 	switch (u.behavior_mode)
 	{
 		case BattleUnit::BehaviorMode::Aggressive:
+			// ai.txt: "Aggressive AI: Nothing?" — no cover/kneel; Default + Vanilla still run.
 			active = false;
 			attackerPosition = NONE;
 			hitsSinceThink = 0;

@@ -77,6 +77,25 @@ static int getPsiAttackChance(int psiAttack, int psiDefense, PsiStatus status, b
 	return chance;
 }
 
+int BattleUnit::applyMindShieldIncrement(int currentBonus)
+{
+	return std::min(200, currentBonus + 30);
+}
+
+int BattleUnit::getEffectivePsiDefence() const
+{
+	if (!agent)
+	{
+		return 0;
+	}
+	int defense = agent->modified_stats.psi_defence + mindShieldBonus;
+	if (defense > 99)
+	{
+		defense = 99;
+	}
+	return defense;
+}
+
 namespace
 {
 static const std::set<TileObject::Type> mapPartSet = {
@@ -1082,8 +1101,8 @@ int BattleUnit::getPsiChanceForEquipment(StateRef<BattleUnit> target, PsiStatus 
 		return 0;
 	}
 
-	return getPsiAttackChance(agent->modified_stats.psi_attack,
-	                          target->agent->modified_stats.psi_defence, status);
+	return getPsiAttackChance(agent->modified_stats.psi_attack, target->getEffectivePsiDefence(),
+	                          status);
 }
 
 bool BattleUnit::startAttackPsi(GameState &state, StateRef<BattleUnit> target, PsiStatus status,
@@ -1855,7 +1874,7 @@ void BattleUnit::applyMoraleDamage(int moraleDamage, int psiAttackPower, GameSta
 	LogWarning("Psionic damageType");
 	const int random = randBoundsExclusive(state.rng, 0, 100);
 	const int chance =
-	    getPsiAttackChance(psiAttackPower, agent->modified_stats.psi_defence, PsiStatus::Panic);
+	    getPsiAttackChance(psiAttackPower, getEffectivePsiDefence(), PsiStatus::Panic);
 
 	LogWarning("Chance: {0}  Random: {1}", chance, random);
 
@@ -2221,19 +2240,27 @@ void BattleUnit::updateMorale(GameState &state, unsigned int ticks)
 					default:
 						break;
 				}
-				// Have a chance to drop items in hand
-				if (moraleState != MoraleState::Berserk)
+				// ai.txt Panic Run: "Drops whatever in hands". Freeze keeps a 50% chance.
+				if (moraleState == MoraleState::PanicRun)
 				{
-					if (randBool(state.rng))
+					if (e1)
 					{
-						if (e1)
-						{
-							addMission(state, BattleUnitMission::dropItem(*this, e1));
-						}
-						if (e2)
-						{
-							addMission(state, BattleUnitMission::dropItem(*this, e2));
-						}
+						addMission(state, BattleUnitMission::dropItem(*this, e1));
+					}
+					if (e2)
+					{
+						addMission(state, BattleUnitMission::dropItem(*this, e2));
+					}
+				}
+				else if (moraleState == MoraleState::PanicFreeze && randBool(state.rng))
+				{
+					if (e1)
+					{
+						addMission(state, BattleUnitMission::dropItem(*this, e1));
+					}
+					if (e2)
+					{
+						addMission(state, BattleUnitMission::dropItem(*this, e2));
 					}
 				}
 			}
@@ -5118,7 +5145,6 @@ bool BattleUnit::useItem(GameState &state, sp<AEquipment> item)
 		case AEquipmentType::Type::DimensionForceField:
 		case AEquipmentType::Type::DisruptorShield:
 		case AEquipmentType::Type::Loot:
-		case AEquipmentType::Type::MindShield:
 		case AEquipmentType::Type::MultiTracker:
 		case AEquipmentType::Type::StructureProbe:
 		case AEquipmentType::Type::VortexAnalyzer:
@@ -5145,6 +5171,10 @@ bool BattleUnit::useItem(GameState &state, sp<AEquipment> item)
 				}
 			}
 			item->inUse = !item->inUse;
+			return true;
+		case AEquipmentType::Type::MindShield:
+			mindShieldBonus = applyMindShieldIncrement(mindShieldBonus);
+			item->inUse = true;
 			return true;
 		case AEquipmentType::Type::MediKit:
 			// Initial use of medikit just brings up interface, action and TU spent happens

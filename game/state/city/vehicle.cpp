@@ -3997,7 +3997,8 @@ void Cargo::refund(GameState &state, StateRef<Building> currentBuilding)
 			LogError("Bought cargo from nobody!? WTF?");
 			return;
 		}
-		originalOwner->balance -= cost * count / divisor;
+		// Purchase already credited originalOwner via settleMarketPurchase.
+		// Expiry refunds the buyer only (UFO2P cancel-order copy).
 		if (destination->owner == state.getPlayer())
 		{
 			fw().pushEvent(

@@ -48,6 +48,10 @@ UFO2P::UFO2P(std::string file_name)
 	                                             RESEARCH_DESCRIPTION_STRTAB_OFFSET_END));
 	this->ufopaedia_group.reset(
 	    new StrTab(file, UFOPAEDIA_GROUP_STRTAB_OFFSET_START, UFOPAEDIA_GROUP_STRTAB_OFFSET_END));
+	this->manufacturing_data.reset(new DataChunk<ManufacturingData>(
+	    file, MANUFACTURING_DATA_OFFSET_START, MANUFACTURING_DATA_OFFSET_END));
+	this->manufacturing_names.reset(new StrTab(file, MANUFACTURING_NAME_STRTAB_OFFSET_START,
+	                                           MANUFACTURING_NAME_STRTAB_OFFSET_END, true));
 
 	this->organisation_data.reset(new DataChunk<OrganisationData>(
 	    file, ORGANISATION_DATA_OFFSET_START, ORGANISATION_DATA_OFFSET_END));
@@ -144,6 +148,8 @@ UFO2P::UFO2P(std::string file_name)
 	    file, BUILDING_INFILTRATION_SPEED_OFFSET_START, BUILDING_INFILTRATION_SPEED_OFFSET_END));
 	this->building_cost_data.reset(new DataChunk<BuildingCostData>(
 	    file, BUILDING_COST_STRUCT_OFFSET_START, BUILDING_COST_STRUCT_OFFSET_END));
+	this->ufo_growth_rates.reset(new DataChunk<UfoGrowthRates>(file, UFO_GROWTH_RATES_OFFSET_START,
+	                                                           UFO_GROWTH_RATES_OFFSET_END));
 }
 
 void UFO2P::fillCrew(GameState &state, CrewData crew,

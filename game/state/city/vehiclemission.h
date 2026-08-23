@@ -7,6 +7,7 @@
 #include "library/strings.h"
 #include "library/vec.h"
 #include <list>
+#include <vector>
 
 namespace OpenApoc
 {
@@ -87,6 +88,9 @@ class GroundVehicleTileHelper : public CanEnterTileHelper
 
 	static float getDistanceStatic(Vec3<float> from, Vec3<float> to);
 	static float getDistanceStatic(Vec3<float> from, Vec3<float> toStart, Vec3<float> toEnd);
+
+	// vehicle_data size_x/size_y tiles covered when the origin is `origin`.
+	static std::vector<Vec3<int>> footprintTiles(Vec3<int> origin, Vec2<int> size);
 
 	// Convert vector direction into index for tube array
 	int convertDirection(Vec3<int> dir) const;

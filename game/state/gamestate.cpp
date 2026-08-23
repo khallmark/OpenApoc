@@ -822,6 +822,12 @@ void GameState::invasion()
 		preference = this->ufo_mission_preference.find(
 		    format("{0}{1}", UFOMissionPreference::getPrefix(), "DEFAULT"));
 	}
+	if (preference == this->ufo_mission_preference.end() || !preference->second ||
+	    preference->second->missionList.empty())
+	{
+		LogWarning("No UFO mission preference for week {0}; skipping invasion", week);
+		return;
+	}
 	auto missionType = pickRandom(rng, preference->second->missionList);
 	// Compile list of missions rated by priority
 	std::map<int, sp<UFOIncursion>> incursions;
@@ -941,7 +947,16 @@ void GameState::invasion()
 			invader->enterDimensionGate(*this);
 			invader->city = invadedCity;
 			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader));
-			invader->addMission(*this, VehicleMission::attackBuilding(*this, *invader), true);
+			if (missionType == UFOIncursion::PrimaryMission::Overspawn)
+			{
+				invader->addMission(
+				    *this, VehicleMission::infiltrateOrSubvertBuilding(*this, *invader, false),
+				    true);
+			}
+			else
+			{
+				invader->addMission(*this, VehicleMission::attackBuilding(*this, *invader), true);
+			}
 		}
 	}
 }
@@ -1303,6 +1318,11 @@ void GameState::updateEndOfDay()
 		o.second->updateVehicleAgentPark(*this);
 		o.second->updateHirableAgents(*this);
 		o.second->updateDailyInfiltrationHistory();
+		if (o.second->initiatesDiplomacy)
+		{
+			// Must run before updateRelations overwrites long_term with current.
+			o.second->setRaidMissions(*this, current_city);
+		}
 		const float relationshipDelta = o.second->updateRelations(player);
 
 		if (o.second->initiatesDiplomacy)
@@ -1314,8 +1334,6 @@ void GameState::updateEndOfDay()
 				fw().pushEvent(new GameOrganisationEvent(GameEventType::OrganisationRequestBribe,
 				                                         {this, o.first}));
 			}
-
-			o.second->setRaidMissions(*this, current_city);
 		}
 	}
 	for (auto &a : this->agents)
@@ -1339,19 +1357,16 @@ void GameState::updateEndOfDay()
 void GameState::updateUfoGrowth()
 {
 	const int week = static_cast<int>(this->gameTime.getWeek());
-
-	// TODO: Make this query the UFOGrowth::week value?
-	auto growthIt = this->ufo_growth_lists.find(format("UFO_GROWTH_{0}", week));
-	if (growthIt == this->ufo_growth_lists.end())
-	{
-		growthIt = this->ufo_growth_lists.find("UFO_GROWTH_DEFAULT");
-	}
-	if (growthIt == this->ufo_growth_lists.end())
+	const auto growth = UFOGrowth::selectForWeek(*this, week);
+	if (!growth)
 	{
 		LogWarning("No valid UFO growth lists found");
 		return;
 	}
-	const auto &growth = growthIt->second;
+	if (!UFOGrowth::craftFactoryIntact(*this))
+	{
+		return;
+	}
 
 	const auto limitIt = this->ufo_growth_lists.find("UFO_GROWTH_LIMIT");
 	if (limitIt == this->ufo_growth_lists.end())

@@ -1,6 +1,7 @@
 #include "framework/framework.h"
 #include "game/state/gamestate.h"
 #include "game/state/rules/city/baselayout.h"
+#include "game/state/rules/city/ufopaedia.h"
 #include "tools/extractors/common/ufo2p.h"
 #include "tools/extractors/extractors.h"
 
@@ -78,34 +79,32 @@ void InitialGameStateExtractor::extractResearch(GameState &state) const
 			LogError("Multiple research topics with ID \"{0}\"", id);
 		}
 		state.research.topics[id] = r;
-// FIXME: The ufopaedia entries here don't seem to directly map to the IDs we're currently using?
-// May also be a many:1 ratio (e.g. the "alien gas" research topic unlocks multiple ufopaedia
-// entries) making this more complex
-#if 0
+	}
 
-		auto ufopaediaEntryID = "PAEDIAENTRY_" + canon_string(r->name);
-		auto ufopaediaCatID =
-		    "PAEDIACATEGORY_" + canon_string(data.ufopaedia_group->get(rdata.ufopaediaGroup));
-		auto paediaCat = state.ufopaedia[ufopaediaCatID];
-		if (!paediaCat)
+	// UFO2P non-4 ufopaedia_group at 0x152ADD: 10 names, last is "Alien Craft".
+	// Entry→research unlocks stay in the patch (many:1). Ensure every EXE group exists.
+	if (!data.ufopaedia_group || data.ufopaedia_group->count() != 10)
+	{
+		LogError("ufopaedia_group count {0} expected 10",
+		         data.ufopaedia_group ? data.ufopaedia_group->count() : 0);
+		return;
+	}
+	if (data.ufopaedia_group->get(9) != "Alien Craft")
+	{
+		LogError("ufopaedia_group[9] is \"{0}\" expected Alien Craft",
+		         data.ufopaedia_group->get(9));
+	}
+	for (unsigned i = 0; i < data.ufopaedia_group->count(); i++)
+	{
+		const auto name = data.ufopaedia_group->get(i);
+		const auto catID = UString("PAEDIACATEGORY_") + canon_string(name);
+		if (state.ufopaedia.find(catID) != state.ufopaedia.end())
 		{
-			state.ufopaedia[ufopaediaCatID] = mksp<UfopaediaCategory>();
-			paediaCat = state.ufopaedia[ufopaediaCatID];
+			continue;
 		}
-		auto paediaEntry = paediaCat->entries[ufopaediaEntryID];
-		if (!paediaEntry)
-		{
-			paediaCat->entries[ufopaediaEntryID] = mksp<UfopaediaEntry>();
-			paediaEntry = paediaCat->entries[ufopaediaEntryID];
-		}
-		if (paediaEntry->required_research)
-		{
-			LogError("Multiple required research for UFOPaedia topic \"{0}\" - \"{1}\" and \"{2}\"",
-			         ufopaediaEntryID, r->name,
-			         paediaEntry->required_research->name);
-		}
-		paediaEntry->required_research = {&state, id};
-#endif
+		auto cat = mksp<UfopaediaCategory>();
+		cat->title = name;
+		state.ufopaedia[catID] = cat;
 	}
 }
 

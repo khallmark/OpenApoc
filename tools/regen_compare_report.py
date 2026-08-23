@@ -165,7 +165,7 @@ def constants_tbody() -> str:
         ("TICKS_PER_ENZYME_EFFECT", "game/state/battle/battleunit.h", "TPS/9 — unverified"),
         ("TICKS_PER_FIRE_EFFECT", "game/state/battle/battleunit.h", "Unverified vs original"),
         ("HAZARD_SPREAD_CHANCE", "game/state/battle/battlehazard.h", "Explicitly made up"),
-        ("FUEL_TICKS_PER_SECOND", "game/state/city/vehicle.h", "Hardcoded 144 — must track TPS"),
+        ("FUEL_TICKS_PER_SECOND", "game/state/city/vehicle.h", "Tracks TICKS_PER_SECOND"),
     ]
     rows = []
     for symbol, rel, note in specs:

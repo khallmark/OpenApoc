@@ -1278,7 +1278,7 @@ StateRef<AEquipmentType> Agent::getDominantItemInHands(GameState &state,
 	// - CanFire >> Two-Handed >> Weapon >> Usable Item >> Others
 	int e1Priority =
 	    e1->isFiring()
-	        ? 1440 - e1->weapon_fire_ticks_remaining
+	        ? HAND_WEAPON_FIRE_PRIORITY_BASE - e1->weapon_fire_ticks_remaining
 	        : (e1->canFire(state)
 	               ? 4
 	               : (e1->type->two_handed ? 3
@@ -1290,7 +1290,7 @@ StateRef<AEquipmentType> Agent::getDominantItemInHands(GameState &state,
 	                                              : 0)));
 	int e2Priority =
 	    e2->isFiring()
-	        ? 1440 - e2->weapon_fire_ticks_remaining
+	        ? HAND_WEAPON_FIRE_PRIORITY_BASE - e2->weapon_fire_ticks_remaining
 	        : (e2->canFire(state)
 	               ? 4
 	               : (e2->type->two_handed ? 3

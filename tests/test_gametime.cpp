@@ -1,6 +1,7 @@
 #include "framework/configfile.h"
 #include "game/state/city/vehicle.h"
 #include "game/state/gametime.h"
+#include "game/state/shared/agent.h"
 #include "tests/test_helpers.h"
 
 using namespace OpenApoc;
@@ -93,6 +94,15 @@ static bool test_hardcoded_fuel_ticks_match_tps()
 	return true;
 }
 
+static bool test_hand_weapon_fire_priority_base()
+{
+	TEST_REQUIRE(HAND_WEAPON_FIRE_PRIORITY_BASE == 40 * VANILLA_TICKS_PER_SECOND,
+	             "HAND_WEAPON_FIRE_PRIORITY_BASE is {0}", HAND_WEAPON_FIRE_PRIORITY_BASE);
+	TEST_REQUIRE(HAND_WEAPON_FIRE_PRIORITY_BASE == 1440,
+	             "HAND_WEAPON_FIRE_PRIORITY_BASE changed from the extracted 1440");
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -106,5 +116,6 @@ int main(int argc, char **argv)
 	    {"add_ticks_flags", test_add_ticks_flags},
 	    {"get_ticks_between", test_get_ticks_between_as_implemented},
 	    {"hardcoded_fuel_ticks_match_tps", test_hardcoded_fuel_ticks_match_tps},
+	    {"hand_weapon_fire_priority_base", test_hand_weapon_fire_priority_base},
 	});
 }

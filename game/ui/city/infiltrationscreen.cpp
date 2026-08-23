@@ -33,13 +33,14 @@ static void drawOrgLine(sp<RGBImage> image, const Organisation &org, const Colou
 	// pre-game-start has 0 infilation anyway)
 	auto step_values = std::vector<float>(steps, 0.0f);
 	// First is always current infiltration value
-	step_values[0] = static_cast<float>(std::min(max_infiltration_value, org.infiltrationValue));
+	step_values[0] = static_cast<float>(org.getInfiltrationDisplayPercent());
 	int step = 1;
 	for (const auto step_value : org.infiltrationHistory)
 	{
 		if (step > steps)
 			break;
-		step_values[step] = static_cast<float>(std::min(max_infiltration_value, step_value));
+		step_values[step] =
+		    static_cast<float>(Organisation::infiltrationDisplayPercent(step_value));
 		step++;
 	}
 

@@ -318,6 +318,7 @@ const std::vector<int> InitialGameStateExtractor::buildingFunctionDetectionWeigh
 void InitialGameStateExtractor::extractCommon(GameState &state) const
 {
 	this->extractResearch(state);
+	this->extractManufacturing(state);
 	this->extractOrganisations(state);
 	this->extractVehicleEquipment(state);
 	this->extractAgentBodyTypes(state);
@@ -329,6 +330,7 @@ void InitialGameStateExtractor::extractCommon(GameState &state) const
 	this->extractDoodads(state);
 	this->extractBuildingFunctions(state);
 	this->extractEconomy(state);
+	this->extractUfoGrowth(state);
 
 	// The alien map doesn't change
 	UString alienMapId = City::getPrefix() + "ALIEN";

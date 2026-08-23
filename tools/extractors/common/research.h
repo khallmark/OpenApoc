@@ -29,3 +29,27 @@ static_assert(sizeof(struct ResearchData) == 28, "Invalid research_data size");
 #define RESEARCH_NAME_STRTAB_OFFSET_END 0x14EA20
 #define RESEARCH_DESCRIPTION_STRTAB_OFFSET_START 0x14EA22
 #define RESEARCH_DESCRIPTION_STRTAB_OFFSET_END 0x1501F1
+
+// UFO2P non-4 manufacturing_data at 0x13FD34 (VA 0x113934). 43 × 50-byte records.
+// Names: manufacturing_items 0x1501F3–0x15055A. hexa.txt [48] is short; EXE stride is 50.
+#pragma pack(push, 1)
+struct ManufacturingData
+{
+	uint16_t manufacturable; // 0 = false, 1 = true
+	uint32_t skillHours;
+	uint16_t unused1;
+	uint32_t unused2;
+	uint16_t techRequired; // research_names index
+	uint8_t padding[26];
+	uint32_t manufacturingCost;
+	uint16_t itemType; // 0 vequip, 1 aequip, 2 vequip ammo, 3 craft
+	uint16_t itemIndex;
+	uint16_t labSize; // 0 small, 1 large
+};
+#pragma pack(pop)
+static_assert(sizeof(struct ManufacturingData) == 50, "Invalid manufacturing_data size");
+
+#define MANUFACTURING_DATA_OFFSET_START 0x13FD34
+#define MANUFACTURING_DATA_OFFSET_END 0x14059A
+#define MANUFACTURING_NAME_STRTAB_OFFSET_START 0x1501F3
+#define MANUFACTURING_NAME_STRTAB_OFFSET_END 0x15055A

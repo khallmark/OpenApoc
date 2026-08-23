@@ -238,6 +238,8 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	unsigned int regenTicksAccumulated = 0;
 	// Stun damage acquired
 	int stunDamage = 0;
+	// TACP non-4 flat FUN_0009b780 @ 0x9B780: type 5 adds 0x1e to unit +0x8a, cap 200
+	int mindShieldBonus = 0;
 	// Ticks accumulated towards next enzyme hit
 	unsigned int enzymeDebuffTicksAccumulated = 0;
 	// Enzyme debuff intensity remaining
@@ -413,6 +415,9 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	bool hasLineToPosition(Vec3<float> targetPosition, bool useLOS = false) const;
 
 	// Psi
+	// TACP non-4 flat FUN_0009b780 @ 0x9B780: add 30, cap 200
+	static int applyMindShieldIncrement(int currentBonus);
+	int getEffectivePsiDefence() const;
 	// Get chance of psi attack to succeed
 	int getPsiChanceForEquipment(StateRef<BattleUnit> target, PsiStatus status,
 	                             StateRef<AEquipmentType> item);

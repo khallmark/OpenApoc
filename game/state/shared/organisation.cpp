@@ -12,6 +12,8 @@
 #include "game/state/rules/city/baselayout.h"
 #include "game/state/rules/city/scenerytiletype.h"
 #include "library/strings.h"
+#include "library/vec.h"
+#include <algorithm>
 
 // Uncomment to turn off org missions
 // #define DEBUG_TURN_OFF_ORG_MISSIONS
@@ -346,7 +348,7 @@ void Organisation::setRaidMissions(GameState &state, StateRef<City> city)
 				continue;
 			}
 
-			if (std::max(1.0f, long_term_relations[otherOrg] - current_relations[otherOrg]) >
+			if (raidRelationPressure(otherOrg) >
 			    randBoundsInclusive(state.rng, 0, rules.nextRaidTimer))
 			{
 				rules.nextRaidTimer = 80 - 2 * state.difficulty;
@@ -645,6 +647,27 @@ void Organisation::updateInfiltration(GameState &state)
 	org->infiltrationValue = clamp(org->infiltrationValue + infiltrationModifier, 0, 200);
 }
 
+int Organisation::infiltrationDisplayPercent(int rawValue) { return clamp(rawValue / 2, 0, 100); }
+
+int Organisation::getInfiltrationDisplayPercent() const
+{
+	return infiltrationDisplayPercent(infiltrationValue);
+}
+
+bool Organisation::militarizedFromType(int organizationType)
+{
+	return organizationType == 1 || organizationType == 3;
+}
+
+float Organisation::raidRelationPressure(const StateRef<Organisation> &other) const
+{
+	const auto longIt = long_term_relations.find(other);
+	const auto curIt = current_relations.find(other);
+	const float longTerm = (longIt == long_term_relations.end()) ? 0.0f : longIt->second;
+	const float current = (curIt == current_relations.end()) ? 0.0f : curIt->second;
+	return std::max(1.0f, longTerm - current);
+}
+
 float Organisation::updateRelations(StateRef<Organisation> &playerOrg)
 {
 	float playerRelationshipDelta = 0.0;
@@ -731,7 +754,7 @@ void Organisation::updateVehicleAgentPark(GameState &state)
 		int countVehicles = 0;
 		for (auto &v : state.vehicles)
 		{
-			if (v.second->owner.id == id && v.second->type == entry.first)
+			if (v.second->owner.id == id && v.second->type == entry.first && !v.second->isDead())
 			{
 				countVehicles++;
 			}
@@ -794,6 +817,36 @@ void Organisation::updateVehicleAgentPark(GameState &state)
 			}
 
 			countVehicles++;
+		}
+		while (countVehicles > entry.second && !spaceLiner)
+		{
+			sp<Vehicle> surplus;
+			for (auto &v : state.vehicles)
+			{
+				if (v.second->owner.id == id && v.second->type == entry.first &&
+				    v.second->missions.empty() && v.second->currentAgents.empty() &&
+				    !v.second->crashed && !v.second->isDead())
+				{
+					surplus = v.second;
+					break;
+				}
+			}
+			if (!surplus)
+			{
+				break;
+			}
+			int price = 0;
+			auto economyIt = state.economy.find(entry.first.id);
+			if (economyIt != state.economy.end())
+			{
+				price = economyIt->second.currentPrice;
+			}
+			if (price > 0)
+			{
+				balance += price;
+			}
+			surplus->die(state, true);
+			countVehicles--;
 		}
 	}
 }

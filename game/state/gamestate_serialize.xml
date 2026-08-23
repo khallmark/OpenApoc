@@ -840,6 +840,7 @@
     <member>woundTicksAccumulated</member>
     <member>regenTicksAccumulated</member>
     <member>stunDamage</member>
+    <member>mindShieldBonus</member>
     <member>enzymeDebuffTicksAccumulated</member>
     <member>fireDebuffTicksAccumulated</member>
     <member>enzymeDebuffIntensity</member>
@@ -1397,6 +1398,8 @@
     <member>balance</member>
     <member>income</member>
     <member>rebuildingRate</member>
+    <member>organizationType</member>
+    <member>raidingStrength</member>
     <member>infiltrationValue</member>
     <member>infiltrationHistory</member>
     <member>infiltrationSpeed</member>

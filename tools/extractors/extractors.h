@@ -97,9 +97,11 @@ class InitialGameStateExtractor
 	void extractBaseLayouts(GameState &state) const;
 	void extractVehicleEquipment(GameState &state) const;
 	void extractResearch(GameState &state) const;
+	void extractManufacturing(GameState &state) const;
 	void extractAgentEquipment(GameState &state) const;
 	void extractDoodads(GameState &state) const;
 	void extractEconomy(GameState &state) const;
+	void extractUfoGrowth(GameState &state) const;
 
 	void extractBattlescapeMap(GameState &state, const std::vector<OpenApoc::UString> &paths) const;
 	void extractBattlescapeMapFromPath(GameState &state, const UString dirName,

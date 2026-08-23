@@ -954,28 +954,41 @@ void Battle::groupMove(GameState &state, std::list<StateRef<BattleUnit>> &select
 	if (useTeleporter)
 	{
 		static const Vec3<int> teleportOffsets[] = {
-		    {0, 0, 0},   {-1, 0, 0}, {1, 0, 0},  {0, -1, 0}, {0, 1, 0},  {-1, -1, 0},
-		    {1, -1, 0},  {-1, 1, 0}, {1, 1, 0},  {0, 0, 1},  {0, 0, -1}, {-2, 0, 0},
-		    {2, 0, 0},   {0, -2, 0}, {0, 2, 0},
+		    {0, 0, 0},   {-1, 0, 0}, {1, 0, 0},  {0, -1, 0}, {0, 1, 0},
+		    {-1, -1, 0}, {1, -1, 0}, {-1, 1, 0}, {1, 1, 0},  {0, 0, 1},
+		    {0, 0, -1},  {-2, 0, 0}, {2, 0, 0},  {0, -2, 0}, {0, 2, 0},
 		};
 		size_t offsetIndex = 0;
+		std::list<StateRef<BattleUnit>> remaining;
 		for (auto &unit : selectedUnits)
 		{
 			auto item = unit->agent->getFirstItemByType(AEquipmentType::Type::Teleporter);
 			if (!item || item->ammo != item->type->max_ammo)
 			{
+				remaining.push_back(unit);
 				continue;
 			}
+			bool teleported = false;
 			while (offsetIndex < sizeof(teleportOffsets) / sizeof(teleportOffsets[0]))
 			{
 				const auto dest = targetLocation + teleportOffsets[offsetIndex++];
 				auto *mission = BattleUnitMission::teleport(*unit, item, dest);
 				if (unit->setMission(state, mission) && !mission->cancelled)
 				{
+					teleported = true;
 					break;
 				}
 			}
+			if (!teleported)
+			{
+				remaining.push_back(unit);
+			}
 		}
+		if (remaining.empty())
+		{
+			return;
+		}
+		groupMove(state, remaining, targetLocation, facingDelta, demandGiveWay, false);
 		return;
 	}
 	if (selectedUnits.size() == 1)

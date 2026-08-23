@@ -115,8 +115,16 @@ class Organisation : public StateObject<Organisation>
 	int balance = 0;
 	int income = 0;
 	unsigned int rebuildingRate = 0;
+	// UFO2P organisation_data.organization_type / raiding_strength (file 0x141468).
+	// Types 1 (Megapol) and 3 (Psyke/Diablo/Osiron) are militarized.
+	int organizationType = 0;
+	int raidingStrength = 0;
+	static bool militarizedFromType(int organizationType);
 	int infiltrationValue = 0;
 	std::list<int> infiltrationHistory;
+	// UFOPaedia and the infiltration graph show 0..100; runtime stores 0..200.
+	static int infiltrationDisplayPercent(int rawValue);
+	int getInfiltrationDisplayPercent() const;
 	// Modified for all infiltration attempts at this org
 	int infiltrationSpeed = 0;
 	unsigned int ticksTakeOverAttemptAccumulated = 0;
@@ -148,6 +156,8 @@ class Organisation : public StateObject<Organisation>
 	Organisation() = default;
 
 	void setRaidMissions(GameState &state, StateRef<City> city);
+	// long_term − current, floored at 1. Call before updateRelations snapshots long_term.
+	float raidRelationPressure(const StateRef<Organisation> &other) const;
 	void updateMissions(GameState &state);
 	void updateHirableAgents(GameState &state);
 	void updateInfiltration(GameState &state);

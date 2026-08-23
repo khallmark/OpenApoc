@@ -2,6 +2,7 @@
 #include "framework/framework.h"
 #include "game/state/gamestate.h"
 #include "game/state/rules/city/ufopaedia.h"
+#include "game/state/shared/organisation.h"
 #include "library/strings_format.h"
 #include "tools/extractors/common/ufo2p.h"
 #include "tools/extractors/extractors.h"
@@ -10,9 +11,6 @@
 #define ORG_ALIENS 1
 #define ORG_MEGAPOL 3
 #define ORG_TRANSTELLAR 9
-#define ORG_PSYKE 20
-#define ORG_DIABLO 21
-#define ORG_OSIRON 22
 #define ORG_CIVILIAN 27
 
 namespace OpenApoc
@@ -125,11 +123,9 @@ void InitialGameStateExtractor::extractOrganisations(GameState &state) const
 			o->long_term_relations[o2] = (float)rdata.relationships[j];
 		}
 
-		// Following organizations use special table when determining raids
-		if (i == ORG_MEGAPOL || i == ORG_PSYKE || i == ORG_DIABLO || i == ORG_OSIRON)
-		{
-			o->militarized = true;
-		}
+		o->organizationType = odata.organization_type;
+		o->raidingStrength = static_cast<int>(odata.raiding_strength);
+		o->militarized = Organisation::militarizedFromType(odata.organization_type);
 
 		// Done in common xml patch
 		/*if (i == ORG_CIVILIAN)

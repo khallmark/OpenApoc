@@ -38,6 +38,22 @@ static bool test_factories()
 	return true;
 }
 
+static bool test_ground_footprint_tiles()
+{
+	auto one = GroundVehicleTileHelper::footprintTiles({5, 6, 1}, {1, 1});
+	TEST_REQUIRE(one.size() == 1, "1x1 count");
+	TEST_REQUIRE(one[0] == Vec3<int>(5, 6, 1), "1x1 origin");
+
+	auto wide = GroundVehicleTileHelper::footprintTiles({10, 20, 2}, {2, 1});
+	TEST_REQUIRE(wide.size() == 2, "2x1 count");
+	TEST_REQUIRE(wide[0] == Vec3<int>(10, 20, 2), "2x1 first");
+	TEST_REQUIRE(wide[1] == Vec3<int>(11, 20, 2), "2x1 second");
+
+	auto zero = GroundVehicleTileHelper::footprintTiles({0, 0, 0}, {0, 0});
+	TEST_REQUIRE(zero.size() == 1, "zero size still occupies origin");
+	return true;
+}
+
 static bool test_select_dimension_exit_portal()
 {
 	TEST_REQUIRE(Vehicle::selectDimensionExitPortal(0, 3) == 0, "index 0 of 3");
@@ -82,6 +98,7 @@ int main(int argc, char **argv)
 	applyDeterministicTestConfig();
 	return runTestSuite({
 	    {"factories", test_factories},
+	    {"ground_footprint_tiles", test_ground_footprint_tiles},
 	    {"select_dimension_exit_portal", test_select_dimension_exit_portal},
 	    {"noop_get_next_destination", test_noop_get_next_destination},
 	});

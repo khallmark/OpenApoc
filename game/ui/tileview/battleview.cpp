@@ -343,7 +343,8 @@ BattleView::BattleView(sp<GameState> gameState)
 
 	baseForm->findControl("BUTTON_FOLLOW_AGENT")
 	    ->addCallback(FormEventType::CheckBoxChange,
-	                  [this](FormsEvent *e) {
+	                  [this](FormsEvent *e)
+	                  {
 		                  this->followAgent =
 		                      std::dynamic_pointer_cast<CheckBox>(e->forms().RaisedBy)->isChecked();
 	                  });
@@ -966,7 +967,8 @@ BattleView::BattleView(sp<GameState> gameState)
 	                  });
 	this->baseForm->findControl("BUTTON_SHOW_LOG")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *) {
+	                  [this](Event *)
+	                  {
 		                  fw().stageQueueCommand({StageCmd::Command::PUSH,
 		                                          mksp<MessageLogScreen>(this->state, *this)});
 	                  });
@@ -1457,7 +1459,8 @@ void BattleView::update()
 				         format("{0}, it is your turn!",
 				                state->current_battle->currentActiveOrganisation->name),
 				         MessageBox::ButtonOptions::Ok,
-				         [this] {
+				         [this]
+				         {
 					         state->current_battle->currentPlayer =
 					             state->current_battle->currentActiveOrganisation;
 				         })});
@@ -2524,8 +2527,8 @@ void BattleView::orderMove(Vec3<int> target, bool strafe, bool demandGiveWay)
 
 	if (battle.battleViewGroupMove && battle.battleViewSelectedUnits.size() > 1 && !runAway)
 	{
-		battle.groupMove(*state, battle.battleViewSelectedUnits, target, facingDelta,
-		                 demandGiveWay);
+		battle.groupMove(*state, battle.battleViewSelectedUnits, target, facingDelta, demandGiveWay,
+		                 true);
 	}
 	else
 	{
@@ -2689,6 +2692,7 @@ void BattleView::orderUse(bool right, bool automatic)
 		// Usable items that have no automatic mode
 		case AEquipmentType::Type::MotionScanner:
 		case AEquipmentType::Type::MediKit:
+		case AEquipmentType::Type::MindShield:
 			if (automatic)
 			{
 				break;
@@ -2709,7 +2713,6 @@ void BattleView::orderUse(bool right, bool automatic)
 		case AEquipmentType::Type::DimensionForceField:
 		case AEquipmentType::Type::DisruptorShield:
 		case AEquipmentType::Type::Loot:
-		case AEquipmentType::Type::MindShield:
 		case AEquipmentType::Type::MultiTracker:
 		case AEquipmentType::Type::StructureProbe:
 		case AEquipmentType::Type::VortexAnalyzer:

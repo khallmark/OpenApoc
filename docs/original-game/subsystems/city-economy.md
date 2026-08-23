@@ -12,6 +12,6 @@ Remaining:
 
 - Full two-way diplomacy with short/long bias ([issue 996](https://github.com/OpenApoc/OpenApoc/issues/996))
 - Organisations selling surplus park vehicles ([issue 1053](https://github.com/OpenApoc/OpenApoc/issues/1053))
-- Infiltration graph clamp at 100 while org values run 0..200; ufopaedia shows `value / 2` ([infiltrationscreen.cpp](../../../game/ui/city/infiltrationscreen.cpp))
+- Infiltration graph and UFOPaedia both plot `infiltrationValue / 2` (runtime 0..200 → display 0..100) ([infiltrationscreen.cpp](../../../game/ui/city/infiltrationscreen.cpp))
 - Senate attitude table (`senate_relationships` `0x15055B`) vs patch `weekly_rating_rules`
 - Training rates still inherit the 4× tick in places ([issue 997](https://github.com/OpenApoc/OpenApoc/issues/997))

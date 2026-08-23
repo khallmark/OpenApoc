@@ -85,6 +85,31 @@ static bool test_sign_treaty()
 	return true;
 }
 
+static bool test_player_relation_mirror()
+{
+	GameState state;
+	sp<Organisation> player;
+	sp<Organisation> megapol;
+	addOrg(state, "ORG_X-COM", 0, player);
+	addOrg(state, "ORG_MEGAPOL", 0, megapol);
+	state.player = {&state, "ORG_X-COM"};
+
+	StateRef<Organisation> playerRef{&state, "ORG_X-COM"};
+	megapol->adjustRelationTo(state, playerRef, -10.0f);
+	TEST_REQUIRE(megapol->getRelationTo(playerRef) == -10.0f, "org side {0}",
+	             megapol->getRelationTo(playerRef));
+	TEST_REQUIRE(player->getRelationTo({&state, "ORG_MEGAPOL"}) == -10.0f,
+	             "player mirror {0}", player->getRelationTo({&state, "ORG_MEGAPOL"}));
+
+	// Player-initiated adjust does not clobber the org's view (raid deltas stay asymmetric).
+	player->adjustRelationTo(state, {&state, "ORG_MEGAPOL"}, 7.0f);
+	TEST_REQUIRE(player->getRelationTo({&state, "ORG_MEGAPOL"}) == -3.0f, "player after {0}",
+	             player->getRelationTo({&state, "ORG_MEGAPOL"}));
+	TEST_REQUIRE(megapol->getRelationTo(playerRef) == -10.0f, "org view must stay -10, got {0}",
+	             megapol->getRelationTo(playerRef));
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -96,5 +121,6 @@ int main(int argc, char **argv)
 	    {"bribe_cost", test_bribe_cost},
 	    {"bribed_by", test_bribed_by},
 	    {"sign_treaty", test_sign_treaty},
+	    {"player_relation_mirror", test_player_relation_mirror},
 	});
 }

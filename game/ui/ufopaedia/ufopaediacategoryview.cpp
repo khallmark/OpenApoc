@@ -305,7 +305,8 @@ void UfopaediaCategoryView::setFormStats()
 							}
 							orgLabels[0]->setText(relation);
 							orgLabels[3]->setText(tr("Alien Infiltration"));
-							orgValues[3]->setText(format("{0}%", ref->infiltrationValue / 2));
+							orgValues[3]->setText(
+							    format("{0}%", ref->getInfiltrationDisplayPercent()));
 						}
 					}
 					break;
