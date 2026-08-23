@@ -11,6 +11,7 @@
 #include "framework/event.h"
 #include "framework/font.h"
 #include "framework/framework.h"
+#include "framework/os/display_size.h"
 #include "framework/renderer.h"
 #include "game/state/city/building.h"
 #include "game/state/city/city.h"
@@ -751,8 +752,10 @@ void AgentAssignment::eventOccured(Event *e)
 				               (positionY - e->mouse().Y) * (positionY - e->mouse().Y);
 				if (distance > insensibility)
 				{
-					draggedList->Location.x = e->mouse().X - this->resolvedLocation.x;
-					draggedList->Location.y = e->mouse().Y - this->resolvedLocation.y;
+					const Vec2<int> local =
+					    displayToUi({e->mouse().X, e->mouse().Y}, fw().uiGetScale());
+					draggedList->Location.x = local.x - this->resolvedLocation.x;
+					draggedList->Location.y = local.y - this->resolvedLocation.y;
 					if (!draggedList->isVisible())
 					{
 						// time to make the list

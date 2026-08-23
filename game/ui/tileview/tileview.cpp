@@ -119,6 +119,10 @@ void TileView::eventOccurred(Event *e)
 			this->setScreenCenterTile(newPos);
 		}
 	}
+	else if (e->type() == EVENT_WINDOW_RESIZE)
+	{
+		refreshDisplaySize();
+	}
 	else if (e->type() == EVENT_MOUSE_MOVE)
 	{
 		scrollLeftM = autoScroll && e->mouse().X < MOUSE_SCROLL_MARGIN;
@@ -286,5 +290,18 @@ void TileView::renderStrategyOverlay(Renderer &r)
 	}
 }
 
-void TileView::update() { applyScrolling(); }
+void TileView::refreshDisplaySize()
+{
+	const Vec2<int> next{fw().displayGetWidth(), fw().displayGetHeight()};
+	if (next != dpySize)
+	{
+		dpySize = next;
+	}
+}
+
+void TileView::update()
+{
+	refreshDisplaySize();
+	applyScrolling();
+}
 }; // namespace OpenApoc

@@ -283,6 +283,24 @@ class ConfigFileImpl
 		}
 		return vm.count(name);
 	}
+
+	bool optionOverridden(const UString &key) const
+	{
+		if (!this->parsed)
+		{
+			return false;
+		}
+		if (this->modifiedOptions.find(key) != this->modifiedOptions.end())
+		{
+			return true;
+		}
+		auto it = this->vm.find(key);
+		if (it == this->vm.end())
+		{
+			return false;
+		}
+		return !it->second.defaulted();
+	}
 	template <typename T> const T &getTyped(const UString &key)
 	{
 		if (!this->parsed)
@@ -460,6 +478,11 @@ bool ConfigFile::parseOptions(int argc, const char *const argv[])
 }
 
 bool ConfigFile::loaded() const { return this->pimpl->loaded(); }
+
+bool ConfigFile::optionOverridden(const UString &key) const
+{
+	return this->pimpl->optionOverridden(key);
+}
 
 void ConfigFile::showHelp() { this->pimpl->showHelp(); }
 

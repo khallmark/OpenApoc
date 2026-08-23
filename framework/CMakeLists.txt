@@ -27,7 +27,8 @@ set (FRAMEWORK_SOURCE_FILES
 	logger_file.cpp
 	options.cpp
 	modinfo.cpp
-	os/app_paths.cpp)
+	os/app_paths.cpp
+	os/display_size.cpp)
 
 source_group(framework\\sources FILES ${FRAMEWORK_SOURCE_FILES})
 list(APPEND ALL_SOURCE_FILES ${FRAMEWORK_SOURCE_FILES})
@@ -60,6 +61,7 @@ set (FRAMEWORK_HEADER_FILES
 	options.h
 	modinfo.h
 	os/app_paths.h
+	os/display_size.h
 	os/file_picker.h)
 
 source_group(framework\\headers FILES ${FRAMEWORK_HEADER_FILES})

@@ -17,6 +17,7 @@ class RendererImageData
 {
   public:
 	virtual sp<Image> readBack();
+	virtual void resize(Vec2<unsigned int> newSize);
 	virtual ~RendererImageData();
 };
 
@@ -53,6 +54,10 @@ class Renderer
 	virtual UString getName() = 0;
 
 	virtual void newFrame() {};
+
+	// GPU draw calls issued since the last call, for the frame profiler. 0 if the
+	// backend does not track them.
+	virtual uint64_t takeDrawCallCount() { return 0; }
 
 	virtual sp<Surface> getDefaultSurface() = 0;
 };

@@ -40,6 +40,7 @@ struct HarnessCommand
 		Text,
 		Screenshot,
 		Status,
+		Resize,
 		Quit,
 		Unknown
 	};

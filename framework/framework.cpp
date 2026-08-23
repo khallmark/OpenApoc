@@ -12,6 +12,7 @@
 #include "framework/logger_sdldialog.h"
 #include "framework/options.h"
 #include "framework/os/app_paths.h"
+#include "framework/os/display_size.h"
 #include "framework/os/file_picker.h"
 #include "framework/renderer.h"
 #include "framework/renderer_interface.h"
@@ -76,12 +77,14 @@ class FrameworkPrivate
 
 	StageStack ProgramStages;
 	sp<Surface> defaultSurface;
-	// The display size may be scaled up to windowSize
+	// Logical world size in window points. scaleSurface blits this to drawableSize.
 	Vec2<int> displaySize;
 	Vec2<int> windowSize;
 
 	sp<Surface> scaleSurface;
 	Vec2<int> drawableSize;
+	Vec2<int> lastWindowedSize;
+	int uiScale;
 	up<ThreadPool> threadPool;
 	up<Harness> harness;
 
@@ -92,7 +95,8 @@ class FrameworkPrivate
 
 	FrameworkPrivate()
 	    : quitProgram(false), window(nullptr), context(0), displaySize(0, 0), windowSize(0, 0),
-	      drawableSize(0, 0)
+	      drawableSize(0, 0), lastWindowedSize(kDefaultScreenWidth, kDefaultScreenHeight),
+	      uiScale(1)
 	{
 		int threadPoolSize = Options::threadPoolSizeOption.get();
 		if (threadPoolSize > 0)
@@ -163,6 +167,7 @@ Framework::Framework(const UString programName, bool createWindow)
 		}
 	}
 	applyAppBundlePathDefaults(programName);
+	applyAppBundleDisplayDefaults(programName);
 	if (createWindow && !cdPathLooksValid(Options::cdPathOption.get()))
 	{
 		LogWarning("CD path \"{0}\" is missing; prompting for original game files",
@@ -344,6 +349,14 @@ void Framework::run(sp<Stage> initialStage)
 
 	bool frame_time_limited_warning_shown = false;
 
+	const size_t profileFrames = (size_t)std::max(0, Options::profileFrames.get());
+	size_t profileSamples = 0;
+	uint64_t profileDrawCalls = 0;
+	std::chrono::steady_clock::duration profileUpdate{};
+	std::chrono::steady_clock::duration profileRender{};
+	std::chrono::steady_clock::duration profileSwap{};
+	std::chrono::steady_clock::duration profileTotal{};
+
 	while (!p->quitProgram)
 	{
 		auto frame_time_now = std::chrono::steady_clock::now();
@@ -376,9 +389,12 @@ void Framework::run(sp<Stage> initialStage)
 		{
 			break;
 		}
+		const auto profileFrameStart = std::chrono::steady_clock::now();
 		{
 			p->ProgramStages.current()->update();
 		}
+		const auto profileUpdateEnd = std::chrono::steady_clock::now();
+		auto profileSwapStart = profileUpdateEnd;
 
 		for (StageCmd cmd : stageCommands)
 		{
@@ -434,9 +450,42 @@ void Framework::run(sp<Stage> initialStage)
 			{
 				this->renderer->flush();
 				this->renderer->newFrame();
+				profileSwapStart = std::chrono::steady_clock::now();
 				SDL_GL_SwapWindow(p->window);
 			}
 		}
+		if (profileFrames)
+		{
+			const auto profileFrameEnd = std::chrono::steady_clock::now();
+			profileUpdate += profileUpdateEnd - profileFrameStart;
+			profileRender += profileSwapStart - profileUpdateEnd;
+			profileSwap += profileFrameEnd - profileSwapStart;
+			profileTotal += profileFrameEnd - profileFrameStart;
+			profileDrawCalls += this->renderer->takeDrawCallCount();
+			if (++profileSamples >= profileFrames)
+			{
+				const auto avgMs = [profileSamples](std::chrono::steady_clock::duration d)
+				{
+					return std::chrono::duration<double, std::milli>(d).count() /
+					       (double)profileSamples;
+				};
+				LogWarning("Frame profile over {0} frames: update {1:.2f} ms, draw {2:.2f} ms, "
+				           "swap {3:.2f} ms, busy {4:.2f} ms ({5:.1f} fps if uncapped), "
+				           "{6} draw calls/frame, display {7} drawable {8} uiScale {9}",
+				           (unsigned long long)profileSamples, avgMs(profileUpdate),
+				           avgMs(profileRender), avgMs(profileSwap), avgMs(profileTotal),
+				           1000.0 / avgMs(profileTotal),
+				           (unsigned long long)(profileDrawCalls / profileSamples), p->displaySize,
+				           p->drawableSize, p->uiScale);
+				profileSamples = 0;
+				profileDrawCalls = 0;
+				profileUpdate = {};
+				profileRender = {};
+				profileSwap = {};
+				profileTotal = {};
+			}
+		}
+
 		if (frameCount && frame == frameCount)
 		{
 			LogWarning("Quitting hitting frame count limit of {0}", (unsigned long long)frame);
@@ -568,6 +617,15 @@ void Framework::translateSdlEvents()
 				// FIXME: Do nothing?
 				break;
 			case SDL_KEYDOWN:
+#if !(defined(__APPLE__) && TARGET_OS_IPHONE)
+				if (!e.key.repeat &&
+				    (e.key.keysym.sym == SDLK_F11 ||
+				     (e.key.keysym.sym == SDLK_RETURN && (e.key.keysym.mod & KMOD_ALT))))
+				{
+					displayToggleFullscreen();
+					break;
+				}
+#endif
 				fwE = new KeyboardEvent(EVENT_KEY_DOWN);
 				fwE->keyboard().KeyCode = e.key.keysym.sym;
 				fwE->keyboard().ScanCode = e.key.keysym.scancode;
@@ -685,13 +743,14 @@ void Framework::translateSdlEvents()
 				// Window events get special treatment
 				switch (e.window.event)
 				{
+					case SDL_WINDOWEVENT_SIZE_CHANGED:
 					case SDL_WINDOWEVENT_RESIZED:
-						// FIXME: Do we care about SDL_WINDOWEVENT_SIZE_CHANGED?
+						displayRefreshSize();
 						fwE = new DisplayEvent(EVENT_WINDOW_RESIZE);
 						fwE->display().X = 0;
 						fwE->display().Y = 0;
-						fwE->display().Width = e.window.data1;
-						fwE->display().Height = e.window.data2;
+						fwE->display().Width = p->displaySize.x;
+						fwE->display().Height = p->displaySize.y;
 						fwE->display().Active = true;
 						pushEvent(up<Event>(fwE));
 						break;
@@ -813,11 +872,6 @@ void Framework::displayInitialise()
 		mode = ScreenMode::Windowed;
 	}
 
-	if (mode == ScreenMode::FullScreen)
-		display_flags |= SDL_WINDOW_FULLSCREEN;
-	else if (mode == ScreenMode::Borderless)
-		display_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-
 	int displayNumber = Options::screenDisplayNumberOption.get();
 	if (displayNumber >= SDL_GetNumVideoDisplays())
 	{
@@ -825,19 +879,64 @@ void Framework::displayInitialise()
 		displayNumber = 0;
 	}
 
-	int scrW = Options::screenWidthOption.get();
-	int scrH = Options::screenHeightOption.get();
-
-	if (scrW < 640 || scrH < 480)
+	SDL_DisplayMode desktop{};
+	if (SDL_GetDesktopDisplayMode(displayNumber, &desktop) != 0 || desktop.w <= 0 ||
+	    desktop.h <= 0)
 	{
-		LogError("Requested display size of {{{0},{1}}} is lower than {{640,480}} and probably "
-		         "won't work",
-		         scrW, scrH);
+		LogWarning("Could not read desktop mode for display {0}: {1}", displayNumber,
+		           SDL_GetError());
+		desktop.w = kDefaultScreenWidth;
+		desktop.h = kDefaultScreenHeight;
+	}
+
+	const int requestedW = Options::screenWidthOption.get();
+	const int requestedH = Options::screenHeightOption.get();
+	Vec2<int> resolved = resolveWindowSize(requestedW, requestedH, desktop.w, desktop.h);
+	if (requestedW <= 0 || requestedH <= 0)
+	{
+		LogInfo("Using desktop size {0} for requested {{{1},{2}}}", resolved, requestedW,
+		        requestedH);
+	}
+
+	if (mode == ScreenMode::FullScreen)
+	{
+		SDL_DisplayMode want{};
+		want.w = resolved.x;
+		want.h = resolved.y;
+		want.format = desktop.format;
+		want.refresh_rate = desktop.refresh_rate;
+		SDL_DisplayMode closest{};
+		if (!SDL_GetClosestDisplayMode(displayNumber, &want, &closest))
+		{
+			LogWarning("No exclusive mode near {0}, using borderless desktop", resolved);
+			mode = ScreenMode::Borderless;
+		}
+		else
+		{
+			resolved = {closest.w, closest.h};
+			display_flags |= SDL_WINDOW_FULLSCREEN;
+		}
+	}
+	if (mode == ScreenMode::Borderless)
+	{
+		display_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+	}
+#if !(defined(__APPLE__) && TARGET_OS_IPHONE)
+	if (mode == ScreenMode::Windowed)
+	{
+		display_flags |= SDL_WINDOW_RESIZABLE;
+	}
+#endif
+
+	if (mode == ScreenMode::Windowed)
+	{
+		p->lastWindowedSize = resolved;
 	}
 
 	p->window =
 	    SDL_CreateWindow("OpenApoc", SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber),
-	                     SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber), scrW, scrH, display_flags);
+	                     SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber), resolved.x, resolved.y,
+	                     display_flags);
 
 	if (!p->window)
 	{
@@ -929,54 +1028,8 @@ void Framework::displayInitialise()
 	}
 	this->p->defaultSurface = this->renderer->getDefaultSurface();
 
-	int width, height;
-	SDL_GetWindowSize(p->window, &width, &height);
-	p->windowSize = {width, height};
-	int drawW = width;
-	int drawH = height;
-	SDL_GL_GetDrawableSize(p->window, &drawW, &drawH);
-	p->drawableSize = {drawW, drawH};
-	if (p->drawableSize != p->windowSize)
-	{
-		LogInfo("HiDPI drawable size {0} from window size {1}", p->drawableSize, p->windowSize);
-	}
-
 	setMouseGrab();
-
-	// FIXME: Scale is currently stored as an integer in 1/100 units (ie 100 is 1.0 == same
-	// size)
-	int scaleX = Options::screenScaleXOption.get();
-	int scaleY = Options::screenScaleYOption.get();
-	const bool autoScale = Options::screenAutoScale.get();
-
-	if (scaleX != 100 || scaleY != 100 || autoScale)
-	{
-		float scaleXFloat = (float)scaleX / 100.0f;
-		float scaleYFloat = (float)scaleY / 100.0f;
-		if (autoScale)
-		{
-			constexpr int referenceWidth = 1280;
-			scaleYFloat = scaleXFloat = (float)referenceWidth / p->drawableSize.x;
-			LogInfo("Autoscaling enabled, scaling by ({0},{1})", scaleXFloat, scaleYFloat);
-		}
-
-		p->displaySize.x = (int)((float)p->drawableSize.x * scaleXFloat);
-		p->displaySize.y = (int)((float)p->drawableSize.y * scaleYFloat);
-		if (p->displaySize.x < 640 || p->displaySize.y < 480)
-		{
-			LogWarning("Requested scaled size of {0} is lower than {{640,480}} and probably "
-			           "won't work, so forcing 640x480",
-			           p->displaySize.x);
-			p->displaySize.x = std::max(640, p->displaySize.x);
-			p->displaySize.y = std::max(480, p->displaySize.y);
-		}
-		LogInfo("Scaling from {0} to {1}", p->displaySize, p->drawableSize);
-		p->scaleSurface = mksp<Surface>(p->displaySize);
-	}
-	else
-	{
-		p->displaySize = p->drawableSize;
-	}
+	displayRefreshSize();
 	this->cursor.reset(new ApocCursor(this->data->loadPalette("xcom3/tacdata/tactical.pal")));
 }
 
@@ -1000,6 +1053,134 @@ int Framework::displayGetWidth() { return p->displaySize.x; }
 int Framework::displayGetHeight() { return p->displaySize.y; }
 
 Vec2<int> Framework::displayGetSize() { return p->displaySize; }
+
+void Framework::displaySetSize(Vec2<int> size)
+{
+	if (!p->window)
+	{
+		return;
+	}
+	SDL_SetWindowSize(p->window, std::max(kMinScreenWidth, size.x),
+	                  std::max(kMinScreenHeight, size.y));
+	displayRefreshSize();
+}
+
+int Framework::uiGetScale() const { return std::max(kMinUiScale, p->uiScale); }
+
+void Framework::displayRefreshSize()
+{
+	if (!p->window)
+	{
+		return;
+	}
+
+	int width = 0;
+	int height = 0;
+	SDL_GetWindowSize(p->window, &width, &height);
+	int drawW = width;
+	int drawH = height;
+	SDL_GL_GetDrawableSize(p->window, &drawW, &drawH);
+
+	const Vec2<int> newWindow{width, height};
+	const Vec2<int> newLogical{std::max(1, width), std::max(1, height)};
+	const Vec2<int> newDrawable{std::max(1, drawW), std::max(1, drawH)};
+	const bool autoScale = Options::screenAutoScale.get();
+	// Tiles and UI layout use window points. HiDPI backing-store pixels are an
+	// upscale blit, not extra world work.
+	const Vec2<int> newDisplay =
+	    computeDisplaySize(newLogical, Options::screenScaleXOption.get(),
+	                       Options::screenScaleYOption.get(), autoScale);
+	const int newUiScale =
+	    computeUiScale(newDisplay.x, Options::screenUiScaleOption.get(), autoScale);
+
+	const bool sizeChanged = newWindow != p->windowSize || newDrawable != p->drawableSize ||
+	                         newDisplay != p->displaySize || newUiScale != p->uiScale;
+
+	p->windowSize = newWindow;
+	p->drawableSize = newDrawable;
+	p->displaySize = newDisplay;
+	p->uiScale = newUiScale;
+	if (optionsScreenMode() == ScreenMode::Windowed && newWindow.x > 0 && newWindow.y > 0)
+	{
+		p->lastWindowedSize = newWindow;
+	}
+
+	if (p->drawableSize != p->windowSize)
+	{
+		LogInfo("HiDPI drawable size {0} from window size {1}", p->drawableSize, p->windowSize);
+	}
+	if (newUiScale > 1)
+	{
+		LogInfo("UI scale {0}x on display {1} (forms stay {2})", newUiScale, p->displaySize,
+		        uiLogicalSize(p->displaySize, newUiScale));
+	}
+
+	if (!sizeChanged)
+	{
+		return;
+	}
+
+	if (p->defaultSurface)
+	{
+		p->defaultSurface->size = {(unsigned)newDrawable.x, (unsigned)newDrawable.y};
+		if (p->defaultSurface->rendererPrivateData)
+		{
+			p->defaultSurface->rendererPrivateData->resize(
+			    {(unsigned)newDrawable.x, (unsigned)newDrawable.y});
+		}
+	}
+
+	const bool wantScale = newDisplay != newDrawable;
+	if (wantScale)
+	{
+		if (!p->scaleSurface ||
+		    p->scaleSurface->size != Vec2<unsigned int>{(unsigned)newDisplay.x,
+		                                                (unsigned)newDisplay.y})
+		{
+			LogInfo("Scaling from {0} to {1}", newDisplay, newDrawable);
+			p->scaleSurface = mksp<Surface>(newDisplay);
+		}
+	}
+	else
+	{
+		p->scaleSurface.reset();
+	}
+}
+
+void Framework::displayToggleFullscreen()
+{
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+	return;
+#else
+	if (!p->window)
+	{
+		return;
+	}
+	ScreenMode mode = optionsScreenMode();
+	if (mode == ScreenMode::Windowed)
+	{
+		SDL_GetWindowSize(p->window, &p->lastWindowedSize.x, &p->lastWindowedSize.y);
+		if (SDL_SetWindowFullscreen(p->window, SDL_WINDOW_FULLSCREEN_DESKTOP) != 0)
+		{
+			LogWarning("Could not enter borderless fullscreen: {0}", SDL_GetError());
+			return;
+		}
+		Options::screenModeOption.set("borderless");
+	}
+	else
+	{
+		if (SDL_SetWindowFullscreen(p->window, 0) != 0)
+		{
+			LogWarning("Could not leave fullscreen: {0}", SDL_GetError());
+			return;
+		}
+		SDL_SetWindowSize(p->window, std::max(kMinScreenWidth, p->lastWindowedSize.x),
+		                  std::max(kMinScreenHeight, p->lastWindowedSize.y));
+		Options::screenModeOption.set("windowed");
+	}
+	displayRefreshSize();
+#endif
+}
 
 int Framework::coordWindowToDisplayX(int x) const
 {

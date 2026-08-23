@@ -775,6 +775,7 @@ class GLSurface final : public RendererImageData
 		}
 	}
 	~GLSurface() override;
+	void resize(Vec2<unsigned int> newSize) override { this->size = newSize; }
 	sp<Image> readBack() override
 	{
 		BindFramebuffer b(this->fbo_id);
