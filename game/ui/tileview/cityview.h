@@ -137,6 +137,8 @@ class CityView : public CityTileView
 	// Installs a harness query handler that can answer view-space questions (where a UFO is on
 	// screen), which the GameState-only handler cannot: the projection lives on the view.
 	void registerCityViewIntrospection();
+	// Name of the selected base, or empty when the player has no bases left.
+	UString currentBaseName() const;
 	// Handler that was installed before ours, restored on destruction so the global harness hook
 	// never keeps calling into a CityView that no longer exists.
 	HarnessQueryFunction previousHarnessHandler;

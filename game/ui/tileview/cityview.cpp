@@ -1871,7 +1871,12 @@ void CityView::resume()
 	modifierRCtrl = false;
 	modifierRShift = false;
 
-	this->uiTabs[0]->findControlTyped<Label>("TEXT_BASE_NAME")->setText(state->current_base->name);
+	// There may be no base left. Losing a base-defence mission destroys it, Base::die clears
+	// current_base, and BattleDebriefing's OK handler constructs a CityView immediately -- before
+	// the XComDefeated event it raised gets a chance to replace the stage stack. Dereferencing an
+	// empty StateRef yields nullptr rather than throwing, so this read used to segfault on the
+	// way out of the player's final battle.
+	this->uiTabs[0]->findControlTyped<Label>("TEXT_BASE_NAME")->setText(currentBaseName());
 
 	refreshBaseView();
 }
@@ -1880,9 +1885,7 @@ void CityView::refreshBaseView()
 {
 	if (miniViews.size() != state->player_bases.size())
 	{
-		this->uiTabs[0]
-		    ->findControlTyped<Label>("TEXT_BASE_NAME")
-		    ->setText(state->current_base->name);
+		this->uiTabs[0]->findControlTyped<Label>("TEXT_BASE_NAME")->setText(currentBaseName());
 		for (auto view : miniViews)
 		{
 			view->setData(nullptr);
@@ -2081,6 +2084,13 @@ void CityView::render()
 	{
 		fw().renderer->draw(this->surface, {0, 0});
 	}
+}
+
+UString CityView::currentBaseName() const
+{
+	// Empty once the player's last base has been destroyed; StateRef::operator-> would return
+	// nullptr rather than throw, so callers must not dereference it blind.
+	return state->current_base ? state->current_base->name : UString("");
 }
 
 void CityView::registerCityViewIntrospection()
