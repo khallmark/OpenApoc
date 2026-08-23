@@ -359,6 +359,32 @@ class Driver:
         except HarnessError:
             pass
 
+    def game_over(self) -> bool:
+        """True once the campaign has reached a terminal state.
+
+        Losing the last base raises XComDefeated, which replaces the stage stack with the losing
+        cutscene and then the main menu. That is the campaign ending, not a failure of the run.
+        """
+        st = self.status()
+        if st.stage in ("VideoScreen", "MainMenu", "CreditsMenu"):
+            if not self.checks.get("game_over"):
+                self.checks["game_over"] = st.stage
+                self.say(f"[campaign] terminal state reached: {st.stage}")
+            return True
+        try:
+            if self.h.gs("stage").get("defeated") == "1":
+                # The cutscene only fires on the next GameState tick; nudge the clock so the
+                # ending actually plays instead of the city sitting there paused.
+                if st.stage == "CityView":
+                    self.h.key("3")
+                if not self.checks.get("defeated"):
+                    self.checks["defeated"] = True
+                    self.say("[campaign] X-COM defeated - all bases lost")
+                return False
+        except HarnessError:
+            pass
+        return False
+
     # -- core loop -------------------------------------------------------
     def pump(self, seconds: float, expect: str | None = None) -> Status:
         """Advance wall-clock while clearing any modal that appears.
@@ -523,6 +549,8 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
     projectiles or attack missions on the current map -- so we watch that gate explicitly and
     fall back to Speed4 rather than sitting at Speed1 without knowing why.
     """
+    if d.game_over():
+        return d.h.gs("time")
     start = int(d.h.gs("time")["ticks"])
     target = start + int(game_days * TICKS_PER_DAY)
     deadline = time.time() + budget_s
@@ -835,6 +863,8 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
     battles = 0
     elapsed = 0.0
     while elapsed < total_days:
+        if d.game_over():
+            break
         leg = min(leg_days, total_days - elapsed)
         advance(d, leg)
         elapsed += leg
