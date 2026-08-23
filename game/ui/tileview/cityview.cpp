@@ -3901,7 +3901,12 @@ bool CityView::handleMouseDown(Event *e)
 								}
 							}
 						}
-						LogWarning("{0}", debug);
+						// Scenery-inspection dump for a debug click; it is diagnostic output, and
+						// on a tile with no scenery it is not even output.
+						if (!debug.empty())
+						{
+							LogInfo("{0}", debug);
+						}
 					}
 
 					if (modifierLAlt && modifierLCtrl && modifierLShift)
