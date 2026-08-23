@@ -1788,7 +1788,7 @@ bool BattleUnitMission::isFinishedInternal(GameState &, BattleUnit &u)
 
 void BattleUnitMission::start(GameState &state, BattleUnit &u)
 {
-	LogWarning("Unit {0} mission \"{1}\" starting", u.id, getName());
+	LogInfo("Unit {0} mission \"{1}\" starting", u.id, getName());
 
 	switch (this->type)
 	{

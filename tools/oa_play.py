@@ -90,6 +90,19 @@ RESPONSES = {
     "BattleDebriefing":       {"ack": "BUTTON_OK"},
 }
 
+# Stages constructed in code rather than from a .form, so there are no control ids to resolve.
+# MessageBox maps Return->OK/Yes and Escape->Cancel/No (game/ui/general/messagebox.cpp:129-155).
+KEY_RESPONSES = {
+    "MessageBox": ["Return", "Escape"],
+}
+
+# Stages where the driver is doing real work and must not be treated as an interruption.
+WORKING_STAGES = {
+    "CityView", "BattleView", "LoadingScreen", "MainMenu", "DifficultyMenu",
+    "BattleBriefing", "BattlePreStart", "BaseScreen", "ResearchScreen", "ResearchSelect",
+    "UfopaediaView", "UfopaediaCategoryView", "Skirmish", "MapSelector", "InGameOptions",
+}
+
 class HarnessError(RuntimeError):
     pass
 
@@ -239,6 +252,7 @@ class Driver:
         self.dismissed: dict[str, int] = {}
         self.checks: dict = {}
         self.responses: dict[str, int] = {}
+        self.unknown_stages: dict[str, int] = {}
 
     def say(self, msg: str) -> None:
         self.events.append(msg)
@@ -320,8 +334,31 @@ class Driver:
 
     def respond_to_event(self, st: Status) -> bool:
         """Engage with an interrupting screen. Returns True if we acted on it."""
+        keys = KEY_RESPONSES.get(st.stage)
+        if keys:
+            for k in keys:
+                self.h.key(k)
+                time.sleep(0.35)
+                if self.h.status().stage != st.stage:
+                    self.responses[f"{st.stage}:{k}"] = self.responses.get(f"{st.stage}:{k}", 0) + 1
+                    self.say(f"  [event] {st.stage} -> KEY {k}")
+                    return True
+            return True
+
         policy = RESPONSES.get(st.stage)
         if not policy:
+            # Unknown screen. Never let an unrecognised stage stall an unattended run: try the
+            # conventional confirm/cancel keys, and record it so the gap can be closed properly.
+            if st.stage not in WORKING_STAGES:
+                self.unknown_stages[st.stage] = self.unknown_stages.get(st.stage, 0) + 1
+                if self.unknown_stages[st.stage] % 5 == 1:
+                    self.say(f"  [event] unknown stage {st.stage}; trying Return/Escape")
+                for k in ("Return", "Escape"):
+                    self.h.key(k)
+                    time.sleep(0.3)
+                    if self.h.status().stage != st.stage:
+                        return True
+                return True
             return False
         ctrls = self.controls(st)
         selected = 0
@@ -685,6 +722,7 @@ def main() -> int:
     finally:
         d.say(f"[stages seen] {sorted(d.stages_seen)}")
         d.say(f"[event responses] {d.responses}")
+        d.say(f"[unknown stages] {d.unknown_stages}")
         d.say(f"[checks] {d.checks}")
         if game:
             game.stop()

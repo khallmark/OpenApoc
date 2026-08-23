@@ -3715,7 +3715,7 @@ bool BattleView::handleMouseDown(Event *e)
 			}
 		}
 		// Determine course of action
-		LogWarning("Click at tile {0}, {1}, {2}", t.x, t.y, t.z);
+		LogInfo("Click at tile {0}, {1}, {2}", t.x, t.y, t.z);
 		switch (selectionState)
 		{
 			case BattleSelectionState::Normal:
