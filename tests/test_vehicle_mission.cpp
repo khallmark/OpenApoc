@@ -121,6 +121,21 @@ static bool test_known_base_slot_selection()
 	return true;
 }
 
+static bool test_ufo2p_base_slot_allocation()
+{
+	GameState state;
+	auto slot0 = mksp<Base>();
+	slot0->ufo2pSlot = 0;
+	state.player_bases["BASE_1"] = slot0;
+	auto slot2 = mksp<Base>();
+	slot2->ufo2pSlot = 2;
+	state.player_bases["BASE_3"] = slot2;
+	TEST_REQUIRE(state.allocateUfo2pBaseSlot() == 1, "first unused slot should be 1");
+	state.player_bases.erase("BASE_1");
+	TEST_REQUIRE(state.allocateUfo2pBaseSlot() == 0, "destroyed base slot should be reusable");
+	return true;
+}
+
 static bool test_select_dimension_exit_portal()
 {
 	TEST_REQUIRE(Vehicle::selectDimensionExitPortal(0, 3) == 0, "index 0 of 3");
@@ -170,6 +185,7 @@ int main(int argc, char **argv)
 	    {"ground_footprint_tiles", test_ground_footprint_tiles},
 	    {"alien_exposure_threshold", test_alien_exposure_threshold},
 	    {"known_base_slot_selection", test_known_base_slot_selection},
+	    {"ufo2p_base_slot_allocation", test_ufo2p_base_slot_allocation},
 	    {"select_dimension_exit_portal", test_select_dimension_exit_portal},
 	    {"noop_get_next_destination", test_noop_get_next_destination},
 	});

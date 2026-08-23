@@ -238,6 +238,7 @@ class GameState : public std::enable_shared_from_this<GameState>
 	void fillPlayerStartingProperty();
 
 	static constexpr int UFO2P_BASE_SLOT_COUNT = 16;
+	int allocateUfo2pBaseSlot() const;
 	static int selectKnownBaseSlot(const std::array<bool, UFO2P_BASE_SLOT_COUNT> &active,
 	                               const std::array<bool, UFO2P_BASE_SLOT_COUNT> &knownToAliens,
 	                               int startSlot);
