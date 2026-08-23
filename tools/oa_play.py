@@ -161,6 +161,25 @@ class Harness:
         raw = self.ok(f"gs {query}")
         return dict(p.split("=", 1) for p in raw.split() if "=" in p)
 
+    def ui(self, filt: str = "") -> dict:
+        """Live control rects from the running game, keyed by control id.
+
+        Replaces computing layout from the .form XML: with a resizable viewport and a UI scale
+        factor, the engine's own resolved positions are the only trustworthy source. Coordinates
+        come back in UI space, which is the same space CLICK takes.
+        """
+        raw = self.ok(f"ui {filt}".strip())
+        d = dict(p.split("=", 1) for p in raw.split() if "=" in p)
+        out = {}
+        if d.get("at", "-") == "-":
+            return out
+        for rec in d["at"].split(";"):
+            f = rec.split(",")
+            if len(f) == 6:
+                out[f[0]] = {"x": int(f[1]), "y": int(f[2]), "w": int(f[3]), "h": int(f[4]),
+                             "visible": f[5] == "1"}
+        return out
+
     def screen_craft(self, query: str) -> list[tuple[int, int, bool]]:
         """Parse "count=N at=x,y,crashed;..." from the view-space craft queries."""
         d = self.gs(query)
@@ -340,14 +359,33 @@ class Driver:
             return {}
 
     def click_id(self, cid: str, st: Status | None = None) -> bool:
+        """Click a control by id, using the game's own resolved geometry when it can.
+
+        The .form resolver stays as a fallback for anything the live dump cannot see, but the
+        live query is authoritative -- it survives a viewport resize and UI scaling, which the
+        static layout computation does not.
+        """
+        try:
+            live = self.h.ui(cid)
+            c = live.get(cid)
+            if c and c["w"] > 0 and c["visible"]:
+                self.h.click_xy(c["x"] + c["w"] // 2, c["y"] + c["h"] // 2)
+                return True
+        except HarnessError:
+            pass
         st = st or self.status()
         ctrls = self.controls(st)
         c = ctrls.get(cid)
         if c is None or c.w <= 0 or c.h <= 0:
             return False
-        x, y = c.centre
-        self.h.click_xy(x, y)
+        self.h.click_xy(*c.centre)
         return True
+
+    def live_rect(self, cid: str) -> dict | None:
+        try:
+            return self.h.ui(cid).get(cid)
+        except HarnessError:
+            return None
 
     def shot(self, tag: str) -> None:
         if not self.shots:

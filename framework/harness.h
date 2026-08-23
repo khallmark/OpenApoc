@@ -25,6 +25,7 @@ class Framework;
 //   STATUS
 //   GS <query>
 //   SAVE <path>
+//   UI [filter]
 //   QUIT
 //
 // Replies are one line: "OK ..." or "ERR ...".
@@ -36,6 +37,13 @@ class Framework;
 using HarnessQueryFunction = std::function<UString(const UString &query)>;
 void setHarnessQueryHandler(HarnessQueryFunction function);
 HarnessQueryFunction getHarnessQueryHandler();
+
+// UI is answered by the forms layer, which framework also cannot name (OpenApoc_Forms links
+// OpenApoc_Framework, never the reverse). Kept separate from the GameState hook because the two
+// have different owners and lifetimes: this one is installed once at startup and never chained.
+using HarnessUIFunction = std::function<UString(const UString &filter)>;
+void setHarnessUIHandler(HarnessUIFunction function);
+HarnessUIFunction getHarnessUIHandler();
 
 struct HarnessCommand
 {
@@ -55,6 +63,7 @@ struct HarnessCommand
 		Query,
 		Save,
 		Resize,
+		UiDump,
 		Quit,
 		Unknown
 	};

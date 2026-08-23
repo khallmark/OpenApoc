@@ -147,6 +147,7 @@ void sendAll(HarnessSocket fd, const UString &text)
 }
 
 HarnessQueryFunction harnessQueryHandler;
+HarnessUIFunction harnessUIHandler;
 
 } // namespace
 
@@ -156,6 +157,10 @@ void setHarnessQueryHandler(HarnessQueryFunction function)
 }
 
 HarnessQueryFunction getHarnessQueryHandler() { return harnessQueryHandler; }
+
+void setHarnessUIHandler(HarnessUIFunction function) { harnessUIHandler = std::move(function); }
+
+HarnessUIFunction getHarnessUIHandler() { return harnessUIHandler; }
 
 bool parseHarnessCommand(const UString &line, HarnessCommand &out)
 {
@@ -244,6 +249,12 @@ bool parseHarnessCommand(const UString &line, HarnessCommand &out)
 			out.error = "GS needs a query";
 			return false;
 		}
+		return true;
+	}
+	if (verb == "UI")
+	{
+		out.type = HarnessCommand::Type::UiDump;
+		out.text = restAfter(0);
 		return true;
 	}
 	if (verb == "SAVE")
@@ -700,6 +711,21 @@ UString Harness::execute(const HarnessCommand &cmd, Framework &fw)
 			if (reply.empty())
 			{
 				return "ERR save failed";
+			}
+			std::replace(reply.begin(), reply.end(), '\n', ' ');
+			return format("OK {0}", reply);
+		}
+		case HarnessCommand::Type::UiDump:
+		{
+			const auto handler = getHarnessUIHandler();
+			if (!handler)
+			{
+				return "ERR no ui handler installed";
+			}
+			UString reply = handler(cmd.text);
+			if (reply.empty())
+			{
+				return "OK count=0";
 			}
 			std::replace(reply.begin(), reply.end(), '\n', ' ');
 			return format("OK {0}", reply);

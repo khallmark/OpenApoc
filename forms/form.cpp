@@ -2,13 +2,26 @@
 #include "dependencies/pugixml/src/pugixml.hpp"
 #include "framework/data.h"
 #include "framework/framework.h"
+#include <algorithm>
 
 namespace OpenApoc
 {
 
-Form::Form() : Control() {}
+namespace
+{
+// Raw pointers, not shared: this is a liveness index, not ownership. Entries are added and
+// removed by the constructor/destructor pair below, so a pointer here is always a live Form.
+std::vector<Form *> g_liveForms;
+} // namespace
 
-Form::~Form() = default;
+const std::vector<Form *> &Form::liveForms() { return g_liveForms; }
+
+Form::Form() : Control() { g_liveForms.push_back(this); }
+
+Form::~Form()
+{
+	g_liveForms.erase(std::remove(g_liveForms.begin(), g_liveForms.end(), this), g_liveForms.end());
+}
 
 void Form::readFormStyle(pugi::xml_node *node)
 {
