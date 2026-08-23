@@ -3,6 +3,8 @@
 #include "framework/framework.h"
 #include "game/state/city/agentmission.h"
 #include "game/state/city/base.h"
+#include "game/state/city/facility.h"
+#include "game/state/rules/city/facilitytype.h"
 #include "game/state/city/building.h"
 #include "game/state/city/city.h"
 #include "game/state/city/research.h"
@@ -2609,6 +2611,54 @@ static bool test_vequip_economy_hide()
 	return true;
 }
 
+static bool test_base_destroy_facility_errors()
+{
+	auto &state = *g_state;
+	TEST_REQUIRE(!state.player_bases.empty(), "no player base");
+	StateRef<Base> base{&state, state.player_bases.begin()->first};
+
+	// Genuinely off-grid coordinates are OutOfBounds.
+	TEST_REQUIRE(base->canDestroyFacility(state, {-1, 0}) == Base::BuildError::OutOfBounds,
+	             "negative x is OutOfBounds");
+	TEST_REQUIRE(base->canDestroyFacility(state, {0, Base::SIZE}) == Base::BuildError::OutOfBounds,
+	             "y past the grid is OutOfBounds");
+
+	// An in-range tile that simply holds nothing is NoFacility, not OutOfBounds. Conflating the
+	// two made the startup cleanup sweep log a warning for every empty tile.
+	bool sawEmpty = false;
+	for (int y = 0; y < Base::SIZE && !sawEmpty; y++)
+	{
+		for (int x = 0; x < Base::SIZE; x++)
+		{
+			if (base->getFacility({x, y}))
+			{
+				continue;
+			}
+			TEST_REQUIRE(base->canDestroyFacility(state, {x, y}) == Base::BuildError::NoFacility,
+			             "empty in-range tile is NoFacility");
+			sawEmpty = true;
+			break;
+		}
+	}
+	TEST_REQUIRE(sawEmpty, "expected at least one empty tile in the starting base");
+
+	// The access lift is fixed and must stay Indestructible.
+	bool sawFixed = false;
+	for (const auto &f : base->facilities)
+	{
+		if (f->type->fixed)
+		{
+			sawFixed = true;
+			TEST_REQUIRE(base->canDestroyFacility(state, f->pos) ==
+			                 Base::BuildError::Indestructible,
+			             "fixed facility is Indestructible");
+			break;
+		}
+	}
+	TEST_REQUIRE(sawFixed, "starting base has no fixed facility");
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	config().addPositionalArgument("common", "Common gamestate to load");
@@ -2680,5 +2730,6 @@ int main(int argc, char **argv)
 	    {"ufopaedia_abf9c_unlock", test_ufopaedia_abf9c_unlock},
 	    {"org_raid_loot_table", test_org_raid_loot_table},
 	    {"org_extracted_scalars", test_org_extracted_scalars},
+	    {"base_destroy_facility_errors", test_base_destroy_facility_errors},
 	});
 }

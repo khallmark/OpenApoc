@@ -47,6 +47,9 @@ class Base : public StateObject<Base>, public std::enable_shared_from_this<Base>
 		OutOfBounds,
 		NoMoney,
 		Indestructible,
+		// An in-range cell that simply holds no facility. Distinct from OutOfBounds, which the
+		// destroy path used to conflate with it and report for every empty tile.
+		NoFacility,
 	};
 
 	Base(GameState &state, StateRef<Building> building);

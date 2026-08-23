@@ -73,6 +73,12 @@ class ControlGenerator
 	std::vector<sp<Image>> purchaseControlParts;
 
   public:
+	// Drops every cached renderer-backed Image. The singleton has static storage duration, so
+	// without this its images are destroyed at process exit, long after the renderer -- which
+	// leaves their GL textures undeleted and makes each one log "destroyed after renderer".
+	// Framework calls this while the renderer is still alive.
+	static void releaseCachedImages();
+
 	static const UString VEHICLE_ICON_NAME;
 	static const UString AGENT_ICON_NAME;
 	static const UString LEFT_LIST_NAME;

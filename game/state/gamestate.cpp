@@ -312,10 +312,10 @@ void GameState::setCurrentCity(StateRef<City> city)
 
 void GameState::validate()
 {
-	LogWarning("Validating GameState");
+	LogInfo("Validating GameState");
 	validateResearch();
 	validateScenery();
-	LogWarning("Validated GameState");
+	LogInfo("Validated GameState");
 }
 
 void GameState::validateResearch()
@@ -2018,7 +2018,7 @@ void GameState::loadMods()
 	auto mods = split(Options::modList.get(), ":");
 	for (const auto &modString : mods)
 	{
-		LogWarning("loading mod \"{0}\"", modString);
+		LogInfo("loading mod \"{0}\"", modString);
 		auto modPath = Options::modPath.get() + "/" + modString;
 		auto _modInfo = ModInfo::getInfo(modPath);
 		if (!_modInfo)

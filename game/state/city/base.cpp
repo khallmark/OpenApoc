@@ -127,11 +127,17 @@ void Base::die(GameState &state, bool collapse)
 			}
 		}
 	}
-	for (auto a : building->currentAgents)
+	// Copy both lists before iterating: Agent::die erases from currentBuilding->currentAgents and
+	// Vehicle::die from currentBuilding->currentVehicles, so a range-for over the live set
+	// increments an iterator whose node has already been freed. That is a SIGSEGV on the way back
+	// from a base-defence mission. Vehicle::die already guards its own agent loop this way.
+	auto agentsCopy = building->currentAgents;
+	for (auto a : agentsCopy)
 	{
 		a->die(state, true);
 	}
-	for (auto v : building->currentVehicles)
+	auto vehiclesCopy = building->currentVehicles;
+	for (auto v : vehiclesCopy)
 	{
 		v->die(state, true);
 	}
@@ -233,7 +239,13 @@ void Base::startingBase(GameState &state)
 		{
 			for (int x = 0; x < this->SIZE; x++)
 			{
-				this->destroyFacility(state, {x, y});
+				// Only ask to destroy tiles that actually hold a removable facility. Sweeping
+				// blindly made every empty tile and the fixed access lift log a warning, which is
+				// thousands of lines per campaign start because placement legitimately retries.
+				if (this->canDestroyFacility(state, {x, y}) == BuildError::NoError)
+				{
+					this->destroyFacility(state, {x, y});
+				}
 			}
 		}
 		// There always must be a single 'access lift' base module even if everything else has been
@@ -379,7 +391,8 @@ Base::BuildError Base::canDestroyFacility(GameState &state, Vec2<int> pos) const
 
 	if (facility == nullptr)
 	{
-		return BuildError::OutOfBounds;
+		return pos.x < 0 || pos.y < 0 || pos.x >= SIZE || pos.y >= SIZE ? BuildError::OutOfBounds
+		                                                                : BuildError::NoFacility;
 	}
 
 	if (facility->type->fixed)

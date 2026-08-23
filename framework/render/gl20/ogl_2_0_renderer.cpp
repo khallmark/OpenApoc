@@ -1077,10 +1077,21 @@ class OGL20Renderer : public Renderer
 	}
 	~OGL20Renderer() override
 	{
+		// Release the renderer's own GL-backed objects while renderer_dead is still false and the
+		// context is still current. Flipping the flag first (as this used to) meant the implicit
+		// member destructors ran afterwards, hit the "destroyed after renderer" guard and returned
+		// early -- so their textures and framebuffers were never actually deleted.
 		if (this->batchVBO)
 		{
 			gl20::DeleteBuffers(1, &this->batchVBO);
 		}
+		this->currentSurface.reset();
+		this->defaultSurface.reset();
+		this->currentPalette.reset();
+		this->rgbProgram.reset();
+		this->colourProgram.reset();
+		this->paletteProgram.reset();
+		this->paletteBatchProgram.reset();
 		renderer_dead = true;
 	};
 	void clear(Colour c = Colour{0, 0, 0, 0}) override

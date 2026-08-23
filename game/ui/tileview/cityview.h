@@ -1,5 +1,6 @@
 #pragma once
 
+#include "framework/harness.h"
 #include "game/state/stateobject.h"
 #include "game/ui/tileview/citytileview.h"
 #include "library/sp.h"
@@ -141,6 +142,14 @@ class CityView : public CityTileView
 	void resume() override;
 	void refreshBaseView();
 	void update() override;
+	// Installs a harness query handler that can answer view-space questions (where a UFO is on
+	// screen), which the GameState-only handler cannot: the projection lives on the view.
+	void registerCityViewIntrospection();
+	// Name of the selected base, or empty when the player has no bases left.
+	UString currentBaseName() const;
+	// Handler that was installed before ours, restored on destruction so the global harness hook
+	// never keeps calling into a CityView that no longer exists.
+	HarnessQueryFunction previousHarnessHandler;
 	void render() override;
 	void eventOccurred(Event *e) override;
 	bool handleKeyDown(Event *e);

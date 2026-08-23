@@ -3797,7 +3797,7 @@ void BattleUnit::updateAI(GameState &state, unsigned int)
 	auto decision = aiList.think(state, *this);
 	if (!decision.isEmpty())
 	{
-		LogWarning("AI {0} for unit {1} decided to {2}", decision.ai, id, decision.getName());
+		LogInfo("AI {0} for unit {1} decided to {2}", decision.ai, id, decision.getName());
 		executeAIDecision(state, decision);
 	}
 }
@@ -5618,7 +5618,7 @@ bool BattleUnit::popFinishedMissions(GameState &state)
 	bool popped = false;
 	while (missions.size() > 0 && missions.front()->isFinished(state, *this))
 	{
-		LogWarning("Unit {0} mission \"{1}\" finished", id, missions.front()->getName());
+		LogInfo("Unit {0} mission \"{1}\" finished", id, missions.front()->getName());
 		missions.pop_front();
 		popped = true;
 		// We may have retreated as a result of finished mission
@@ -5634,7 +5634,7 @@ bool BattleUnit::popFinishedMissions(GameState &state)
 		}
 		else
 		{
-			LogWarning("No next unit mission, going idle");
+			LogInfo("No next unit mission, going idle");
 			break;
 		}
 	}

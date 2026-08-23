@@ -31,6 +31,8 @@
 #include "game/state/city/vequipment.h"
 #include "game/state/gameevent.h"
 #include "game/state/gamestate.h"
+#include "framework/harness.h"
+#include "game/state/gamestateintrospect.h"
 #include "game/state/gametime.h"
 #include "game/state/message.h"
 #include "game/state/rules/aequipmenttype.h"
@@ -1196,6 +1198,8 @@ CityView::CityView(sp<GameState> state)
       lastSpeed(CityUpdateSpeed::Pause), state(state), followVehicle(false),
       selectionState(CitySelectionState::Normal)
 {
+	registerGameStateIntrospection(state);
+	registerCityViewIntrospection();
 	weaponType.resize(3);
 	weaponDisabled.resize(3, false);
 	weaponAmmo.resize(3, -1);
@@ -1826,7 +1830,14 @@ CityView::CityView(sp<GameState> state)
 #endif
 }
 
-CityView::~CityView() = default;
+CityView::~CityView()
+{
+	// Our harness handler captured a raw `this`. Normally the next gameplay stage re-registers
+	// and displaces it, but "Abandon Game" replaces the stack with MainMenu and nothing
+	// re-registers -- leaving a global std::function holding a dangling CityView. Put back
+	// whatever was installed before us.
+	setHarnessQueryHandler(previousHarnessHandler);
+}
 
 void CityView::begin()
 {
@@ -1861,7 +1872,12 @@ void CityView::resume()
 	modifierRCtrl = false;
 	modifierRShift = false;
 
-	this->uiTabs[0]->findControlTyped<Label>("TEXT_BASE_NAME")->setText(state->current_base->name);
+	// There may be no base left. Losing a base-defence mission destroys it, Base::die clears
+	// current_base, and BattleDebriefing's OK handler constructs a CityView immediately -- before
+	// the XComDefeated event it raised gets a chance to replace the stage stack. Dereferencing an
+	// empty StateRef yields nullptr rather than throwing, so this read used to segfault on the
+	// way out of the player's final battle.
+	this->uiTabs[0]->findControlTyped<Label>("TEXT_BASE_NAME")->setText(currentBaseName());
 
 	refreshBaseView();
 }
@@ -1920,9 +1936,7 @@ void CityView::refreshBaseView()
 	// slot in the renderer's sprite atlas, so both are gated on an actual change.
 	if (miniViews.size() != state->player_bases.size())
 	{
-		this->uiTabs[0]
-		    ->findControlTyped<Label>("TEXT_BASE_NAME")
-		    ->setText(state->current_base->name);
+		this->uiTabs[0]->findControlTyped<Label>("TEXT_BASE_NAME")->setText(currentBaseName());
 		for (auto &view : miniViews)
 		{
 			view->setData(nullptr);
@@ -2138,6 +2152,108 @@ void CityView::renderCityScene()
 			}
 		}
 	}
+}
+
+UString CityView::currentBaseName() const
+{
+	// Empty once the player's last base has been destroyed; StateRef::operator-> would return
+	// nullptr rather than throw, so callers must not dereference it blind.
+	return state->current_base ? state->current_base->name : UString("");
+}
+
+void CityView::registerCityViewIntrospection()
+{
+	// Chain in front of the GameState handler installed by registerGameStateIntrospection():
+	// view-space queries are answered here, everything else falls through unchanged.
+	previousHarnessHandler = getHarnessQueryHandler();
+	auto stateHandler = previousHarnessHandler;
+	std::weak_ptr<GameState> weakState = state;
+	CityView *view = this;
+	setHarnessQueryHandler(
+	    [stateHandler, weakState, view](const UString &query) -> UString
+	    {
+		    const auto q = to_lower(query);
+		    auto gameState = weakState.lock();
+		    // "centre_on_ufo": bring the nearest live UFO into view so a driver can click it.
+		    // Craft off the visible area cannot be targeted at all, which made automated
+		    // interception a no-op whenever the camera sat over the player's base.
+		    if (gameState && (q == "centre_on_ufo" || q == "centre_on_own"))
+		    {
+			    const auto aliens = gameState->getAliens();
+			    if (q == "centre_on_own")
+			    {
+				    const auto owner = gameState->getPlayer();
+				    for (const auto &v : gameState->vehicles)
+				    {
+					    const auto &vehicle = v.second;
+					    if (!vehicle || !vehicle->owner || !vehicle->tileObject ||
+					        vehicle->city != gameState->current_city ||
+					        vehicle->owner.id != owner.id)
+					    {
+						    continue;
+					    }
+					    view->setScreenCenterTile(vehicle->getPosition());
+					    return format("centred=1 at={0},{1},{2}", (int)vehicle->getPosition().x,
+					                  (int)vehicle->getPosition().y,
+					                  (int)vehicle->getPosition().z);
+				    }
+				    return UString("centred=0");
+			    }
+			    for (const auto &v : gameState->vehicles)
+			    {
+				    const auto &vehicle = v.second;
+				    if (!vehicle || !vehicle->owner || !vehicle->tileObject ||
+				        vehicle->city != gameState->current_city || vehicle->crashed ||
+				        vehicle->owner.id != aliens.id)
+				    {
+					    continue;
+				    }
+				    view->setScreenCenterTile(vehicle->getPosition());
+				    return format("centred=1 at={0},{1},{2}", (int)vehicle->getPosition().x,
+				                  (int)vehicle->getPosition().y, (int)vehicle->getPosition().z);
+			    }
+			    return UString("centred=0");
+		    }
+		    if (gameState && (q == "ufos_screen" || q == "vehicles_screen"))
+		    {
+			    const bool wantAliens = (q == "ufos_screen");
+			    const auto player = gameState->getPlayer();
+			    const auto aliens = gameState->getAliens();
+			    UString out;
+			    int count = 0;
+			    for (const auto &v : gameState->vehicles)
+			    {
+				    const auto &vehicle = v.second;
+				    if (!vehicle || !vehicle->owner || !vehicle->tileObject ||
+				        vehicle->city != gameState->current_city)
+				    {
+					    continue;
+				    }
+				    const bool isAlien = vehicle->owner.id == aliens.id;
+				    const bool isMine = vehicle->owner.id == player.id;
+				    if (wantAliens ? !isAlien : !isMine)
+				    {
+					    continue;
+				    }
+				    const auto screen =
+				        view->tileToOffsetScreenCoords<float>(vehicle->getPosition());
+				    // Only report craft actually on screen; the driver clicks these coordinates.
+				    const auto size = fw().displayGetSize();
+				    if (screen.x < 0 || screen.y < 0 || screen.x >= size.x || screen.y >= size.y)
+				    {
+					    continue;
+				    }
+				    if (count++ > 0)
+				    {
+					    out += ";";
+				    }
+				    out += format("{0},{1},{2}", (int)screen.x, (int)screen.y,
+				                  vehicle->crashed ? 1 : 0);
+			    }
+			    return format("count={0} at={1}", count, out.empty() ? UString("-") : out);
+		    }
+		    return stateHandler ? stateHandler(query) : UString("");
+	    });
 }
 
 void CityView::update()
@@ -3869,7 +3985,12 @@ bool CityView::handleMouseDown(Event *e)
 								}
 							}
 						}
-						LogWarning("{0}", debug);
+						// Scenery-inspection dump for a debug click; it is diagnostic output, and
+						// on a tile with no scenery it is not even output.
+						if (!debug.empty())
+						{
+							LogInfo("{0}", debug);
+						}
 					}
 
 					if (modifierLAlt && modifierLCtrl && modifierLShift)
@@ -3890,10 +4011,10 @@ bool CityView::handleMouseDown(Event *e)
 				{
 					vehicle =
 					    std::dynamic_pointer_cast<TileObjectVehicle>(collision.obj)->getVehicle();
-					LogWarning("CLICKED VEHICLE {0} at {1}", vehicle->name, vehicle->position);
+					LogInfo("CLICKED VEHICLE {0} at {1}", vehicle->name, vehicle->position);
 					for (auto &m : vehicle->missions)
 					{
-						LogWarning("Mission {0}", m.getName());
+						LogInfo("Mission {0}", m.getName());
 					}
 					for (auto &c : vehicle->cargo)
 					{
@@ -3938,11 +4059,11 @@ bool CityView::handleMouseDown(Event *e)
 				{
 					vehicle = std::dynamic_pointer_cast<TileObjectVehicle>(collisionVehicle.obj)
 					              ->getVehicle();
-					LogWarning("SECONDARY CLICK ON VEHICLE {0} at {1}", vehicle->name,
+					LogInfo("SECONDARY CLICK ON VEHICLE {0} at {1}", vehicle->name,
 					           vehicle->position);
 					for (auto &m : vehicle->missions)
 					{
-						LogWarning("Mission {0}", m.getName());
+						LogInfo("Mission {0}", m.getName());
 					}
 					for (auto &c : vehicle->cargo)
 					{

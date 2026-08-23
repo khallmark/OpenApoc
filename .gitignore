@@ -142,3 +142,6 @@ cmake-build-*
 # Steam depot and local original-game lab (never commit)
 depot_7661/
 docs/original-game/.local/
+
+# Python bytecode from the automation tools
+tools/__pycache__/

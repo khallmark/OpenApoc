@@ -893,7 +893,6 @@ void VehicleMover::updateFalling(GameState &state, unsigned int ticks)
 		if (vehicleHealth != 0 && vehicle.getMaxHealth() / vehicle.getHealth() >= 3 &&
 		    randBoundsExclusive(state.rng, 0, 100) < 2)
 		{
-			LogWarning("Doodads");
 			UString doodadId = randBool(state.rng) ? "DOODAD_1_AUTOCANNON" : "DOODAD_2_AIRGUARD";
 			auto doodadPos = vehicle.position;
 			doodadPos.x += (float)randBoundsInclusive(state.rng, -3, 3) / 10.0f;
@@ -1123,6 +1122,33 @@ void VehicleMover::updateFalling(GameState &state, unsigned int ticks)
 				}
 				break;
 			}
+		}
+		else if (newPosition.z <= 0.0f)
+		{
+			// Reached the map floor with nothing to land on (open or destroyed terrain). The
+			// landing logic above only runs where the tile has scenery, so a vehicle falling here
+			// used to accelerate downwards past z=0 while TileObject::setPosition clamped it back
+			// and warned every physics tick until something else destroyed it.
+			//
+			// falling does not imply crashed -- a healthy craft gets here after losing fuel, or
+			// after the road under a ground vehicle was destroyed. Letting it settle unharmed
+			// would be more lenient than either neighbouring outcome: landing on scenery always
+			// applies collision damage, and falling off the map edge above calls die(). Match the
+			// off-map case, and only let an already-crashed hulk come to rest so it stays
+			// recoverable.
+			if (!vehicle.crashed)
+			{
+				vehicle.die(state, false, nullptr);
+				return;
+			}
+			vehicle.falling = false;
+			vehicle.velocity = {0.0f, 0.0f, 0.0f};
+			vehicle.angularVelocity = 0.0f;
+			newPosition.z = 0.0f;
+			vehicle.setPosition(newPosition);
+			vehicle.goalPosition = vehicle.position;
+			vehicle.goalWaypoints.clear();
+			break;
 		}
 	}
 

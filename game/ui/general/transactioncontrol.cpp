@@ -37,6 +37,23 @@ sp<Image> TransactionControl::transactionShade;
 sp<BitmapFont> TransactionControl::labelFont;
 bool TransactionControl::resourcesInitialised = false;
 
+void TransactionControl::releaseCachedImages()
+{
+	bgLeft = nullptr;
+	bgRight = nullptr;
+	purchaseBoxIcon = nullptr;
+	purchaseXComIcon = nullptr;
+	purchaseArrow = nullptr;
+	alienContainedDetain = nullptr;
+	alienContainedKill = nullptr;
+	scrollLeft = nullptr;
+	scrollRight = nullptr;
+	transactionShade = nullptr;
+	labelFont = nullptr;
+	// initResources() repopulates these if a transaction screen is opened again.
+	resourcesInitialised = false;
+}
+
 void TransactionControl::initResources()
 {
 	bgLeft = fw().data->loadImage(format(

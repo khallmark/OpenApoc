@@ -27,6 +27,8 @@
 #include "game/state/battle/battleunit.h"
 #include "game/state/gameevent.h"
 #include "game/state/gamestate.h"
+#include "framework/harness.h"
+#include "game/state/gamestateintrospect.h"
 #include "game/state/message.h"
 #include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/battle/battlemapparttype.h"
@@ -82,6 +84,8 @@ BattleView::BattleView(sp<GameState> gameState)
       battle(*state->current_battle), followAgent(false),
       selectionState(BattleSelectionState::Normal)
 {
+	registerGameStateIntrospection(gameState);
+	registerBattleViewIntrospection();
 	motionScannerDirectionIcons.push_back(
 	    fw().data->loadImage(format("PCK:xcom3/tacdata/icons.pck:xcom3/tacdata/"
 	                                "icons.tab:{0}:xcom3/tacdata/tactical.pal",
@@ -1423,6 +1427,56 @@ void BattleView::setSelectedTab(sp<Form> tabPtr)
 		tab->setVisible(false);
 	tabPtr->setVisible(true);
 	this->activeTab = tabPtr;
+}
+
+void BattleView::registerBattleViewIntrospection()
+{
+	// Chain in front of the GameState-only handler: projecting a unit's tile position to the
+	// screen needs the view, which the game-state handler cannot see.
+	previousHarnessHandler = getHarnessQueryHandler();
+	auto stateHandler = previousHarnessHandler;
+	std::weak_ptr<GameState> weakState = state;
+	BattleView *view = this;
+	setHarnessQueryHandler(
+	    [stateHandler, weakState, view](const UString &query) -> UString
+	    {
+		    const auto q = to_lower(query);
+		    auto gameState = weakState.lock();
+		    if (gameState && gameState->current_battle &&
+		        (q == "enemies_screen" || q == "friends_screen"))
+		    {
+			    const bool wantFoes = (q == "enemies_screen");
+			    const auto player = gameState->getPlayer();
+			    const auto size = fw().displayGetSize();
+			    UString out;
+			    int count = 0;
+			    for (const auto &u : gameState->current_battle->units)
+			    {
+				    const auto &unit = u.second;
+				    if (!unit || !unit->owner || !unit->tileObject || !unit->isConscious())
+				    {
+					    continue;
+				    }
+				    const bool mine = unit->owner.id == player.id;
+				    if (wantFoes == mine)
+				    {
+					    continue;
+				    }
+				    const auto screen = view->tileToOffsetScreenCoords<float>(unit->position);
+				    if (screen.x < 0 || screen.y < 0 || screen.x >= size.x || screen.y >= size.y)
+				    {
+					    continue;
+				    }
+				    if (count++ > 0)
+				    {
+					    out += ";";
+				    }
+				    out += format("{0},{1},0", (int)screen.x, (int)screen.y);
+			    }
+			    return format("count={0} at={1}", count, out.empty() ? UString("-") : out);
+		    }
+		    return stateHandler ? stateHandler(query) : UString("");
+	    });
 }
 
 void BattleView::update()
@@ -3713,7 +3767,7 @@ bool BattleView::handleMouseDown(Event *e)
 			}
 		}
 		// Determine course of action
-		LogWarning("Click at tile {0}, {1}, {2}", t.x, t.y, t.z);
+		LogInfo("Click at tile {0}, {1}, {2}", t.x, t.y, t.z);
 		switch (selectionState)
 		{
 			case BattleSelectionState::Normal:

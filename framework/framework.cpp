@@ -269,7 +269,18 @@ Framework::Framework(const UString programName, bool createWindow)
 	if (createWindow)
 	{
 		displayInitialise();
-		enableSDLDialogLogger(p->window);
+		// SDL_ShowSimpleMessageBox is modal and blocks the thread that calls it until somebody
+		// dismisses it, and Logger.dialogLevel defaults to Error -- so under the harness a single
+		// LogError deadlocks the main loop forever, taking the harness (which is polled from that
+		// same loop) down with it. Nobody is there to click OK on an automated run.
+		if (Options::harnessEnable.get())
+		{
+			LogInfo("Harness enabled: not installing the modal SDL dialog logger");
+		}
+		else
+		{
+			enableSDLDialogLogger(p->window);
+		}
 	}
 	audioInitialise(!createWindow);
 
@@ -377,6 +388,17 @@ void Framework::run(sp<Stage> initialStage)
 		expected_frame_time += target_frame_duration;
 		frame++;
 
+		// expected_frame_time only ever advances one frame per iteration, so a single long frame
+		// -- city generation on load, a big save -- leaves it arbitrarily far behind wall-clock
+		// with no way to catch up: every later iteration sees it already in the past, never
+		// sleeps, and TargetFPS silently stops limiting anything for the rest of the session.
+		// That is why this fired on essentially every launch: it was reporting the load hitch,
+		// not a steady-state pacing problem. Resynchronise rather than accumulate a debt that
+		// cannot be paid.
+		if (frame_time_now > expected_frame_time + 5 * target_frame_duration)
+		{
+			expected_frame_time = frame_time_now + target_frame_duration;
+		}
 		if (!frame_time_limited_warning_shown &&
 		    frame_time_now > expected_frame_time + 5 * target_frame_duration)
 		{
@@ -401,7 +423,13 @@ void Framework::run(sp<Stage> initialStage)
 		const auto profileUpdateEnd = std::chrono::steady_clock::now();
 		auto profileSwapStart = profileUpdateEnd;
 
-		for (StageCmd cmd : stageCommands)
+		// Iterate a copy. REPLACEALL/QUIT below clear the stage stack, which destroys stages and
+		// everything they own; anything in that teardown that queues another stage command would
+		// append to this very vector mid-iteration and invalidate the range-for. Copying keeps
+		// the existing semantics -- commands raised while processing this batch are discarded by
+		// the clear() below, exactly as before -- without the undefined behaviour.
+		const auto commandsThisFrame = stageCommands;
+		for (const StageCmd &cmd : commandsThisFrame)
 		{
 			switch (cmd.cmd)
 			{
@@ -563,7 +591,7 @@ void Framework::processEvents()
 							    }
 							    else
 							    {
-								    LogWarning("Wrote screenshot to \"{0}\"", screenshotName);
+								    LogInfo("Wrote screenshot to \"{0}\"", screenshotName);
 							    }
 						    });
 					}
@@ -999,8 +1027,12 @@ void Framework::displayInitialise()
 		SDL_DestroyWindow(p->window);
 		exit(1);
 #else
-		LogWarning("Could not create GL context! [SDLError: {0}]", SDL_GetError());
-		LogWarning("Attempting to create context by lowering the requested version");
+		// The first request is for a version macOS never grants, so this retry is the normal
+		// path there, not a fault. A genuine failure is the LogError + exit(1) just below.
+		LogInfo("GL context request unsupported by driver, retrying with a legacy context "
+		        "[SDLError: {0}]",
+		        SDL_GetError());
+		LogInfo("Attempting to create context by lowering the requested version");
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 		p->context = SDL_GL_CreateContext(p->window);
@@ -1438,7 +1470,7 @@ bool Framework::writeScreenshot(const UString &path)
 		LogWarning("Failed to write screenshot \"{0}\"", path);
 		return false;
 	}
-	LogWarning("Wrote screenshot to \"{0}\"", path);
+	LogInfo("Wrote screenshot to \"{0}\"", path);
 	return true;
 }
 
@@ -1447,7 +1479,7 @@ void Framework::setupModDataPaths()
 	auto mods = split(Options::modList.get(), ":");
 	for (const auto &modString : mods)
 	{
-		LogWarning("Loading mod data \"{0}\"", modString);
+		LogInfo("Loading mod data \"{0}\"", modString);
 		auto modPath = Options::modPath.get() + "/" + modString;
 		auto _modInfo = ModInfo::getInfo(modPath);
 		if (!_modInfo)

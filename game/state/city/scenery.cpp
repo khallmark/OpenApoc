@@ -1431,7 +1431,7 @@ void Scenery::collapse(GameState &state)
 	}
 	else
 	{
-		LogWarning("Scenery at {0} type {1} now falling", currentPosition, type.id);
+		LogInfo("Scenery at {0} type {1} now falling", currentPosition, type.id);
 		falling = true;
 		// state.current_battle->queueVisionRefresh(position);
 		// state.current_battle->queuePathfindingRefresh(position);

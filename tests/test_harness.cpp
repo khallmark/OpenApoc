@@ -23,6 +23,9 @@ static bool test_parse_key_and_text()
 	TEST_REQUIRE(parseHarnessCommand("KEY Escape", cmd), "parse escape");
 	TEST_REQUIRE(cmd.type == HarnessCommand::Type::Key, "key type");
 	TEST_REQUIRE(cmd.keyCode != 0, "keycode");
+	TEST_REQUIRE(parseHarnessCommand("KEY Left Shift", cmd), "parse multi-word key name");
+	TEST_REQUIRE(cmd.type == HarnessCommand::Type::Key, "multi-word key type");
+	TEST_REQUIRE(cmd.keyCode != 0, "multi-word keycode");
 	TEST_REQUIRE(parseHarnessCommand("TEXT hello world", cmd), "parse text");
 	TEST_REQUIRE(cmd.type == HarnessCommand::Type::Text, "text type");
 	TEST_REQUIRE(cmd.text == "hello world", "text rest");
@@ -46,6 +49,10 @@ static bool test_parse_errors()
 	HarnessCommand cmd;
 	TEST_REQUIRE(!parseHarnessCommand("CLICK no", cmd), "bad click");
 	TEST_REQUIRE(!parseHarnessCommand("NOTACOMMAND", cmd), "unknown");
+	TEST_REQUIRE(!parseHarnessCommand("GS", cmd), "GS needs a query");
+	TEST_REQUIRE(parseHarnessCommand("GS all", cmd) && cmd.type == HarnessCommand::Type::Query,
+	             "GS query");
+	TEST_REQUIRE(cmd.text == "all", "GS query text");
 	TEST_REQUIRE(!parseHarnessCommand("", cmd), "empty");
 	return true;
 }
