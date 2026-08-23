@@ -61,6 +61,7 @@ template <> const UString &StateObject<Base>::getId(const GameState &state, cons
 
 Base::Base(GameState &state, StateRef<Building> building) : building(building)
 {
+	ufo2pSlot = state.allocateUfo2pBaseSlot();
 	corridors = std::vector<std::vector<bool>>(SIZE, std::vector<bool>(SIZE, false));
 	for (auto &rect : building->base_layout->baseCorridors)
 	{

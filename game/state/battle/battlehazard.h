@@ -97,8 +97,9 @@ We have 12 frames for fire. Let's number them 0 to 11 where 0 is full force fire
 Let "Stage" be the value that controls the fire's current state, and what frame we use.
 
 The visual age model below remains observational. Recovered type-2 overlays use
-the serialized Battle global row/contact scheduler in real-time mode. Turn-based
-scheduling and unit fire intensity remain to be bound.
+the serialized Battle global row/contact scheduler in real-time and the
+400-iteration end-of-round batch in turn-based mode. Unit fire intensity remains
+to be bound.
 
 When fire is applied (Incendiary missile or grenade), Stage = 10 - random[0-2] * 0,6
 (here [] are inclusive brackets, as in widely accepted math notation)

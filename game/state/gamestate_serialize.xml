@@ -564,6 +564,7 @@
     <member>name</member>
     <member>building</member>
     <member>knownToAliens</member>
+    <member>ufo2pSlot</member>
   </object>
   <object>
     <name>Facility</name>

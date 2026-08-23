@@ -143,6 +143,37 @@ void GameState::initState()
 		current_battle->initBattle(*this);
 	}
 
+	// Populate persistent UFO2P base slots for older saves and repair duplicates.
+	std::array<bool, UFO2P_BASE_SLOT_COUNT> usedBaseSlots{};
+	for (auto &entry : player_bases)
+	{
+		auto &slot = entry.second->ufo2pSlot;
+		if (slot >= 0 && slot < UFO2P_BASE_SLOT_COUNT && !usedBaseSlots[slot])
+		{
+			usedBaseSlots[slot] = true;
+		}
+		else
+		{
+			slot = -1;
+		}
+	}
+	for (auto &entry : player_bases)
+	{
+		if (entry.second->ufo2pSlot >= 0)
+		{
+			continue;
+		}
+		for (int slot = 0; slot < UFO2P_BASE_SLOT_COUNT; slot++)
+		{
+			if (!usedBaseSlots[slot])
+			{
+				entry.second->ufo2pSlot = slot;
+				usedBaseSlots[slot] = true;
+				break;
+			}
+		}
+	}
+
 	for (auto &c : this->cities)
 	{
 		auto &city = c.second;
@@ -790,6 +821,46 @@ void GameState::fillPlayerStartingProperty()
 	bld->city->cityViewScreenCenter = {buildingCenter.x, buildingCenter.y, 1.0f};
 }
 
+int GameState::allocateUfo2pBaseSlot() const
+{
+	std::array<bool, UFO2P_BASE_SLOT_COUNT> used{};
+	for (const auto &entry : player_bases)
+	{
+		if (entry.second && entry.second->ufo2pSlot >= 0 &&
+		    entry.second->ufo2pSlot < UFO2P_BASE_SLOT_COUNT)
+		{
+			used[entry.second->ufo2pSlot] = true;
+		}
+	}
+	for (int slot = 0; slot < UFO2P_BASE_SLOT_COUNT; slot++)
+	{
+		if (!used[slot])
+		{
+			return slot;
+		}
+	}
+	return -1;
+}
+
+int GameState::selectKnownBaseSlot(const std::array<bool, UFO2P_BASE_SLOT_COUNT> &active,
+                                   const std::array<bool, UFO2P_BASE_SLOT_COUNT> &knownToAliens,
+                                   int startSlot)
+{
+	if (startSlot < 0 || startSlot >= UFO2P_BASE_SLOT_COUNT)
+	{
+		return -1;
+	}
+	for (int scanned = 0; scanned < UFO2P_BASE_SLOT_COUNT; scanned++)
+	{
+		const int slot = (startSlot + scanned) % UFO2P_BASE_SLOT_COUNT;
+		if (active[slot] && knownToAliens[slot])
+		{
+			return slot;
+		}
+	}
+	return -1;
+}
+
 void GameState::invasion()
 {
 	auto invadedCity = StateRef<City>{this, "CITYMAP_HUMAN"};
@@ -879,6 +950,26 @@ void GameState::invasion()
 		return;
 	}
 
+	std::array<StateRef<Base>, UFO2P_BASE_SLOT_COUNT> baseSlots;
+	std::array<bool, UFO2P_BASE_SLOT_COUNT> activeBases{};
+	std::array<bool, UFO2P_BASE_SLOT_COUNT> knownBases{};
+	bool preferredKnownBaseUsed = false;
+	if (missionType == UFOIncursion::PrimaryMission::Subversion)
+	{
+		for (auto &entry : player_bases)
+		{
+			const int slot = entry.second ? entry.second->ufo2pSlot : -1;
+			if (slot < 0 || slot >= UFO2P_BASE_SLOT_COUNT || !entry.second ||
+			    !entry.second->building)
+			{
+				continue;
+			}
+			baseSlots[slot] = {this, entry.first};
+			activeBases[slot] = entry.second->building->isAlive();
+			knownBases[slot] = entry.second->knownToAliens;
+		}
+	}
+
 	std::set<StateRef<Vehicle>> escorted;
 	for (size_t primaryIdx = 0; primaryIdx < currentIncursion->primaryList.size(); primaryIdx++)
 	{
@@ -913,10 +1004,23 @@ void GameState::invasion()
 					    true);
 					break;
 				case UFOIncursion::PrimaryMission::Subversion:
-					invader->addMission(
-					    *this, VehicleMission::infiltrateOrSubvertBuilding(*this, *invader, true),
-					    true);
+				{
+					// FUN_000702e4 consumes rand16(15) for every role-2 craft,
+					// before consulting the one-preferred-target latch.
+					const int startSlot = randBoundsInclusive(rng, 0, UFO2P_BASE_SLOT_COUNT - 1);
+					const int slot = selectKnownBaseSlot(activeBases, knownBases, startSlot);
+					StateRef<Building> preferredKnownBase;
+					if (!preferredKnownBaseUsed && slot >= 0)
+					{
+						preferredKnownBase = baseSlots[slot]->building;
+						preferredKnownBaseUsed = true;
+					}
+					invader->addMission(*this,
+					                    VehicleMission::infiltrateOrSubvertBuilding(
+					                        *this, *invader, true, preferredKnownBase),
+					                    true);
 					break;
+				}
 				case UFOIncursion::PrimaryMission::Overspawn:
 					// Overspawn dumps aliens into buildings rather than bombing them.
 					// Dedicated attackers still come from attackList below.

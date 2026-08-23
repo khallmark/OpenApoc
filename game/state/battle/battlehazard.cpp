@@ -100,7 +100,9 @@ bool BattleHazard::advanceOriginalFireOverlay(GameState &state)
 	if (!stageContinues || !terrain || specialFeatureExtinguishes || terrainBurned)
 	{
 		fireOverlay = 0;
-		die(state, true);
+		// FUN_0007b3dc clears the tile overlay; it does not establish the
+		// legacy OpenApoc smoke-on-expiry side effect.
+		die(state, false);
 		return true;
 	}
 	return false;
@@ -639,7 +641,14 @@ bool BattleHazard::update(GameState &state, unsigned int ticks)
 	return false;
 }
 
-bool BattleHazard::updateTB(GameState &state) { return updateInner(state, TICKS_PER_TURN); }
+bool BattleHazard::updateTB(GameState &state)
+{
+	if (fireOverlayStage(fireOverlay) >= 0)
+	{
+		return false;
+	}
+	return updateInner(state, TICKS_PER_TURN);
+}
 
 void BattleHazard::updateTileVisionBlock(GameState &state)
 {
