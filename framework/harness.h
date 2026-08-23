@@ -20,6 +20,7 @@ class Framework;
 //   KEYUP <name>
 //   TEXT <string>
 //   SCREENSHOT <path>
+//   RESIZE <width> <height>
 //   STATUS
 //   QUIT
 //

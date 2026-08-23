@@ -85,6 +85,8 @@ class FrameworkPrivate
 	Vec2<int> drawableSize;
 	Vec2<int> lastWindowedSize;
 	int uiScale;
+	// Mouse input from the OS is ignored while the window is not the focused one.
+	bool windowFocused = true;
 	up<ThreadPool> threadPool;
 	up<Harness> harness;
 
@@ -149,6 +151,8 @@ Framework::Framework(const UString programName, bool createWindow)
 	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
 #endif
 #endif
+	// Clicking a background window should only raise it, never also act in the game.
+	SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "0");
 	// Initialize subsystems separately?
 	if (SDL_Init(SDL_INIT_EVENTS | SDL_INIT_TIMER) < 0)
 	{
@@ -352,6 +356,7 @@ void Framework::run(sp<Stage> initialStage)
 	const size_t profileFrames = (size_t)std::max(0, Options::profileFrames.get());
 	size_t profileSamples = 0;
 	uint64_t profileDrawCalls = 0;
+	uint64_t profileSprites = 0;
 	std::chrono::steady_clock::duration profileUpdate{};
 	std::chrono::steady_clock::duration profileRender{};
 	std::chrono::steady_clock::duration profileSwap{};
@@ -462,6 +467,7 @@ void Framework::run(sp<Stage> initialStage)
 			profileSwap += profileFrameEnd - profileSwapStart;
 			profileTotal += profileFrameEnd - profileFrameStart;
 			profileDrawCalls += this->renderer->takeDrawCallCount();
+			profileSprites += this->renderer->takeSpriteCount();
 			if (++profileSamples >= profileFrames)
 			{
 				const auto avgMs = [profileSamples](std::chrono::steady_clock::duration d)
@@ -471,14 +477,17 @@ void Framework::run(sp<Stage> initialStage)
 				};
 				LogWarning("Frame profile over {0} frames: update {1:.2f} ms, draw {2:.2f} ms, "
 				           "swap {3:.2f} ms, busy {4:.2f} ms ({5:.1f} fps if uncapped), "
-				           "{6} draw calls/frame, display {7} drawable {8} uiScale {9}",
+				           "{6} draw calls + {7} sprites/frame, display {8} drawable {9} "
+				           "uiScale {10}",
 				           (unsigned long long)profileSamples, avgMs(profileUpdate),
 				           avgMs(profileRender), avgMs(profileSwap), avgMs(profileTotal),
 				           1000.0 / avgMs(profileTotal),
-				           (unsigned long long)(profileDrawCalls / profileSamples), p->displaySize,
+				           (unsigned long long)(profileDrawCalls / profileSamples),
+				           (unsigned long long)(profileSprites / profileSamples), p->displaySize,
 				           p->drawableSize, p->uiScale);
 				profileSamples = 0;
 				profileDrawCalls = 0;
+				profileSprites = 0;
 				profileUpdate = {};
 				profileRender = {};
 				profileSwap = {};
@@ -606,6 +615,23 @@ void Framework::translateSdlEvents()
 
 	while (SDL_PollEvent(&e))
 	{
+		// A background window must not be playable: neither the click that raises it nor
+		// the pointer passing over it should reach the game. Releases and key-ups are let
+		// through so a drag or held key interrupted by an app switch cannot stick down.
+		if (!p->windowFocused)
+		{
+			switch (e.type)
+			{
+				case SDL_MOUSEMOTION:
+				case SDL_MOUSEWHEEL:
+				case SDL_MOUSEBUTTONDOWN:
+				case SDL_FINGERDOWN:
+				case SDL_FINGERMOTION:
+					continue;
+				default:
+					break;
+			}
+		}
 		switch (e.type)
 		{
 			case SDL_QUIT:
@@ -743,6 +769,26 @@ void Framework::translateSdlEvents()
 				// Window events get special treatment
 				switch (e.window.event)
 				{
+					case SDL_WINDOWEVENT_FOCUS_GAINED:
+						p->windowFocused = true;
+						fwE = new DisplayEvent(EVENT_WINDOW_ACTIVATE);
+						fwE->display().X = 0;
+						fwE->display().Y = 0;
+						SDL_GetWindowSize(p->window, &(fwE->display().Width),
+						                  &(fwE->display().Height));
+						fwE->display().Active = true;
+						pushEvent(up<Event>(fwE));
+						break;
+					case SDL_WINDOWEVENT_FOCUS_LOST:
+						p->windowFocused = false;
+						fwE = new DisplayEvent(EVENT_WINDOW_DEACTIVATE);
+						fwE->display().X = 0;
+						fwE->display().Y = 0;
+						SDL_GetWindowSize(p->window, &(fwE->display().Width),
+						                  &(fwE->display().Height));
+						fwE->display().Active = false;
+						pushEvent(up<Event>(fwE));
+						break;
 					case SDL_WINDOWEVENT_SIZE_CHANGED:
 					case SDL_WINDOWEVENT_RESIZED:
 						displayRefreshSize();
@@ -943,6 +989,7 @@ void Framework::displayInitialise()
 		LogError("Failed to create window \"{0}\"", SDL_GetError());
 		exit(1);
 	}
+	p->windowFocused = (SDL_GetWindowFlags(p->window) & SDL_WINDOW_INPUT_FOCUS) != 0;
 
 	p->context = SDL_GL_CreateContext(p->window);
 	if (!p->context)

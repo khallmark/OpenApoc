@@ -28,6 +28,7 @@ namespace
 {
 
 static std::atomic<uint64_t> drawCallCount{0};
+static std::atomic<uint64_t> spriteCount{0};
 
 // This backend issues one draw call per sprite, and a city frame is thousands of
 // sprites. Asking the driver for the current binding before each one (glGetIntegerv)
@@ -1098,88 +1099,86 @@ class OGL20Renderer : public Renderer
 		this->currentPalette = p;
 	}
 	sp<Palette> getPalette() override { return this->currentPalette; }
-	void draw(sp<Image> image, Vec2<float> position) override
+	void draw(const sp<Image> &image, Vec2<float> position) override
 	{
 		drawScaled(image, position, image->size, Scaler::Nearest);
 	}
-	void drawRotated(sp<Image> image, Vec2<float> center, Vec2<float> position,
+	void drawRotated(const sp<Image> &image, Vec2<float> center, Vec2<float> position,
 	                 float angle) override
 	{
-		auto size = image->size;
-		sp<RGBImage> rgbImage = std::dynamic_pointer_cast<RGBImage>(image);
-		if (rgbImage)
+		if (image->imageType != ImageType::RGB)
 		{
-			GLRGBImage *img = dynamic_cast<GLRGBImage *>(rgbImage->rendererPrivateData.get());
-			if (!img)
-			{
-				img = new GLRGBImage(rgbImage, this);
-				image->rendererPrivateData.reset(img);
-			}
-			this->drawRgb(*img, position, size, Scaler::Linear, center, angle);
+			LogError("Unsupported image type");
 			return;
 		}
-
-		sp<PaletteImage> paletteImage = std::dynamic_pointer_cast<PaletteImage>(image);
-		LogError("Unsupported image type");
+		auto *img = static_cast<GLRGBImage *>(image->rendererPrivateData.get());
+		if (!img)
+		{
+			img = new GLRGBImage(std::static_pointer_cast<RGBImage>(image), this);
+			image->rendererPrivateData.reset(img);
+		}
+		this->drawRgb(*img, position, image->size, Scaler::Linear, center, angle);
 	}
-	void drawScaled(sp<Image> image, Vec2<float> position, Vec2<float> size,
+	void drawScaled(const sp<Image> &image, Vec2<float> position, Vec2<float> size,
 	                Scaler scaler = Scaler::Linear) override
 	{
 		drawScaledImage(image, position, size, scaler);
 	}
-	void drawScaledImage(sp<Image> image, Vec2<float> position, Vec2<float> size,
+	// Hot path: called once per sprite, thousands of times a frame. Dispatch on the
+	// image's own type tag and stay on raw pointers - the old dynamic_pointer_cast chain
+	// cost more per sprite than the draw it was dispatching to.
+	void drawScaledImage(const sp<Image> &image, Vec2<float> position, Vec2<float> size,
 	                     Scaler scaler = Scaler::Linear, Colour tint = {255, 255, 255, 255})
 	{
-
-		sp<RGBImage> rgbImage = std::dynamic_pointer_cast<RGBImage>(image);
-		if (rgbImage)
+		auto *priv = image->rendererPrivateData.get();
+		switch (image->imageType)
 		{
-			GLRGBImage *img = dynamic_cast<GLRGBImage *>(rgbImage->rendererPrivateData.get());
-			if (!img)
+			case ImageType::Palette:
 			{
-				img = new GLRGBImage(rgbImage, this);
-				image->rendererPrivateData.reset(img);
+				auto *img = static_cast<GLPaletteImage *>(priv);
+				if (!img)
+				{
+					img = new GLPaletteImage(std::static_pointer_cast<PaletteImage>(image), this);
+					image->rendererPrivateData.reset(img);
+				}
+				if (scaler != Scaler::Nearest)
+				{
+					// blending indices doesn't make sense. You'll have to render
+					// it to an RGB surface then scale that
+					LogError("Only nearest scaler is supported on paletted images");
+				}
+				this->drawPalette(*img, position, size, tint);
+				return;
 			}
-			this->drawRgb(*img, position, size, scaler, {0, 0}, 0, tint);
-			return;
-		}
-
-		sp<PaletteImage> paletteImage = std::dynamic_pointer_cast<PaletteImage>(image);
-		if (paletteImage)
-		{
-			GLPaletteImage *img =
-			    dynamic_cast<GLPaletteImage *>(paletteImage->rendererPrivateData.get());
-			if (!img)
+			case ImageType::RGB:
 			{
-				img = new GLPaletteImage(paletteImage, this);
-				image->rendererPrivateData.reset(img);
+				auto *img = static_cast<GLRGBImage *>(priv);
+				if (!img)
+				{
+					img = new GLRGBImage(std::static_pointer_cast<RGBImage>(image), this);
+					image->rendererPrivateData.reset(img);
+				}
+				this->drawRgb(*img, position, size, scaler, {0, 0}, 0, tint);
+				return;
 			}
-			if (scaler != Scaler::Nearest)
+			case ImageType::Surface:
 			{
-				// blending indices doesn't make sense. You'll have to render
-				// it to an RGB surface then scale that
-				LogError("Only nearest scaler is supported on paletted images");
+				auto *fbo = static_cast<FBOData *>(priv);
+				if (!fbo)
+				{
+					fbo = new FBOData(image->size, this);
+					image->rendererPrivateData.reset(fbo);
+				}
+				this->drawSurface(*fbo, position, size, scaler, tint);
+				return;
 			}
-			this->drawPalette(*img, position, size, tint);
-			return;
-		}
-
-		sp<Surface> surface = std::dynamic_pointer_cast<Surface>(image);
-		if (surface)
-		{
-			FBOData *fbo = dynamic_cast<FBOData *>(surface->rendererPrivateData.get());
-			if (!fbo)
-			{
-				fbo = new FBOData(image->size, this);
-				image->rendererPrivateData.reset(fbo);
-			}
-			this->drawSurface(*fbo, position, size, scaler, tint);
-			return;
+			case ImageType::Lazy:
+				break;
 		}
 		LogError("Unsupported image type");
 	}
 
-	void drawTinted(sp<Image> i, Vec2<float> position, Colour tint) override
+	void drawTinted(const sp<Image> &i, Vec2<float> position, Colour tint) override
 	{
 		drawScaledImage(i, position, i->size, Scaler::Nearest, tint);
 	}
@@ -1295,6 +1294,7 @@ class OGL20Renderer : public Renderer
 		}
 	}
 	uint64_t takeDrawCallCount() override { return drawCallCount.exchange(0); }
+	uint64_t takeSpriteCount() override { return spriteCount.exchange(0); }
 	UString getName() override { return "OGL2.0 Renderer"; }
 	sp<Surface> getDefaultSurface() override { return this->defaultSurface; }
 
@@ -1431,6 +1431,7 @@ class OGL20Renderer : public Renderer
 	void drawPalette(GLPaletteImage &img, Vec2<float> offset, Vec2<float> size,
 	                 Colour tint = {255, 255, 255, 255})
 	{
+		spriteCount++;
 		bool flipY = false;
 		if (currentBoundFBO == 0)
 			flipY = true;
