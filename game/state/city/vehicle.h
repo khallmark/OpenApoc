@@ -270,6 +270,10 @@ class Vehicle : public StateObject<Vehicle>,
 
 	void processRecoveredVehicle(GameState &state);
 	void dropCarriedVehicle(GameState &state);
+	// RecoverVehicle unmanned UFO: probe/scout have no battle_map. Load
+	// extracted vehicle loot onto this craft (same cargo path as a won
+	// UfoRecovery battle) before the wreck is removed.
+	void loadUnmannedUfoLoot(GameState &state, Vehicle &recovered);
 
 	// Provide cargo or passenger service. Loads cargo or passengers or bio.
 	// If otherOrg true - provides service to other orgs but only if type provides freight

@@ -29,6 +29,7 @@ set (DATAEXTRACTOR_SOURCE_FILES
 	extract_manufacturing.cpp
 	extract_ufo_growth.cpp
 	extract_ufo_incursions.cpp
+	extract_ufo_mission_preference.cpp
 	extract_unit_image_packs.cpp
 	extract_unit_animation_packs.cpp
 	extract_unit_animation_pack_unit.cpp
@@ -68,6 +69,7 @@ set (DATAEXTRACTOR_HEADER_FILES
 	common/research.h
 	common/ufogrowth.h
 	common/ufoincursion.h
+	common/ufomissionpattern.h
 	common/bulletsprite.h
 	common/building.h
 	common/battlemap.h

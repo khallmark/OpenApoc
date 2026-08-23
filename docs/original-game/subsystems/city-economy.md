@@ -12,5 +12,5 @@ Remaining:
 
 - Org-org bribe/rift dollar formulas ([issue 996](https://github.com/OpenApoc/OpenApoc/issues/996))
 - Senate numeric funding bands stay patch `weekly_rating_rules` until `~0xF6EC7` is fully listed (`0x15055B` is UI copy)
-- `craft_ammo_manufacturers_data` `0x13EB6A` uint16[15] disagrees with patch on Zorium (EXE X-COM vs patch Solmine) — leave patch until a consumer is decompiled
+- `craft_ammo_manufacturers_data` `0x13EB6A` is extracted (`uint16[15]` org index). Zorium is X-COM.
 - Training rates still inherit the 4× tick in places ([issue 997](https://github.com/OpenApoc/OpenApoc/issues/997))

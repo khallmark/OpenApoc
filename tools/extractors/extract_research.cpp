@@ -1,7 +1,9 @@
 #include "framework/framework.h"
 #include "game/state/gamestate.h"
+#include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/city/baselayout.h"
 #include "game/state/rules/city/ufopaedia.h"
+#include "game/state/rules/city/vequipmenttype.h"
 #include "tools/extractors/common/ufo2p.h"
 #include "tools/extractors/extractors.h"
 
@@ -70,9 +72,27 @@ void InitialGameStateExtractor::extractResearch(GameState &state) const
 			r->dependencies.research.push_back(dependency);
 		}
 
-		/*ItemDependency itemdep;
-		itemdep.agentItemsRequired[{&state, "AEQUIPMENTTYPE_PSICLONE"}] = 1;
-		r->dependencies.items.push_back(itemdep);*/
+		// prereqType is an item-type gate, not Any/All. Type 3 (alien lifeform)
+		// index → ALIVE/DEAD/autopsy item is unbound; leave those to the patch.
+		if (rdata.prereqType != 0xff && rdata.prereq != 0xffff)
+		{
+			switch (rdata.prereqType)
+			{
+				case 0:
+					r->dependencies.items
+					    .vehicleItemsRequired[{&state, data.getVequipmentId(rdata.prereq)}] = 1;
+					break;
+				case 1:
+					r->dependencies.items
+					    .agentItemsRequired[{&state, data.getAEquipmentId(rdata.prereq)}] = 1;
+					break;
+				case 3:
+					break;
+				default:
+					LogError("Unexpected prereqType {0:02x} for {1}", (unsigned)rdata.prereqType,
+					         id);
+			}
+		}
 
 		r->score = rdata.score;
 

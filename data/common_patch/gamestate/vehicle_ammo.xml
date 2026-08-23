@@ -28,7 +28,7 @@
       <id>VEQUIPMENTAMMOTYPE_ZORIUM</id>
       <name>Zorium</name>
       <ammo_id>2</ammo_id>
-      <manufacturer>ORG_SOLMINE</manufacturer>
+      <manufacturer>ORG_X-COM</manufacturer>
       <weight>0</weight>
       <store_space>1</store_space>
     </value>

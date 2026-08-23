@@ -10,7 +10,7 @@ UFO2P strings that name the road layer: `Road type:`, `TJunction/Crossroads`, `R
 
 OpenApoc runtime:
 
-- [vehiclemission.cpp](../../../game/state/city/vehiclemission.cpp) — all mission types have defensive `getNextDestination` / `update` / `start` defaults. `connection[dir]` is used for road and ATV tiles.
+- [vehiclemission.cpp](../../../game/state/city/vehiclemission.cpp) — all mission types have defensive `getNextDestination` / `update` / `start` defaults. `connection[dir]` is used for road and ATV tiles. RecoverVehicle on a UFO without `battle_map` (extractor: probe/scout, `i <= 1`) loads `Vehicle::loot` onto the recovering craft (`loadUnmannedUfoLoot`), same cargo constructor as a won UfoRecovery battle.
 - Ground 1-tile occupancy now uses the same `intersectingObjects` vehicle block as flyers. Large-vehicle footprint and engagement tables ([issue 785](https://github.com/OpenApoc/OpenApoc/issues/785)) are still incomplete. [version01readme.txt](../../../tools/extractors/docs/version01readme.txt) warned that ordering ground vehicles can crash.
 
 Organisation park refill now checks funds and `purchase()` credits the seller. Surplus idle non-liner park vehicles sell at `currentPrice` ([issue 1053](https://github.com/OpenApoc/OpenApoc/issues/1053)).

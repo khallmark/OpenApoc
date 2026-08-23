@@ -49,6 +49,8 @@ class InitialGameStateExtractor
 	InitialGameStateExtractor() = default;
 	void extractCommon(GameState &state) const;
 	void extract(GameState &state, Difficulty difficulty) const;
+	// After common_patch: overlay EXE org indices onto existing VAmmoType keys.
+	void applyCraftAmmoManufacturers(GameState &state) const;
 	/* extractBulletSprites() returns a list of images, so doesn't affect a GameState */
 	std::map<UString, sp<Image>> extractBulletSpritesCity() const;
 	std::map<UString, sp<Image>> extractBulletSpritesBattle() const;
@@ -103,6 +105,7 @@ class InitialGameStateExtractor
 	void extractEconomy(GameState &state) const;
 	void extractUfoGrowth(GameState &state) const;
 	void extractUfoIncursions(GameState &state) const;
+	void extractUfoMissionPreference(GameState &state) const;
 
 	void extractBattlescapeMap(GameState &state, const std::vector<OpenApoc::UString> &paths) const;
 	void extractBattlescapeMapFromPath(GameState &state, const UString dirName,

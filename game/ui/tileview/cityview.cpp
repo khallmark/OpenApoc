@@ -4113,7 +4113,7 @@ bool CityView::handleGameStateEvent(Event *e)
 		case GameEventType::UfoRecoveryUnmanned:
 		{
 			auto gameRecoveryEvent = dynamic_cast<GameVehicleEvent *>(e);
-			LogWarning("Load unmanned ufo loot on craft!");
+			gameRecoveryEvent->actor->loadUnmannedUfoLoot(*state, *gameRecoveryEvent->vehicle);
 			// Remove ufo
 			gameRecoveryEvent->vehicle->die(*state, true);
 			// Return to base

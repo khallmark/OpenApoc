@@ -38,6 +38,7 @@
 #include <glm/gtx/vector_angle.hpp>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <random>
 
 namespace OpenApoc
@@ -1594,6 +1595,28 @@ void Vehicle::dropCarriedVehicle(GameState &state)
 	carriedVehicle->startFalling(state);
 	carriedVehicle->carriedByVehicle.clear();
 	carriedVehicle.clear();
+}
+
+void Vehicle::loadUnmannedUfoLoot(GameState &state, Vehicle &recovered)
+{
+	StateRef<Building> destination = homeBuilding;
+	if (!destination && !state.player_bases.empty())
+	{
+		destination = state.player_bases.begin()->second->building;
+	}
+	std::map<StateRef<VEquipmentType>, int> counts;
+	for (auto &e : recovered.loot)
+	{
+		if (e)
+		{
+			counts[e]++;
+		}
+	}
+	for (auto &entry : counts)
+	{
+		cargo.emplace_back(state, entry.first, entry.second, 0, nullptr, destination);
+	}
+	recovered.loot.clear();
 }
 
 void Vehicle::provideService(GameState &state, bool otherOrg)

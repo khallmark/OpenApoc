@@ -1,5 +1,6 @@
 #pragma once
 
+#include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/city/facilitytype.h"
 #include "game/state/rules/city/vammotype.h"
 #include "game/state/rules/city/vehicletype.h"
@@ -22,6 +23,7 @@
 #include "tools/extractors/common/strtab.h"
 #include "tools/extractors/common/ufogrowth.h"
 #include "tools/extractors/common/ufoincursion.h"
+#include "tools/extractors/common/ufomissionpattern.h"
 #include "tools/extractors/common/ufopaedia.h"
 #include "tools/extractors/common/vehicle.h"
 #include "tools/extractors/common/vequipment.h"
@@ -86,6 +88,7 @@ class UFO2P
 	std::unique_ptr<DataChunk<EconomyData>> economy_data2;
 	std::unique_ptr<DataChunk<EconomyData>> economy_data3;
 	std::unique_ptr<StrTab> craft_ammo_names;
+	std::unique_ptr<DataChunk<uint16_t>> craft_ammo_manufacturers;
 
 	std::unique_ptr<DataChunk<SceneryMinimapColour>> scenery_minimap_colour;
 
@@ -102,6 +105,7 @@ class UFO2P
 	std::unique_ptr<DataChunk<BuildingInfiltrationSpeed>> infiltration_speed_building;
 	std::unique_ptr<DataChunk<UfoGrowthRates>> ufo_growth_rates;
 	std::unique_ptr<DataChunk<UfoMissionData>> ufo_mission_data;
+	std::unique_ptr<DataChunk<UfoMissionPatterns>> ufo_mission_patterns;
 
 	UString getOrgId(int idx) const
 	{
@@ -110,6 +114,10 @@ class UFO2P
 	UString getFacilityId(int idx) const
 	{
 		return FacilityType::getPrefix() + canon_string(this->facility_names->get(idx));
+	}
+	UString getAEquipmentId(int idx) const
+	{
+		return AEquipmentType::getPrefix() + canon_string(this->agent_equipment_names->get(idx));
 	}
 	UString getVequipmentId(int idx) const
 	{

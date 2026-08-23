@@ -332,6 +332,7 @@ void InitialGameStateExtractor::extractCommon(GameState &state) const
 	this->extractEconomy(state);
 	this->extractUfoGrowth(state);
 	this->extractUfoIncursions(state);
+	this->extractUfoMissionPreference(state);
 
 	// The alien map doesn't change
 	UString alienMapId = City::getPrefix() + "ALIEN";

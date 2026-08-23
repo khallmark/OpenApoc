@@ -2502,7 +2502,6 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 					        pos.y, pos.z);
 
 					// If arrived to a location above building, deposit aliens or subvert
-					// FIXME: Handle subversion
 					if (subvert)
 					{
 						auto doodad = v.city->placeDoodad(

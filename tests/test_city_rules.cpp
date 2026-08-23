@@ -13,12 +13,16 @@
 #include "game/state/rules/city/ufogrowth.h"
 #include "game/state/rules/city/ufoincursion.h"
 #include "game/state/rules/city/ufomissionpreference.h"
+#include "game/state/rules/city/vammotype.h"
 #include "game/state/rules/city/vehicletype.h"
+#include "game/state/rules/city/vequipmenttype.h"
 #include "game/state/shared/agent.h"
 #include "game/state/shared/doodad.h"
 #include "game/state/shared/organisation.h"
+#include "library/rect.h"
 #include "library/sp.h"
 #include "tests/test_helpers.h"
+#include <vector>
 
 using namespace OpenApoc;
 using namespace OpenApoc::TestHelpers;
@@ -329,19 +333,74 @@ static bool test_infiltration_display_percent()
 	return true;
 }
 
+static int countPref(const std::list<UFOIncursion::PrimaryMission> &list,
+                     UFOIncursion::PrimaryMission mission)
+{
+	int n = 0;
+	for (auto &m : list)
+	{
+		if (m == mission)
+		{
+			n++;
+		}
+	}
+	return n;
+}
+
 static bool test_ufo_mission_preference_loaded()
 {
 	auto &state = *g_state;
-	if (state.ufo_mission_preference.empty())
-	{
-		const auto patch = config().getString("Framework.Data") + "/common_patch";
-		TEST_REQUIRE(state.loadGame(patch), "failed to load {0}", patch);
-	}
-	auto it = state.ufo_mission_preference.find("UFO_MISSION_PREFERENCE_DEFAULT");
-	TEST_REQUIRE(it != state.ufo_mission_preference.end(),
-	             "UFO_MISSION_PREFERENCE_DEFAULT missing after patch load");
-	TEST_REQUIRE(it->second && !it->second->missionList.empty(),
-	             "DEFAULT mission preference has an empty list");
+	TEST_REQUIRE(!state.ufo_mission_preference.empty(),
+	             "ufo_mission_preference empty (re-extract common_gamestate)");
+
+	// UFO2P non-4 0x155164: 20×10 uint16. 3=Inf 1=Atk 2=Sub 5=Over. Last row DEFAULT.
+	auto defIt = state.ufo_mission_preference.find("UFO_MISSION_PREFERENCE_DEFAULT");
+	TEST_REQUIRE(defIt != state.ufo_mission_preference.end() && defIt->second, "DEFAULT missing");
+	const auto &def = *defIt->second;
+	TEST_REQUIRE(def.missionList.size() == 10, "DEFAULT slots {0}", def.missionList.size());
+	auto d = def.missionList.begin();
+	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Infiltration, "DEFAULT[0]");
+	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Attack, "DEFAULT[1]");
+	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Attack, "DEFAULT[2]");
+	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Subversion, "DEFAULT[3]");
+	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Subversion, "DEFAULT[4]");
+	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Subversion, "DEFAULT[5]");
+	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Subversion, "DEFAULT[6]");
+	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Overspawn, "DEFAULT[7]");
+	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Overspawn, "DEFAULT[8]");
+	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Overspawn, "DEFAULT[9]");
+
+	auto w1It = state.ufo_mission_preference.find("UFO_MISSION_PREFERENCE_1");
+	TEST_REQUIRE(w1It != state.ufo_mission_preference.end() && w1It->second, "week1 missing");
+	TEST_REQUIRE(w1It->second->missionList.size() == 10, "week1 slots {0}",
+	             w1It->second->missionList.size());
+	TEST_REQUIRE(countPref(w1It->second->missionList, UFOIncursion::PrimaryMission::Infiltration) ==
+	                 10,
+	             "week1 all infiltration");
+
+	auto w4It = state.ufo_mission_preference.find("UFO_MISSION_PREFERENCE_4");
+	TEST_REQUIRE(w4It != state.ufo_mission_preference.end() && w4It->second, "week4 missing");
+	TEST_REQUIRE(countPref(w4It->second->missionList, UFOIncursion::PrimaryMission::Infiltration) ==
+	                 9,
+	             "week4 infiltration");
+	TEST_REQUIRE(countPref(w4It->second->missionList, UFOIncursion::PrimaryMission::Attack) == 1,
+	             "week4 attack");
+
+	auto w13It = state.ufo_mission_preference.find("UFO_MISSION_PREFERENCE_13");
+	TEST_REQUIRE(w13It != state.ufo_mission_preference.end() && w13It->second, "week13 missing");
+	TEST_REQUIRE(w13It->second->missionList.size() == 10, "week13 slots {0}",
+	             w13It->second->missionList.size());
+	TEST_REQUIRE(
+	    countPref(w13It->second->missionList, UFOIncursion::PrimaryMission::Infiltration) == 3,
+	    "week13 infiltration");
+	TEST_REQUIRE(countPref(w13It->second->missionList, UFOIncursion::PrimaryMission::Attack) == 3,
+	             "week13 attack");
+	TEST_REQUIRE(countPref(w13It->second->missionList, UFOIncursion::PrimaryMission::Subversion) ==
+	                 2,
+	             "week13 subversion");
+	TEST_REQUIRE(countPref(w13It->second->missionList, UFOIncursion::PrimaryMission::Overspawn) ==
+	                 2,
+	             "week13 overspawn");
 	return true;
 }
 
@@ -656,6 +715,56 @@ static bool test_manufacture_type02_ammo_ids()
 	return true;
 }
 
+static bool test_craft_ammo_manufacturers()
+{
+	auto &state = *g_state;
+	// UFO2P non-4 craft_ammo_manufacturers_data at 0x13EB6A: uint16[15] org index.
+	// Zorium is org 0 (X-COM), not Solmine.
+	struct Case
+	{
+		const char *ammo;
+		const char *org;
+	};
+	const Case cases[] = {
+	    {"VEQUIPMENTAMMOTYPE_FUSION_POWERFUEL", "ORG_SUPERDYNAMICS"},
+	    {"VEQUIPMENTAMMOTYPE_ELERIUM_115", "ORG_SOLMINE"},
+	    {"VEQUIPMENTAMMOTYPE_ZORIUM", "ORG_X-COM"},
+	    {"VEQUIPMENTAMMOTYPE_DISRUPTOR_BOMB", "ORG_X-COM"},
+	};
+	for (const auto &c : cases)
+	{
+		auto it = state.vehicle_ammo.find(c.ammo);
+		TEST_REQUIRE(it != state.vehicle_ammo.end() && it->second, "{0} missing", c.ammo);
+		TEST_REQUIRE(it->second->manufacturer.id == c.org, "{0} manufacturer {1}", c.ammo,
+		             it->second->manufacturer.id);
+	}
+	return true;
+}
+
+static bool test_research_item_prereq_gates()
+{
+	auto &state = *g_state;
+	// UFO2P non-4 research_data prereqType 1 / prereq 41 → agent_equipment_names[41].
+	auto gun = state.research.topics.find("RESEARCH_DISRUPTOR_GUN");
+	TEST_REQUIRE(gun != state.research.topics.end() && gun->second, "DISRUPTOR_GUN missing");
+	StateRef<AEquipmentType> gunItem{&state, "AEQUIPMENTTYPE_DISRUPTOR_GUN"};
+	auto git = gun->second->dependencies.items.agentItemsRequired.find(gunItem);
+	TEST_REQUIRE(git != gun->second->dependencies.items.agentItemsRequired.end() &&
+	                 git->second == 1,
+	             "Disruptor Gun item gate");
+
+	// prereqType 0 / prereq 6 → vehicle_equipment_names[6] Light Disruptor Beam.
+	auto beam = state.research.topics.find("RESEARCH_LIGHT_DISRUPTOR_BEAM");
+	TEST_REQUIRE(beam != state.research.topics.end() && beam->second,
+	             "LIGHT_DISRUPTOR_BEAM missing");
+	StateRef<VEquipmentType> beamItem{&state, "VEQUIPMENTTYPE_LIGHT_DISRUPTOR_BEAM"};
+	auto bit = beam->second->dependencies.items.vehicleItemsRequired.find(beamItem);
+	TEST_REQUIRE(bit != beam->second->dependencies.items.vehicleItemsRequired.end() &&
+	                 bit->second == 1,
+	             "Light Disruptor Beam item gate");
+	return true;
+}
+
 static bool test_ufopaedia_alien_craft_group()
 {
 	auto &state = *g_state;
@@ -753,6 +862,70 @@ static bool test_militarized_from_org_type()
 	return true;
 }
 
+static bool test_nearby_intact_buildings()
+{
+	// 15-tile / 15-candidate rule used by alienMovement and post-battle retreat.
+	const std::vector<Rect<int>> bounds = {
+	    {{0, 0}, {2, 2}},   // center 1,1
+	    {{10, 0}, {12, 2}}, // center 11,1  dist 10
+	    {{20, 0}, {22, 2}}, // center 21,1  dist 20 — out of range
+	    {{4, 0}, {6, 2}},   // center 5,1   dist 4
+	    {{8, 0}, {10, 2}},  // center 9,1   dist 8
+	};
+	const std::vector<bool> intact = {true, true, true, false, true};
+	const auto origin = Vec2<int>{1, 1};
+	const auto ranked = Building::rankNearbyIntact(bounds, intact, origin);
+	TEST_REQUIRE(ranked.size() == 2, "ranked size {0}", ranked.size());
+	TEST_REQUIRE(ranked[0] == 4, "closest intact should be index 4, got {0}", ranked[0]);
+	TEST_REQUIRE(ranked[1] == 1, "second should be index 1, got {0}", ranked[1]);
+
+	const auto none = Building::rankNearbyIntact(bounds, intact, origin, 3, 15);
+	TEST_REQUIRE(none.empty(), "range 3 should exclude all");
+	return true;
+}
+
+static bool test_unmanned_ufo_loot()
+{
+	auto &state = *g_state;
+	Vehicle *recoverer = nullptr;
+	for (auto &v : state.vehicles)
+	{
+		if (v.second && v.second->owner == state.getPlayer() && v.second->homeBuilding)
+		{
+			recoverer = v.second.get();
+			break;
+		}
+	}
+	TEST_REQUIRE(recoverer != nullptr, "no player vehicle with a home building");
+
+	StateRef<VEquipmentType> eq;
+	for (auto &e : state.vehicle_equipment)
+	{
+		if (e.second && e.second->store_space > 0)
+		{
+			eq = {&state, e.first};
+			break;
+		}
+	}
+	TEST_REQUIRE(!!eq, "no vehicle equipment with store_space");
+
+	Vehicle recovered;
+	recovered.loot.push_back(eq);
+	recovered.loot.push_back(eq);
+	const auto cargoBefore = recoverer->cargo.size();
+	recoverer->loadUnmannedUfoLoot(state, recovered);
+	TEST_REQUIRE(recovered.loot.empty(), "recovered loot not cleared");
+	TEST_REQUIRE(recoverer->cargo.size() == cargoBefore + 1, "cargo entries {0}",
+	             recoverer->cargo.size());
+	const auto &c = recoverer->cargo.back();
+	TEST_REQUIRE(c.id == eq.id, "cargo id {0}", c.id);
+	TEST_REQUIRE(c.count == 2, "cargo count {0}", c.count);
+	TEST_REQUIRE(c.cost == 0, "salvage must be free");
+	TEST_REQUIRE(c.destination == recoverer->homeBuilding, "destination {0}", c.destination.id);
+	recoverer->cargo.pop_back();
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	config().addPositionalArgument("common", "Common gamestate to load");
@@ -793,9 +966,13 @@ int main(int argc, char **argv)
 	    {"advanced_quantum_lab_any", test_advanced_quantum_lab_any},
 	    {"alien_building4_keeps_table_prereq", test_alien_building4_keeps_table_prereq},
 	    {"manufacture_type02_ammo_ids", test_manufacture_type02_ammo_ids},
+	    {"craft_ammo_manufacturers", test_craft_ammo_manufacturers},
+	    {"research_item_prereq_gates", test_research_item_prereq_gates},
 	    {"ufopaedia_alien_craft_group", test_ufopaedia_alien_craft_group},
 	    {"organic_factory_gates_ufo_growth", test_organic_factory_gates_ufo_growth},
 	    {"ufo_incursion_table", test_ufo_incursion_table},
 	    {"militarized_from_org_type", test_militarized_from_org_type},
+	    {"nearby_intact_buildings", test_nearby_intact_buildings},
+	    {"unmanned_ufo_loot", test_unmanned_ufo_loot},
 	});
 }

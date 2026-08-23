@@ -2736,7 +2736,7 @@ void Battle::finishBattle(GameState &state)
 		{
 			loot.push_back(e->item);
 		}
-		LogWarning("Implement UFO parts loot");
+		// UFO vehicle parts are loaded later from mission_location_vehicle->loot.
 	}
 	// Player didn't secure the area
 	// - doesn't get loot
@@ -2802,43 +2802,31 @@ void Battle::finishBattle(GameState &state)
 	// Regardless of what happened, retreated aliens go to a nearby building
 	if (!retreatedAliens.empty())
 	{
-		// FIXME: Should find 15 closest buildings that are intact and within 15 tiles
-		// (center to center) and pick one of them
-		LogWarning("Properly find building to house retreated aliens");
 		Vec2<int> battleLocation;
 		StateRef<City> city;
 		if (state.current_battle->mission_type == Battle::MissionType::UfoRecovery)
 		{
 			StateRef<Vehicle> location = state.current_battle->mission_location_vehicle;
 			city = location->city;
-			battleLocation = {location->position.x, location->position.y};
+			battleLocation = {static_cast<int>(location->position.x),
+			                  static_cast<int>(location->position.y)};
 		}
 		else
 		{
 			StateRef<Building> location = state.current_battle->mission_location_building;
 			city = location->city;
-			battleLocation = location->bounds.p0;
+			battleLocation = Building::boundsCenter(location->bounds);
 		}
-		StateRef<Building> closestBuilding;
-		int closestDistance = INT_MAX;
-		for (auto &b : city->buildings)
+		if (city)
 		{
-			int distance = std::abs(b->bounds.p0.x - battleLocation.x) +
-			               std::abs(b->bounds.p0.y - battleLocation.y);
-			if (distance < closestDistance)
+			auto house = Building::pickNearbyIntact(state, *city, battleLocation);
+			if (house)
 			{
-				closestDistance = distance;
-				closestBuilding = b;
+				for (auto &a : retreatedAliens)
+				{
+					house->current_crew[a->agent->type] += 1;
+				}
 			}
-		}
-		if (!closestBuilding)
-		{
-			LogError("WTF? No building in city closer than INT_MAX?");
-			return;
-		}
-		for (auto &a : retreatedAliens)
-		{
-			closestBuilding->current_crew[a->agent->type] += 1;
 		}
 	}
 	// Remove dead player agents and all enemy agents from the game and from vehicles
