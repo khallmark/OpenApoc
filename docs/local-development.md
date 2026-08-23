@@ -228,12 +228,14 @@ One command per line, one line back, `OK ...` or `ERR ...` (see `framework/harne
 | `CLICK x y [left\|right\|middle]`, `MOVE`, `DOWN`, `UP`, `SCROLL` | mouse input |
 | `KEY <name>`, `KEYDOWN`, `KEYUP`, `TEXT <s>` | keyboard input; names may contain spaces (`Left Shift`) |
 | `SCREENSHOT <path>` | write a PNG |
+| `RESIZE <w> <h>` | resize the window, to measure a fixed scene at several resolutions |
 | `GS <query>` | inspect the running game (below) |
+| `SAVE <path>` | write a save, for checkpointing a long campaign run |
 | `QUIT` | quit cleanly |
 
 `GS` accepts `time`, `funds`, `bases`, `research`, `orgs`, `vehicles`, `agents`, `turbo`,
-`battle`, `stage`, `all`, plus the CityView-only `ufos_screen`, `vehicles_screen` and
-`centre_on_ufo`. Replies are one line of `key=value` pairs.
+`battle`, `stage`, `all`, plus the CityView-only `ufos_screen`, `vehicles_screen`,
+`centre_on_ufo` and `centre_on_own`. Replies are one line of `key=value` pairs.
 
 `GS` is answered by the game layer, not the framework: `OpenApoc_GameState` links
 `OpenApoc_Framework` and never the reverse, so `harness.cpp` cannot name a `GameState`. The
