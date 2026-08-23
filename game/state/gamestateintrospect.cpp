@@ -117,28 +117,38 @@ UString describeVehicles(GameState &state)
 	const auto aliens = state.getAliens();
 	size_t mine = 0;
 	size_t ufos = 0;
+	size_t ufosHere = 0;
 	size_t crashed = 0;
 	for (const auto &v : state.vehicles)
 	{
-		if (!v.second || !v.second->owner)
+		const auto &vehicle = v.second;
+		if (!vehicle || !vehicle->owner)
 		{
 			continue;
 		}
-		if (v.second->owner.id == player.id)
+		if (vehicle->owner.id == player.id)
 		{
 			mine++;
 		}
-		else if (v.second->owner.id == aliens.id)
+		else if (vehicle->owner.id == aliens.id)
 		{
 			ufos++;
-			if (v.second->crashed)
+			// Only craft with a tileObject on the current city are actually on the map and
+			// therefore targetable; the rest are in the other dimension or not yet spawned.
+			// Reporting only the total made "11 UFOs" look targetable when none were.
+			if (vehicle->tileObject && vehicle->city == state.current_city)
+			{
+				ufosHere++;
+			}
+			if (vehicle->crashed)
 			{
 				crashed++;
 			}
 		}
 	}
-	return format("player_vehicles={0} ufos={1} ufos_crashed={2} next_invasion={3}", mine, ufos,
-	              crashed, state.nextInvasion);
+	return format("player_vehicles={0} ufos={1} ufos_in_city={2} ufos_crashed={3} "
+	              "next_invasion={4}",
+	              mine, ufos, ufosHere, crashed, state.nextInvasion);
 }
 
 // Turbo (city Speed5) is silently downgraded to Speed1 whenever canTurbo() is false, which is the
