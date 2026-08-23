@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Reference: UFO2P non-4 starting_available_UFOPaedia_entries @ 0x19196A
+     (282 bytes) + catalog @ 0x1910A2 (281×8) + PCX names @ 0x134AA8.
+     FUN_000abf50 / FUN_0008903c @ file 0xFE5F4 / 0xDB6E0: visible if start byte ≠ 0.
+     FUN_000abf9c @ file 0xFE640 writes the byte on research match; extra unlocks
+     cat 3 idx 0x21→0x22 and 0x1B→0x13+0x17 (already shared research topics).
+     Catalog-bound pages store catalogCategory/Index; shuffled patch deps
+     (alien buildings 0–8, Dimension Gates vs 11dimens) are ignored.
+     Type-mismatched PCX stays unbound. Do not XInclude under
+     data/common_patch/gamestate/. -->
+<ufopaedia_start_visible>
+  <catalog_rows>281</catalog_rows>
+  <start_bytes>282</start_bytes>
+  <start_nonzero>165</start_nonzero>
+  <gameplay_deltas>
+    <shown exe_start="1">PAEDIAENTRY_XCOM_BODY_SHIELD</shown>
+    <hidden exe_start="0">PAEDIAENTRY_INCENDIARY_GRENADE</hidden>
+  </gameplay_deltas>
+</ufopaedia_start_visible>

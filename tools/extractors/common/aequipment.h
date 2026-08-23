@@ -34,6 +34,9 @@
 // These are offsets into UFO2P.EXE because equipment names there are better formatted
 #define AGENT_EQUIPMENT_NAMES_OFFSET_START 1349488
 #define AGENT_EQUIPMENT_NAMES_OFFSET_END 1351088
+// UFO2P aequip_alien_artifact_data: 87×uint8, flag≠0 = hidden until type-1 research.
+#define AEQUIP_ALIEN_ARTIFACT_DATA_OFFSET_START 0x1422A8
+#define AEQUIP_ALIEN_ARTIFACT_DATA_OFFSET_END 0x1422FF
 
 // Everything else in this file is an offset into TACP.EXE
 #define DAMAGE_TYPE_NAMES_OFFSET_START 3024353
@@ -76,6 +79,9 @@ struct AgentEquipmentData
 static_assert(sizeof(struct AgentEquipmentData) == 18, "Invalid agent_equipment_data size");
 #define AGENT_EQUIPMENT_DATA_OFFSET_START 3154678
 #define AGENT_EQUIPMENT_DATA_OFFSET_END 3156244
+// TACP DAT_00293050 @ file 0x2E2AF4 (FUN_0007ae18 @ VA 0x7AE18 / file 0xD58BC).
+#define FIRE_HAZARD_POWER_TABLE_OFFSET_START 0x2E2AF4
+#define FIRE_HAZARD_POWER_TABLE_OFFSET_END 0x2E2B0F
 
 struct AgentArmorData
 {

@@ -4,6 +4,7 @@
 #include "game/state/battle/battleunit.h"
 #include "game/state/city/vehicle.h"
 #include "game/state/gametime.h"
+#include "game/state/rules/aequipmenttype.h"
 #include "tests/test_helpers.h"
 
 using namespace OpenApoc;
@@ -31,6 +32,16 @@ static bool test_made_up_and_tick_derived_constants()
 	return true;
 }
 
+static bool test_fire_hazard_item_resist()
+{
+	// TACP FUN_0007c110: factor=(dl+19)/20; overlay 1 is power 10 → factor 1.
+	TEST_REQUIRE(AEquipmentType::fireHazardDamage(10, 0) == 1, "Megapol resist 0 takes 1");
+	TEST_REQUIRE(AEquipmentType::fireHazardDamage(10, 50) == 1, "Marsec resist 50 still takes 1");
+	TEST_REQUIRE(AEquipmentType::fireHazardDamage(10, 100) == 0, "X-COM resist 100 takes 0");
+	TEST_REQUIRE(AEquipmentType::fireHazardDamage(10, 200) == -1, "resist 200 delta is -1");
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -40,5 +51,6 @@ int main(int argc, char **argv)
 	applyDeterministicTestConfig();
 	return runTestSuite({
 	    {"made_up_and_tick_derived_constants", test_made_up_and_tick_derived_constants},
+	    {"fire_hazard_item_resist", test_fire_hazard_item_resist},
 	});
 }

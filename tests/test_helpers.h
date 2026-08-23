@@ -54,6 +54,8 @@ inline bool loadStartedGameState(GameState &state, const UString &common, const 
 	// base zip must replace them, not append onto existing keys.
 	state.ufo_incursions.clear();
 	state.ufo_mission_preference.clear();
+	state.vehicleParkSpawnTable.clear();
+	state.fireHazardPowerTable.clear();
 	if (!state.loadGame(gamestate))
 	{
 		LogError("Failed to load gamestate \"{0}\"", gamestate);

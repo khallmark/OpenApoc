@@ -3379,7 +3379,7 @@ void Battle::exitBattle(GameState &state)
 				auto building = state.current_battle->mission_location_building;
 				for (auto &u : building->researchUnlock)
 				{
-					u->forceComplete();
+					u->forceComplete(&state);
 				}
 				victory = building->victory;
 				building->collapse(state);
@@ -3424,7 +3424,7 @@ void Battle::exitBattle(GameState &state)
 				auto building = state.current_battle->mission_location_building;
 				for (auto &u : building->researchUnlock)
 				{
-					u->forceComplete();
+					u->forceComplete(&state);
 				}
 				victory = building->victory;
 				if (config().getBool("OpenApoc.NewFeature.CollapseRaidedBuilding"))
@@ -3445,7 +3445,7 @@ void Battle::exitBattle(GameState &state)
 			auto vehicle = state.current_battle->mission_location_vehicle;
 			for (auto &u : vehicle->type->researchUnlock)
 			{
-				u->forceComplete();
+				u->forceComplete(&state);
 			}
 			vehicle->die(state, true);
 			break;

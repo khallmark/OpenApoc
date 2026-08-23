@@ -6,6 +6,7 @@
 #include "library/strings_format.h"
 #include "tools/extractors/common/ufo2p.h"
 #include "tools/extractors/extractors.h"
+#include <utility>
 
 namespace OpenApoc
 {
@@ -150,6 +151,19 @@ void InitialGameStateExtractor::applyCraftAmmoManufacturers(GameState &state) co
 			continue;
 		}
 		ammo->manufacturer = {&state, orgId};
+		// extractEconomy keys economy_data2 with getVAmmoId (keeps '-').
+		// Patch VAmmoType IDs can fold that hyphen. purchase() / reload
+		// look up economy[vehicle_ammo.id].
+		const auto exeId = data.getVAmmoId(static_cast<int>(i));
+		if (exeId != ammo->id)
+		{
+			auto it = state.economy.find(exeId);
+			if (it != state.economy.end())
+			{
+				state.economy[ammo->id] = std::move(it->second);
+				state.economy.erase(it);
+			}
+		}
 	}
 }
 

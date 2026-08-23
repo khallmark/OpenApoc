@@ -264,19 +264,8 @@
         <order>30110</order>
 		<picture>PCK:xcom3/ufodata/base.pck:xcom3/ufodata/base.tab:40:xcom3/ufodata/base.pcx</picture>
         <ufopaedia_entry>PAEDIAENTRY_ADVANCED_QUANTUM_PHYSICS_LAB</ufopaedia_entry>
-        <dependencies>
-          <research op="delete">
-            <entry>
-              <type>Any</type>
-              <topics>
-                <entry>RESEARCH_ALIEN_CONTROL_SYSTEM</entry>
-                <entry>RESEARCH_ALIEN_ENERGY_SOURCE</entry>
-                <entry>RESEARCH_ALIEN_PROPULSION_SYSTEM</entry>
-              </topics>
-            </entry>
-          </research>
-          <items/>
-        </dependencies>
+        <!-- EXE research_data record 45: unknown2==1 → Any of Propulsion/Control/Energy
+             (FUN_000aa7a8). Extractor emits Any. Do not overlay All. -->
       </value>
     </entry>
     <entry>
@@ -431,6 +420,8 @@
       <value>
         <order>60100</order>
         <ufopaedia_entry>PAEDIAENTRY_LIGHT_DISRUPTOR_BEAM</ufopaedia_entry>
+        <!-- EXE record 62 unknown1==1: Any of Light/Medium/Heavy. Extractor emits Any.
+             Do not op=delete the item map. -->
 		<dependencies>
 		<items>
 		<vehicleItemsRequired>
@@ -1168,6 +1159,7 @@
       <key>RESEARCH_OVERSPAWN_AUTOPSY</key>
       <value>
         <order>10370</order>
+        <score>450</score>
         <ufopaedia_entry>PAEDIAENTRY_OVERSPAWN_AUTOPSY</ufopaedia_entry>
 		<dependencies>
 		<items>
@@ -1185,6 +1177,7 @@
       <key>RESEARCH_OVERSPAWN_AUTOPSY_1</key>
       <value>
         <order>10380</order>
+        <score>450</score>
         <ufopaedia_entry>PAEDIAENTRY_OVERSPAWN_AUTOPSY_1</ufopaedia_entry>
         <dependencies>
 		<items>
@@ -1212,6 +1205,7 @@
       <value>
         <order>20110</order>
         <ufopaedia_entry>PAEDIAENTRY_THE_ALIEN_LIFE_CYCLE</ufopaedia_entry>
+        <!-- Extract leftover; applyAa7a8HardcodedGates restores EXE All of 12..17 plus topic 36. -->
         <dependencies>
           <research op="delete">
             <entry>
@@ -1235,6 +1229,7 @@
       <value>
         <order>20120</order>
         <ufopaedia_entry>PAEDIAENTRY_THE_REAL_ALIEN_THREAT</ufopaedia_entry>
+        <!-- Extract leftover; applyAa7a8HardcodedGates restores EXE All of 8..31. -->
         <dependencies>
           <research op="delete">
             <entry>
@@ -1309,6 +1304,7 @@
         <order>40100</order>
 		<picture>PCK:xcom3/ufodata/base.pck:xcom3/ufodata/base.tab:38:xcom3/ufodata/base.pcx</picture>
         <ufopaedia_entry>PAEDIAENTRY_ADVANCED_BIOCHEMISTRY_LAB</ufopaedia_entry>
+        <!-- Extract leftover; applyAa7a8HardcodedGates restores EXE Any of 7..33. -->
         <dependencies>
           <research op="delete">
             <entry>
@@ -1422,19 +1418,7 @@
         <order>70100</order>
         <description>This research could reveal a weakness in the Alien defenses.</description>
         <man_hours>38000</man_hours>
-        <dependencies>
-          <research>
-            <entry>
-              <type>All</type>
-            </entry>
-            <entry>
-              <type>All</type>
-              <topics>
-                <entry>RESEARCH_THE_ALIEN_DIMENSION</entry>
-              </topics>
-            </entry>
-          </research>
-        </dependencies>
+        <!-- EXE record 88 @ 0x13F820: empty prereqTech. Do not invent Dimension. -->
         <ufopaedia_entry>PAEDIAENTRY_SLEEPING_CHAMBER</ufopaedia_entry>
         <score>380</score>
       </value>
@@ -1443,6 +1427,8 @@
       <key>RESEARCH_ALIEN_BUILDING_1</key>
       <value>
         <order>70120</order>
+        <man_hours>42000</man_hours>
+        <score>420</score>
         <ufopaedia_entry>PAEDIAENTRY_FOOD_CHAMBER</ufopaedia_entry>
 		<dependencies><research><entry><type>All</type><topics><entry>RESEARCH_UNLOCK_ALIEN_BUILDING_1</entry></topics></entry></research></dependencies>
       </value>
@@ -1451,6 +1437,8 @@
       <key>RESEARCH_ALIEN_BUILDING_2</key>
       <value>
         <order>70130</order>
+        <man_hours>32000</man_hours>
+        <score>320</score>
         <ufopaedia_entry>PAEDIAENTRY_ALIEN_FARM</ufopaedia_entry>
 		<dependencies><research><entry><type>All</type><topics><entry>RESEARCH_UNLOCK_ALIEN_BUILDING_2</entry></topics></entry></research></dependencies>
       </value>
@@ -1459,6 +1447,8 @@
       <key>RESEARCH_ALIEN_BUILDING_3</key>
       <value>
         <order>70140</order>
+        <man_hours>46000</man_hours>
+        <score>460</score>
         <ufopaedia_entry>PAEDIAENTRY_MAINTENANCE_FACTORY</ufopaedia_entry>
 		<dependencies><research><entry><type>All</type><topics><entry>RESEARCH_UNLOCK_ALIEN_BUILDING_3</entry></topics></entry></research></dependencies>
       </value>
@@ -1467,14 +1457,33 @@
       <key>RESEARCH_ALIEN_BUILDING_4</key>
       <value>
         <order>70150</order>
+        <man_hours>30000</man_hours>
+        <score>300</score>
         <ufopaedia_entry>PAEDIAENTRY_INCUBATOR_CHAMBER</ufopaedia_entry>
-		<dependencies><research><entry><type>All</type><topics><entry>RESEARCH_UNLOCK_ALIEN_BUILDING_4</entry></topics></entry></research></dependencies>
+		<dependencies>
+		  <research op="delete">
+		    <entry>
+		      <type>All</type>
+		      <topics>
+		        <entry>RESEARCH_THE_ALIEN_DIMENSION</entry>
+		      </topics>
+		    </entry>
+		    <entry>
+		      <type>All</type>
+		      <topics>
+		        <entry>RESEARCH_UNLOCK_ALIEN_BUILDING_4</entry>
+		      </topics>
+		    </entry>
+		  </research>
+		</dependencies>
       </value>
     </entry>
     <entry>
       <key>RESEARCH_ALIEN_BUILDING_5</key>
       <value>
         <order>70160</order>
+        <man_hours>44000</man_hours>
+        <score>440</score>
         <ufopaedia_entry>PAEDIAENTRY_CONTROL_CHAMBER</ufopaedia_entry>
 		<dependencies><research><entry><type>All</type><topics><entry>RESEARCH_UNLOCK_ALIEN_BUILDING_5</entry></topics></entry></research></dependencies>
       </value>
@@ -1483,6 +1492,8 @@
       <key>RESEARCH_ALIEN_BUILDING_6</key>
       <value>
         <order>70170</order>
+        <man_hours>34000</man_hours>
+        <score>340</score>
         <ufopaedia_entry>PAEDIAENTRY_SPAWNING_CHAMBER</ufopaedia_entry>
 		<dependencies><research><entry><type>All</type><topics><entry>RESEARCH_UNLOCK_ALIEN_BUILDING_6</entry></topics></entry></research></dependencies>
       </value>
@@ -1491,6 +1502,8 @@
       <key>RESEARCH_ALIEN_BUILDING_7</key>
       <value>
         <order>70180</order>
+        <man_hours>40000</man_hours>
+        <score>400</score>
         <ufopaedia_entry>PAEDIAENTRY_ORGANIC_FACTORY</ufopaedia_entry>
 		<dependencies><research><entry><type>All</type><topics><entry>RESEARCH_UNLOCK_ALIEN_BUILDING_7</entry></topics></entry></research></dependencies>
       </value>
@@ -1499,6 +1512,8 @@
       <key>RESEARCH_ALIEN_BUILDING_8</key>
       <value>
         <order>70190</order>
+        <man_hours>36000</man_hours>
+        <score>360</score>
         <ufopaedia_entry>PAEDIAENTRY_MEGAPOD_CHAMBER</ufopaedia_entry>
 		<dependencies><research><entry><type>All</type><topics><entry>RESEARCH_UNLOCK_ALIEN_BUILDING_8</entry></topics></entry></research></dependencies>
       </value>
@@ -1507,6 +1522,8 @@
       <key>RESEARCH_ALIEN_BUILDING_9</key>
       <value>
         <order>70200</order>
+        <man_hours>48000</man_hours>
+        <score>480</score>
         <ufopaedia_entry>PAEDIAENTRY_DIMENSION_GATE_GENERATOR</ufopaedia_entry>
 		<dependencies><research><entry><type>All</type><topics><entry>RESEARCH_UNLOCK_ALIEN_BUILDING_9</entry></topics></entry></research></dependencies>
       </value>
@@ -2518,6 +2535,23 @@
     </entry>
     <!-- Manufacture Topics - Agent Equipment & Ammo End -->
     <!-- Manufacture Topics - Agent Armor Begin -->
+    <!-- canon_string used to fold "Disruptor Armor (legs)" to __LEGS_.
+         Delete leftover extract keys so only the parenthesis IDs remain. -->
+    <entry op="delete">
+      <key>MANUFACTURE_DISRUPTOR_ARMOR__LEGS_</key>
+    </entry>
+    <entry op="delete">
+      <key>MANUFACTURE_DISRUPTOR_ARMOR__TORSO_</key>
+    </entry>
+    <entry op="delete">
+      <key>MANUFACTURE_DISRUPTOR_ARMOR__RIGHT_ARM_</key>
+    </entry>
+    <entry op="delete">
+      <key>MANUFACTURE_DISRUPTOR_ARMOR__LEFT_ARM_</key>
+    </entry>
+    <entry op="delete">
+      <key>MANUFACTURE_DISRUPTOR_ARMOR__HEAD_</key>
+    </entry>
     <entry>
       <key>MANUFACTURE_DISRUPTOR_ARMOR_(LEGS)</key>
       <value>

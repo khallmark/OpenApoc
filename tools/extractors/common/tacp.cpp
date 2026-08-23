@@ -76,6 +76,8 @@ TACP::TACP(std::string file_name)
 
 	this->agent_equipment.reset(new DataChunk<AgentEquipmentData>(
 	    file, at(AGENT_EQUIPMENT_DATA_OFFSET_START), at(AGENT_EQUIPMENT_DATA_OFFSET_END)));
+	this->fire_hazard_power_table.reset(new DataChunk<uint8_t>(
+	    file, at(FIRE_HAZARD_POWER_TABLE_OFFSET_START), at(FIRE_HAZARD_POWER_TABLE_OFFSET_END)));
 
 	this->agent_armor.reset(new DataChunk<AgentArmorData>(file, at(AGENT_ARMOR_DATA_OFFSET_START),
 	                                                      at(AGENT_ARMOR_DATA_OFFSET_END)));

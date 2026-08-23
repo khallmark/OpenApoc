@@ -378,17 +378,14 @@ void BattleHazard::applyEffect(GameState &state)
 		{
 			if (damageType->effectType == DamageType::EffectType::Fire)
 			{
-				// It was observed that armor resists fire damage deal to it
-				// It also appears that damage is applied gradually at a rate of around 1 damage per
-				// second
-				// In tests, marsec armor (20% modifier) was hurt by fire but X-Com armor (10%
-				// modifier) was not
-				// If we apply damage once per turn, we apply 4 at once. Since we round down, 4 *
-				// 20% will be rounded to 0
-				// while it should be 1. So we add 1 here
+				// TACP FUN_0007c110 @ VA 0x7C110 / file 0xD6BB4: unknown01 resist, not
+				// damage_modifier. Power byte stays BattleHazard::power until overlay index
+				// (FUN_0007ad94) is stored on the hazard.
 				auto i = std::static_pointer_cast<TileObjectBattleItem>(obj)->getItem();
-				i->applyDamage(state, 2 * TICKS_PER_HAZARD_UPDATE / TICKS_PER_SECOND + 1,
-				               damageType);
+				if (i)
+				{
+					i->applyFireHazard(state, power);
+				}
 			}
 		}
 		else if (obj->getType() == TileObject::Type::Unit)

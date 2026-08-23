@@ -34,7 +34,23 @@ void InitialGameStateExtractor::extractManufacturing(GameState &state) const
 
 		auto r = mksp<ResearchTopic>();
 		r->name = data.manufacturing_names->get(i);
-		const auto id = UString("MANUFACTURE_") + canon_string(r->name);
+		// Keep '(' / ')' so "Disruptor Armor (legs)" matches the patch key
+		// MANUFACTURE_DISRUPTOR_ARMOR_(LEGS). canon_string maps both to '_',
+		// which used to emit MANUFACTURE_DISRUPTOR_ARMOR__LEGS_ and leave both
+		// in the StateRefMap (UFO2P non-4 names @ 0x1501F3 records 38–42).
+		UString idCanon;
+		for (auto c : r->name)
+		{
+			if (c == '(' || c == ')')
+			{
+				idCanon += c;
+			}
+			else
+			{
+				idCanon += static_cast<char>(canon_char(c));
+			}
+		}
+		const auto id = UString("MANUFACTURE_") + idCanon;
 		r->type = ResearchTopic::Type::Engineering;
 		r->man_hours = mdata.skillHours;
 		r->cost = static_cast<int>(mdata.manufacturingCost);

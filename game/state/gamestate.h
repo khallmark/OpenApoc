@@ -14,6 +14,7 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include <vector>
 
 namespace OpenApoc
 {
@@ -145,6 +146,11 @@ class GameState : public std::enable_shared_from_this<GameState>
 	std::map<int, std::list<std::pair<StateRef<AgentType>, Vec2<int>>>> initial_aliens;
 
 	std::map<UString, EconomyInfo> economy;
+	// UFO2P FUN_000962cc spawn pool (40 IDs) and per-type caps (33).
+	std::vector<StateRef<VehicleType>> vehicleParkSpawnTable;
+	std::map<UString, int> vehicleParkSpawnCap;
+	// TACP FUN_0007ae18 fire overlay power bytes (27).
+	std::vector<int> fireHazardPowerTable;
 
 	StateRef<Organisation> player;
 	StateRef<Organisation> aliens;

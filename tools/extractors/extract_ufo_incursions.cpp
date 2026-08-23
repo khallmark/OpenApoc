@@ -8,6 +8,21 @@
 namespace OpenApoc
 {
 
+static UFOIncursionSlot slotFromRecord(const UfoMissionData &rec, int slot, const UFO2P &data)
+{
+	UFOIncursionSlot out;
+	out.zoneMode = rec.zone_mode[slot];
+	out.buildingFunction = rec.building_function[slot];
+	out.scatter = rec.scatter[slot];
+	out.typePercent = rec.type_percent[slot];
+	const auto follow = rec.follow_slot[slot];
+	if (follow >= 0 && follow < UFO_MISSION_SLOT_COUNT && rec.craft[follow] != 0xffff)
+	{
+		out.followVehicleType = data.getVehicleId(rec.craft[follow]);
+	}
+	return out;
+}
+
 void InitialGameStateExtractor::extractUfoIncursions(GameState &state) const
 {
 	auto &data = this->ufo2p;
@@ -69,18 +84,22 @@ void InitialGameStateExtractor::extractUfoIncursions(GameState &state) const
 				continue;
 			}
 			const auto typeId = data.getVehicleId(rec.craft[slot]);
+			const auto tail = slotFromRecord(rec, slot, data);
 			if (rec.role[slot] == UFO_MISSION_ROLE_ESCORT)
 			{
 				inc->escortList.emplace_back(typeId, rec.count[slot]);
+				inc->escortSlots.push_back(tail);
 			}
 			else if (rec.role[slot] == UFO_MISSION_ROLE_ATTACK &&
 			         primary != UFOIncursion::PrimaryMission::Attack)
 			{
 				inc->attackList.emplace_back(typeId, rec.count[slot]);
+				inc->attackSlots.push_back(tail);
 			}
 			else
 			{
 				inc->primaryList.emplace_back(typeId, rec.count[slot]);
+				inc->primarySlots.push_back(tail);
 			}
 		}
 		const auto id = format("{0}{1}", prefix, indexInType);

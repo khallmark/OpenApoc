@@ -13,6 +13,7 @@
 #include "game/state/rules/city/ufogrowth.h"
 #include "game/state/rules/city/ufoincursion.h"
 #include "game/state/rules/city/ufomissionpreference.h"
+#include "game/state/rules/city/ufopaedia.h"
 #include "game/state/rules/city/vammotype.h"
 #include "game/state/rules/city/vehicletype.h"
 #include "game/state/rules/city/vequipmenttype.h"
@@ -22,6 +23,7 @@
 #include "library/rect.h"
 #include "library/sp.h"
 #include "tests/test_helpers.h"
+#include "tools/extractors/common/research.h"
 #include <list>
 #include <map>
 #include <vector>
@@ -670,18 +672,289 @@ static bool test_manufacture_dimension_probe()
 	return true;
 }
 
-static bool test_advanced_quantum_lab_any()
+static bool hasExactDep(const ResearchTopic &topic, ResearchDependency::Type type,
+                        const std::vector<UString> &required)
+{
+	for (const auto &dep : topic.dependencies.research)
+	{
+		if (dep.type != type || dep.topics.size() != required.size())
+		{
+			continue;
+		}
+		bool match = true;
+		for (const auto &id : required)
+		{
+			bool found = false;
+			for (const auto &t : dep.topics)
+			{
+				if (t.id == id)
+				{
+					found = true;
+					break;
+				}
+			}
+			if (!found)
+			{
+				match = false;
+				break;
+			}
+		}
+		if (match)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool hasExactAll(const ResearchTopic &topic, const std::vector<UString> &required)
+{
+	return hasExactDep(topic, ResearchDependency::Type::All, required);
+}
+
+static bool test_research_prereq_all_graphs()
 {
 	auto &state = *g_state;
-	auto it = state.research.topics.find("RESEARCH_ADVANCED_QUANTUM_PHYSICS_LAB");
-	TEST_REQUIRE(it != state.research.topics.end() && it->second,
-	             "RESEARCH_ADVANCED_QUANTUM_PHYSICS_LAB missing");
-	const auto &deps = it->second->dependencies.research;
-	TEST_REQUIRE(deps.size() == 1, "quantum lab groups {0} (extractor All ANDs patch Any)",
-	             deps.size());
-	TEST_REQUIRE(deps.front().type == ResearchDependency::Type::Any, "quantum lab must be Any");
-	TEST_REQUIRE(deps.front().topics.size() == 3, "quantum lab topic count {0}",
-	             deps.front().topics.size());
+	// UFO2P non-4 research_data prereqTech[3] at 0x13EE80. unknown2==0 → All.
+	// Dimension Probe (record 2) is All of the same three sciences that
+	// Quantum Lab (record 45, unknown2==1) treats as Any.
+	struct Case
+	{
+		const char *topic;
+		std::vector<UString> techs;
+	};
+	const Case cases[] = {
+	    {"RESEARCH_DIMENSION_PROBE",
+	     {"RESEARCH_ALIEN_PROPULSION_SYSTEM", "RESEARCH_ALIEN_CONTROL_SYSTEM",
+	      "RESEARCH_ALIEN_ENERGY_SOURCE"}},
+	    {"RESEARCH_ADVANCED_WORKSHOP", {"RESEARCH_DIMENSION_PROBE"}},
+	    {"RESEARCH_ADVANCED_ALIEN_CONTAINMENT", {"RESEARCH_ADVANCED_QUANTUM_PHYSICS_LAB"}},
+	};
+	for (const auto &c : cases)
+	{
+		auto it = state.research.topics.find(c.topic);
+		TEST_REQUIRE(it != state.research.topics.end() && it->second, "{0} missing", c.topic);
+		TEST_REQUIRE(hasExactAll(*it->second, c.techs), "{0} lost EXE All graph", c.topic);
+		for (const auto &dep : it->second->dependencies.research)
+		{
+			TEST_REQUIRE(dep.type != ResearchDependency::Type::Any, "{0} must not be Any", c.topic);
+		}
+	}
+	return true;
+}
+
+static bool test_research_prereq_unknown2_any()
+{
+	auto &state = *g_state;
+	// FUN_000aa7a8 @ VA 0xAA7A8 / file 0x10CE4C: JMP [unknown2*4+0x9A794] at
+	// file 0x10CF9F (table 0x10CE38). Case 1 is Any of prereqTech[3].
+	// Records 36 / 43 / 45. Fails if the extractor still emits All.
+	struct Case
+	{
+		const char *topic;
+		std::vector<UString> techs;
+	};
+	const Case cases[] = {
+	    {"RESEARCH_THE_ALIEN_GENETIC_STRUCTURE",
+	     {"RESEARCH_MULTIWORM_EGG_AUTOPSY", "RESEARCH_MULTIWORM_AUTOPSY",
+	      "RESEARCH_HYPERWORM_AUTOPSY"}},
+	    {"RESEARCH_ADVANCED_SECURITY_STATION",
+	     {"RESEARCH_LIGHT_DISRUPTOR_BEAM", "RESEARCH_MEDIUM_DISRUPTOR_BEAM",
+	      "RESEARCH_DISRUPTOR_INVERSION_BOMB"}},
+	    {"RESEARCH_ADVANCED_QUANTUM_PHYSICS_LAB",
+	     {"RESEARCH_ALIEN_PROPULSION_SYSTEM", "RESEARCH_ALIEN_CONTROL_SYSTEM",
+	      "RESEARCH_ALIEN_ENERGY_SOURCE"}},
+	};
+	for (const auto &c : cases)
+	{
+		auto it = state.research.topics.find(c.topic);
+		TEST_REQUIRE(it != state.research.topics.end() && it->second, "{0} missing", c.topic);
+		TEST_REQUIRE(hasExactDep(*it->second, ResearchDependency::Type::Any, c.techs),
+		             "{0} lost EXE Any graph", c.topic);
+		for (const auto &dep : it->second->dependencies.research)
+		{
+			TEST_REQUIRE(dep.type != ResearchDependency::Type::All, "{0} must not be All", c.topic);
+		}
+	}
+	return true;
+}
+
+static bool test_research_prereq_unknown1_any()
+{
+	auto &state = *g_state;
+	// FUN_000aa7a8 unknown1==1 @ file 0x10CED7: Any of three typed item gates.
+	// Record 62 unknown3=0000 → Light or Medium or Heavy.
+	// Record 63 unknown3=00FF → Medium or Heavy.
+	// Record 70 unknown3=FFFF → Small Shield only (Large type 0xFF is omitted).
+	auto light = state.research.topics.find("RESEARCH_LIGHT_DISRUPTOR_BEAM");
+	auto medium = state.research.topics.find("RESEARCH_MEDIUM_DISRUPTOR_BEAM");
+	auto small = state.research.topics.find("RESEARCH_SMALL_DISRUPTION_SHIELD");
+	TEST_REQUIRE(light != state.research.topics.end() && light->second, "LIGHT missing");
+	TEST_REQUIRE(medium != state.research.topics.end() && medium->second, "MEDIUM missing");
+	TEST_REQUIRE(small != state.research.topics.end() && small->second, "SMALL SHIELD missing");
+	TEST_REQUIRE(light->second->dependencies.items.type == ItemDependency::Type::Any,
+	             "Light item combinator is not Any");
+	TEST_REQUIRE(medium->second->dependencies.items.type == ItemDependency::Type::Any,
+	             "Medium item combinator is not Any");
+	TEST_REQUIRE(small->second->dependencies.items.type == ItemDependency::Type::Any,
+	             "Small Shield item combinator is not Any");
+
+	StateRef<VEquipmentType> lightEq{&state, "VEQUIPMENTTYPE_LIGHT_DISRUPTOR_BEAM"};
+	StateRef<VEquipmentType> mediumEq{&state, "VEQUIPMENTTYPE_MEDIUM_DISRUPTOR_BEAM"};
+	StateRef<VEquipmentType> heavyEq{&state, "VEQUIPMENTTYPE_HEAVY_DISRUPTOR_BEAM"};
+	StateRef<VEquipmentType> smallEq{&state, "VEQUIPMENTTYPE_SMALL_DISRUPTION_SHIELD"};
+	StateRef<VEquipmentType> largeEq{&state, "VEQUIPMENTTYPE_LARGE_DISRUPTION_SHIELD"};
+	auto has = [](const ItemDependency &items, const StateRef<VEquipmentType> &eq) -> bool
+	{
+		auto it = items.vehicleItemsRequired.find(eq);
+		return it != items.vehicleItemsRequired.end() && it->second == 1;
+	};
+	TEST_REQUIRE(has(light->second->dependencies.items, lightEq) &&
+	                 has(light->second->dependencies.items, mediumEq) &&
+	                 has(light->second->dependencies.items, heavyEq),
+	             "Light lost EXE Any of three beams");
+	TEST_REQUIRE(has(medium->second->dependencies.items, mediumEq) &&
+	                 has(medium->second->dependencies.items, heavyEq) &&
+	                 !has(medium->second->dependencies.items, lightEq),
+	             "Medium must be Medium-or-Heavy");
+	TEST_REQUIRE(has(small->second->dependencies.items, smallEq) &&
+	                 !has(small->second->dependencies.items, largeEq),
+	             "Small Shield must not accept Large");
+
+	TEST_REQUIRE(!state.player_bases.empty(), "no player base");
+	StateRef<Base> base{&state, state.player_bases.begin()->first};
+	auto &inv = base->inventoryVehicleEquipment;
+	const auto savedLight = inv[lightEq.id];
+	const auto savedMedium = inv[mediumEq.id];
+	const auto savedHeavy = inv[heavyEq.id];
+	const auto savedSmall = inv[smallEq.id];
+	const auto savedLarge = inv[largeEq.id];
+	inv[lightEq.id] = 0;
+	inv[mediumEq.id] = 0;
+	inv[heavyEq.id] = 1;
+	inv[smallEq.id] = 0;
+	inv[largeEq.id] = 0;
+	TEST_REQUIRE(light->second->dependencies.items.satisfied(base),
+	             "Heavy must unlock Light research");
+	inv[heavyEq.id] = 0;
+	TEST_REQUIRE(!light->second->dependencies.items.satisfied(base),
+	             "empty inventory must not unlock Light");
+	inv[smallEq.id] = 1;
+	TEST_REQUIRE(small->second->dependencies.items.satisfied(base),
+	             "Small Shield unlocks its research");
+	inv[smallEq.id] = 0;
+	inv[largeEq.id] = 1;
+	TEST_REQUIRE(!small->second->dependencies.items.satisfied(base),
+	             "Large Shield must not unlock Small research");
+	inv[lightEq.id] = savedLight;
+	inv[mediumEq.id] = savedMedium;
+	inv[heavyEq.id] = savedHeavy;
+	inv[smallEq.id] = savedSmall;
+	inv[largeEq.id] = savedLarge;
+	return true;
+}
+
+static bool test_research_aa7a8_hardcoded_gates()
+{
+	auto &state = *g_state;
+	// FUN_000aa7a8 listing @ VA 0xAAABE / file 0x10D162 (decompiler dropped
+	// the MOV EBX,1 at 0xAAAEA). Record 37: All of 12..17 plus topic 36.
+	// Record 38: All of 8..31. Record 44: Any of 7..33.
+	std::vector<UString> cycleIds;
+	cycleIds.reserve(sizeof(UFO2P_AA7A8_LIFE_CYCLE_ALL) / sizeof(UFO2P_AA7A8_LIFE_CYCLE_ALL[0]));
+	for (auto *id : UFO2P_AA7A8_LIFE_CYCLE_ALL)
+	{
+		cycleIds.emplace_back(id);
+	}
+	std::vector<UString> threat;
+	threat.reserve(sizeof(UFO2P_AA7A8_THREAT_ALL) / sizeof(UFO2P_AA7A8_THREAT_ALL[0]));
+	for (auto *id : UFO2P_AA7A8_THREAT_ALL)
+	{
+		threat.emplace_back(id);
+	}
+	std::vector<UString> biochem;
+	biochem.reserve(sizeof(UFO2P_AA7A8_BIOCHEM_ANY) / sizeof(UFO2P_AA7A8_BIOCHEM_ANY[0]));
+	for (auto *id : UFO2P_AA7A8_BIOCHEM_ANY)
+	{
+		biochem.emplace_back(id);
+	}
+	TEST_REQUIRE(cycleIds.size() == 7, "life cycle is 12..17 plus topic 36");
+	TEST_REQUIRE(cycleIds.back() == "RESEARCH_THE_ALIEN_GENETIC_STRUCTURE",
+	             "CMP [0xDE420] is Genetic Structure");
+	TEST_REQUIRE(threat.size() == 24, "threat range 8..31 is 24 topics");
+	TEST_REQUIRE(biochem.size() == 27, "biochem range 7..33 is 27 topics");
+	TEST_REQUIRE(biochem.front() == "RESEARCH_BRAINSUCKER_PODS", "biochem loop starts at topic 7");
+
+	auto threatTopic = state.research.topics.find("RESEARCH_THE_REAL_ALIEN_THREAT");
+	auto biochemTopic = state.research.topics.find("RESEARCH_ADVANCED_BIOCHEMISTRY_LAB");
+	auto cycle = state.research.topics.find("RESEARCH_THE_ALIEN_LIFE_CYCLE");
+	TEST_REQUIRE(threatTopic != state.research.topics.end() && threatTopic->second,
+	             "threat missing");
+	TEST_REQUIRE(biochemTopic != state.research.topics.end() && biochemTopic->second,
+	             "biochem missing");
+	TEST_REQUIRE(cycle != state.research.topics.end() && cycle->second, "life cycle missing");
+	TEST_REQUIRE(hasExactDep(*threatTopic->second, ResearchDependency::Type::All, threat),
+	             "Real Alien Threat lost EXE All of 8..31");
+	TEST_REQUIRE(hasExactDep(*biochemTopic->second, ResearchDependency::Type::Any, biochem),
+	             "Biochem Lab lost EXE Any of 7..33");
+	TEST_REQUIRE(hasExactDep(*cycle->second, ResearchDependency::Type::All, cycleIds),
+	             "Life Cycle lost EXE All of 12..17 plus Genetic Structure");
+
+	auto pods = state.research.topics.find("RESEARCH_BRAINSUCKER_PODS");
+	auto autopsy = state.research.topics.find("RESEARCH_BRAINSUCKER_AUTOPSY");
+	auto genetics = state.research.topics.find("RESEARCH_THE_ALIEN_GENETIC_STRUCTURE");
+	TEST_REQUIRE(pods != state.research.topics.end() && pods->second, "pods missing");
+	TEST_REQUIRE(autopsy != state.research.topics.end() && autopsy->second, "autopsy missing");
+	TEST_REQUIRE(genetics != state.research.topics.end() && genetics->second, "genetics missing");
+	const auto savedPods = pods->second->man_hours_progress;
+	const auto savedPodsStarted = pods->second->started;
+	const auto savedAutopsy = autopsy->second->man_hours_progress;
+	struct SavedTopic
+	{
+		sp<ResearchTopic> topic;
+		unsigned progress = 0;
+		bool started = false;
+	};
+	std::vector<SavedTopic> savedCycle;
+	for (const auto &id : cycleIds)
+	{
+		auto it = state.research.topics.find(id);
+		TEST_REQUIRE(it != state.research.topics.end() && it->second, "cycle topic {0} missing",
+		             id);
+		savedCycle.push_back({it->second, it->second->man_hours_progress, it->second->started});
+		it->second->man_hours_progress = 0;
+	}
+	pods->second->man_hours_progress = 0;
+	autopsy->second->man_hours_progress = 0;
+	TEST_REQUIRE(!biochemTopic->second->dependencies.research.front().satisfied(),
+	             "Biochem stays gated with no bio topic");
+	pods->second->forceComplete();
+	TEST_REQUIRE(biochemTopic->second->dependencies.research.front().satisfied(),
+	             "Brainsucker Pods must unlock Biochem");
+	TEST_REQUIRE(!threatTopic->second->dependencies.research.front().satisfied(),
+	             "one complete topic must not unlock Threat");
+	TEST_REQUIRE(!cycle->second->dependencies.research.front().satisfied(),
+	             "Life Cycle stays gated when 12..17 and 36 are incomplete");
+	for (auto &saved : savedCycle)
+	{
+		if (saved.topic != genetics->second)
+		{
+			saved.topic->forceComplete();
+		}
+	}
+	TEST_REQUIRE(!cycle->second->dependencies.research.front().satisfied(),
+	             "12..17 without Genetic Structure must not unlock Life Cycle");
+	genetics->second->forceComplete();
+	TEST_REQUIRE(cycle->second->dependencies.research.front().satisfied(),
+	             "All of 12..17 plus Genetic Structure unlocks Life Cycle");
+	for (auto &saved : savedCycle)
+	{
+		saved.topic->man_hours_progress = saved.progress;
+		saved.topic->started = saved.started;
+	}
+	pods->second->man_hours_progress = savedPods;
+	pods->second->started = savedPodsStarted;
+	autopsy->second->man_hours_progress = savedAutopsy;
 	return true;
 }
 
@@ -714,6 +987,54 @@ static bool test_alien_building4_keeps_table_prereq()
 	return true;
 }
 
+static bool test_alien_building_exe_rows()
+{
+	auto &state = *g_state;
+	// UFO2P non-4 research_data records 88–97 @ 0x13F820. Ten "Alien building"
+	// names; each row keeps its own score / hours / prereqTech.
+	struct Row
+	{
+		const char *topic;
+		int hours;
+		int score;
+		bool wantsDimension;
+	};
+	const Row rows[] = {
+	    {"RESEARCH_ALIEN_BUILDING_0", 38000, 380, false},
+	    {"RESEARCH_ALIEN_BUILDING_1", 42000, 420, false},
+	    {"RESEARCH_ALIEN_BUILDING_2", 32000, 320, false},
+	    {"RESEARCH_ALIEN_BUILDING_3", 46000, 460, false},
+	    {"RESEARCH_ALIEN_BUILDING_4", 30000, 300, true},
+	    {"RESEARCH_ALIEN_BUILDING_5", 44000, 440, false},
+	    {"RESEARCH_ALIEN_BUILDING_6", 34000, 340, false},
+	    {"RESEARCH_ALIEN_BUILDING_7", 40000, 400, false},
+	    {"RESEARCH_ALIEN_BUILDING_8", 36000, 360, false},
+	    {"RESEARCH_ALIEN_BUILDING_9", 48000, 480, false},
+	};
+	for (const auto &row : rows)
+	{
+		auto it = state.research.topics.find(row.topic);
+		TEST_REQUIRE(it != state.research.topics.end() && it->second, "{0} missing", row.topic);
+		TEST_REQUIRE(it->second->man_hours == row.hours, "{0} hours {1}", row.topic,
+		             it->second->man_hours);
+		TEST_REQUIRE(it->second->score == row.score, "{0} score {1}", row.topic, it->second->score);
+		bool sawDimension = false;
+		for (const auto &dep : it->second->dependencies.research)
+		{
+			for (const auto &t : dep.topics)
+			{
+				if (t.id == "RESEARCH_THE_ALIEN_DIMENSION")
+				{
+					sawDimension = true;
+				}
+			}
+		}
+		TEST_REQUIRE(sawDimension == row.wantsDimension, "{0} Dimension gate {1}", row.topic,
+		             sawDimension);
+	}
+	return true;
+}
+
 static bool test_manufacture_type02_ammo_ids()
 {
 	auto &state = *g_state;
@@ -743,11 +1064,87 @@ static bool test_manufacture_type02_ammo_ids()
 	return true;
 }
 
+static bool test_manufacture_disruptor_armor_ids()
+{
+	auto &state = *g_state;
+	// UFO2P non-4 manufacturing_data records 38–42 @ 0x13FD34 (names 0x1501F3).
+	// canon_string maps '(' / ')' to '_', which used to emit
+	// MANUFACTURE_DISRUPTOR_ARMOR__LEGS_ beside the patch (LEGS) key.
+	// Record 37 (Dimension Destabiliser) is manufacturable=0. 42 live rows.
+	struct Case
+	{
+		const char *topic;
+		const char *item;
+		unsigned hours;
+		int cost;
+	};
+	const Case cases[] = {
+	    {"MANUFACTURE_DISRUPTOR_ARMOR_(LEGS)", "AEQUIPMENTTYPE_X-COM_LEG_SHIELDS", 3400, 1200},
+	    {"MANUFACTURE_DISRUPTOR_ARMOR_(TORSO)", "AEQUIPMENTTYPE_X-COM_BODY_SHIELD", 3800, 1500},
+	    {"MANUFACTURE_DISRUPTOR_ARMOR_(RIGHT_ARM)", "AEQUIPMENTTYPE_X-COM_RIGHT_ARM_SHIELD", 3400,
+	     1200},
+	    {"MANUFACTURE_DISRUPTOR_ARMOR_(LEFT_ARM)", "AEQUIPMENTTYPE_X-COM_LEFT_ARM_SHIELD", 3400,
+	     1200},
+	    {"MANUFACTURE_DISRUPTOR_ARMOR_(HEAD)", "AEQUIPMENTTYPE_X-COM_HEAD_SHIELD", 3800, 1500},
+	};
+	const char *folded[] = {
+	    "MANUFACTURE_DISRUPTOR_ARMOR__LEGS_",      "MANUFACTURE_DISRUPTOR_ARMOR__TORSO_",
+	    "MANUFACTURE_DISRUPTOR_ARMOR__RIGHT_ARM_", "MANUFACTURE_DISRUPTOR_ARMOR__LEFT_ARM_",
+	    "MANUFACTURE_DISRUPTOR_ARMOR__HEAD_",
+	};
+	int manufactureCount = 0;
+	int armorNameCount = 0;
+	for (const auto &pair : state.research.topics)
+	{
+		if (!pair.second)
+		{
+			continue;
+		}
+		if (pair.first.find("MANUFACTURE_") == 0)
+		{
+			manufactureCount++;
+		}
+		if (pair.second->name.find("Disruptor Armor (") == 0)
+		{
+			armorNameCount++;
+		}
+	}
+	TEST_REQUIRE(manufactureCount == 42, "MANUFACTURE_* count {0} (extract+patch doubles armor)",
+	             manufactureCount);
+	TEST_REQUIRE(armorNameCount == 5, "Disruptor Armor name count {0}", armorNameCount);
+	for (const auto *id : folded)
+	{
+		TEST_REQUIRE(state.research.topics.find(id) == state.research.topics.end(),
+		             "folded extract key {0} must not remain", id);
+	}
+	for (const auto &c : cases)
+	{
+		auto it = state.research.topics.find(c.topic);
+		TEST_REQUIRE(it != state.research.topics.end() && it->second, "{0} missing", c.topic);
+		TEST_REQUIRE(it->second->type == ResearchTopic::Type::Engineering, "{0} type", c.topic);
+		TEST_REQUIRE(it->second->item_type == ResearchTopic::ItemType::AgentEquipment,
+		             "{0} item_type", c.topic);
+		TEST_REQUIRE(it->second->man_hours == c.hours, "{0} hours {1}", c.topic,
+		             it->second->man_hours);
+		TEST_REQUIRE(it->second->cost == c.cost, "{0} cost {1}", c.topic, it->second->cost);
+		TEST_REQUIRE(it->second->itemId == c.item, "{0} itemId {1}", c.topic, it->second->itemId);
+		TEST_REQUIRE(state.agent_equipment.find(c.item) != state.agent_equipment.end(),
+		             "{0} equipment missing", c.item);
+		TEST_REQUIRE(it->second->dependencies.research.size() == 1, "{0} research groups {1}",
+		             c.topic, it->second->dependencies.research.size());
+		TEST_REQUIRE(
+		    hasExactDep(*it->second, ResearchDependency::Type::All, {"RESEARCH_DISRUPTOR_ARMOR"}),
+		    "{0} prereq is not All(RESEARCH_DISRUPTOR_ARMOR)", c.topic);
+	}
+	return true;
+}
+
 static bool test_craft_ammo_manufacturers()
 {
 	auto &state = *g_state;
 	// UFO2P non-4 craft_ammo_manufacturers_data at 0x13EB6A: uint16[15] org index.
-	// Zorium is org 0 (X-COM), not Solmine.
+	// Zorium is org 0 (X-COM). Patch vehicle_ammo.xml must not carry
+	// <manufacturer> — applyCraftAmmoManufacturers writes the EXE org.
 	struct Case
 	{
 		const char *ammo;
@@ -766,6 +1163,100 @@ static bool test_craft_ammo_manufacturers()
 		TEST_REQUIRE(it->second->manufacturer.id == c.org, "{0} manufacturer {1}", c.ammo,
 		             it->second->manufacturer.id);
 	}
+	return true;
+}
+
+static bool test_craft_ammo_economy_ids()
+{
+	auto &state = *g_state;
+	// extractEconomy keys economy_data2 with getVAmmoId (keeps '-'). Patch
+	// VAmmoType IDs fold Elerium-115 / Multi-Cannon Round. purchase() looks up
+	// economy[vehicle_ammo.id].
+	TEST_REQUIRE(state.economy.find("VEQUIPMENTAMMOTYPE_ELERIUM-115") == state.economy.end(),
+	             "stale hyphen Elerium economy key");
+	TEST_REQUIRE(state.economy.find("VEQUIPMENTAMMOTYPE_MULTI-CANNON_ROUND") == state.economy.end(),
+	             "stale hyphen Multi-Cannon economy key");
+	auto elerium = state.economy.find("VEQUIPMENTAMMOTYPE_ELERIUM_115");
+	TEST_REQUIRE(elerium != state.economy.end(), "Elerium economy missing under live ammo id");
+	TEST_REQUIRE(elerium->second.weekAvailable == 1 && elerium->second.basePrice == 20,
+	             "Elerium week/price {0}/{1}", elerium->second.weekAvailable,
+	             elerium->second.basePrice);
+	auto multi = state.economy.find("VEQUIPMENTAMMOTYPE_MULTI_CANNON_ROUND");
+	TEST_REQUIRE(multi != state.economy.end(), "Multi-Cannon economy missing under live ammo id");
+	TEST_REQUIRE(multi->second.weekAvailable == 1 && multi->second.basePrice == 5,
+	             "Multi-Cannon week/price {0}/{1}", multi->second.weekAvailable,
+	             multi->second.basePrice);
+	return true;
+}
+
+static bool test_vehicle_equipment_ammo_types()
+{
+	auto &state = *g_state;
+	// UFO2P non-4 vehicle_equipment.ammo_type indexes craft_ammo_names at 0x14B18E.
+	// 0xffff = none (lasers / disruptor beams).
+	struct Case
+	{
+		const char *equipment;
+		const char *ammo;
+	};
+	const Case cases[] = {
+	    {"VEQUIPMENTTYPE_RENDOR_PLASMA_GUN", "VEQUIPMENTAMMOTYPE_ELERIUM_115"},
+	    {"VEQUIPMENTTYPE_40MM_AUTO_CANNON", "VEQUIPMENTAMMOTYPE_MULTI_CANNON_ROUND"},
+	    {"VEQUIPMENTTYPE_JANITOR_MISSILE_ARRAY", "VEQUIPMENTAMMOTYPE_JANITOR_MISSILE"},
+	    {"VEQUIPMENTTYPE_AIRGUARD_ANTI-AIR_CANNON",
+	     "VEQUIPMENTAMMOTYPE_AIRGUARD_52MM_CANNON_ROUND"},
+	    {"VEQUIPMENTTYPE_GLM_AIR_DEFENSE", "VEQUIPMENTAMMOTYPE_AIR_DEFENSE_MISSILE"},
+	    {"VEQUIPMENTTYPE_SD_STANDARD", "VEQUIPMENTAMMOTYPE_FUSION_POWERFUEL"},
+	};
+	for (const auto &c : cases)
+	{
+		auto it = state.vehicle_equipment.find(c.equipment);
+		TEST_REQUIRE(it != state.vehicle_equipment.end() && it->second, "{0} missing", c.equipment);
+		TEST_REQUIRE(it->second->ammo_type.id == c.ammo, "{0} ammo_type {1}", c.equipment,
+		             it->second->ammo_type.id);
+	}
+	auto bolter = state.vehicle_equipment.find("VEQUIPMENTTYPE_BOLTER_4000_LASER_GUN");
+	TEST_REQUIRE(bolter != state.vehicle_equipment.end() && bolter->second, "Bolter missing");
+	TEST_REQUIRE(!bolter->second->ammo_type, "Bolter ammo_type {0}", bolter->second->ammo_type.id);
+	return true;
+}
+
+static bool test_disruptor_multibomb_fragment()
+{
+	auto &state = *g_state;
+	// UFO2P non-4 vehicle_weapons[24] @ 0x18B510 (parent data_idx 15 split_idx 24).
+	// speed 22, accuracy raw 90 → 10, damage 65. Patch must not keep those scalars.
+	auto parent = state.vehicle_equipment.find("VEQUIPMENTTYPE_DISRUPTOR_MULTI-BOMB_LAUNCHER");
+	TEST_REQUIRE(parent != state.vehicle_equipment.end() && parent->second,
+	             "Multi-Bomb launcher missing");
+	TEST_REQUIRE(parent->second->splitIntoTypes.size() == 4, "parent split count {0}",
+	             parent->second->splitIntoTypes.size());
+	for (auto &ref : parent->second->splitIntoTypes)
+	{
+		TEST_REQUIRE(ref.id == "VEQUIPMENTTYPE_DISRUPTOR_MULTI-BOMB_FRAGMENT",
+		             "parent split id {0}", ref.id);
+	}
+	auto frag = state.vehicle_equipment.find("VEQUIPMENTTYPE_DISRUPTOR_MULTI-BOMB_FRAGMENT");
+	TEST_REQUIRE(frag != state.vehicle_equipment.end() && frag->second, "fragment missing");
+	TEST_REQUIRE(frag->second->speed == 22, "fragment speed {0}", frag->second->speed);
+	TEST_REQUIRE(frag->second->accuracy == 10, "fragment accuracy {0}", frag->second->accuracy);
+	TEST_REQUIRE(frag->second->damage == 65, "fragment damage {0}", frag->second->damage);
+	TEST_REQUIRE(frag->second->guided, "fragment must be guided");
+	TEST_REQUIRE(frag->second->turn_rate == 28, "fragment turn {0}", frag->second->turn_rate);
+	TEST_REQUIRE(frag->second->range == 400, "fragment range {0}", frag->second->range);
+	TEST_REQUIRE(frag->second->ttl == 2400, "fragment ttl {0}", frag->second->ttl);
+	TEST_REQUIRE(frag->second->tail_size == 20, "fragment tail {0}", frag->second->tail_size);
+	return true;
+}
+
+static bool test_dimension_probe_manufacturer()
+{
+	auto &state = *g_state;
+	// UFO2P non-4 vehicle_data[20] manufacturer uint16 at 0x189C8C + 20×126 = 5 (Marsec).
+	auto it = state.vehicle_types.find("VEHICLETYPE_DIMENSION_PROBE");
+	TEST_REQUIRE(it != state.vehicle_types.end() && it->second, "DIMENSION_PROBE missing");
+	TEST_REQUIRE(it->second->manufacturer.id == "ORG_MARSEC", "Dimension Probe manufacturer {0}",
+	             it->second->manufacturer.id);
 	return true;
 }
 
@@ -808,6 +1299,51 @@ static bool test_research_item_prereq_gates()
 	TEST_REQUIRE(sit != shift->second->dependencies.items.vehicleItemsRequired.end() &&
 	                 sit->second == 1,
 	             "Dimension Shifter item gate");
+
+	// prereqType 3: live slot 1 / dead slot 16 / pod slot 13 / Overspawn dead 29.
+	auto sucker = state.research.topics.find("RESEARCH_BRAINSUCKER");
+	TEST_REQUIRE(sucker != state.research.topics.end() && sucker->second, "BRAINSUCKER missing");
+	StateRef<AEquipmentType> liveSucker{&state, "AEQUIPMENTTYPE_BRAINSUCKER_ALIVE"};
+	auto lit = sucker->second->dependencies.items.agentItemsRequired.find(liveSucker);
+	TEST_REQUIRE(lit != sucker->second->dependencies.items.agentItemsRequired.end() &&
+	                 lit->second == 1,
+	             "Brainsucker live gate");
+	auto autopsy = state.research.topics.find("RESEARCH_BRAINSUCKER_AUTOPSY");
+	TEST_REQUIRE(autopsy != state.research.topics.end() && autopsy->second, "AUTOPSY missing");
+	StateRef<AEquipmentType> deadSucker{&state, "AEQUIPMENTTYPE_BRAINSUCKER_DEAD"};
+	auto ait = autopsy->second->dependencies.items.agentItemsRequired.find(deadSucker);
+	TEST_REQUIRE(ait != autopsy->second->dependencies.items.agentItemsRequired.end() &&
+	                 ait->second == 1,
+	             "Brainsucker autopsy gate");
+	auto pods = state.research.topics.find("RESEARCH_BRAINSUCKER_PODS");
+	TEST_REQUIRE(pods != state.research.topics.end() && pods->second, "PODS missing");
+	StateRef<AEquipmentType> podItem{&state, "AEQUIPMENTTYPE_BRAINSUCKER_POD"};
+	auto pit = pods->second->dependencies.items.agentItemsRequired.find(podItem);
+	TEST_REQUIRE(pit != pods->second->dependencies.items.agentItemsRequired.end() &&
+	                 pit->second == 1,
+	             "Brainsucker Pod gate");
+	auto over = state.research.topics.find("RESEARCH_OVERSPAWN_AUTOPSY");
+	TEST_REQUIRE(over != state.research.topics.end() && over->second, "OVERSPAWN_AUTOPSY missing");
+	StateRef<AEquipmentType> deadOver{&state, "AEQUIPMENTTYPE_OVERSPAWN_DEAD"};
+	auto oit = over->second->dependencies.items.agentItemsRequired.find(deadOver);
+	TEST_REQUIRE(oit != over->second->dependencies.items.agentItemsRequired.end() &&
+	                 oit->second == 1,
+	             "Overspawn dead gate");
+	TEST_REQUIRE(over->second->man_hours == 20000, "Overspawn Autopsy hours {0}",
+	             over->second->man_hours);
+	TEST_REQUIRE(over->second->score == 450, "Overspawn Autopsy score {0}", over->second->score);
+	auto overLive = state.research.topics.find("RESEARCH_OVERSPAWN_AUTOPSY_1");
+	TEST_REQUIRE(overLive != state.research.topics.end() && overLive->second,
+	             "OVERSPAWN_AUTOPSY_1 missing");
+	StateRef<AEquipmentType> liveOver{&state, "AEQUIPMENTTYPE_OVERSPAWN_ALIVE"};
+	auto litOver = overLive->second->dependencies.items.agentItemsRequired.find(liveOver);
+	TEST_REQUIRE(litOver != overLive->second->dependencies.items.agentItemsRequired.end() &&
+	                 litOver->second == 1,
+	             "Overspawn live gate");
+	TEST_REQUIRE(overLive->second->man_hours == 25000, "Overspawn Autopsy 1 hours {0}",
+	             overLive->second->man_hours);
+	TEST_REQUIRE(overLive->second->score == 450, "Overspawn Autopsy 1 score {0}",
+	             overLive->second->score);
 	return true;
 }
 
@@ -884,6 +1420,39 @@ static bool test_ufo_incursion_table()
 	                 i1->second->escortList[0].first == "VEHICLETYPE_ALIEN_ESCORT" &&
 	                 i1->second->escortList[0].second == 2,
 	             "I1 escort×2");
+	// UFO2P non-4 0x13DDFC record 0 tail; FUN_0006da88 @ file 0xD012C.
+	TEST_REQUIRE(i1->second->primarySlots.size() == 2 && i1->second->escortSlots.size() == 1,
+	             "I1 slot vectors");
+	TEST_REQUIRE(i1->second->primarySlots[0].followVehicleType.empty() &&
+	                 i1->second->primarySlots[0].zoneMode == 2 &&
+	                 i1->second->primarySlots[0].buildingFunction == 1 &&
+	                 i1->second->primarySlots[0].scatter == 15 &&
+	                 i1->second->primarySlots[0].typePercent == 20,
+	             "I1 mothership tail");
+	TEST_REQUIRE(i1->second->primarySlots[1].followVehicleType.empty() &&
+	                 i1->second->primarySlots[1].zoneMode == 2 &&
+	                 i1->second->primarySlots[1].buildingFunction == 1 &&
+	                 i1->second->primarySlots[1].scatter == 15 &&
+	                 i1->second->primarySlots[1].typePercent == 30,
+	             "I1 battleship tail");
+	TEST_REQUIRE(i1->second->escortSlots[0].followVehicleType == "VEHICLETYPE_ALIEN_MOTHERSHIP" &&
+	                 i1->second->escortSlots[0].zoneMode == 2 &&
+	                 i1->second->escortSlots[0].buildingFunction == 5 &&
+	                 i1->second->escortSlots[0].scatter == 15 &&
+	                 i1->second->escortSlots[0].typePercent == 20,
+	             "I1 escort follows mothership (follow_slot 0)");
+
+	auto i5 = state.ufo_incursions.find("UFO_INCURSION_I5");
+	TEST_REQUIRE(
+	    i5 != state.ufo_incursions.end() && i5->second && i5->second->escortSlots.size() == 1 &&
+	        i5->second->escortSlots[0].followVehicleType == "VEHICLETYPE_ALIEN_ASSAULT_SHIP",
+	    "I5 escort follows craft[1] assault ship");
+
+	auto o3 = state.ufo_incursions.find("UFO_INCURSION_O3");
+	TEST_REQUIRE(o3 != state.ufo_incursions.end() && o3->second &&
+	                 o3->second->escortSlots.size() == 1 &&
+	                 o3->second->escortSlots[0].followVehicleType.empty(),
+	             "O3 role 11 has follow_slot 0xFFFF");
 
 	auto o5 = state.ufo_incursions.find("UFO_INCURSION_O5");
 	TEST_REQUIRE(o5 != state.ufo_incursions.end() && o5->second, "UFO_INCURSION_O5 missing");
@@ -895,6 +1464,149 @@ static bool test_ufo_incursion_table()
 	             "O5 single mothership");
 	TEST_REQUIRE(o5->second->escortList.empty() && o5->second->attackList.empty(),
 	             "O5 extra lists");
+	TEST_REQUIRE(o5->second->escortSlots.empty() && o5->second->attackSlots.empty(),
+	             "O5 extra slots");
+
+	// FUN_0006da88: constitution (VehicleType::health) × type_percent / 100; scatter clamp.
+	TEST_REQUIRE(VehicleMission::clampIncursionScatter(15, 20) == 15,
+	             "I1 percent keeps scatter 15");
+	TEST_REQUIRE(VehicleMission::clampIncursionScatter(15, 50) == 15, "percent 50 is not > 0x32");
+	TEST_REQUIRE(VehicleMission::clampIncursionScatter(15, 51) == 10,
+	             "percent 51 forces scatter 10");
+	TEST_REQUIRE(VehicleMission::clampIncursionScatter(20, 51) == 20,
+	             "clamp only when scatter is 15");
+	auto mothership = state.vehicle_types.find("VEHICLETYPE_ALIEN_MOTHERSHIP");
+	auto battleship = state.vehicle_types.find("VEHICLETYPE_ALIEN_BATTLESHIP");
+	auto escort = state.vehicle_types.find("VEHICLETYPE_ALIEN_ESCORT");
+	TEST_REQUIRE(mothership != state.vehicle_types.end() && mothership->second, "mothership type");
+	TEST_REQUIRE(battleship != state.vehicle_types.end() && battleship->second, "battleship type");
+	TEST_REQUIRE(escort != state.vehicle_types.end() && escort->second, "escort type");
+	TEST_REQUIRE(mothership->second->health == 2800, "mothership constitution {0}",
+	             mothership->second->health);
+	TEST_REQUIRE(battleship->second->health == 1800, "battleship constitution {0}",
+	             battleship->second->health);
+	TEST_REQUIRE(escort->second->health == 500, "escort constitution {0}", escort->second->health);
+	TEST_REQUIRE(VehicleMission::incursionTypeThreshold(mothership->second->health, 20) == 560,
+	             "I1 mothership +0x168");
+	TEST_REQUIRE(VehicleMission::incursionTypeThreshold(battleship->second->health, 30) == 540,
+	             "I1 battleship +0x168");
+	TEST_REQUIRE(VehicleMission::incursionTypeThreshold(escort->second->health, 20) == 100,
+	             "I1 escort +0x168");
+	return true;
+}
+
+static bool test_ufo_incursion_spawn_xy()
+{
+	auto &state = *g_state;
+	// FUN_0003b724 @ VA 0x3B724 / file 0x2B723: FUN_0005d1d8(scatter*2) then −scatter.
+	state.rng.seed(0x4749ffc1);
+	const auto first = VehicleMission::computeIncursionSpawnXY(state, 50, 50, 2, 15);
+	state.rng.seed(0x4749ffc1);
+	const auto second = VehicleMission::computeIncursionSpawnXY(state, 50, 50, 2, 15);
+	TEST_REQUIRE(first.x == second.x && first.y == second.y, "spawn xy deterministic");
+	TEST_REQUIRE(first.x >= 0 && first.x <= 100 && first.y >= 0 && first.y <= 100,
+	             "spawn xy clamp keeps 100");
+
+	state.rng.seed(1);
+	const auto zone2Center = VehicleMission::computeIncursionSpawnXY(state, 50, 50, 2, 0);
+	TEST_REQUIRE(zone2Center.x == 50 && zone2Center.y == 50,
+	             "zone 2 scatter 0 from 50,50 must accept 50,50 (was 0..99 RNG)");
+
+	state.rng.seed(1);
+	const auto zone0Center = VehicleMission::computeIncursionSpawnXY(state, 50, 50, 0, 0);
+	TEST_REQUIRE(!(zone0Center.x == 50 && zone0Center.y == 50),
+	             "zone 0 scatter 0 from 50,50 must reject the inner 11..89 square");
+	TEST_REQUIRE(
+	    !(zone0Center.x > 10 && zone0Center.x < 90 && zone0Center.y > 10 && zone0Center.y < 90),
+	    "zone 0 fallback must stay off the inner square");
+
+	state.rng.seed(1);
+	const auto zone2Edge = VehicleMission::computeIncursionSpawnXY(state, 10, 10, 2, 0);
+	TEST_REQUIRE(zone2Edge.x >= 25 && zone2Edge.x <= 75 && zone2Edge.y >= 25 && zone2Edge.y <= 75,
+	             "zone 2 fallback is rand16(50)+25");
+
+	auto i1 = state.ufo_incursions.find("UFO_INCURSION_I1");
+	TEST_REQUIRE(i1 != state.ufo_incursions.end() && i1->second, "I1 for spawn tail");
+	TEST_REQUIRE(i1->second->primarySlots[0].zoneMode == 2 &&
+	                 i1->second->primarySlots[0].scatter == 15,
+	             "I1 uses zone 2 scatter 15");
+	return true;
+}
+
+static bool test_ufo_incursion_follow_type()
+{
+	auto &state = *g_state;
+	TEST_REQUIRE(state.current_city.id == "CITYMAP_HUMAN", "current_city is {0}",
+	             state.current_city.id);
+	auto alienCity = state.cities["CITYMAP_ALIEN"];
+	TEST_REQUIRE(alienCity && alienCity->size.z > 0, "alien city has no z size");
+
+	std::map<UString, std::list<UFOIncursion::PrimaryMission>> savedLists;
+	for (auto &pref : state.ufo_mission_preference)
+	{
+		savedLists[pref.first] = pref.second->missionList;
+		pref.second->missionList = {UFOIncursion::PrimaryMission::Infiltration};
+	}
+	struct RestorePrefs
+	{
+		GameState &state;
+		std::map<UString, std::list<UFOIncursion::PrimaryMission>> saved;
+		~RestorePrefs()
+		{
+			for (auto &pref : state.ufo_mission_preference)
+			{
+				auto it = saved.find(pref.first);
+				if (it != saved.end())
+				{
+					pref.second->missionList = it->second;
+				}
+			}
+		}
+	} restorePrefs{state, std::move(savedLists)};
+
+	const Vec3<float> pos = {40.0f, 40.0f, static_cast<float>(alienCity->size.z - 1)};
+	StateRef<Organisation> aliens{&state, "ORG_ALIEN"};
+	TEST_REQUIRE(!!aliens, "ORG_ALIEN missing");
+	auto mothership =
+	    alienCity->placeVehicle(state, {&state, "VEHICLETYPE_ALIEN_MOTHERSHIP"}, aliens, pos, 0.0f);
+	auto battleship =
+	    alienCity->placeVehicle(state, {&state, "VEHICLETYPE_ALIEN_BATTLESHIP"}, aliens, pos, 0.0f);
+	auto escortA =
+	    alienCity->placeVehicle(state, {&state, "VEHICLETYPE_ALIEN_ESCORT"}, aliens, pos, 0.0f);
+	auto escortB =
+	    alienCity->placeVehicle(state, {&state, "VEHICLETYPE_ALIEN_ESCORT"}, aliens, pos, 0.0f);
+	TEST_REQUIRE(mothership && battleship && escortA && escortB, "failed to place I1 fleet");
+
+	state.invasion();
+
+	int followMothership = 0;
+	int followBattleship = 0;
+	for (auto &vp : state.vehicles)
+	{
+		if (!vp.second || vp.second->owner.id != "ORG_ALIEN" ||
+		    vp.second->type.id != "VEHICLETYPE_ALIEN_ESCORT" ||
+		    vp.second->city.id != "CITYMAP_HUMAN")
+		{
+			continue;
+		}
+		for (auto &m : vp.second->missions)
+		{
+			if (m.type != VehicleMission::MissionType::FollowVehicle || !m.targetVehicle)
+			{
+				continue;
+			}
+			if (m.targetVehicle->type.id == "VEHICLETYPE_ALIEN_MOTHERSHIP")
+			{
+				followMothership++;
+			}
+			if (m.targetVehicle->type.id == "VEHICLETYPE_ALIEN_BATTLESHIP")
+			{
+				followBattleship++;
+			}
+		}
+	}
+	TEST_REQUIRE(followMothership >= 1, "I1 escorts must follow mothership (follow_slot 0)");
+	TEST_REQUIRE(followBattleship == 0, "I1 escorts must not follow battleship");
 	return true;
 }
 
@@ -972,6 +1684,709 @@ static bool test_unmanned_ufo_loot()
 	return true;
 }
 
+static std::vector<UString> lootIds(const Organisation &org, Organisation::LootPriority priority)
+{
+	std::vector<UString> ids;
+	const auto it = org.loot.find(priority);
+	if (it == org.loot.end())
+	{
+		return ids;
+	}
+	for (const auto &item : it->second)
+	{
+		ids.push_back(item.id);
+	}
+	return ids;
+}
+
+static bool expectLoot(const Organisation &org, Organisation::LootPriority priority,
+                       const std::vector<UString> &expected, const char *label)
+{
+	const auto ids = lootIds(org, priority);
+	TEST_REQUIRE(ids.size() >= expected.size(), "{0} loot size {1} < {2}", label, ids.size(),
+	             expected.size());
+	for (size_t i = 0; i < expected.size(); i++)
+	{
+		TEST_REQUIRE(ids[i] == expected[i], "{0}[{1}] is {2} expected {3}", label, i, ids[i],
+		             expected[i]);
+	}
+	return true;
+}
+
+static bool test_org_raid_loot_table()
+{
+	auto &state = *g_state;
+	// UFO2P non-4 organisation_raid_loot_data at 0x192184 (28×60, uint32[3][5]).
+	// Empty slot is index 0; 85 is Elerium. Civilian is filled with nullptrs.
+	auto megapol = state.organisations.find("ORG_MEGAPOL");
+	TEST_REQUIRE(megapol != state.organisations.end() && megapol->second, "ORG_MEGAPOL missing");
+	if (!expectLoot(*megapol->second, Organisation::LootPriority::A,
+	                {"AEQUIPMENTTYPE_MEGAPOL_AP_GRENADE", "AEQUIPMENTTYPE_MEGAPOL_STUN_GRENADE",
+	                 "AEQUIPMENTTYPE_MEGAPOL_PLASMA_GUN", "AEQUIPMENTTYPE_MEGAPOL_LASER_SNIPER_GUN",
+	                 "AEQUIPMENTTYPE_ELERIUM"},
+	                "Megapol A"))
+	{
+		return false;
+	}
+	if (!expectLoot(*megapol->second, Organisation::LootPriority::B,
+	                {"AEQUIPMENTTYPE_MEGAPOL_STUN_GRAPPLE", "AEQUIPMENTTYPE_MEDI-KIT",
+	                 "AEQUIPMENTTYPE_MEGAPOL_AUTO_CANNON", "AEQUIPMENTTYPE_ELERIUM",
+	                 "AEQUIPMENTTYPE_ELERIUM"},
+	                "Megapol B"))
+	{
+		return false;
+	}
+	if (!expectLoot(*megapol->second, Organisation::LootPriority::C,
+	                {"AEQUIPMENTTYPE_MEGAPOL_LEG_ARMOR", "AEQUIPMENTTYPE_MEGAPOL_BODY_ARMOR",
+	                 "AEQUIPMENTTYPE_MEGAPOL_RIGHT_ARM_ARMOR",
+	                 "AEQUIPMENTTYPE_MEGAPOL_LEFT_ARM_ARMOR", "AEQUIPMENTTYPE_MEGAPOL_HELMET"},
+	                "Megapol C"))
+	{
+		return false;
+	}
+
+	auto marsec = state.organisations.find("ORG_MARSEC");
+	TEST_REQUIRE(marsec != state.organisations.end() && marsec->second, "ORG_MARSEC missing");
+	if (!expectLoot(*marsec->second, Organisation::LootPriority::A,
+	                {"AEQUIPMENTTYPE_MARSEC_PROXIMITY_MINE", "AEQUIPMENTTYPE_MARSEC_HIGH_EXPLOSIVE",
+	                 "AEQUIPMENTTYPE_MARSEC_M4000_MACHINE_GUN",
+	                 "AEQUIPMENTTYPE_MARSEC_HEAVY_LAUNCHER", "AEQUIPMENTTYPE_MARSEC_MINILAUNCHER"},
+	                "Marsec A"))
+	{
+		return false;
+	}
+
+	auto civilian = state.organisations.find("ORG_CIVILIAN");
+	TEST_REQUIRE(civilian != state.organisations.end() && civilian->second, "ORG_CIVILIAN missing");
+	for (const auto priority : {Organisation::LootPriority::A, Organisation::LootPriority::B,
+	                            Organisation::LootPriority::C})
+	{
+		for (const auto &item : lootIds(*civilian->second, priority))
+		{
+			TEST_REQUIRE(item.empty(), "civilian loot slot {0}", item);
+		}
+	}
+	return true;
+}
+
+static bool test_org_extracted_scalars()
+{
+	auto &state = *g_state;
+	// UFO2P non-4 organisation_data at 0x141468 (18 B/record).
+	// raiding_strength +2 uint32, average_guards +7 uint8, rebuilding_rate +16 uint16.
+	auto megapol = state.organisations.find("ORG_MEGAPOL");
+	TEST_REQUIRE(megapol != state.organisations.end() && megapol->second, "ORG_MEGAPOL missing");
+	TEST_REQUIRE(megapol->second->raidingStrength == 5000, "Megapol raidingStrength {0}",
+	             megapol->second->raidingStrength);
+	TEST_REQUIRE(megapol->second->rebuildingRate == 15, "Megapol rebuildingRate {0}",
+	             megapol->second->rebuildingRate);
+	TEST_REQUIRE(megapol->second->average_guards == 16, "Megapol average_guards {0}",
+	             megapol->second->average_guards);
+
+	auto marsec = state.organisations.find("ORG_MARSEC");
+	TEST_REQUIRE(marsec != state.organisations.end() && marsec->second, "ORG_MARSEC missing");
+	TEST_REQUIRE(marsec->second->raidingStrength == 4000, "Marsec raidingStrength {0}",
+	             marsec->second->raidingStrength);
+	TEST_REQUIRE(marsec->second->rebuildingRate == 15, "Marsec rebuildingRate {0}",
+	             marsec->second->rebuildingRate);
+	TEST_REQUIRE(marsec->second->average_guards == 14, "Marsec average_guards {0}",
+	             marsec->second->average_guards);
+	return true;
+}
+
+static bool test_cequip_score_req()
+{
+	auto &state = *g_state;
+	// UFO2P non-4 cequip_score_req_data at 0x1421C4: 5×5 uint32, rows 0-3 = vequip 44-47.
+	static const char *ids[4] = {"VEQUIPMENTTYPE_SMALL_DISRUPTION_SHIELD",
+	                             "VEQUIPMENTTYPE_LARGE_DISRUPTION_SHIELD",
+	                             "VEQUIPMENTTYPE_CLOAKING_FIELD", "VEQUIPMENTTYPE_TELEPORTER"};
+	static const int scores[4][5] = {
+	    {2000, 1750, 1500, 1250, 1000},
+	    {4000, 3500, 3000, 2500, 2000},
+	    {8000, 7000, 6000, 5000, 4000},
+	    {16000, 14000, 12000, 10000, 8000},
+	};
+	for (int row = 0; row < 4; row++)
+	{
+		auto it = state.vehicle_equipment.find(ids[row]);
+		TEST_REQUIRE(it != state.vehicle_equipment.end() && it->second, "{0} missing", ids[row]);
+		TEST_REQUIRE(it->second->scoreRequirementByDifficulty.size() == 5, "{0} score columns {1}",
+		             ids[row], it->second->scoreRequirementByDifficulty.size());
+		for (int d = 0; d < 5; d++)
+		{
+			TEST_REQUIRE(it->second->scoreRequirementByDifficulty[d] == scores[row][d],
+			             "{0} difficulty {1} is {2}, expected {3}", ids[row], d,
+			             it->second->scoreRequirementByDifficulty[d], scores[row][d]);
+		}
+		TEST_REQUIRE(it->second->scoreRequirement == scores[row][0], "{0} scoreRequirement {1}",
+		             ids[row], it->second->scoreRequirement);
+		TEST_REQUIRE(it->second->scoreRequirementFor(0) == scores[row][0], "{0} novice gate",
+		             ids[row]);
+		TEST_REQUIRE(it->second->scoreRequirementFor(4) == scores[row][4], "{0} superhuman gate",
+		             ids[row]);
+	}
+	auto shifter = state.vehicle_equipment.find("VEQUIPMENTTYPE_DIMENSION_SHIFTER");
+	TEST_REQUIRE(shifter != state.vehicle_equipment.end() && shifter->second,
+	             "DIMENSION_SHIFTER missing");
+	TEST_REQUIRE(shifter->second->scoreRequirement == 0, "row 4 must not bind Dimension Shifter");
+	TEST_REQUIRE(shifter->second->scoreRequirementByDifficulty.empty(),
+	             "Dimension Shifter must not take the unnamed fifth row");
+
+	StateRef<VehicleType> scout{&state, "VEHICLETYPE_ALIEN_SCOUT"};
+	TEST_REQUIRE(!!scout, "ALIEN_SCOUT missing");
+	bool scoutHasShield = false;
+	for (auto &pair : scout->initial_equipment_list)
+	{
+		if (pair.second.id == ids[0])
+		{
+			scoutHasShield = true;
+			break;
+		}
+	}
+	TEST_REQUIRE(scoutHasShield, "scout default loadout missing small shield");
+
+	auto cityIt = state.cities.find("CITYMAP_HUMAN");
+	TEST_REQUIRE(cityIt != state.cities.end() && cityIt->second, "CITYMAP_HUMAN missing");
+	const auto savedScore = state.totalScore.craftShotDownUFO;
+	auto probe = cityIt->second->createVehicle(state, scout, state.getAliens());
+	TEST_REQUIRE(!!probe, "failed to create alien scout");
+	state.totalScore.craftShotDownUFO = 1999;
+	probe->equipDefaultEquipment(state);
+	bool skipped = true;
+	for (auto &e : probe->loot)
+	{
+		if (e.id == ids[0])
+		{
+			skipped = false;
+			break;
+		}
+	}
+	state.totalScore.craftShotDownUFO = 2000;
+	probe->equipDefaultEquipment(state);
+	bool allowed = false;
+	for (auto &e : probe->loot)
+	{
+		if (e.id == ids[0])
+		{
+			allowed = true;
+			break;
+		}
+	}
+	state.totalScore.craftShotDownUFO = savedScore;
+	UString eraseId;
+	for (auto &p : state.vehicles)
+	{
+		if (p.second == probe)
+		{
+			eraseId = p.first;
+			break;
+		}
+	}
+	if (!eraseId.empty())
+	{
+		state.vehicles.erase(eraseId);
+	}
+	TEST_REQUIRE(skipped, "small shield equipped below 2000");
+	TEST_REQUIRE(allowed, "small shield skipped at 2000");
+	return true;
+}
+
+static bool test_aequip_artifact_and_resist()
+{
+	auto &state = *g_state;
+	// UFO2P aequip_alien_artifact_data @ 0x1422A8. TACP unknown01 is fire resist.
+	auto destab = state.agent_equipment.find("AEQUIPMENTTYPE_DIMENSION_DESTABILISER");
+	auto disruptor = state.agent_equipment.find("AEQUIPMENTTYPE_DISRUPTOR_GUN");
+	auto plasma = state.agent_equipment.find("AEQUIPMENTTYPE_MEGAPOL_PLASMA_GUN");
+	auto megapol = state.agent_equipment.find("AEQUIPMENTTYPE_MEGAPOL_BODY_ARMOR");
+	auto marsec = state.agent_equipment.find("AEQUIPMENTTYPE_MARSEC_BODY_UNIT");
+	auto xcom = state.agent_equipment.find("AEQUIPMENTTYPE_X-COM_BODY_SHIELD");
+	auto shield = state.agent_equipment.find("AEQUIPMENTTYPE_PERSONAL_DISRUPTOR_SHIELD");
+	TEST_REQUIRE(destab != state.agent_equipment.end() && destab->second, "destabiliser missing");
+	TEST_REQUIRE(disruptor != state.agent_equipment.end() && disruptor->second,
+	             "disruptor missing");
+	TEST_REQUIRE(plasma != state.agent_equipment.end() && plasma->second, "plasma gun missing");
+	TEST_REQUIRE(megapol != state.agent_equipment.end() && megapol->second, "megapol body missing");
+	TEST_REQUIRE(marsec != state.agent_equipment.end() && marsec->second, "marsec body missing");
+	TEST_REQUIRE(xcom != state.agent_equipment.end() && xcom->second, "xcom body missing");
+	TEST_REQUIRE(shield != state.agent_equipment.end() && shield->second,
+	             "disruptor shield missing");
+	TEST_REQUIRE(destab->second->artifact, "Dimension Destabiliser must be an artifact");
+	TEST_REQUIRE(disruptor->second->artifact, "Disruptor Gun must be an artifact");
+	TEST_REQUIRE(shield->second->artifact, "Personal Disruptor Shield must be an artifact");
+	TEST_REQUIRE(!plasma->second->artifact, "Megapol Plasma Gun must not be an artifact");
+	TEST_REQUIRE(!megapol->second->artifact, "Megapol Body Armor must not be an artifact");
+	TEST_REQUIRE(megapol->second->hazardResist == 0, "Megapol armor resist {0}",
+	             megapol->second->hazardResist);
+	TEST_REQUIRE(marsec->second->hazardResist == 50, "Marsec armor resist {0}",
+	             marsec->second->hazardResist);
+	TEST_REQUIRE(xcom->second->hazardResist == 100, "X-COM armor resist {0}",
+	             xcom->second->hazardResist);
+	TEST_REQUIRE(shield->second->hazardResist == 200, "disruptor shield resist {0}",
+	             shield->second->hazardResist);
+	TEST_REQUIRE(AEquipmentType::fireHazardDamage(10, 50) == 1, "Marsec factor-1 still takes 1");
+	TEST_REQUIRE(AEquipmentType::fireHazardDamage(10, 100) == 0, "X-COM factor-1 takes 0");
+	TEST_REQUIRE(AEquipmentType::fireHazardDamage(10, 200) == -1, "resist 200 signed delta");
+	TEST_REQUIRE(state.fireHazardPowerTable.size() == 27, "fire power table size {0}",
+	             state.fireHazardPowerTable.size());
+	TEST_REQUIRE(state.fireHazardPowerTable[0] == 5 && state.fireHazardPowerTable[1] == 10 &&
+	                 state.fireHazardPowerTable[14] == 75 && state.fireHazardPowerTable[26] == 5,
+	             "TACP fire power table @ 0x2E2AF4");
+
+	// FUN_000811fc hides artifacts; FUN_000ab440 clears on same-name type-1 complete.
+	auto gun = state.research.topics.find("RESEARCH_DISRUPTOR_GUN");
+	TEST_REQUIRE(gun != state.research.topics.end() && gun->second, "DISRUPTOR_GUN topic missing");
+	TEST_REQUIRE(disruptor->second->name == gun->second->name, "name match {0} vs {1}",
+	             disruptor->second->name, gun->second->name);
+	const auto savedProgress = gun->second->man_hours_progress;
+	const auto savedStarted = gun->second->started;
+	gun->second->man_hours_progress = 0;
+	TEST_REQUIRE(!disruptor->second->isEconomyVisible(), "incomplete artifact stays hidden");
+	gun->second->forceComplete();
+	TEST_REQUIRE(disruptor->second->isEconomyVisible(), "completed artifact is in economy");
+	gun->second->man_hours_progress = savedProgress;
+	gun->second->started = savedStarted;
+
+	const bool savedArtifact = destab->second->artifact;
+	const auto savedDep = destab->second->research_dependency;
+	destab->second->artifact = true;
+	destab->second->research_dependency = {};
+	TEST_REQUIRE(destab->second->isResearched(), "empty dep uses satisfied() fallback");
+	TEST_REQUIRE(!destab->second->isEconomyVisible(), "artifact empty dep is not in market");
+	destab->second->artifact = savedArtifact;
+	destab->second->research_dependency = savedDep;
+
+	// FUN_000ab440: same-name type-1 complete shows artifact index 37.
+	auto destTopic = state.research.topics.find("RESEARCH_DIMENSION_DESTABILISER");
+	TEST_REQUIRE(destTopic != state.research.topics.end() && destTopic->second,
+	             "DESTABILISER topic missing");
+	TEST_REQUIRE(destab->second->name == destTopic->second->name, "destab name {0} vs {1}",
+	             destab->second->name, destTopic->second->name);
+	bool destabHasTopic = false;
+	for (auto &t : destab->second->research_dependency.topics)
+	{
+		if (t.id == "RESEARCH_DIMENSION_DESTABILISER")
+		{
+			destabHasTopic = true;
+		}
+	}
+	TEST_REQUIRE(destabHasTopic, "destab lost RESEARCH_DIMENSION_DESTABILISER");
+	const auto destProgress = destTopic->second->man_hours_progress;
+	const auto destStarted = destTopic->second->started;
+	destTopic->second->man_hours_progress = 0;
+	TEST_REQUIRE(!destab->second->isEconomyVisible(), "incomplete destab stays hidden");
+	destTopic->second->forceComplete();
+	TEST_REQUIRE(destab->second->isEconomyVisible(), "completed destab is in economy");
+	destTopic->second->man_hours_progress = destProgress;
+	destTopic->second->started = destStarted;
+
+	// FUN_000ab440 case 1 @ file 0x10DC3C / 4-build 0x10E4AE: manufacture
+	// itemIndex (not strcmp) clears DAT_00183b3b. Indices 19/23 have no
+	// same-name type-1 topic; techRequired 42 is Alien Gas.
+	auto heavy = state.agent_equipment.find("AEQUIPMENTTYPE_HEAVY_LAUNCHER_AG_MISSILE");
+	auto mini = state.agent_equipment.find("AEQUIPMENTTYPE_MINILAUNCHER_AG_MISSILE");
+	auto pod = state.agent_equipment.find("AEQUIPMENTTYPE_BRAINSUCKER_POD");
+	auto heavyMfg = state.research.topics.find("MANUFACTURE_HEAVY_LAUNCHER_ALIEN_GAS_MISSILE");
+	auto miniMfg = state.research.topics.find("MANUFACTURE_MINI_LAUNCHER_ALIEN_GAS_MISSILE");
+	auto gas = state.research.topics.find("RESEARCH_ALIEN_GAS");
+	TEST_REQUIRE(heavy != state.agent_equipment.end() && heavy->second, "heavy AG missing");
+	TEST_REQUIRE(mini != state.agent_equipment.end() && mini->second, "mini AG missing");
+	TEST_REQUIRE(pod != state.agent_equipment.end() && pod->second, "brainsucker pod missing");
+	TEST_REQUIRE(heavyMfg != state.research.topics.end() && heavyMfg->second, "heavy mfg missing");
+	TEST_REQUIRE(miniMfg != state.research.topics.end() && miniMfg->second, "mini mfg missing");
+	TEST_REQUIRE(gas != state.research.topics.end() && gas->second, "ALIEN_GAS missing");
+	TEST_REQUIRE(heavy->second->artifact && mini->second->artifact,
+	             "AG missiles must be artifacts");
+	TEST_REQUIRE(pod->second->artifact, "Brainsucker Pod must stay an artifact");
+	TEST_REQUIRE(heavyMfg->second->itemId == "AEQUIPMENTTYPE_HEAVY_LAUNCHER_AG_MISSILE",
+	             "heavy mfg itemIndex 19");
+	TEST_REQUIRE(miniMfg->second->itemId == "AEQUIPMENTTYPE_MINILAUNCHER_AG_MISSILE",
+	             "mini mfg itemIndex 23");
+	TEST_REQUIRE(
+	    hasExactDep(*heavyMfg->second, ResearchDependency::Type::All, {"RESEARCH_ALIEN_GAS"}),
+	    "heavy mfg lost techRequired 42");
+	TEST_REQUIRE(
+	    hasExactDep(*miniMfg->second, ResearchDependency::Type::All, {"RESEARCH_ALIEN_GAS"}),
+	    "mini mfg lost techRequired 42");
+	const auto gasProgress = gas->second->man_hours_progress;
+	const auto gasStarted = gas->second->started;
+	const bool savedHeavyUnhide = heavy->second->artifactUnhidden;
+	const bool savedMiniUnhide = mini->second->artifactUnhidden;
+	heavy->second->artifactUnhidden = false;
+	mini->second->artifactUnhidden = false;
+	gas->second->man_hours_progress = 0;
+	TEST_REQUIRE(!heavy->second->isEconomyVisible() && !mini->second->isEconomyVisible(),
+	             "AG missiles stay hidden before manufacture");
+	gas->second->forceComplete();
+	TEST_REQUIRE(!heavy->second->isEconomyVisible(),
+	             "Alien Gas research must not unhide Heavy AG Missile");
+	TEST_REQUIRE(!mini->second->isEconomyVisible(),
+	             "Alien Gas research must not unhide Mini AG Missile");
+	TEST_REQUIRE(!pod->second->isEconomyVisible(), "index 57 is never cleared");
+	heavy->second->clearEconomyHide();
+	TEST_REQUIRE(heavy->second->isEconomyVisible(),
+	             "manufacture itemIndex 19 must unhide Heavy AG Missile");
+	TEST_REQUIRE(!mini->second->isEconomyVisible(), "clearing 19 must not unhide 23");
+	mini->second->clearEconomyHide();
+	TEST_REQUIRE(mini->second->isEconomyVisible(),
+	             "manufacture itemIndex 23 must unhide Mini AG Missile");
+	TEST_REQUIRE(!pod->second->isEconomyVisible(), "index 57 stays hidden after AG manufacture");
+	heavy->second->artifactUnhidden = savedHeavyUnhide;
+	mini->second->artifactUnhidden = savedMiniUnhide;
+	gas->second->man_hours_progress = gasProgress;
+	gas->second->started = gasStarted;
+	TEST_REQUIRE(plasma->second->isEconomyVisible() == plasma->second->isResearched(),
+	             "non-artifact economy follows isResearched");
+	return true;
+}
+
+static bool test_aequip_market_week0()
+{
+	auto &state = *g_state;
+	// FUN_000811fc @ file 0xE3971 / 4-build 0xE39BC: shop hide is
+	// DAT_00183b3b only. economy_data3 week is 0 for AG 19/23, destab 37.
+	auto destab = state.agent_equipment.find("AEQUIPMENTTYPE_DIMENSION_DESTABILISER");
+	auto heavy = state.agent_equipment.find("AEQUIPMENTTYPE_HEAVY_LAUNCHER_AG_MISSILE");
+	auto pod = state.agent_equipment.find("AEQUIPMENTTYPE_BRAINSUCKER_POD");
+	auto destTopic = state.research.topics.find("RESEARCH_DIMENSION_DESTABILISER");
+	TEST_REQUIRE(destab != state.agent_equipment.end() && destab->second, "destab missing");
+	TEST_REQUIRE(heavy != state.agent_equipment.end() && heavy->second, "heavy AG missing");
+	TEST_REQUIRE(pod != state.agent_equipment.end() && pod->second, "pod missing");
+	TEST_REQUIRE(destTopic != state.research.topics.end() && destTopic->second,
+	             "destab topic missing");
+	auto destabEco = state.economy.find(destab->second->id);
+	auto heavyEco = state.economy.find(heavy->second->id);
+	auto podEco = state.economy.find(pod->second->id);
+	TEST_REQUIRE(destabEco != state.economy.end() && destabEco->second.weekAvailable == 0,
+	             "destab week must be 0");
+	TEST_REQUIRE(heavyEco != state.economy.end() && heavyEco->second.weekAvailable == 0,
+	             "heavy AG week must be 0");
+	TEST_REQUIRE(podEco != state.economy.end() && podEco->second.weekAvailable == 0,
+	             "pod week must be 0");
+
+	const auto destProgress = destTopic->second->man_hours_progress;
+	const auto destStarted = destTopic->second->started;
+	const bool savedHeavyUnhide = heavy->second->artifactUnhidden;
+	destTopic->second->man_hours_progress = 0;
+	destTopic->second->started = false;
+	heavy->second->artifactUnhidden = false;
+	TEST_REQUIRE(!destab->second->isMarketListed(state), "incomplete destab stays off market");
+	destTopic->second->forceComplete();
+	TEST_REQUIRE(destab->second->isEconomyVisible(), "same-name destab research unhides");
+	TEST_REQUIRE(destab->second->isMarketListed(state),
+	             "week 0 must not hide destab after FUN_000aac88");
+	TEST_REQUIRE(!heavy->second->isMarketListed(state), "AG stays hidden until manufacture");
+	heavy->second->clearEconomyHide();
+	TEST_REQUIRE(heavy->second->isMarketListed(state),
+	             "week 0 must not hide AG after FUN_000ab440 case 1");
+	TEST_REQUIRE(!pod->second->isMarketListed(state), "index 57 never lists");
+	heavy->second->artifactUnhidden = savedHeavyUnhide;
+	destTopic->second->man_hours_progress = destProgress;
+	destTopic->second->started = destStarted;
+	return true;
+}
+
+static bool test_vehicle_park_spawn()
+{
+	auto &state = *g_state;
+	// UFO2P vehicle_park_spawn_table @ 0x188F18 (40 IDs); caps @ 0x188FB8.
+	TEST_REQUIRE(state.vehicleParkSpawnTable.size() == 40, "spawn table size {0}",
+	             state.vehicleParkSpawnTable.size());
+	TEST_REQUIRE(state.vehicleParkSpawnTable[0].id == "VEHICLETYPE_PHOENIX_HOVERCAR",
+	             "civilian pool starts with Phoenix");
+	TEST_REQUIRE(state.vehicleParkSpawnTable[20].id == "VEHICLETYPE_POLICE_HOVERCAR",
+	             "Megapol pool starts with Police Hover");
+	TEST_REQUIRE(state.vehicleParkSpawnTable[39].id == "VEHICLETYPE_HAWK_AIR_WARRIOR",
+	             "index 39 is the dword FUN_000962cc reads past 0–38");
+	TEST_REQUIRE(state.vehicleParkSpawnCap["VEHICLETYPE_PHOENIX_HOVERCAR"] == 7, "Phoenix cap");
+	TEST_REQUIRE(state.vehicleParkSpawnCap["VEHICLETYPE_HAWK_AIR_WARRIOR"] == 2, "Hawk cap");
+	TEST_REQUIRE(state.vehicleParkSpawnCap["VEHICLETYPE_GRIFFON_AFV"] == 1, "Griffon cap");
+	TEST_REQUIRE(state.vehicleParkSpawnCap["VEHICLETYPE_POLICE_HOVERCAR"] == 15,
+	             "Police Hover cap");
+	auto mega = state.organisations.find("ORG_MEGAPOL");
+	TEST_REQUIRE(mega != state.organisations.end() && mega->second, "ORG_MEGAPOL missing");
+	TEST_REQUIRE(mega->second->exeOrgIndex == 3, "Megapol exe index {0}",
+	             mega->second->exeOrgIndex);
+	TEST_REQUIRE(mega->second->parkBudgetWeight == 55, "Megapol park scalar {0}",
+	             mega->second->parkBudgetWeight);
+	auto nutr = state.organisations.find("ORG_NUTRIVEND");
+	TEST_REQUIRE(nutr != state.organisations.end() && nutr->second, "ORG_NUTRIVEND missing");
+	TEST_REQUIRE(nutr->second->exeOrgIndex == 13, "Nutrivend exe index {0}",
+	             nutr->second->exeOrgIndex);
+	TEST_REQUIRE(nutr->second->parkBudgetWeight == 2, "Nutrivend park scalar {0}",
+	             nutr->second->parkBudgetWeight);
+	auto saved = nutr->second->current_relations;
+	const int savedBalance = nutr->second->balance;
+	nutr->second->current_relations.clear();
+	TEST_REQUIRE(nutr->second->parkHostileWeight(state) == 0, "cleared relations still hostile");
+	StateRef<Organisation> other{&state, "ORG_MEGAPOL"};
+	nutr->second->current_relations[other] = -50.0f;
+	TEST_REQUIRE(nutr->second->parkHostileWeight(state) == 2, "rel -50 must add 2");
+	nutr->second->current_relations[other] = -49.0f;
+	TEST_REQUIRE(nutr->second->parkHostileWeight(state) == 0, "rel -49 is not < -0x31");
+	nutr->second->balance = 100000;
+	nutr->second->current_relations.clear();
+	TEST_REQUIRE(nutr->second->parkPurchaseBudget(state) ==
+	                 (100000 * nutr->second->parkBudgetWeight) / 100,
+	             "budget is funds * (hostile + parkScalar) / 100");
+	nutr->second->current_relations = saved;
+	nutr->second->balance = savedBalance;
+	return true;
+}
+
+static bool test_ufopaedia_start_visible()
+{
+	auto &state = *g_state;
+	auto requireEntry = [&](const UString &id) -> sp<UfopaediaEntry>
+	{
+		auto it = state.ufopaedia_entries.find(id);
+		if (it == state.ufopaedia_entries.end())
+		{
+			return nullptr;
+		}
+		return it->second;
+	};
+
+	auto shield = requireEntry("PAEDIAENTRY_XCOM_BODY_SHIELD");
+	TEST_REQUIRE(shield, "PAEDIAENTRY_XCOM_BODY_SHIELD missing");
+	TEST_REQUIRE(shield->startVisibleFromExe, "ARMOUR3 catalog row must bind Body Shield");
+	TEST_REQUIRE(shield->startVisible, "ARMOUR3 start byte is 1");
+	TEST_REQUIRE(shield->isVisible(state), "FUN_0008903c start byte shows Body Shield");
+	TEST_REQUIRE(!shield->dependency.satisfied(), "Disruptor Armor research is not complete");
+
+	auto inc = requireEntry("PAEDIAENTRY_INCENDIARY_GRENADE");
+	TEST_REQUIRE(inc, "PAEDIAENTRY_INCENDIARY_GRENADE missing");
+	TEST_REQUIRE(inc->startVisibleFromExe, "W59 catalog row must bind Incendiary Grenade");
+	TEST_REQUIRE(!inc->startVisible, "W59 start byte is 0");
+	TEST_REQUIRE(!inc->isVisible(state), "empty dep must not show a start-hidden page");
+
+	auto destab = requireEntry("PAEDIAENTRY_DIMENSION_DESTABILISER");
+	TEST_REQUIRE(destab, "PAEDIAENTRY_DIMENSION_DESTABILISER missing");
+	TEST_REQUIRE(destab->startVisibleFromExe, "W37 catalog row must bind Destabiliser");
+	TEST_REQUIRE(!destab->startVisible, "W37 start byte is 0");
+	TEST_REQUIRE(!destab->isVisible(state), "Destabiliser stays research-gated");
+
+	auto bio = requireEntry("PAEDIAENTRY_BIO_TRANSPORT_MODULE");
+	TEST_REQUIRE(bio, "PAEDIAENTRY_BIO_TRANSPORT_MODULE missing");
+	TEST_REQUIRE(!bio->startVisible, "V32 start byte is 0");
+	TEST_REQUIRE(!bio->isVisible(state), "Bio-Transport Module stays research-gated");
+
+	auto lab = requireEntry("PAEDIAENTRY_BIOCHEMISTRY_LAB");
+	TEST_REQUIRE(lab, "PAEDIAENTRY_BIOCHEMISTRY_LAB missing");
+	TEST_REQUIRE(lab->startVisible && lab->isVisible(state), "Biochemistry Lab starts visible");
+
+	auto warehouse = requireEntry("PAEDIAENTRY_WAREHOUSE");
+	TEST_REQUIRE(warehouse, "PAEDIAENTRY_WAREHOUSE missing");
+	TEST_REQUIRE(!warehouse->startVisibleFromExe, "30warehs is not in the EXE catalog");
+	TEST_REQUIRE(warehouse->isVisible(state), "unmapped empty-dep building stays visible");
+
+	auto genetics = requireEntry("PAEDIAENTRY_THE_ALIEN_GENETIC_STRUCTURE");
+	TEST_REQUIRE(genetics, "PAEDIAENTRY_THE_ALIEN_GENETIC_STRUCTURE missing");
+	TEST_REQUIRE(!genetics->startVisibleFromExe,
+	             "genetics.pcx building row must not bind the research page");
+	TEST_REQUIRE(!genetics->isVisible(state), "Genetic Structure stays research-gated");
+	return true;
+}
+
+static bool test_ufopaedia_abf9c_unlock()
+{
+	auto &state = *g_state;
+	// FUN_000abf9c @ file 0xFE640: research_data (group, entry) sets the
+	// catalog start byte. Extra cat 3 0x1B → 0x13 + 0x17.
+	auto incubator = state.ufopaedia_entries.find("PAEDIAENTRY_INCUBATOR_CHAMBER");
+	auto sleeping = state.ufopaedia_entries.find("PAEDIAENTRY_SLEEPING_CHAMBER");
+	auto alienDim = state.ufopaedia_entries.find("PAEDIAENTRY_THE_ALIEN_DIMENSION");
+	auto gatesPage = state.ufopaedia_entries.find("PAEDIAENTRY_DIMENSION_GATES");
+	auto building0 = state.research.topics.find("RESEARCH_ALIEN_BUILDING_0");
+	auto gates = state.research.topics.find("RESEARCH_DIMENSION_GATES");
+	TEST_REQUIRE(incubator != state.ufopaedia_entries.end() && incubator->second,
+	             "incubator paedia missing");
+	TEST_REQUIRE(sleeping != state.ufopaedia_entries.end() && sleeping->second,
+	             "sleeping paedia missing");
+	TEST_REQUIRE(alienDim != state.ufopaedia_entries.end() && alienDim->second,
+	             "alien dimension paedia missing");
+	TEST_REQUIRE(gatesPage != state.ufopaedia_entries.end() && gatesPage->second,
+	             "dimension gates paedia missing");
+	TEST_REQUIRE(building0 != state.research.topics.end() && building0->second,
+	             "ALIEN_BUILDING_0 missing");
+	TEST_REQUIRE(gates != state.research.topics.end() && gates->second, "DIMENSION_GATES missing");
+	TEST_REQUIRE(building0->second->ufopaediaGroup == 8 && building0->second->ufopaediaEntry == 0,
+	             "BUILDING_0 catalog {0},{1}", building0->second->ufopaediaGroup,
+	             building0->second->ufopaediaEntry);
+	TEST_REQUIRE(gates->second->ufopaediaGroup == 8 && gates->second->ufopaediaEntry == 10,
+	             "GATES catalog {0},{1}", gates->second->ufopaediaGroup,
+	             gates->second->ufopaediaEntry);
+	TEST_REQUIRE(incubator->second->catalogCategory == 8 && incubator->second->catalogIndex == 0,
+	             "incubator bind {0},{1}", incubator->second->catalogCategory,
+	             incubator->second->catalogIndex);
+	TEST_REQUIRE(sleeping->second->catalogCategory == 8 && sleeping->second->catalogIndex == 4,
+	             "sleeping bind {0},{1}", sleeping->second->catalogCategory,
+	             sleeping->second->catalogIndex);
+	TEST_REQUIRE(alienDim->second->catalogCategory == 8 && alienDim->second->catalogIndex == 10,
+	             "alien dimension bind {0},{1}", alienDim->second->catalogCategory,
+	             alienDim->second->catalogIndex);
+
+	const auto b0Progress = building0->second->man_hours_progress;
+	const auto b0Started = building0->second->started;
+	const auto gatesProgress = gates->second->man_hours_progress;
+	const auto gatesStarted = gates->second->started;
+	const bool savedInc = incubator->second->startVisible;
+	const bool savedSleep = sleeping->second->startVisible;
+	const bool savedDim = alienDim->second->startVisible;
+	const bool savedGates = gatesPage->second->startVisible;
+	building0->second->man_hours_progress = 0;
+	building0->second->started = false;
+	gates->second->man_hours_progress = 0;
+	gates->second->started = false;
+	incubator->second->startVisible = false;
+	sleeping->second->startVisible = false;
+	alienDim->second->startVisible = false;
+	gatesPage->second->startVisible = false;
+
+	TEST_REQUIRE(!incubator->second->isVisible(state), "incubator starts hidden");
+	building0->second->forceComplete(&state);
+	TEST_REQUIRE(incubator->second->startVisible, "FUN_000abf9c must set incubator start byte");
+	TEST_REQUIRE(incubator->second->isVisible(state), "BUILDING_0 shows Incubator");
+	TEST_REQUIRE(!sleeping->second->startVisible && !sleeping->second->isVisible(state),
+	             "BUILDING_0 must not show Sleeping (catalog 8,4)");
+
+	TEST_REQUIRE(!alienDim->second->isVisible(state), "Alien Dimension starts hidden");
+	gates->second->forceComplete(&state);
+	TEST_REQUIRE(alienDim->second->startVisible, "FUN_000abf9c must set 11dimens start byte");
+	TEST_REQUIRE(alienDim->second->isVisible(state), "Dimension Gates research shows 11dimens");
+	TEST_REQUIRE(!gatesPage->second->startVisible, "Gates page is catalog 6,32 not 8,10");
+
+	incubator->second->startVisible = savedInc;
+	sleeping->second->startVisible = savedSleep;
+	alienDim->second->startVisible = savedDim;
+	gatesPage->second->startVisible = savedGates;
+	building0->second->man_hours_progress = b0Progress;
+	building0->second->started = b0Started;
+	gates->second->man_hours_progress = gatesProgress;
+	gates->second->started = gatesStarted;
+	return true;
+}
+
+static bool test_ufopaedia_economy_hide()
+{
+	auto &state = *g_state;
+	// FUN_0008c860 @ file 0xEEF04 (4-build case 2/3 @ 0xEF2C8 / 0xEF2D6):
+	// catalog type 2 reads DAT_00183b3b, type 3 reads DAT_00183b0a.
+	auto heavyPage = state.ufopaedia_entries.find("PAEDIAENTRY_HEAVY_LAUNCHER_AG_MISSILE");
+	auto miniPage = state.ufopaedia_entries.find("PAEDIAENTRY_MINILAUNCHER_AG_MISSILE");
+	auto shieldPage = state.ufopaedia_entries.find("PAEDIAENTRY_SMALL_DISRUPTION_SHIELD");
+	auto warehouse = state.ufopaedia_entries.find("PAEDIAENTRY_WAREHOUSE");
+	auto heavy = state.agent_equipment.find("AEQUIPMENTTYPE_HEAVY_LAUNCHER_AG_MISSILE");
+	auto mini = state.agent_equipment.find("AEQUIPMENTTYPE_MINILAUNCHER_AG_MISSILE");
+	auto shield = state.vehicle_equipment.find("VEQUIPMENTTYPE_SMALL_DISRUPTION_SHIELD");
+	auto gas = state.research.topics.find("RESEARCH_ALIEN_GAS");
+	auto shieldTopic = state.research.topics.find("RESEARCH_SMALL_DISRUPTION_SHIELD");
+	TEST_REQUIRE(heavyPage != state.ufopaedia_entries.end() && heavyPage->second,
+	             "heavy AG paedia missing");
+	TEST_REQUIRE(miniPage != state.ufopaedia_entries.end() && miniPage->second,
+	             "mini AG paedia missing");
+	TEST_REQUIRE(shieldPage != state.ufopaedia_entries.end() && shieldPage->second,
+	             "shield paedia missing");
+	TEST_REQUIRE(warehouse != state.ufopaedia_entries.end() && warehouse->second,
+	             "warehouse paedia missing");
+	TEST_REQUIRE(heavy != state.agent_equipment.end() && heavy->second, "heavy AG missing");
+	TEST_REQUIRE(mini != state.agent_equipment.end() && mini->second, "mini AG missing");
+	TEST_REQUIRE(shield != state.vehicle_equipment.end() && shield->second, "small shield missing");
+	TEST_REQUIRE(gas != state.research.topics.end() && gas->second, "ALIEN_GAS missing");
+	TEST_REQUIRE(shieldTopic != state.research.topics.end() && shieldTopic->second,
+	             "shield research missing");
+
+	const auto gasProgress = gas->second->man_hours_progress;
+	const auto gasStarted = gas->second->started;
+	const auto shieldProgress = shieldTopic->second->man_hours_progress;
+	const auto shieldStarted = shieldTopic->second->started;
+	const bool savedHeavyUnhide = heavy->second->artifactUnhidden;
+	const bool savedMiniUnhide = mini->second->artifactUnhidden;
+	const bool savedShieldUnhide = shield->second->economyUnhidden;
+	heavy->second->artifactUnhidden = false;
+	mini->second->artifactUnhidden = false;
+	shield->second->economyUnhidden = false;
+	gas->second->man_hours_progress = 0;
+	gas->second->started = false;
+	shieldTopic->second->man_hours_progress = 0;
+	shieldTopic->second->started = false;
+
+	TEST_REQUIRE(warehouse->second->isVisible(state), "Warehouse is not hide-gated");
+	gas->second->forceComplete(&state);
+	TEST_REQUIRE(!heavyPage->second->isVisible(state) && !miniPage->second->isVisible(state),
+	             "FUN_0008c860 case 2 keeps AG pages hidden after Alien Gas");
+	heavy->second->clearEconomyHide();
+	mini->second->clearEconomyHide();
+	TEST_REQUIRE(heavyPage->second->isVisible(state) && miniPage->second->isVisible(state),
+	             "type-1 manufacture must show AG paedia");
+
+	shieldTopic->second->forceComplete(&state);
+	TEST_REQUIRE(!shieldPage->second->isVisible(state),
+	             "FUN_0008c860 case 3 keeps Small Shield paedia hidden after research");
+	shield->second->clearEconomyHide();
+	TEST_REQUIRE(shieldPage->second->isVisible(state),
+	             "type-0 manufacture must show Small Shield paedia");
+
+	heavy->second->artifactUnhidden = savedHeavyUnhide;
+	mini->second->artifactUnhidden = savedMiniUnhide;
+	shield->second->economyUnhidden = savedShieldUnhide;
+	gas->second->man_hours_progress = gasProgress;
+	gas->second->started = gasStarted;
+	shieldTopic->second->man_hours_progress = shieldProgress;
+	shieldTopic->second->started = shieldStarted;
+	return true;
+}
+
+static bool test_vequip_economy_hide()
+{
+	auto &state = *g_state;
+	// FUN_00014854 @ file 0x77116: DAT_00183b0a[i] = (economy week == 0), 49
+	// entries. FUN_000ab440 case 0 @ file 0x10DC0D / 4-build 0x10E481 clears
+	// hide[itemIndex]. Small Disruption Shield is vequip 44, mfg rec 16.
+	auto shield = state.vehicle_equipment.find("VEQUIPMENTTYPE_SMALL_DISRUPTION_SHIELD");
+	auto bolter = state.vehicle_equipment.find("VEQUIPMENTTYPE_BOLTER_4000_LASER_GUN");
+	auto mfg = state.research.topics.find("MANUFACTURE_SMALL_DISRUPTION_SHIELD");
+	auto topic = state.research.topics.find("RESEARCH_SMALL_DISRUPTION_SHIELD");
+	TEST_REQUIRE(shield != state.vehicle_equipment.end() && shield->second, "small shield missing");
+	TEST_REQUIRE(bolter != state.vehicle_equipment.end() && bolter->second, "bolter missing");
+	TEST_REQUIRE(mfg != state.research.topics.end() && mfg->second, "shield mfg missing");
+	TEST_REQUIRE(topic != state.research.topics.end() && topic->second, "shield research missing");
+	TEST_REQUIRE(mfg->second->itemId == "VEQUIPMENTTYPE_SMALL_DISRUPTION_SHIELD",
+	             "mfg itemIndex 44");
+	TEST_REQUIRE(mfg->second->item_type == ResearchTopic::ItemType::VehicleEquipment, "mfg type 0");
+	auto shieldEco = state.economy.find(shield->second->id);
+	auto bolterEco = state.economy.find(bolter->second->id);
+	TEST_REQUIRE(shieldEco != state.economy.end(), "small shield economy missing");
+	TEST_REQUIRE(bolterEco != state.economy.end(), "bolter economy missing");
+	TEST_REQUIRE(shieldEco->second.weekAvailable == 0, "shield week must be 0");
+	TEST_REQUIRE(bolterEco->second.weekAvailable == 1, "bolter week must be 1");
+
+	const bool savedUnhide = shield->second->economyUnhidden;
+	const bool savedBolterUnhide = bolter->second->economyUnhidden;
+	const auto savedProgress = topic->second->man_hours_progress;
+	const auto savedStarted = topic->second->started;
+	shield->second->economyUnhidden = false;
+	bolter->second->economyUnhidden = false;
+	topic->second->man_hours_progress = 0;
+	topic->second->started = false;
+	TEST_REQUIRE(!shield->second->isEconomyVisible(state), "week 0 stays hidden");
+	topic->second->forceComplete();
+	TEST_REQUIRE(!shield->second->isEconomyVisible(state),
+	             "research complete must not clear DAT_00183b0a");
+	shield->second->clearEconomyHide();
+	TEST_REQUIRE(shield->second->isEconomyVisible(state),
+	             "type-0 manufacture must unhide Small Disruption Shield");
+	TEST_REQUIRE(bolter->second->isEconomyVisible(state) ==
+	                 bolter->second->research_dependency.satisfied(),
+	             "week 1 must not need manufacture unhide");
+	shield->second->economyUnhidden = savedUnhide;
+	bolter->second->economyUnhidden = savedBolterUnhide;
+	topic->second->man_hours_progress = savedProgress;
+	topic->second->started = savedStarted;
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	config().addPositionalArgument("common", "Common gamestate to load");
@@ -1009,16 +2424,37 @@ int main(int argc, char **argv)
 	    {"infiltration_display_percent", test_infiltration_display_percent},
 	    {"ufo_growth_rates_match_exe", test_ufo_growth_rates_match_exe},
 	    {"manufacture_dimension_probe", test_manufacture_dimension_probe},
-	    {"advanced_quantum_lab_any", test_advanced_quantum_lab_any},
+	    {"research_prereq_all_graphs", test_research_prereq_all_graphs},
+	    {"research_prereq_unknown2_any", test_research_prereq_unknown2_any},
+	    {"research_prereq_unknown1_any", test_research_prereq_unknown1_any},
+	    {"research_aa7a8_hardcoded_gates", test_research_aa7a8_hardcoded_gates},
 	    {"alien_building4_keeps_table_prereq", test_alien_building4_keeps_table_prereq},
+	    {"alien_building_exe_rows", test_alien_building_exe_rows},
 	    {"manufacture_type02_ammo_ids", test_manufacture_type02_ammo_ids},
+	    {"manufacture_disruptor_armor_ids", test_manufacture_disruptor_armor_ids},
 	    {"craft_ammo_manufacturers", test_craft_ammo_manufacturers},
+	    {"craft_ammo_economy_ids", test_craft_ammo_economy_ids},
+	    {"vehicle_equipment_ammo_types", test_vehicle_equipment_ammo_types},
+	    {"disruptor_multibomb_fragment", test_disruptor_multibomb_fragment},
+	    {"dimension_probe_manufacturer", test_dimension_probe_manufacturer},
 	    {"research_item_prereq_gates", test_research_item_prereq_gates},
 	    {"ufopaedia_alien_craft_group", test_ufopaedia_alien_craft_group},
 	    {"organic_factory_gates_ufo_growth", test_organic_factory_gates_ufo_growth},
 	    {"ufo_incursion_table", test_ufo_incursion_table},
+	    {"ufo_incursion_spawn_xy", test_ufo_incursion_spawn_xy},
+	    {"ufo_incursion_follow_type", test_ufo_incursion_follow_type},
 	    {"militarized_from_org_type", test_militarized_from_org_type},
 	    {"nearby_intact_buildings", test_nearby_intact_buildings},
 	    {"unmanned_ufo_loot", test_unmanned_ufo_loot},
+	    {"cequip_score_req", test_cequip_score_req},
+	    {"aequip_artifact_and_resist", test_aequip_artifact_and_resist},
+	    {"aequip_market_week0", test_aequip_market_week0},
+	    {"vequip_economy_hide", test_vequip_economy_hide},
+	    {"vehicle_park_spawn", test_vehicle_park_spawn},
+	    {"ufopaedia_start_visible", test_ufopaedia_start_visible},
+	    {"ufopaedia_economy_hide", test_ufopaedia_economy_hide},
+	    {"ufopaedia_abf9c_unlock", test_ufopaedia_abf9c_unlock},
+	    {"org_raid_loot_table", test_org_raid_loot_table},
+	    {"org_extracted_scalars", test_org_extracted_scalars},
 	});
 }

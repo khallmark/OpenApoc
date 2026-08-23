@@ -31,6 +31,7 @@
 #include "game/state/city/vequipment.h"
 #include "game/state/gameevent.h"
 #include "game/state/gamestate.h"
+#include "game/state/gametime.h"
 #include "game/state/message.h"
 #include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/battle/battlemap.h"
@@ -507,7 +508,7 @@ void CityView::showWeeklyFundingReport()
 
 void CityView::tryOpenUfopaediaEntry(StateRef<UfopaediaEntry> ufopaediaEntry)
 {
-	if (ufopaediaEntry && ufopaediaEntry->dependency.satisfied())
+	if (ufopaediaEntry && ufopaediaEntry->isVisible(*this->state))
 	{
 		sp<UfopaediaCategory> ufopaedia_category;
 		for (auto &cat : this->state->ufopaedia)
@@ -2110,11 +2111,7 @@ void CityView::update()
 
 	if (this->updateSpeed == CityUpdateSpeed::Speed1)
 	{
-		skipSpeed1Tick = !skipSpeed1Tick;
-		if (skipSpeed1Tick)
-		{
-			ticks = 0;
-		}
+		ticks = vanillaCitySpeed1Ticks(ticks, skipSpeed1Tick);
 	}
 
 	if (turbo)
@@ -3037,7 +3034,7 @@ void CityView::update()
 			{
 				const auto selectedVehicleIsUnresearchedUfo =
 				    selectedVehicle->owner == state->getAliens() &&
-				    !selectedVehicle->type->ufopaedia_entry->dependency.satisfied();
+				    !selectedVehicle->type->ufopaedia_entry->isVisible(*state);
 
 				const auto vehicleDisplayName =
 				    selectedVehicleIsUnresearchedUfo ? tr("UFO") : selectedVehicle->name;
@@ -4105,7 +4102,7 @@ bool CityView::handleGameStateEvent(Event *e)
 				                                    gameRecoveryEvent->actor));
 				for (auto &u : gameRecoveryEvent->vehicle->type->researchUnlock)
 				{
-					u->forceComplete();
+					u->forceComplete(state.get());
 				}
 			}
 			break;

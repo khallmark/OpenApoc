@@ -528,10 +528,13 @@ VehicleMission VehicleMission::selfDestruct(GameState &state, Vehicle &v)
 	return mission;
 }
 
-VehicleMission VehicleMission::arriveFromDimensionGate(GameState &state, Vehicle &v, int ticks)
+VehicleMission VehicleMission::arriveFromDimensionGate(GameState &state, Vehicle &v, int ticks,
+                                                       int zoneMode, int scatter)
 {
 	VehicleMission mission;
 	mission.type = MissionType::ArriveFromDimensionGate;
+	mission.incursionZoneMode = zoneMode;
+	mission.incursionScatter = scatter;
 	// find max delay arrival and increment
 	int lastTicks = -DIMENSION_GATE_DELAY;
 	for (auto &v2 : state.vehicles)
@@ -2586,6 +2589,10 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 					{
 						v.addMission(state, VehicleMission::gotoBuilding(state, v));
 					}
+					else if (incursionZoneMode >= 0)
+					{
+						takeIncursionSpawnPosition(state, v, incursionZoneMode, incursionScatter);
+					}
 					else
 					{
 						takePositionNearPortal(state, v);
@@ -3043,6 +3050,200 @@ void VehicleMission::updateTimer(unsigned ticks)
 		this->timeToSnooze = 0;
 	else
 		this->timeToSnooze -= ticks;
+}
+
+namespace
+{
+
+// FUN_0005d1d8 @ VA 0x5D1D8 / file 0x4D1D7: EAX = n, return uniform [0, n].
+int incursionRand16(GameState &state, int n)
+{
+	if (n < 0)
+	{
+		return 0;
+	}
+	return randBoundsInclusive(state.rng, 0, n);
+}
+
+// FUN_0003b724 clamp: 100 is kept; only values > 100 become 99.
+int clampIncursionTile(int value)
+{
+	if (value < 0)
+	{
+		return 0;
+	}
+	if (value > 100)
+	{
+		return 99;
+	}
+	return value;
+}
+
+bool acceptIncursionZone0(int x, int y)
+{
+	if (x < 0 || x > 100 || y < 0 || y > 100)
+	{
+		return false;
+	}
+	if (x > 10 && x < 90 && y > 10 && y < 90)
+	{
+		return false;
+	}
+	return true;
+}
+
+bool acceptIncursionZone1(int x, int y)
+{
+	if (x < 10 || x > 90 || y < 10 || y > 90)
+	{
+		return false;
+	}
+	if (x > 25 && x < 75 && y > 25 && y < 75)
+	{
+		return false;
+	}
+	return true;
+}
+
+bool acceptIncursionZone2(int x, int y) { return x >= 25 && x <= 75 && y >= 25 && y <= 75; }
+
+void fallbackIncursionZone0(GameState &state, int &x, int &y)
+{
+	const int bucket = incursionRand16(state, 20);
+	if (bucket <= 5)
+	{
+		x = incursionRand16(state, 100);
+		y = incursionRand16(state, 10);
+	}
+	else if (bucket <= 10)
+	{
+		x = incursionRand16(state, 100);
+		y = 100 - incursionRand16(state, 10);
+	}
+	else if (bucket <= 15)
+	{
+		x = 100 - incursionRand16(state, 10);
+		y = incursionRand16(state, 100);
+	}
+	else
+	{
+		x = incursionRand16(state, 10);
+		y = incursionRand16(state, 100);
+	}
+}
+
+void fallbackIncursionZone1(GameState &state, int &x, int &y)
+{
+	const int bucket = incursionRand16(state, 20);
+	if (bucket <= 5)
+	{
+		x = incursionRand16(state, 80) + 10;
+		y = incursionRand16(state, 15) + 10;
+	}
+	else if (bucket <= 10)
+	{
+		x = incursionRand16(state, 80) + 10;
+		y = 90 - incursionRand16(state, 15);
+	}
+	else if (bucket <= 15)
+	{
+		x = 90 - incursionRand16(state, 15);
+		y = incursionRand16(state, 80) + 10;
+	}
+	else
+	{
+		x = incursionRand16(state, 15) + 10;
+		y = incursionRand16(state, 80) + 10;
+	}
+}
+
+} // namespace
+
+Vec2<int> VehicleMission::computeIncursionSpawnXY(GameState &state, int baseX, int baseY,
+                                                  int zoneMode, int scatter, bool alienCity)
+{
+	// UFO2P non-4 FUN_0003b724 @ VA 0x3B724 / file 0x2B723 (ISO CRC 0x4749ffc1).
+	// Main-loop EAX is scatter*2 (listing 0x2B738). Fallback maxes from 0x2B7AF / 0x2B8B8 /
+	// 0x2B9A4.
+	int x = baseX;
+	int y = baseY;
+	bool accepted = false;
+	for (int attempt = 1; attempt <= 11; attempt++)
+	{
+		x = baseX + incursionRand16(state, scatter * 2) - scatter;
+		y = baseY + incursionRand16(state, scatter * 2) - scatter;
+		if (attempt > 10)
+		{
+			break;
+		}
+		if (zoneMode == 0)
+		{
+			accepted = acceptIncursionZone0(x, y);
+		}
+		else if (zoneMode == 1)
+		{
+			accepted = acceptIncursionZone1(x, y);
+		}
+		else
+		{
+			accepted = acceptIncursionZone2(x, y);
+		}
+		if (accepted)
+		{
+			break;
+		}
+	}
+	if (!accepted)
+	{
+		if (zoneMode == 0)
+		{
+			fallbackIncursionZone0(state, x, y);
+		}
+		else if (zoneMode == 1)
+		{
+			fallbackIncursionZone1(state, x, y);
+		}
+		else
+		{
+			x = incursionRand16(state, 50) + 25;
+			y = incursionRand16(state, 50) + 25;
+		}
+	}
+	x = clampIncursionTile(x);
+	y = clampIncursionTile(y);
+	// DAT_000d5060 == 1 (alien city): overwrite, no re-clamp.
+	if (alienCity)
+	{
+		x = incursionRand16(state, 0x6e) - 10;
+		y = incursionRand16(state, 0x6e) - 10;
+	}
+	return {x, y};
+}
+
+int VehicleMission::clampIncursionScatter(int scatter, int typePercent)
+{
+	// FUN_0006da88 @ file 0x5DB80: CMP AX,0x32; scatter==15 → 10.
+	if (typePercent > 50 && scatter == 15)
+	{
+		return 10;
+	}
+	return scatter;
+}
+
+int VehicleMission::incursionTypeThreshold(int constitution, int typePercent)
+{
+	// FUN_0006da88 @ file 0x5DBBF: (instance +0x12e constitution) * type_percent / 100.
+	return (constitution * typePercent) / 100;
+}
+
+void VehicleMission::takeIncursionSpawnPosition(GameState &state, Vehicle &v, int zoneMode,
+                                                int scatter)
+{
+	const int baseX = static_cast<int>(v.position.x);
+	const int baseY = static_cast<int>(v.position.y);
+	const auto xy = computeIncursionSpawnXY(state, baseX, baseY, zoneMode, scatter,
+	                                        v.city && v.city.id == "CITYMAP_ALIEN");
+	v.addMission(state, VehicleMission::gotoLocation(state, v, v.getPreferredPosition(xy.x, xy.y)));
 }
 
 void VehicleMission::takePositionNearPortal(GameState &state, Vehicle &v)

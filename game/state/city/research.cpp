@@ -9,6 +9,7 @@
 #include "game/state/gameevent.h"
 #include "game/state/gamestate.h"
 #include "game/state/rules/aequipmenttype.h"
+#include "game/state/rules/city/ufopaedia.h"
 #include "game/state/rules/city/vammotype.h"
 #include "game/state/rules/city/vehicletype.h"
 #include "game/state/rules/city/vequipmenttype.h"
@@ -24,10 +25,50 @@ bool ResearchTopic::isComplete() const
 	       (this->man_hours_progress >= this->man_hours);
 }
 
-void ResearchTopic::forceComplete()
+void ResearchTopic::forceComplete(GameState *state)
 {
 	man_hours_progress = man_hours;
 	started = true;
+	if (state)
+	{
+		unlockUfopaediaPages(*state);
+	}
+}
+
+void ResearchTopic::unlockUfopaediaPages(GameState &state) const
+{
+	// FUN_000abf9c @ VA 0xABF9C / file 0xFE640: set DAT_001302c6[row] = 1
+	// when catalog (char)packed == group and packed>>16 == entry.
+	// Extra: cat 3 idx 0x21 also unlocks 0x22; cat 3 idx 0x1B unlocks 0x13
+	// and 0x17.
+	auto unlock = [&](unsigned category, unsigned index)
+	{
+		if (index == 0xFFFF)
+		{
+			return;
+		}
+		for (auto &pair : state.ufopaedia_entries)
+		{
+			if (!pair.second || pair.second->catalogIndex == 0xFFFF)
+			{
+				continue;
+			}
+			if (pair.second->catalogCategory == category && pair.second->catalogIndex == index)
+			{
+				pair.second->startVisible = true;
+			}
+		}
+	};
+	unlock(ufopaediaGroup, ufopaediaEntry);
+	if (ufopaediaGroup == 3 && ufopaediaEntry == 0x21)
+	{
+		unlock(3, 0x22);
+	}
+	if (ufopaediaGroup == 3 && ufopaediaEntry == 0x1B)
+	{
+		unlock(3, 0x13);
+		unlock(3, 0x17);
+	}
 }
 
 bool ResearchDependency::satisfied() const
@@ -65,27 +106,50 @@ bool ResearchDependency::satisfied() const
 
 bool ItemDependency::satisfied(StateRef<Base> base) const
 {
-	for (auto &e : agentItemsRequired)
+	auto agentHeld = [&](const std::pair<const StateRef<AEquipmentType>, int> &e) -> bool
 	{
 		int mult = e.first->type == AEquipmentType::Type::Ammo ? e.first->max_ammo : 1;
 		if (e.first->bioStorage)
 		{
-			if (base->inventoryBioEquipment[e.first.id] < e.second * mult)
+			return base->inventoryBioEquipment[e.first.id] >= e.second * mult;
+		}
+		return base->inventoryAgentEquipment[e.first.id] >= e.second * mult;
+	};
+	auto vehicleHeld = [&](const std::pair<const StateRef<VEquipmentType>, int> &e) -> bool
+	{ return base->inventoryVehicleEquipment[e.first.id] >= e.second; };
+
+	if (type == Type::Any)
+	{
+		if (agentItemsRequired.empty() && vehicleItemsRequired.empty())
+		{
+			return true;
+		}
+		for (auto &e : agentItemsRequired)
+		{
+			if (agentHeld(e))
 			{
-				return false;
+				return true;
 			}
 		}
-		else
+		for (auto &e : vehicleItemsRequired)
 		{
-			if (base->inventoryAgentEquipment[e.first.id] < e.second * mult)
+			if (vehicleHeld(e))
 			{
-				return false;
+				return true;
 			}
+		}
+		return false;
+	}
+	for (auto &e : agentItemsRequired)
+	{
+		if (!agentHeld(e))
+		{
+			return false;
 		}
 	}
 	for (auto &e : vehicleItemsRequired)
 	{
-		if (base->inventoryVehicleEquipment[e.first.id] < e.second)
+		if (!vehicleHeld(e))
 		{
 			return false;
 		}
@@ -421,6 +485,7 @@ void Lab::update(unsigned int ticks, StateRef<Lab> lab, sp<GameState> state)
 				lab->current_project->man_hours_progress += progress_hours;
 				if (lab->current_project->isComplete())
 				{
+					lab->current_project->unlockUfopaediaPages(*state);
 					// Produce a research remains item
 					StateRef<Base> thisBase;
 					for (auto &base : state->player_bases)
@@ -516,6 +581,9 @@ void Lab::update(unsigned int ticks, StateRef<Lab> lab, sp<GameState> state)
 										    base.second->inventoryVehicleEquipment
 										        [lab->current_project->itemId] +
 										    1;
+										StateRef<VEquipmentType> produced{
+										    state.get(), lab->current_project->itemId};
+										produced->clearEconomyHide();
 									}
 									break;
 									case ResearchTopic::ItemType::VehicleEquipmentAmmo:
@@ -543,6 +611,7 @@ void Lab::update(unsigned int ticks, StateRef<Lab> lab, sp<GameState> state)
 										    base.second->inventoryAgentEquipment
 										        [lab->current_project->itemId] +
 										    count;
+										type->clearEconomyHide();
 									}
 									break;
 									case ResearchTopic::ItemType::Craft:

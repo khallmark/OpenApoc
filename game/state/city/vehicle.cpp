@@ -3843,13 +3843,17 @@ void Vehicle::equipDefaultEquipment(GameState &state)
 		auto &pos = pair.first;
 		auto &etype = pair.second;
 
-		if (alien && state.totalScore.craftShotDownUFO < etype->scoreRequirement)
+		if (alien &&
+		    state.totalScore.craftShotDownUFO < etype->scoreRequirementFor(state.difficulty))
 		{
 			continue;
 		}
 		loot.push_back(etype);
 		auto eq = this->addEquipment(state, pos, etype);
-		eq->ammo = eq->type->max_ammo;
+		if (eq)
+		{
+			eq->ammo = eq->type->max_ammo;
+		}
 	}
 	shield = getMaxShield();
 	health = getMaxHealth();

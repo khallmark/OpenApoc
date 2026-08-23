@@ -117,6 +117,26 @@ bool BattleItem::applyDamage(GameState &state, int power, StateRef<DamageType> d
 	return false;
 }
 
+void BattleItem::applyFireHazard(GameState &state, int powerByte)
+{
+	if (!item || !item->type)
+	{
+		return;
+	}
+	// FUN_0007c110: skip on 0; HP -= signed delta; destroy when HP < 1.
+	const int delta = item->type->fireHazardDamage(powerByte);
+	if (delta == 0)
+	{
+		return;
+	}
+	item->armor -= delta;
+	if (item->armor < 1)
+	{
+		item->armor = 0;
+		die(state);
+	}
+}
+
 void BattleItem::setPosition(const Vec3<float> &pos)
 {
 	this->position = pos;

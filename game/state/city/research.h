@@ -24,6 +24,13 @@ class ItemDependency
 {
   public:
 	ItemDependency() = default;
+	enum class Type
+	{
+		Any,
+		All,
+	};
+	// FUN_000aa7a8 unknown1: 0 All, 1 Any of up to three typed item gates.
+	Type type = Type::All;
 	std::map<StateRef<AEquipmentType>, int> agentItemsRequired;
 	std::map<StateRef<VEquipmentType>, int> vehicleItemsRequired;
 	std::map<StateRef<AEquipmentType>, int> agentItemsConsumed;
@@ -80,13 +87,18 @@ class ResearchTopic : public StateObject<ResearchTopic>
 	unsigned man_hours_progress = 0;
 	// This is the entry that gets shown when you press "Yes" when asked to view
 	StateRef<UfopaediaEntry> ufopaedia_entry;
+	// research_data +25/+26. FUN_000abf9c @ file 0xFE640 matches catalog
+	// (category, entry). 0xFF / 0xFFFF = no page.
+	unsigned ufopaediaGroup = 0xFF;
+	unsigned ufopaediaEntry = 0xFFFF;
 	StateRef<Lab> current_lab;
 	unsigned score = 0;
 	sp<Image> picture;
 	bool started = false;
 	bool isComplete() const;
 	bool hidden = false;
-	void forceComplete();
+	void forceComplete(GameState *state = nullptr);
+	void unlockUfopaediaPages(GameState &state) const;
 
 	// Manufacture only
 	int cost = 0;

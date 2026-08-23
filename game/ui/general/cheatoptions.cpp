@@ -129,7 +129,7 @@ void CheatOptions::eventOccurred(Event *e)
 				}
 				else
 				{
-					topic->forceComplete();
+					topic->forceComplete(this->state.get());
 					LogWarning("Topic \"{0}\" marked as complete", r.first);
 				}
 			}

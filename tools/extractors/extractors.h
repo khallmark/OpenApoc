@@ -49,8 +49,17 @@ class InitialGameStateExtractor
 	InitialGameStateExtractor() = default;
 	void extractCommon(GameState &state) const;
 	void extract(GameState &state, Difficulty difficulty) const;
-	// After common_patch: overlay EXE org indices onto existing VAmmoType keys.
+	// After common_patch: overlay EXE org indices onto existing VAmmoType keys
+	// and move economy_data2 onto those IDs (patch may fold '-' to '_').
 	void applyCraftAmmoManufacturers(GameState &state) const;
+	// After common_patch: vehicle_equipment.ammo_type → craft_ammo_names.
+	void applyVehicleEquipmentAmmoTypes(GameState &state) const;
+	// After common_patch: overlay vehicle_weapons[split_idx] onto fragment types.
+	void applyVehicleEquipmentSplitWeapons(GameState &state) const;
+	// After common_patch: catalog @ 0x1910A2 + start bytes @ 0x19196A → startVisible.
+	void applyUfopaediaStartVisible(GameState &state) const;
+	// After common_patch: FUN_000aa7a8 hardcoded topic loops (records 37 / 38 / 44).
+	void applyAa7a8HardcodedGates(GameState &state) const;
 	// Re-write list tables after loadGame so a leftover section file cannot append.
 	void reapplyExeListTables(GameState &state) const;
 	// Re-extract EXE list tables after loadGame (serialize appends vectors / lists).
@@ -112,6 +121,8 @@ class InitialGameStateExtractor
 	void extractUfoGrowth(GameState &state) const;
 	void extractUfoIncursions(GameState &state) const;
 	void extractUfoMissionPreference(GameState &state) const;
+	void extractVehicleParkSpawnTable(GameState &state) const;
+	void extractFireHazardPowerTable(GameState &state) const;
 
 	void extractBattlescapeMap(GameState &state, const std::vector<OpenApoc::UString> &paths) const;
 	void extractBattlescapeMapFromPath(GameState &state, const UString dirName,

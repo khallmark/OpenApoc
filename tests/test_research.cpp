@@ -1,6 +1,8 @@
 #include "framework/configfile.h"
+#include "game/state/city/base.h"
 #include "game/state/city/research.h"
 #include "game/state/gamestate.h"
+#include "game/state/rules/city/vequipmenttype.h"
 #include "library/sp.h"
 #include "tests/test_helpers.h"
 #include "tools/extractors/common/exe_slide.h"
@@ -92,6 +94,34 @@ static bool test_research_dependency()
 	return true;
 }
 
+static bool test_item_dependency_any()
+{
+	GameState state;
+	auto light = mksp<VEquipmentType>();
+	light->id = "VEQUIPMENTTYPE_LIGHT";
+	state.vehicle_equipment["VEQUIPMENTTYPE_LIGHT"] = light;
+	auto heavy = mksp<VEquipmentType>();
+	heavy->id = "VEQUIPMENTTYPE_HEAVY";
+	state.vehicle_equipment["VEQUIPMENTTYPE_HEAVY"] = heavy;
+	auto base = mksp<Base>();
+	state.player_bases["BASE_TEST"] = base;
+	StateRef<Base> baseRef{&state, "BASE_TEST"};
+	base->inventoryVehicleEquipment["VEQUIPMENTTYPE_HEAVY"] = 1;
+
+	ItemDependency any;
+	any.type = ItemDependency::Type::Any;
+	any.vehicleItemsRequired[{&state, UString("VEQUIPMENTTYPE_LIGHT")}] = 1;
+	any.vehicleItemsRequired[{&state, UString("VEQUIPMENTTYPE_HEAVY")}] = 1;
+	TEST_REQUIRE(any.satisfied(baseRef), "Any should be true when Heavy is held");
+
+	ItemDependency all;
+	all.type = ItemDependency::Type::All;
+	all.vehicleItemsRequired[{&state, UString("VEQUIPMENTTYPE_LIGHT")}] = 1;
+	all.vehicleItemsRequired[{&state, UString("VEQUIPMENTTYPE_HEAVY")}] = 1;
+	TEST_REQUIRE(!all.satisfied(baseRef), "All should be false when Light is missing");
+	return true;
+}
+
 static bool test_exe_slide_crcs()
 {
 	int32_t slide = -1;
@@ -110,6 +140,43 @@ static bool test_exe_slide_crcs()
 	return true;
 }
 
+static bool test_alien_lifeform_prereq_ids()
+{
+	// UFO2P non-4 research_data type 3: 15 live slots, dead = live+15.
+	TEST_REQUIRE(ufo2pAlienLifeformItemId(0) == "AEQUIPMENTTYPE_MULTIWORM_EGG_ALIVE", "slot 0");
+	TEST_REQUIRE(ufo2pAlienLifeformItemId(1) == "AEQUIPMENTTYPE_BRAINSUCKER_ALIVE", "slot 1");
+	TEST_REQUIRE(ufo2pAlienLifeformItemId(12) == "AEQUIPMENTTYPE_MICRONOID_AGGREGATE_ALIVE",
+	             "slot 12");
+	TEST_REQUIRE(ufo2pAlienLifeformItemId(13) == "AEQUIPMENTTYPE_BRAINSUCKER_POD", "slot 13");
+	TEST_REQUIRE(ufo2pAlienLifeformItemId(14) == "AEQUIPMENTTYPE_OVERSPAWN_ALIVE", "slot 14");
+	TEST_REQUIRE(ufo2pAlienLifeformItemId(15) == "AEQUIPMENTTYPE_MULTIWORM_EGG_DEAD", "dead 0");
+	TEST_REQUIRE(ufo2pAlienLifeformItemId(16) == "AEQUIPMENTTYPE_BRAINSUCKER_DEAD", "dead 1");
+	TEST_REQUIRE(ufo2pAlienLifeformItemId(27) == "AEQUIPMENTTYPE_MICRONOID_AGGREGATE_DEAD",
+	             "dead 12");
+	TEST_REQUIRE(ufo2pAlienLifeformItemId(28) == "", "pod has no dead");
+	TEST_REQUIRE(ufo2pAlienLifeformItemId(29) == "AEQUIPMENTTYPE_OVERSPAWN_DEAD", "dead 14");
+	TEST_REQUIRE(ufo2pAlienLifeformItemId(30) == "", "oob");
+	return true;
+}
+
+static bool test_aa7a8_hardcoded_topic_lists()
+{
+	// Listing @ VA 0xAAABE / file 0x10D162. 0xDE420 = 0xDE2B8 + 36*10.
+	TEST_REQUIRE((sizeof(UFO2P_AA7A8_LIFE_CYCLE_ALL) / sizeof(UFO2P_AA7A8_LIFE_CYCLE_ALL[0])) == 7,
+	             "life cycle All is 12..17 plus topic 36");
+	TEST_REQUIRE(UString(UFO2P_AA7A8_LIFE_CYCLE_ALL[0]) == "RESEARCH_MULTIWORM_AUTOPSY",
+	             "life cycle starts at topic 12");
+	TEST_REQUIRE(UString(UFO2P_AA7A8_LIFE_CYCLE_ALL[6]) == "RESEARCH_THE_ALIEN_GENETIC_STRUCTURE",
+	             "CMP [0xDE420] is Genetic Structure");
+	TEST_REQUIRE((sizeof(UFO2P_AA7A8_THREAT_ALL) / sizeof(UFO2P_AA7A8_THREAT_ALL[0])) == 24,
+	             "threat All is 8..31");
+	TEST_REQUIRE((sizeof(UFO2P_AA7A8_BIOCHEM_ANY) / sizeof(UFO2P_AA7A8_BIOCHEM_ANY[0])) == 27,
+	             "biochem Any is 7..33");
+	TEST_REQUIRE(UString(UFO2P_AA7A8_BIOCHEM_ANY[0]) == "RESEARCH_BRAINSUCKER_PODS",
+	             "biochem starts at topic 7");
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -121,6 +188,9 @@ int main(int argc, char **argv)
 	    {"is_complete", test_is_complete},
 	    {"force_complete", test_force_complete},
 	    {"research_dependency", test_research_dependency},
+	    {"item_dependency_any", test_item_dependency_any},
 	    {"exe_slide_crcs", test_exe_slide_crcs},
+	    {"alien_lifeform_prereq_ids", test_alien_lifeform_prereq_ids},
+	    {"aa7a8_hardcoded_topic_lists", test_aa7a8_hardcoded_topic_lists},
 	});
 }

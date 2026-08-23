@@ -333,6 +333,8 @@ void InitialGameStateExtractor::extractCommon(GameState &state) const
 	this->extractUfoGrowth(state);
 	this->extractUfoIncursions(state);
 	this->extractUfoMissionPreference(state);
+	this->extractVehicleParkSpawnTable(state);
+	this->extractFireHazardPowerTable(state);
 
 	// The alien map doesn't change
 	UString alienMapId = City::getPrefix() + "ALIEN";
@@ -355,6 +357,8 @@ void InitialGameStateExtractor::reapplyExeListTables(GameState &state) const
 	this->extractUfoGrowth(state);
 	this->extractUfoIncursions(state);
 	this->extractUfoMissionPreference(state);
+	this->extractVehicleParkSpawnTable(state);
+	this->extractFireHazardPowerTable(state);
 }
 
 void InitialGameStateExtractor::extract(GameState &state, Difficulty difficulty) const

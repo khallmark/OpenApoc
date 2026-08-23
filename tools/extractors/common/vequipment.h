@@ -52,7 +52,7 @@ struct VehicleWeaponData
 	uint16_t firing_arc_1; // Firing arc left/right
 	uint16_t firing_arc_2; // Firing arc up/down
 	uint16_t point_defence;
-	int16_t split_idx; // won't parse the number itself, just find where it is
+	int16_t split_idx; // vehicle_weapons index of the split fragment; -1 = none
 	uint16_t fire_sfx;
 	uint16_t idem;              //  APOC'd says this is duplicated fire_sfx
 	uint16_t explosion_graphic; // FIXME: Find ptang lookup? (how many frames etc.)
@@ -61,7 +61,9 @@ struct VehicleWeaponData
 static_assert(sizeof(struct VehicleWeaponData) == 34, "Invalid vehicle_weapon_data size");
 
 #define VEHICLE_WEAPON_DATA_OFFSET_START 1618400
-#define VEHICLE_WEAPON_DATA_OFFSET_END 1619248
+// 25 rows (0-24). Row 24 is the unnamed Disruptor Multi-Bomb fragment
+// (parent data_idx 15, split_idx 24 @ 0x18B510). Engine table starts at 1619252.
+#define VEHICLE_WEAPON_DATA_OFFSET_END 1619250
 #pragma pack(push, 1)
 struct VehicleEngineData
 {
@@ -92,3 +94,19 @@ static_assert(sizeof(struct VehicleGeneralEquipmentData) == 18,
 
 #define VEHICLE_GENERAL_EQUIPMENT_DATA_OFFSET_START 1619318
 #define VEHICLE_GENERAL_EQUIPMENT_DATA_OFFSET_END 1619552
+
+// UFO2P non-4 hexa "cequip score req data" 1319364-1319463 (file 0x1421C4).
+// 5 rows × 5 difficulty columns (Novice..Superhuman) of uint32.
+// Rows 0-3 are vehicle_equipment_names 44-47. Row 4 has no named item — do not bind.
+#define CEQUIP_SCORE_REQ_ITEM_COUNT 5
+#define CEQUIP_SCORE_REQ_DIFFICULTY_COUNT 5
+#define CEQUIP_SCORE_REQ_NAMED_ROWS 4
+#define CEQUIP_SCORE_REQ_FIRST_VEQUIP 44
+
+struct CequipScoreReqData
+{
+	uint32_t score[CEQUIP_SCORE_REQ_ITEM_COUNT][CEQUIP_SCORE_REQ_DIFFICULTY_COUNT];
+};
+static_assert(sizeof(struct CequipScoreReqData) == 100, "Invalid cequip_score_req_data size");
+#define CEQUIP_SCORE_REQ_DATA_OFFSET_START 1319364
+#define CEQUIP_SCORE_REQ_DATA_OFFSET_END 1319464

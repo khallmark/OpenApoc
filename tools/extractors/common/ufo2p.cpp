@@ -43,6 +43,13 @@ UFO2P::UFO2P(std::string file_name)
 	                                             at(RESEARCH_DESCRIPTION_STRTAB_OFFSET_END)));
 	this->ufopaedia_group.reset(new StrTab(file, at(UFOPAEDIA_GROUP_STRTAB_OFFSET_START),
 	                                       at(UFOPAEDIA_GROUP_STRTAB_OFFSET_END)));
+	this->ufopaedia_catalog.reset(new DataChunk<UfopaediaCatalogRow>(
+	    file, at(UFOPAEDIA_CATALOG_OFFSET_START), at(UFOPAEDIA_CATALOG_OFFSET_END)));
+	this->ufopaedia_start_visible.reset(
+	    new DataChunk<uint8_t>(file, at(STARTING_AVAILABLE_UFOPAEDIA_OFFSET_START),
+	                           at(STARTING_AVAILABLE_UFOPAEDIA_OFFSET_END)));
+	this->ufopaedia_pcx_names.reset(new StrTab(file, at(UFOPAEDIA_PCX_NAME_STRTAB_OFFSET_START),
+	                                           at(UFOPAEDIA_PCX_NAME_STRTAB_OFFSET_END)));
 	this->manufacturing_data.reset(new DataChunk<ManufacturingData>(
 	    file, at(MANUFACTURING_DATA_OFFSET_START), at(MANUFACTURING_DATA_OFFSET_END)));
 	this->manufacturing_names.reset(new StrTab(file, at(MANUFACTURING_NAME_STRTAB_OFFSET_START),
@@ -100,6 +107,8 @@ UFO2P::UFO2P(std::string file_name)
 	this->vehicle_general_equipment.reset(new DataChunk<VehicleGeneralEquipmentData>(
 	    file, at(VEHICLE_GENERAL_EQUIPMENT_DATA_OFFSET_START),
 	    at(VEHICLE_GENERAL_EQUIPMENT_DATA_OFFSET_END)));
+	this->cequip_score_req.reset(new DataChunk<CequipScoreReqData>(
+	    file, at(CEQUIP_SCORE_REQ_DATA_OFFSET_START), at(CEQUIP_SCORE_REQ_DATA_OFFSET_END)));
 
 	this->vehicle_equipment_layouts.reset(new DataChunk<VehicleEquipmentLayout>(
 	    file, at(VEHICLE_EQUIPMENT_LAYOUT_OFFSET_START), at(VEHICLE_EQUIPMENT_LAYOUT_OFFSET_END)));
@@ -143,6 +152,13 @@ UFO2P::UFO2P(std::string file_name)
 	this->vehicle_park.reset(
 	    new DataChunk<OrgVehicleParkData>(file, at(ORGANISATION_VEHICLE_PARK_DATA_OFFSET_START),
 	                                      at(ORGANISATION_VEHICLE_PARK_DATA_OFFSET_END)));
+	this->vehicle_park_spawn_table.reset(new DataChunk<uint32_t>(
+	    file, at(VEHICLE_PARK_SPAWN_TABLE_OFFSET_START), at(VEHICLE_PARK_SPAWN_TABLE_OFFSET_END)));
+	this->vehicle_park_spawn_cap.reset(new DataChunk<uint32_t>(
+	    file, at(VEHICLE_PARK_SPAWN_CAP_OFFSET_START), at(VEHICLE_PARK_SPAWN_CAP_OFFSET_END)));
+	this->aequip_alien_artifact.reset(
+	    new DataChunk<uint8_t>(file, at(AEQUIP_ALIEN_ARTIFACT_DATA_OFFSET_START),
+	                           at(AEQUIP_ALIEN_ARTIFACT_DATA_OFFSET_END)));
 
 	this->infiltration_speed_agent.reset(new DataChunk<AgentInfiltrationSpeed>(
 	    file, at(AGENT_INFILTRATION_SPEED_OFFSET_START), at(AGENT_INFILTRATION_SPEED_OFFSET_END)));

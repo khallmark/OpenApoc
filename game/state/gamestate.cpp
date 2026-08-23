@@ -275,7 +275,7 @@ void GameState::setCurrentCity(StateRef<City> city)
 	current_city = city;
 	for (auto &u : current_city->researchUnlock)
 	{
-		u->forceComplete();
+		u->forceComplete(this);
 	}
 }
 
@@ -646,8 +646,10 @@ void GameState::startGame()
 
 	newGame = true;
 	firstDetection = true;
-	nextInvasion = gameTime.getTicks() + 10 * TICKS_PER_HOUR +
-	               randBoundsInclusive(rng, 0, (int)(2 * TICKS_PER_HOUR));
+	nextInvasion =
+	    gameTime.getTicks() +
+	    vanillaInvasionDelayTicks(randBoundsInclusive(rng, 0, INVASION_DELAY_MINUTE_MAX),
+	                              randBoundsInclusive(rng, 0, INVASION_DELAY_SECOND_MAX));
 }
 
 // Fills out initial player property
@@ -796,8 +798,10 @@ void GameState::invasion()
 		nextInvasion += TICKS_PER_MINUTE;
 		return;
 	}
-	nextInvasion = gameTime.getTicks() + 24 * TICKS_PER_HOUR +
-	               randBoundsInclusive(rng, 0, (int)(72 * TICKS_PER_HOUR));
+	nextInvasion =
+	    gameTime.getTicks() +
+	    vanillaInvasionDelayTicks(randBoundsInclusive(rng, 0, INVASION_DELAY_MINUTE_MAX),
+	                              randBoundsInclusive(rng, 0, INVASION_DELAY_SECOND_MAX));
 
 	auto invadingCity = StateRef<City>{this, "CITYMAP_ALIEN"};
 	auto invadingOrg = StateRef<Organisation>{this, "ORG_ALIEN"};
@@ -876,8 +880,17 @@ void GameState::invasion()
 	}
 
 	std::set<StateRef<Vehicle>> escorted;
-	for (auto &v : currentIncursion->primaryList)
+	for (size_t primaryIdx = 0; primaryIdx < currentIncursion->primaryList.size(); primaryIdx++)
 	{
+		auto &v = currentIncursion->primaryList[primaryIdx];
+		int zoneMode = -1;
+		int scatter = 0;
+		if (primaryIdx < currentIncursion->primarySlots.size())
+		{
+			const auto &slot = currentIncursion->primarySlots[primaryIdx];
+			zoneMode = slot.zoneMode;
+			scatter = VehicleMission::clampIncursionScatter(slot.scatter, slot.typePercent);
+		}
 		for (int i = 0; i < v.second; i++)
 		{
 			auto invader = invaders[v.first].front();
@@ -886,7 +899,8 @@ void GameState::invasion()
 			invader->enterDimensionGate(*this);
 			invader->equipDefaultEquipment(*this);
 			invader->city = invadedCity;
-			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader));
+			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader, 0,
+			                                                                   zoneMode, scatter));
 			switch (missionType)
 			{
 				case UFOIncursion::PrimaryMission::Attack:
@@ -914,8 +928,19 @@ void GameState::invasion()
 			escorted.emplace(this, invader);
 		}
 	}
-	for (auto &v : currentIncursion->escortList)
+	for (size_t escortIdx = 0; escortIdx < currentIncursion->escortList.size(); escortIdx++)
 	{
+		auto &v = currentIncursion->escortList[escortIdx];
+		UString followType;
+		int zoneMode = -1;
+		int scatter = 0;
+		if (escortIdx < currentIncursion->escortSlots.size())
+		{
+			const auto &slot = currentIncursion->escortSlots[escortIdx];
+			followType = slot.followVehicleType;
+			zoneMode = slot.zoneMode;
+			scatter = VehicleMission::clampIncursionScatter(slot.scatter, slot.typePercent);
+		}
 		for (int i = 0; i < v.second; i++)
 		{
 			auto invader = invaders[v.first].front();
@@ -923,22 +948,47 @@ void GameState::invasion()
 
 			invader->enterDimensionGate(*this);
 			invader->city = invadedCity;
-			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader));
-			// This creates a copy of escorted list in randomised order
-			auto escortedCopy = escorted;
-			std::list<StateRef<Vehicle>> escortedRandomized;
-			while (!escortedCopy.empty())
+			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader, 0,
+			                                                                   zoneMode, scatter));
+			// FUN_0006da88 stores craft[follow_slot]; FUN_00059148 matches that type.
+			// follow_slot 0xFFFF leaves followVehicleType empty — no FollowVehicle.
+			if (followType.empty())
 			{
-				auto item = pickRandom(rng, escortedCopy);
-				escortedCopy.erase(item);
-				escortedRandomized.push_back(item);
+				continue;
 			}
-			invader->addMission(
-			    *this, VehicleMission::followVehicle(*this, *invader, escortedRandomized), true);
+			std::set<StateRef<Vehicle>> followCopy;
+			for (auto &e : escorted)
+			{
+				if (e && e->type.id == followType)
+				{
+					followCopy.emplace(e);
+				}
+			}
+			std::list<StateRef<Vehicle>> followRandomized;
+			while (!followCopy.empty())
+			{
+				auto item = pickRandom(rng, followCopy);
+				followCopy.erase(item);
+				followRandomized.push_back(item);
+			}
+			if (!followRandomized.empty())
+			{
+				invader->addMission(
+				    *this, VehicleMission::followVehicle(*this, *invader, followRandomized), true);
+			}
 		}
 	}
-	for (auto &v : currentIncursion->attackList)
+	for (size_t attackIdx = 0; attackIdx < currentIncursion->attackList.size(); attackIdx++)
 	{
+		auto &v = currentIncursion->attackList[attackIdx];
+		int zoneMode = -1;
+		int scatter = 0;
+		if (attackIdx < currentIncursion->attackSlots.size())
+		{
+			const auto &slot = currentIncursion->attackSlots[attackIdx];
+			zoneMode = slot.zoneMode;
+			scatter = VehicleMission::clampIncursionScatter(slot.scatter, slot.typePercent);
+		}
 		for (int i = 0; i < v.second; i++)
 		{
 			auto invader = invaders[v.first].front();
@@ -946,7 +996,8 @@ void GameState::invasion()
 
 			invader->enterDimensionGate(*this);
 			invader->city = invadedCity;
-			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader));
+			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader, 0,
+			                                                                   zoneMode, scatter));
 			if (missionType == UFOIncursion::PrimaryMission::Overspawn)
 			{
 				invader->addMission(

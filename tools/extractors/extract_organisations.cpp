@@ -35,6 +35,11 @@ void InitialGameStateExtractor::extractOrganisations(GameState &state) const
 
 		o->name = data.organisation_names->get(i);
 		o->id = id;
+		o->exeOrgIndex = static_cast<int>(i);
+		if (data.vehicle_park && i < data.vehicle_park->count())
+		{
+			o->parkBudgetWeight = static_cast<int>(data.vehicle_park->get(i).vehiclePark);
+		}
 
 		auto ped = format("{0}{1}", UfopaediaEntry::getPrefix(),
 		                  canon_string(data.organisation_names->get(i)));
@@ -396,6 +401,44 @@ void InitialGameStateExtractor::extractOrganisations(GameState &state) const
 	    {&state, "VEHICLETYPE_HOVERBIKE"},
 	    {&state, "VEHICLETYPE_VALKYRIE_INTERCEPTOR"},
 	    {&state, "VEHICLETYPE_HAWK_AIR_WARRIOR"}};
+}
+
+void InitialGameStateExtractor::extractVehicleParkSpawnTable(GameState &state) const
+{
+	auto &data = this->ufo2p;
+	// Do not keep a copy under common_patch/gamestate/ — loadGame appends vectors.
+	state.vehicleParkSpawnTable.clear();
+	state.vehicleParkSpawnCap.clear();
+	if (!data.vehicle_park_spawn_table ||
+	    data.vehicle_park_spawn_table->count() !=
+	        (VEHICLE_PARK_SPAWN_TABLE_OFFSET_END - VEHICLE_PARK_SPAWN_TABLE_OFFSET_START) / 4)
+	{
+		LogError("vehicle_park_spawn_table count {0}",
+		         data.vehicle_park_spawn_table ? data.vehicle_park_spawn_table->count() : 0);
+		return;
+	}
+	for (unsigned i = 0; i < data.vehicle_park_spawn_table->count(); i++)
+	{
+		const auto vid = data.vehicle_park_spawn_table->get(i);
+		if (vid >= data.vehicle_names->count())
+		{
+			LogError("park spawn index {0} vehicle {1} out of range", i, vid);
+			state.vehicleParkSpawnTable.emplace_back();
+			continue;
+		}
+		state.vehicleParkSpawnTable.emplace_back(&state, data.getVehicleId(static_cast<int>(vid)));
+	}
+	if (!data.vehicle_park_spawn_cap || data.vehicle_park_spawn_cap->count() != VEHICLE_TYPE_COUNT)
+	{
+		LogError("vehicle_park_spawn_cap count {0}",
+		         data.vehicle_park_spawn_cap ? data.vehicle_park_spawn_cap->count() : 0);
+		return;
+	}
+	for (unsigned i = 0; i < data.vehicle_park_spawn_cap->count(); i++)
+	{
+		state.vehicleParkSpawnCap[data.getVehicleId(static_cast<int>(i))] =
+		    static_cast<int>(data.vehicle_park_spawn_cap->get(i));
+	}
 }
 
 } // namespace OpenApoc

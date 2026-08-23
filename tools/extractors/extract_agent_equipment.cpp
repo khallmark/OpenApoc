@@ -486,6 +486,12 @@ void InitialGameStateExtractor::extractAgentEquipment(GameState &state) const
 				e->research_dependency.topics.emplace(&state, "RESEARCH_ENTROPY_POD");
 				break;
 		}
+		// aequip_alien_artifact_data[37] @ 0x1422A8. FUN_000aac88 clears hide
+		// on the same-name type-1 topic. Manufacture itemIndex is FUN_000ab440.
+		if (id == "AEQUIPMENTTYPE_DIMENSION_DESTABILISER")
+		{
+			e->research_dependency.topics.emplace(&state, "RESEARCH_DIMENSION_DESTABILISER");
+		}
 
 		// Mark brainsucker launcher
 		if (edata.sprite_idx == IT_BRAINSUCKERLAUNCHER)
@@ -493,7 +499,15 @@ void InitialGameStateExtractor::extractAgentEquipment(GameState &state) const
 			e->launcher = true;
 		}
 
-		e->artifact = edata.artifact != 0;
+		e->hazardResist = edata.unknown01;
+		if (data_u.aequip_alien_artifact && i < data_u.aequip_alien_artifact->count())
+		{
+			e->artifact = data_u.aequip_alien_artifact->get(i) != 0;
+		}
+		else
+		{
+			e->artifact = edata.artifact != 0;
+		}
 
 		unsigned payload_idx = std::numeric_limits<unsigned>::max();
 		switch (edata.type)
@@ -1118,6 +1132,26 @@ void InitialGameStateExtractor::extractAgentEquipment(GameState &state) const
 
 			state.equipment_sets[id] = es;
 		}
+	}
+}
+
+void InitialGameStateExtractor::extractFireHazardPowerTable(GameState &state) const
+{
+	auto &data_t = this->tacp;
+	// Do not keep a copy under common_patch/gamestate/ — loadGame appends vectors.
+	state.fireHazardPowerTable.clear();
+	if (!data_t.fire_hazard_power_table ||
+	    data_t.fire_hazard_power_table->count() !=
+	        (FIRE_HAZARD_POWER_TABLE_OFFSET_END - FIRE_HAZARD_POWER_TABLE_OFFSET_START))
+	{
+		LogError("fire_hazard_power_table count {0}",
+		         data_t.fire_hazard_power_table ? data_t.fire_hazard_power_table->count() : 0);
+		return;
+	}
+	state.fireHazardPowerTable.reserve(data_t.fire_hazard_power_table->count());
+	for (unsigned i = 0; i < data_t.fire_hazard_power_table->count(); i++)
+	{
+		state.fireHazardPowerTable.push_back(data_t.fire_hazard_power_table->get(i));
 	}
 }
 

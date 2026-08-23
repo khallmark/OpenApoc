@@ -62,7 +62,7 @@ void UfopaediaCategoryView::begin()
 	for (auto &entryRef : this->category->entries)
 	{
 		// Skip non-visible entries
-		if (!entryRef->isVisible())
+		if (!entryRef->isVisible(*state))
 		{
 			continue;
 		}
@@ -630,7 +630,7 @@ void UfopaediaCategoryView::setNextTopic()
 		// Loop until we find the end (which shows the category intro screen)
 		// or a visible entry
 	} while (this->position_iterator != this->category->entries.end() &&
-	         !(*this->position_iterator)->isVisible());
+	         !(*this->position_iterator)->isVisible(*state));
 	this->setFormData();
 	return;
 }
@@ -650,7 +650,7 @@ void UfopaediaCategoryView::setPreviousTopic()
 		// Loop until we find the end (which shows the category intro screen)
 		// or a visible entry
 	} while (this->position_iterator != this->category->entries.end() &&
-	         !(*this->position_iterator)->isVisible());
+	         !(*this->position_iterator)->isVisible(*state));
 	this->setFormData();
 	return;
 }

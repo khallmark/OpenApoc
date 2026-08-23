@@ -57,8 +57,14 @@ class UFO2P
 	std::unique_ptr<DataChunk<OrgStartingRelationshipsData>>
 	    organisation_starting_relationships_data;
 	std::unique_ptr<DataChunk<OrgVehicleParkData>> vehicle_park;
+	std::unique_ptr<DataChunk<uint32_t>> vehicle_park_spawn_table;
+	std::unique_ptr<DataChunk<uint32_t>> vehicle_park_spawn_cap;
+	std::unique_ptr<DataChunk<uint8_t>> aequip_alien_artifact;
 
 	std::unique_ptr<StrTab> ufopaedia_group;
+	std::unique_ptr<DataChunk<UfopaediaCatalogRow>> ufopaedia_catalog;
+	std::unique_ptr<DataChunk<uint8_t>> ufopaedia_start_visible;
+	std::unique_ptr<StrTab> ufopaedia_pcx_names;
 	std::unique_ptr<DataChunk<ManufacturingData>> manufacturing_data;
 	std::unique_ptr<StrTab> manufacturing_names;
 
@@ -78,6 +84,7 @@ class UFO2P
 	std::unique_ptr<DataChunk<VehicleWeaponData>> vehicle_weapons;
 	std::unique_ptr<DataChunk<VehicleEngineData>> vehicle_engines;
 	std::unique_ptr<DataChunk<VehicleGeneralEquipmentData>> vehicle_general_equipment;
+	std::unique_ptr<DataChunk<CequipScoreReqData>> cequip_score_req;
 
 	std::unique_ptr<DataChunk<VehicleEquipmentLayout>> vehicle_equipment_layouts;
 
