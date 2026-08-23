@@ -103,6 +103,11 @@ WORKING_STAGES = {
     "UfopaediaView", "UfopaediaCategoryView", "Skirmish", "MapSelector", "InGameOptions",
 }
 
+# How many times to try a screen's engaging action before deciding the game is
+# refusing it and settling for acknowledgement.
+ACT_ATTEMPT_LIMIT = 4
+
+
 class HarnessError(RuntimeError):
     pass
 
@@ -300,6 +305,7 @@ class Driver:
         self.checks: dict = {}
         self.responses: dict[str, int] = {}
         self.unknown_stages: dict[str, int] = {}
+        self.act_counts: dict[str, int] = {}
 
     def say(self, msg: str) -> None:
         self.events.append(msg)
@@ -409,10 +415,22 @@ class Driver:
             return False
         ctrls = self.controls(st)
         selected = 0
-        if policy.get("select"):
+
+        # An "act" that the game refuses bounces us straight back to the same screen -- e.g. a
+        # raid with no eligible squad returns BuildingScreen -> MessageBox -> BuildingScreen
+        # forever. Changing stage is therefore not proof of progress; stop offering the action
+        # once it has clearly stopped working and just acknowledge instead.
+        kinds = ("act", "ack")
+        if self.act_counts.get(st.stage, 0) >= ACT_ATTEMPT_LIMIT:
+            kinds = ("ack",)
+            if self.act_counts.get(st.stage) == ACT_ATTEMPT_LIMIT:
+                self.act_counts[st.stage] += 1
+                self.say(f"  [event] {st.stage}: action refused {ACT_ATTEMPT_LIMIT}x, "
+                         f"acknowledging from now on")
+        elif policy.get("select"):
             selected = self.select_assignment_rows(st)
 
-        for kind in ("act", "ack"):
+        for kind in kinds:
             cid = policy.get(kind)
             if not cid:
                 continue
@@ -425,6 +443,8 @@ class Driver:
             if after != st.stage:
                 key = f"{st.stage}:{kind}"
                 self.responses[key] = self.responses.get(key, 0) + 1
+                if kind == "act":
+                    self.act_counts[st.stage] = self.act_counts.get(st.stage, 0) + 1
                 self.say(f"  [event] {st.stage} -> {cid} ({kind}"
                          + (f", {selected} units selected" if selected else "") + f") -> {after}")
                 return True
@@ -844,6 +864,7 @@ def main() -> int:
         d.say(f"[stages seen] {sorted(d.stages_seen)}")
         d.say(f"[event responses] {d.responses}")
         d.say(f"[unknown stages] {d.unknown_stages}")
+        d.say(f"[actions attempted] {d.act_counts}")
         d.say(f"[checks] {d.checks}")
         if game:
             game.stop()
