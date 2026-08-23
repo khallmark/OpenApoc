@@ -24,6 +24,26 @@ namespace OpenApoc
 {
 ControlGenerator ControlGenerator::singleton;
 
+void ControlGenerator::releaseCachedImages()
+{
+	singleton.labelFont = nullptr;
+	singleton.healthImage = nullptr;
+	singleton.shieldImage = nullptr;
+	singleton.stunImage = nullptr;
+	singleton.iconShade = nullptr;
+	singleton.iconFatal = nullptr;
+	singleton.iconPsiIn = nullptr;
+	singleton.iconPsiOut = nullptr;
+	singleton.unitRanks.clear();
+	singleton.battleSelect.clear();
+	singleton.citySelect.clear();
+	singleton.vehiclePassengerCountIcons.clear();
+	singleton.icons.clear();
+	singleton.purchaseControlParts.clear();
+	// init() repopulates everything above if the UI is used again.
+	singleton.initialised = false;
+}
+
 const UString ControlGenerator::VEHICLE_ICON_NAME("ICON_V");
 const UString ControlGenerator::AGENT_ICON_NAME("ICON_A");
 const UString ControlGenerator::LEFT_LIST_NAME("LEFT");
