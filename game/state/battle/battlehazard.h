@@ -5,6 +5,8 @@
 #include "game/state/stateobject.h"
 #include "library/sp.h"
 #include "library/vec.h"
+#include <cstdint>
+#include <vector>
 
 #define HAZARD_FRAME_COUNT 3
 // FIXME: This is a MADE UP VALUE!
@@ -28,6 +30,9 @@ class TileMap;
 class BattleHazard : public std::enable_shared_from_this<BattleHazard>
 {
   public:
+	static constexpr uint8_t FIRE_OVERLAY_TYPE = 0x80;
+	static constexpr uint8_t FIRE_OVERLAY_INDEX_MASK = 0x3f;
+
 	Vec3<float> getPosition() const { return this->position; }
 
 	Vec3<float> position;
@@ -39,6 +44,10 @@ class BattleHazard : public std::enable_shared_from_this<BattleHazard>
 	unsigned lifetime = 0;
 	// Time already lived for most hazards, stage for fire
 	unsigned age = 0;
+	// TACP tile overlay: top two bits are type (2 = fire), low six bits index the
+	// 27-byte fire power table. Zero is legacy/uninitialized; encoded stage zero
+	// is 0x80. Separate from age, which still drives legacy visuals/scheduling.
+	uint8_t fireOverlay = 0;
 	unsigned int frame = 0;
 	unsigned ticksUntilVisible = 0;
 	unsigned frameChangeTicksAccumulated = 0;
@@ -53,6 +62,11 @@ class BattleHazard : public std::enable_shared_from_this<BattleHazard>
 	void die(GameState &state, bool violently);
 	void dieAndRemove(GameState &state, bool violently);
 	void updateTileVisionBlock(GameState &state);
+
+	static uint8_t encodeFireOverlay(unsigned stage);
+	static int fireOverlayStage(uint8_t overlay);
+	static int fireOverlayPower(const std::vector<int> &powerTable, uint8_t overlay);
+	static bool advanceFireOverlay(const std::vector<int> &powerTable, uint8_t &overlay);
 
 	// these return true if this hazard has died and needs to be deleted
 	bool update(GameState &state, unsigned int ticks);
@@ -79,6 +93,10 @@ Fire in the game starts small, gradually enlarges, then rages for a bit, and the
 We have 12 frames for fire. Let's number them 0 to 11 where 0 is full force fire.
 
 Let "Stage" be the value that controls the fire's current state, and what frame we use.
+
+The visual age model below remains observational. The recovered type-2 overlay
+packing, power lookup, progression, and terrain threshold are represented by
+pure helpers; global row scheduling and unit intensity remain to be bound.
 
 When fire is applied (Incendiary missile or grenade), Stage = 10 - random[0-2] * 0,6
 (here [] are inclusive brackets, as in widely accepted math notation)
@@ -107,9 +125,8 @@ Which is exactly how it appears to work in the game!
 
 Now, fire can spread to an adjacent flammable object (only feature or ground).
 When it does, it starts burning from 10, as usual.
-When it reaches past Stage 6 (value of 5,8) that's when object's "time to burn" (#9) timer starts
-When this timer ends, object is destroyed.
-Condition for spreading is the same - fire that reached past Stage 6 can spread.
+FUN_0007b3dc destroys terrain when the six-bit fire overlay stage reaches
+fire_burn_time. Neighbour spread/resistance remains approximate until FUN_0007b0d0 is bound.
 At least for fire resist 25.
 I don't know how it works for other resists so I will cheat and fake it
 

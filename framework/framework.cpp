@@ -5,6 +5,7 @@
 #include "framework/data.h"
 #include "framework/event.h"
 #include "framework/filesystem.h"
+#include "framework/harness.h"
 #include "framework/image.h"
 #include "framework/jukebox.h"
 #include "framework/logger_file.h"
@@ -80,6 +81,7 @@ class FrameworkPrivate
 
 	sp<Surface> scaleSurface;
 	up<ThreadPool> threadPool;
+	up<Harness> harness;
 
 	std::atomic<int> toolTipTimerId = 0;
 	up<Event> toolTipTimerEvent;
@@ -259,6 +261,15 @@ Framework::Framework(const UString programName, bool createWindow)
 		enableSDLDialogLogger(p->window);
 	}
 	audioInitialise(!createWindow);
+
+	if (Options::harnessEnable.get())
+	{
+		p->harness.reset(new Harness(Options::harnessPort.get()));
+		if (!p->harness->listening())
+		{
+			p->harness.reset();
+		}
+	}
 }
 
 Framework::~Framework()
@@ -343,6 +354,10 @@ void Framework::run(sp<Stage> initialStage)
 			LogWarning("Over 5 frames behind - likely vsync limited?");
 		}
 
+		if (p->harness)
+		{
+			p->harness->poll(*this);
+		}
 		processEvents();
 
 		if (p->ProgramStages.isEmpty())
@@ -1144,6 +1159,28 @@ UString Framework::textGetClipboard()
 void Framework::threadPoolTaskEnqueue(std::function<void()> task) { p->threadPool->enqueue(task); }
 
 void *Framework::getWindowHandle() const { return static_cast<void *>(p->window); }
+
+bool Framework::writeScreenshot(const UString &path)
+{
+	if (!p->defaultSurface || !p->defaultSurface->rendererPrivateData)
+	{
+		LogWarning("Screenshot requested before anything was drawn");
+		return false;
+	}
+	auto img = p->defaultSurface->rendererPrivateData->readBack();
+	if (!img)
+	{
+		LogWarning("Screenshot readBack returned no image");
+		return false;
+	}
+	if (!this->data->writeImage(path, img))
+	{
+		LogWarning("Failed to write screenshot \"{0}\"", path);
+		return false;
+	}
+	LogWarning("Wrote screenshot to \"{0}\"", path);
+	return true;
+}
 
 void Framework::setupModDataPaths()
 {

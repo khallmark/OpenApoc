@@ -42,7 +42,6 @@
     <member>agentEquipmentTemplates</member>
     <member>totalScore</member>
     <member>weekScore</member>
-    <member>micronoidRainChance</member>
     <member>objectIdCount</member>
     <member type="Section">city_common_image_list</member>
     <member type="Section">city_common_sample_list</member>
@@ -564,6 +563,7 @@
     <member>inventoryVehicleAmmo</member>
     <member>name</member>
     <member>building</member>
+    <member>knownToAliens</member>
   </object>
   <object>
     <name>Facility</name>
@@ -924,6 +924,7 @@
     <member>power</member>
     <member>lifetime</member>
     <member>age</member>
+    <member>fireOverlay</member>
     <member>frame</member>
     <member>ticksUntilVisible</member>
     <member>frameChangeTicksAccumulated</member>
@@ -1125,7 +1126,7 @@
     <name>UFOIncursionSlot</name>
     <member>followVehicleType</member>
     <member>zoneMode</member>
-    <member>buildingFunction</member>
+    <member>missionCounter</member>
     <member>scatter</member>
     <member>typePercent</member>
   </object>

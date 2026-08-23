@@ -1,7 +1,10 @@
 #include "framework/configfile.h"
+#include "game/state/city/base.h"
+#include "game/state/city/building.h"
 #include "game/state/city/vehicle.h"
 #include "game/state/city/vehiclemission.h"
 #include "game/state/gamestate.h"
+#include "game/state/shared/organisation.h"
 #include "tests/test_helpers.h"
 
 using namespace OpenApoc;
@@ -20,7 +23,6 @@ static bool test_factories()
 	auto subvert = VehicleMission::infiltrateOrSubvertBuilding(state, v, true);
 	TEST_REQUIRE(subvert.type == VehicleMission::MissionType::InfiltrateSubvert, "subvert type");
 	TEST_REQUIRE(subvert.subvert == true, "subvert flag");
-	// Effect: Organisation::tryMicronoidRain (locked in test_organisation).
 
 	auto recover = VehicleMission::recoverVehicle(state, v, {});
 	TEST_REQUIRE(recover.type == VehicleMission::MissionType::RecoverVehicle, "recover type");
@@ -39,6 +41,37 @@ static bool test_factories()
 	return true;
 }
 
+static bool test_subversion_completion_exposes_base_without_takeover()
+{
+	GameState state;
+	auto victim = mksp<Organisation>();
+	victim->infiltrationValue = 37;
+	state.organisations["ORG_TEST_VICTIM"] = victim;
+
+	auto target = mksp<Building>();
+	target->owner = {&state, "ORG_TEST_VICTIM"};
+	state.buildings["BUILDING_TEST_TARGET"] = target;
+	auto base = mksp<Base>();
+	base->building = {&state, "BUILDING_TEST_TARGET"};
+	state.player_bases["BASE_TEST_TARGET"] = base;
+	target->base = {&state, "BASE_TEST_TARGET"};
+
+	auto vehicleType = mksp<VehicleType>();
+	state.vehicle_types["VEHICLETYPE_TEST_SUBVERSION"] = vehicleType;
+	Vehicle vehicle;
+	vehicle.type = {&state, "VEHICLETYPE_TEST_SUBVERSION"};
+
+	auto mission = VehicleMission::infiltrateOrSubvertBuilding(state, vehicle, true,
+	                                                           {&state, "BUILDING_TEST_TARGET"});
+	mission.missionCounter = 1;
+	mission.start(state, vehicle);
+
+	TEST_REQUIRE(base->knownToAliens, "subversion completion did not expose target base");
+	TEST_REQUIRE(!victim->takenOver && !victim->militarized && victim->infiltrationValue == 37,
+	             "subversion completion changed organisation takeover state");
+	return true;
+}
+
 static bool test_ground_footprint_tiles()
 {
 	auto one = GroundVehicleTileHelper::footprintTiles({5, 6, 1}, {1, 1});
@@ -52,6 +85,17 @@ static bool test_ground_footprint_tiles()
 
 	auto zero = GroundVehicleTileHelper::footprintTiles({0, 0, 0}, {0, 0});
 	TEST_REQUIRE(zero.size() == 1, "zero size still occupies origin");
+	return true;
+}
+
+static bool test_alien_exposure_threshold()
+{
+	// UFO2P uses inclusive rand16(100) < moved_count * 5.
+	TEST_REQUIRE(Base::alienExposureRollSucceeds(4, 1), "one alien roll 4");
+	TEST_REQUIRE(!Base::alienExposureRollSucceeds(5, 1), "one alien roll 5");
+	TEST_REQUIRE(Base::alienExposureRollSucceeds(99, 20), "twenty aliens roll 99");
+	TEST_REQUIRE(!Base::alienExposureRollSucceeds(100, 20), "twenty aliens roll 100");
+	TEST_REQUIRE(!Base::alienExposureRollSucceeds(0, 0), "zero aliens never exposes");
 	return true;
 }
 
@@ -99,7 +143,10 @@ int main(int argc, char **argv)
 	applyDeterministicTestConfig();
 	return runTestSuite({
 	    {"factories", test_factories},
+	    {"subversion_completion_exposes_base_without_takeover",
+	     test_subversion_completion_exposes_base_without_takeover},
 	    {"ground_footprint_tiles", test_ground_footprint_tiles},
+	    {"alien_exposure_threshold", test_alien_exposure_threshold},
 	    {"select_dimension_exit_portal", test_select_dimension_exit_portal},
 	    {"noop_get_next_destination", test_noop_get_next_destination},
 	});

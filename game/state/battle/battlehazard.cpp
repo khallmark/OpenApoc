@@ -19,6 +19,47 @@
 
 namespace OpenApoc
 {
+uint8_t BattleHazard::encodeFireOverlay(unsigned stage)
+{
+	return FIRE_OVERLAY_TYPE | (stage & FIRE_OVERLAY_INDEX_MASK);
+}
+
+int BattleHazard::fireOverlayStage(uint8_t overlay)
+{
+	// TACP FUN_0007ad94 @ non-4 file 0xD5838: only overlay type 2 is fire.
+	return (overlay >> 6) == 2 ? overlay & FIRE_OVERLAY_INDEX_MASK : -1;
+}
+
+int BattleHazard::fireOverlayPower(const std::vector<int> &powerTable, uint8_t overlay)
+{
+	const int stage = fireOverlayStage(overlay);
+	if (stage < 0 || static_cast<size_t>(stage) >= powerTable.size())
+	{
+		return 0;
+	}
+	// TACP FUN_0007ae18 @ non-4 file 0xD58BC.
+	return powerTable[stage];
+}
+
+bool BattleHazard::advanceFireOverlay(const std::vector<int> &powerTable, uint8_t &overlay)
+{
+	const int stage = fireOverlayStage(overlay);
+	if (stage < 0 || fireOverlayPower(powerTable, overlay) == 0)
+	{
+		overlay = 0;
+		return false;
+	}
+	const int nextStage = stage + 1;
+	if (static_cast<size_t>(nextStage) >= powerTable.size() || powerTable[nextStage] == 0)
+	{
+		overlay = 0;
+		return false;
+	}
+	// TACP FUN_0007b3dc @ non-4 file 0xD5E80: increment index, retain type 2.
+	overlay = encodeFireOverlay(nextStage);
+	return true;
+}
+
 BattleHazard::BattleHazard(GameState &state, StateRef<DamageType> damageType, bool delayVisibility)
     : damageType(damageType), hazardType(damageType->hazardType)
 {
@@ -335,6 +376,9 @@ void BattleHazard::grow(GameState &state)
 void BattleHazard::applyEffect(GameState &state)
 {
 	auto tile = tileObject->getOwningTile();
+	const bool fire = damageType->effectType == DamageType::EffectType::Fire;
+	const int overlayPower = fireOverlayPower(state.fireHazardPowerTable, fireOverlay);
+	const int itemEffectPower = fire && overlayPower > 0 ? overlayPower : power;
 
 	auto set = tile->ownedObjects;
 	for (auto &obj : set)
@@ -378,13 +422,13 @@ void BattleHazard::applyEffect(GameState &state)
 		{
 			if (damageType->effectType == DamageType::EffectType::Fire)
 			{
-				// TACP FUN_0007c110 @ VA 0x7C110 / file 0xD6BB4: unknown01 resist, not
-				// damage_modifier. Power byte stays BattleHazard::power until overlay index
-				// (FUN_0007ad94) is stored on the hazard.
+				// TACP FUN_0007c110 @ VA 0x7C110 / file 0xD6BB4: unknown01 resist,
+				// not damage_modifier. A recovered type-2 overlay uses the power table
+				// via FUN_0007ad94/FUN_0007ae18; legacy hazards retain old power.
 				auto i = std::static_pointer_cast<TileObjectBattleItem>(obj)->getItem();
 				if (i)
 				{
-					i->applyFireHazard(state, power);
+					i->applyFireHazard(state, itemEffectPower);
 				}
 			}
 		}
@@ -417,6 +461,8 @@ void BattleHazard::applyEffect(GameState &state)
 				// Legs are default already
 			}
 			// Apply
+			// TACP's recovered contact path raises a separate fire-intensity byte.
+			// Keep legacy direct unit damage until its decay/damage consumer is bound.
 			u->applyDamage(state, power, damageType,
 			               u->determineBodyPartHit(damageType, cposition, velocity),
 			               DamageSource::Hazard);

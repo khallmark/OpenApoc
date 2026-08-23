@@ -5,10 +5,12 @@
 #include "game/state/rules/city/vequipmenttype.h"
 #include "library/sp.h"
 #include "tests/test_helpers.h"
+#include "tools/extractors/common/aequipment.h"
 #include "tools/extractors/common/agent.h"
 #include "tools/extractors/common/building.h"
 #include "tools/extractors/common/exe_slide.h"
 #include "tools/extractors/common/research.h"
+#include "tools/extractors/common/ufomissionpattern.h"
 
 using namespace OpenApoc;
 using namespace OpenApoc::TestHelpers;
@@ -139,6 +141,8 @@ static bool test_exe_slide_crcs()
 	TEST_REQUIRE(ufo2pTableOffset(0xE00, RESEARCH_DATA_OFFSET_START) ==
 	                 RESEARCH_DATA_OFFSET_START + 0xE00,
 	             "research_data slides +0xE00");
+	TEST_REQUIRE(FIRE_HAZARD_POWER_TABLE_OFFSET_START - 0x2200 == 0x2E08F4,
+	             "fire table slides to TACP 4-build 0x2E08F4");
 	return true;
 }
 
@@ -168,6 +172,10 @@ static bool test_detection_weight_table_bounds()
 	TEST_REQUIRE(BUILDING_DETECTION_WEIGHT_OFFSET_END - BUILDING_DETECTION_WEIGHT_OFFSET_START ==
 	                 BUILDING_DETECTION_WEIGHT_COUNT * 4,
 	             "building weight span");
+	TEST_REQUIRE(BUILDING_DETECTION_WEIGHT_OFFSET_START == UFO_MISSION_PATTERNS_OFFSET_END + 0x60,
+	             "96-byte gap after UFO mission patterns");
+	TEST_REQUIRE(BUILDING_DETECTION_WEIGHT_OFFSET_END + 4 == AGENT_INFILTRATION_SPEED_OFFSET_START,
+	             "4-byte gap before agent infiltration speed");
 	TEST_REQUIRE(ALIEN_INFILTRATION_SLOT_COUNT == 13, "13 alien infiltration slots");
 	TEST_REQUIRE(ALIEN_DETECTION_WEIGHT_OFFSET_END - ALIEN_DETECTION_WEIGHT_OFFSET_START ==
 	                 ALIEN_INFILTRATION_SLOT_COUNT * 4,

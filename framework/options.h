@@ -153,6 +153,9 @@ extern ConfigOptionBool packSaveOption;
 extern ConfigOptionBool skipIntroOption;
 extern ConfigOptionString loadGameOption;
 
+extern ConfigOptionBool harnessEnable;
+extern ConfigOptionInt harnessPort;
+
 extern ConfigOptionString modList;
 extern ConfigOptionString modPath;
 

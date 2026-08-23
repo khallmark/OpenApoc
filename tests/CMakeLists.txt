@@ -61,6 +61,7 @@ add_openapoc_test(test_vehicle_mission)
 add_openapoc_test(test_battle_hazard)
 add_openapoc_test(test_battle_use_item)
 add_openapoc_test(test_game_end)
+add_openapoc_test(test_harness)
 add_openapoc_test(test_city_rules ARGS
 		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
 		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)

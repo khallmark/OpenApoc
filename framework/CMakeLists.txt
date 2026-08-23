@@ -10,6 +10,7 @@ set (FRAMEWORK_SOURCE_FILES
 	event.cpp
 	font.cpp
 	framework.cpp
+	harness.cpp
 	image.cpp
 	jukebox.cpp
 	logger.cpp
@@ -37,6 +38,7 @@ set (FRAMEWORK_HEADER_FILES
 	font.h
 	framework.h
 	filesystem.h
+	harness.h
 	fs.h
 	image.h
 	imageloader_interface.h
@@ -196,6 +198,7 @@ if(APPLE)
 			"-DBROKEN_THREAD_LOCAL")
 elseif(WIN32)
 	target_compile_definitions(OpenApoc_Framework PRIVATE "-DGLESWRAP_PLATFORM_WGL")
+	target_link_libraries(OpenApoc_Framework PUBLIC ws2_32)
 else()
 	target_compile_definitions(OpenApoc_Framework PRIVATE "-DGLESWRAP_PLATFORM_GLX")
 endif()

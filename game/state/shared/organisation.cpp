@@ -108,24 +108,6 @@ void Organisation::takeOver(GameState &state, bool forced)
 	fw().pushEvent(event);
 }
 
-bool Organisation::tryMicronoidRain(GameState &state, int chancePercent)
-{
-	if (takenOver)
-	{
-		return false;
-	}
-	if (chancePercent <= 0)
-	{
-		return false;
-	}
-	if (randBoundsExclusive(state.rng, 0, 100) >= chancePercent)
-	{
-		return false;
-	}
-	takeOver(state, true);
-	return true;
-}
-
 Organisation::PurchaseResult
 Organisation::canPurchaseFrom(GameState &state, const StateRef<Building> &buyer, bool vehicle) const
 {

@@ -147,6 +147,34 @@ Without `portable.txt`, logs and settings go to `~/Library/Application Support/O
 
 On some Macs GLES 3.0 context creation fails; OpenApoc falls back to the GL 2.0 renderer automatically.
 
+### Input harness (localhost)
+
+A loopback TCP command channel can inject the same mouse/key events SDL would, plus take a screenshot of the last presented frame. It is **off by default** and binds `127.0.0.1` only. Do not persist `Framework.Harness.Enable` in `OpenApoc_settings.conf` (`--Config.Save=0` on the launch line).
+
+```sh
+./build/bin/OpenApoc.app/Contents/MacOS/OpenApoc \
+  --Framework.Data="$PWD/data" \
+  --Framework.CD="$PWD/data/cd.iso" \
+  --Framework.Harness.Enable=1 \
+  --Framework.Harness.Port=17321 \
+  --Game.SkipIntro=1 \
+  --Config.Save=0 \
+  --Config.Read=0 \
+  --Framework.AudioBackends=null
+```
+
+Then, from another terminal:
+
+```sh
+python3 tools/oa_harness.py status
+python3 tools/oa_harness.py click 320 200
+python3 tools/oa_harness.py key Escape
+python3 tools/oa_harness.py screenshot /tmp/oa.png
+python3 tools/oa_harness.py quit
+```
+
+Click/move coordinates are **display** pixels (the size `status` reports), not OS window pixels when the window is scaled. Key names are SDL names (`Escape`, `Return`, `Space`, `Left Shift`). Task: `openapoc: launch harness`.
+
 ## Cursor / VS Code tasks
 
 Tasks live in [`.vscode/tasks.json`](../.vscode/tasks.json). Run via **Tasks: Run Task** or **Terminal → Run Build Task** (`Cmd+Shift+B`).
@@ -166,6 +194,7 @@ Tasks live in [`.vscode/tasks.json`](../.vscode/tasks.json). Run via **Tasks: Ru
 | **`openapoc: run`** | **Fresh run:** clean runtime state → build → launch |
 | `openapoc: run (open .app)` | Fresh run, then `open` the `.app` |
 | `openapoc: launch only` | Launch without clean or rebuild |
+| `openapoc: launch harness` | Launch with the localhost input harness on port 17321 |
 
 Debug: [`.vscode/launch.json`](../.vscode/launch.json) — **OpenApoc (lldb)** with pinned data paths.
 

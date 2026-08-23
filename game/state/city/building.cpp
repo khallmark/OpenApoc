@@ -1017,6 +1017,13 @@ void Building::alienMovement(GameState &state)
 	}
 	if (bld->base)
 	{
+		if (Base::alienExposureRollSucceeds(randBoundsInclusive(state.rng, 0, 100),
+		                                    totalMoveAmount))
+		{
+			// UFO2P FUN_0006f7f8 @ object-page file 0x5F7F7: successful alien
+			// movement exposes the destination base with moved-count × 5 threshold.
+			bld->base->knownToAliens = true;
+		}
 		// Destroy base if its empty
 		if (!bld->occupied())
 		{

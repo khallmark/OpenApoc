@@ -2,5 +2,4 @@
 <gamestate>
   <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="organisations.xml"/>
   <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="buildings.xml"/>
-  <micronoidRainChance>10</micronoidRainChance>
 </gamestate>

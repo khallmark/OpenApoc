@@ -214,6 +214,20 @@
         "openapoc: launch"
       ],
       "problemMatcher": []
+    },
+    {
+      "label": "openapoc: launch harness",
+      "type": "shell",
+      "command": "./build/bin/OpenApoc.app/Contents/MacOS/OpenApoc --Framework.Data=\"${workspaceFolder}/data\" --Framework.CD=\"${workspaceFolder}/data/cd.iso\" --Framework.Harness.Enable=1 --Framework.Harness.Port=17321 --Game.SkipIntro=1 --Config.Save=0 --Config.Read=0 --Framework.AudioBackends=null",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true
+      },
+      "problemMatcher": []
     }
   ]
 }

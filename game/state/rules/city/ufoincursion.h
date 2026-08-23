@@ -14,7 +14,7 @@ class UFOIncursionSlot
   public:
 	UString followVehicleType;
 	int zoneMode = 0;
-	int buildingFunction = 0;
+	int missionCounter = 0;
 	int scatter = 0;
 	int typePercent = 0;
 };
@@ -38,8 +38,8 @@ class UFOIncursion : public StateObject<UFOIncursion>
 	// craft[follow_slot] from UFO2P UFO_mission_data; empty if follow_slot is
 	// 0xFFFF. zoneMode/scatter are consumed on gate exit (FUN_0003b724).
 	// typePercent is constitution×percent/100 (VehicleType::health) and the
-	// scatter>50→10 clamp. buildingFunction is the +0x1B byte (vehicle +0x171);
-	// org-table consumer at VA 0x1439E0 is unbound.
+	// scatter>50→10 clamp. missionCounter is the +0x1B byte copied to vehicle
+	// +0x171; FUN_0003a910 decrements it on mission-destination arrival.
 	std::vector<UFOIncursionSlot> primarySlots;
 	std::vector<UFOIncursionSlot> escortSlots;
 	std::vector<UFOIncursionSlot> attackSlots;

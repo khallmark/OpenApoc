@@ -12,7 +12,7 @@ static UFOIncursionSlot slotFromRecord(const UfoMissionData &rec, int slot, cons
 {
 	UFOIncursionSlot out;
 	out.zoneMode = rec.zone_mode[slot];
-	out.buildingFunction = rec.building_function[slot];
+	out.missionCounter = rec.mission_counter[slot];
 	out.scatter = rec.scatter[slot];
 	out.typePercent = rec.type_percent[slot];
 	const auto follow = rec.follow_slot[slot];

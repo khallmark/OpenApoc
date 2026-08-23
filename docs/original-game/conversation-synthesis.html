@@ -309,7 +309,7 @@ footer {
       documentation is treated as authoritative when later evidence corrected an earlier claim.
     </p>
     <ul class="snapshot" aria-label="Report snapshot">
-      <li><strong>8</strong><span>completed top-level conversations</span></li>
+      <li><strong>8</strong><span>completed conversation records</span></li>
       <li><strong>264</strong><span>additional worker transcripts</span></li>
       <li><strong>52</strong><span>systems in the current gap matrix</span></li>
       <li><strong>43</strong><span>currently marked implemented</span></li>
@@ -502,7 +502,7 @@ footer {
         <li>Incursion follow-slot, spawn coordinates, type-percent constitution multiplication, and scatter clamp are consumed.</li>
         <li>The 20×10 mission-pattern table is extracted; patch XInclude copies were removed to prevent vector duplication.</li>
         <li>Pattern IDs 3/1/2/5 describe campaign first appearances in weeks 1/4/5/7, but no original runtime consumer is recovered.</li>
-        <li><code>building_function</code> is copied to vehicle <code>+0x171</code> and read by <code>FUN_0006d384</code>; the <code>0x1439E0</code> rebuild, tile probe, target semantics, and full <code>+0x168</code> path remain unbound.</li>
+        <li>Hexa's <code>building_function</code> label is wrong: +0x1B is copied to vehicle <code>+0x171</code> and decremented as a mission-arrival counter by <code>FUN_0003a910</code>. <code>0x1439E0</code> is dimension-gate runtime RAM, and <code>FUN_0005e7f4</code> tests vehicle-volume occupancy. The exact counter transition and full <code>+0x168</code> path remain unbound.</li>
       </ul>
     </article>
 
@@ -638,7 +638,7 @@ footer {
     <div class="correction" data-search data-status="corrected">
       <div><strong class="old">Earlier:</strong> role 8 justified <code>tryMicronoidRain → takeOver</code> as original parity.</div>
       <div class="arrow" aria-hidden="true">→</div>
-      <div><strong class="new">Current:</strong> it is an OpenApoc stand-in. Hover completion writes a building flag, but no arrival percentage or takeover consumer is bound.</div>
+      <div><strong class="new">Current:</strong> the stand-in was removed. There is no arrival organisation takeover; <code>+0x2BC</code> is the monotonic <code>Base::knownToAliens</code> exposure flag.</div>
     </div>
     <div class="correction" data-search data-status="corrected">
       <div><strong class="old">Earlier:</strong> mission patterns had a decoded original runtime consumer.</div>
@@ -698,7 +698,7 @@ footer {
       <li><strong>Dead gadgets:</strong> find consumers for MultiTracker, VortexAnalyzer, and Disruptor use; Mind Shield is already locked.</li>
       <li><strong>Mission-pattern runtime:</strong> locate the original consumer of the extracted weekly pattern table.</li>
       <li><strong>Subversion arrival:</strong> trace building <code>+0x2BC</code> readers; do not infer takeover from role 8 alone.</li>
-      <li><strong>Mission-tail state:</strong> bind the <code>0x1439E0</code> rebuild, tile probe, and missing <code>+0x12c/+0x12e/+0x16a</code> semantics before porting <code>FUN_000588f8</code>/<code>FUN_0004dd14</code>.</li>
+      <li><strong>Mission-tail state:</strong> bind the <code>+0x171</code> mission-counter transition and missing <code>+0x12c/+0x12e/+0x16a</code> semantics before porting <code>FUN_000588f8</code>/<code>FUN_0004dd14</code>.</li>
     </ol>
     <p class="note">
       Also explicitly unbound: the research <code>de2b0[topic]</code> override,
@@ -795,8 +795,10 @@ footer {
       <p>
         Its strongest durable result is that <code>FUN_0007fcc0</code> is hourly infiltration, not
         weekly processing or micronoid rain. The current docs further settle the divisor as
-        <code>42 - difficulty</code>. The session’s <code>tryMicronoidRain → takeOver</code> path remains an OpenApoc
-        stand-in, not proven original behavior.
+        <code>42 - difficulty</code>. The session’s invented
+        <code>tryMicronoidRain → takeOver</code> path has since been removed. Later Ghidra work
+        identified base-record <code>+0x2BC</code> as X-COM base exposure to aliens, separate
+        from organisation takeover.
       </p>
     </article>
 

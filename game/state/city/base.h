@@ -30,6 +30,10 @@ class Base : public StateObject<Base>, public std::enable_shared_from_this<Base>
 	std::map<UString, unsigned> inventoryVehicleAmmo;
 	UString name;
 	StateRef<Building> building;
+	// UFO2P Base record +0x2BC. Monotonic alien-exposure flag used by role-2
+	// targeting/arrival; initialized false and never cleared while the base exists.
+	bool knownToAliens = false;
+	static bool alienExposureRollSucceeds(int inclusiveRoll, int movedAlienCount);
 
 	Base() = default;
 

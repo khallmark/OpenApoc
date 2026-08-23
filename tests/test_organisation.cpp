@@ -126,33 +126,6 @@ static bool test_raid_relation_pressure()
 	return true;
 }
 
-static bool test_micronoid_rain_takeover()
-{
-	Framework fw("OpenApoc", false);
-	GameState state;
-	sp<Organisation> player;
-	sp<Organisation> aliens;
-	sp<Organisation> victim;
-	addOrg(state, "ORG_XCOM", player);
-	addOrg(state, "ORG_ALIEN", aliens);
-	addOrg(state, "ORG_VICTIM", victim);
-	state.player = {&state, "ORG_XCOM"};
-	state.aliens = {&state, "ORG_ALIEN"};
-
-	TEST_REQUIRE(!victim->tryMicronoidRain(state, 0), "chance 0 must fail");
-	TEST_REQUIRE(!victim->takenOver, "chance 0 must not take over");
-
-	TEST_REQUIRE(victim->tryMicronoidRain(state, 100), "chance 100 must succeed");
-	TEST_REQUIRE(victim->takenOver, "subversion must set takenOver");
-	TEST_REQUIRE(victim->infiltrationValue == 200, "infiltration {0}", victim->infiltrationValue);
-	TEST_REQUIRE(victim->militarized, "taken-over org militarizes");
-	StateRef<Organisation> playerRef{&state, "ORG_XCOM"};
-	TEST_REQUIRE(victim->getRelationTo(playerRef) == -100.0f, "hostile to player {0}",
-	             victim->getRelationTo(playerRef));
-	TEST_REQUIRE(!victim->tryMicronoidRain(state, 100), "already taken over");
-	return true;
-}
-
 static bool test_taken_over_infiltration_clamp()
 {
 	// FUN_0007fcc0 @ VA 0x7FCC0: taken-over org infiltration is forced to 200.
@@ -326,7 +299,6 @@ int main(int argc, char **argv)
 	    {"adjust_clamp_and_sign", test_adjust_clamp_and_sign},
 	    {"can_purchase_hostile", test_can_purchase_hostile},
 	    {"raid_relation_pressure", test_raid_relation_pressure},
-	    {"micronoid_rain_takeover", test_micronoid_rain_takeover},
 	    {"taken_over_infiltration_clamp", test_taken_over_infiltration_clamp},
 	    {"infiltration_hourly_ufo2p_rules", test_infiltration_hourly_ufo2p_rules},
 	    {"infiltration_divisor_uses_difficulty", test_infiltration_divisor_uses_difficulty},

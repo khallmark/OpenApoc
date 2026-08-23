@@ -75,6 +75,7 @@ class Framework
 	void displaySetIcon(sp<RGBImage> icon);
 	bool displayHasWindow() const;
 	void *getWindowHandle() const;
+	bool writeScreenshot(const UString &path);
 
 	// Map coordinates from window to display, for scaled displays
 	int coordWindowToDisplayX(int x) const;

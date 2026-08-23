@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Reference copy of UFO2P non-4 UFO_mission_data at 0x13DDFC (45×42).
      Tail: FUN_0006da88 @ file 0xD012C. followVehicleType is craft[follow_slot];
-     empty if 0xFFFF. Do not put this file under data/common_patch/gamestate/. -->
+     empty if 0xFFFF. missionCounter is +0x1B copied to vehicle +0x171 and
+     decremented by FUN_0003a910. Do not put this file under common_patch/. -->
 <ufo_incursions>
   <entry><key>UFO_INCURSION_A1</key>
     <value><primaryMission>Attack</primaryMission>
@@ -17,17 +18,17 @@
         <sizeHint>3</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>12</buildingFunction>
+          <missionCounter>12</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>12</buildingFunction>
+          <missionCounter>12</missionCounter>
           <scatter>10</scatter>
           <typePercent>10</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>12</buildingFunction>
+          <missionCounter>12</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -44,7 +45,7 @@
         <sizeHint>1</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>9</buildingFunction>
+          <missionCounter>9</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -64,12 +65,12 @@
         <sizeHint>2</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>12</buildingFunction>
+          <missionCounter>12</missionCounter>
           <scatter>10</scatter>
           <typePercent>20</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>12</buildingFunction>
+          <missionCounter>12</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -89,12 +90,12 @@
         <sizeHint>2</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>12</buildingFunction>
+          <missionCounter>12</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>12</buildingFunction>
+          <missionCounter>12</missionCounter>
           <scatter>10</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -116,7 +117,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>11</buildingFunction>
+          <missionCounter>11</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -124,7 +125,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_BOMBER</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -144,12 +145,12 @@
         <sizeHint>2</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>11</buildingFunction>
+          <missionCounter>11</missionCounter>
           <scatter>10</scatter>
           <typePercent>20</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>11</buildingFunction>
+          <missionCounter>11</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -171,7 +172,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>10</buildingFunction>
+          <missionCounter>10</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -179,7 +180,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_BOMBER</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>10</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -201,7 +202,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>10</buildingFunction>
+          <missionCounter>10</missionCounter>
           <scatter>10</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -209,7 +210,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_DESTROYER</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -226,7 +227,7 @@
         <sizeHint>1</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>9</buildingFunction>
+          <missionCounter>9</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -248,7 +249,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>9</buildingFunction>
+          <missionCounter>9</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -256,7 +257,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -280,12 +281,12 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>1</buildingFunction>
+          <missionCounter>1</missionCounter>
           <scatter>15</scatter>
           <typePercent>20</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>1</buildingFunction>
+          <missionCounter>1</missionCounter>
           <scatter>15</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -293,7 +294,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_MOTHERSHIP</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>15</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -312,12 +313,12 @@
         <sizeHint>2</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>2</buildingFunction>
+          <missionCounter>2</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
         <entry><zoneMode>1</zoneMode>
-          <buildingFunction>3</buildingFunction>
+          <missionCounter>3</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -338,14 +339,14 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>1</zoneMode>
-          <buildingFunction>2</buildingFunction>
+          <missionCounter>2</missionCounter>
           <scatter>15</scatter>
           <typePercent>30</typePercent>
         </entry>
         <sizeHint>1</sizeHint>
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_ASSAULT_SHIP</followVehicleType>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>15</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -369,19 +370,19 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>1</buildingFunction>
+          <missionCounter>1</missionCounter>
           <scatter>15</scatter>
           <typePercent>30</typePercent>
         </entry>
         <entry><zoneMode>1</zoneMode>
-          <buildingFunction>3</buildingFunction>
+          <missionCounter>3</missionCounter>
           <scatter>10</scatter>
           <typePercent>20</typePercent>
         </entry>
         <sizeHint>2</sizeHint>
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_TRANSPORTER</followVehicleType>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>10</scatter>
           <typePercent>10</typePercent>
         </entry>
@@ -400,12 +401,12 @@
         <sizeHint>2</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>1</zoneMode>
-          <buildingFunction>2</buildingFunction>
+          <missionCounter>2</missionCounter>
           <scatter>8</scatter>
           <typePercent>20</typePercent>
         </entry>
         <entry><zoneMode>1</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>8</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -426,14 +427,14 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>2</buildingFunction>
+          <missionCounter>2</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
         <sizeHint>1</sizeHint>
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_ASSAULT_SHIP</followVehicleType>
-          <buildingFunction>3</buildingFunction>
+          <missionCounter>3</missionCounter>
           <scatter>15</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -457,12 +458,12 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>3</buildingFunction>
+          <missionCounter>3</missionCounter>
           <scatter>9</scatter>
           <typePercent>30</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>3</buildingFunction>
+          <missionCounter>3</missionCounter>
           <scatter>9</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -470,7 +471,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_TRANSPORTER</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>9</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -491,7 +492,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>2</buildingFunction>
+          <missionCounter>2</missionCounter>
           <scatter>15</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -499,7 +500,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_TRANSPORTER</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>15</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -520,7 +521,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>1</buildingFunction>
+          <missionCounter>1</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -528,7 +529,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_TRANSPORTER</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>10</scatter>
           <typePercent>10</typePercent>
         </entry>
@@ -547,12 +548,12 @@
         <sizeHint>2</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>1</buildingFunction>
+          <missionCounter>1</missionCounter>
           <scatter>15</scatter>
           <typePercent>30</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>15</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -573,7 +574,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>1</zoneMode>
-          <buildingFunction>3</buildingFunction>
+          <missionCounter>3</missionCounter>
           <scatter>10</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -581,7 +582,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_SCOUT</followVehicleType>
           <zoneMode>1</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -597,7 +598,7 @@
         <sizeHint>1</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>1</buildingFunction>
+          <missionCounter>1</missionCounter>
           <scatter>15</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -618,7 +619,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>1</zoneMode>
-          <buildingFunction>1</buildingFunction>
+          <missionCounter>1</missionCounter>
           <scatter>8</scatter>
           <typePercent>10</typePercent>
         </entry>
@@ -626,7 +627,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_SCOUT</followVehicleType>
           <zoneMode>1</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>15</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -647,7 +648,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>1</buildingFunction>
+          <missionCounter>1</missionCounter>
           <scatter>15</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -655,7 +656,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_BATTLESHIP</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>15</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -681,7 +682,7 @@
         <sizeHint>1</sizeHint>
       </attackList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>2</buildingFunction>
+          <missionCounter>2</missionCounter>
           <scatter>15</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -689,14 +690,14 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_BATTLESHIP</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>15</scatter>
           <typePercent>20</typePercent>
         </entry>
         <sizeHint>1</sizeHint>
       </escortSlots>
       <attackSlots><entry><zoneMode>1</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>15</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -720,19 +721,19 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>3</buildingFunction>
+          <missionCounter>3</missionCounter>
           <scatter>15</scatter>
           <typePercent>20</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>2</buildingFunction>
+          <missionCounter>2</missionCounter>
           <scatter>15</scatter>
           <typePercent>20</typePercent>
         </entry>
         <sizeHint>2</sizeHint>
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_ASSAULT_SHIP</followVehicleType>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>15</scatter>
           <typePercent>10</typePercent>
         </entry>
@@ -757,21 +758,21 @@
         </entry>
         <sizeHint>1</sizeHint>
       </attackList>
-      <primarySlots><entry><buildingFunction>1</buildingFunction>
+      <primarySlots><entry><missionCounter>1</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
         <sizeHint>1</sizeHint>
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_ASSAULT_SHIP</followVehicleType>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>10</scatter>
           <typePercent>20</typePercent>
         </entry>
         <sizeHint>1</sizeHint>
       </escortSlots>
       <attackSlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>6</buildingFunction>
+          <missionCounter>6</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -792,7 +793,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>1</buildingFunction>
+          <missionCounter>1</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -800,7 +801,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_ASSAULT_SHIP</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>10</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -821,7 +822,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>1</buildingFunction>
+          <missionCounter>1</missionCounter>
           <scatter>15</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -829,7 +830,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_ASSAULT_SHIP</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>15</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -853,12 +854,12 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>1</zoneMode>
-          <buildingFunction>1</buildingFunction>
+          <missionCounter>1</missionCounter>
           <scatter>15</scatter>
           <typePercent>20</typePercent>
         </entry>
         <entry><zoneMode>1</zoneMode>
-          <buildingFunction>1</buildingFunction>
+          <missionCounter>1</missionCounter>
           <scatter>15</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -866,7 +867,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_ASSAULT_SHIP</followVehicleType>
           <zoneMode>1</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>15</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -888,7 +889,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>8</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -896,7 +897,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_MOTHERSHIP</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>8</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -918,7 +919,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>8</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -926,7 +927,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_MOTHERSHIP</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>8</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -953,21 +954,21 @@
         <sizeHint>1</sizeHint>
       </attackList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>8</scatter>
           <typePercent>30</typePercent>
         </entry>
         <sizeHint>1</sizeHint>
       </primarySlots>
       <escortSlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>8</scatter>
           <typePercent>40</typePercent>
         </entry>
         <sizeHint>1</sizeHint>
       </escortSlots>
       <attackSlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>8</scatter>
           <typePercent>50</typePercent>
         </entry>
@@ -989,7 +990,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>8</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -997,7 +998,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_MOTHERSHIP</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>8</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -1014,7 +1015,7 @@
         <sizeHint>1</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>8</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -1036,7 +1037,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -1044,7 +1045,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_MOTHERSHIP</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>10</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -1061,7 +1062,7 @@
         <sizeHint>1</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -1083,7 +1084,7 @@
         <sizeHint>1</sizeHint>
       </escortList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -1091,7 +1092,7 @@
       </primarySlots>
       <escortSlots><entry><followVehicleType>VEHICLETYPE_ALIEN_BATTLESHIP</followVehicleType>
           <zoneMode>2</zoneMode>
-          <buildingFunction>5</buildingFunction>
+          <missionCounter>5</missionCounter>
           <scatter>10</scatter>
           <typePercent>20</typePercent>
         </entry>
@@ -1111,12 +1112,12 @@
         <sizeHint>2</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -1136,12 +1137,12 @@
         <sizeHint>2</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -1164,17 +1165,17 @@
         <sizeHint>3</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -1194,12 +1195,12 @@
         <sizeHint>2</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>
@@ -1219,12 +1220,12 @@
         <sizeHint>2</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -1244,12 +1245,12 @@
         <sizeHint>2</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>
         <entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>30</typePercent>
         </entry>
@@ -1266,7 +1267,7 @@
         <sizeHint>1</sizeHint>
       </primaryList>
       <primarySlots><entry><zoneMode>2</zoneMode>
-          <buildingFunction>4</buildingFunction>
+          <missionCounter>4</missionCounter>
           <scatter>10</scatter>
           <typePercent>40</typePercent>
         </entry>

@@ -2,6 +2,7 @@
 #include "framework/configfile.h"
 #include "game/state/battle/battle.h"
 #include "game/state/battle/battledoor.h"
+#include "game/state/battle/battlehazard.h"
 #include "game/state/battle/battlemappart.h"
 #include "game/state/battle/battlescanner.h"
 #include "game/state/battle/battleunit.h"
@@ -1123,9 +1124,16 @@ BattleMap::fillMap(std::vector<std::list<std::pair<Vec3<int>, sp<BattleMapPart>>
 						case BattleMapPartType::AutoConvert::Fire:
 						{
 							StateRef<DamageType> dt = {&state, "DAMAGETYPE_INCENDIARY"};
-							b->placeHazard(state, propertyOwner, nullptr, dt, pair.first + shift,
-							               // Make it already hot
-							               dt->hazardType->getLifetime(state) * 2, 0, 1, false);
+							auto hazard = b->placeHazard(
+							    state, propertyOwner, nullptr, dt, pair.first + shift,
+							    // Keep the legacy visual state hot.
+							    dt->hazardType->getLifetime(state) * 2, 0, 1, false);
+							if (hazard)
+							{
+								// TACP FUN_0007aba0 converts preplaced feature marker 25
+								// with FUN_0007adac: 25 | 0x80 = fire overlay 0x99.
+								hazard->fireOverlay = BattleHazard::encodeFireOverlay(25);
+							}
 							break;
 						}
 						case BattleMapPartType::AutoConvert::Smoke:

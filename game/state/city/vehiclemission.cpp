@@ -2505,7 +2505,21 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 					        pos.y, pos.z);
 
 					// If arrived to a location above building, deposit aliens or subvert
-					if (subvert)
+					if (subvert && targetBuilding->base && targetBuilding->base->knownToAliens)
+					{
+						// UFO2P FUN_000635f0: an exposed base gets smoke (13) and
+						// infiltration (14) doodads on the follow-up pass.
+						auto smoke = v.city->placeDoodad(
+						    StateRef<DoodadType>{&state, "DOODAD_13_SMOKE_FUME"},
+						    v.tileObject->getPosition() - Vec3<float>{0, 0, 0.5f});
+						auto infiltration = v.city->placeDoodad(
+						    StateRef<DoodadType>{&state, "DOODAD_14_INFILTRATION_BIG"},
+						    v.tileObject->getPosition() - Vec3<float>{0, 0, 0.5f});
+						v.addMission(state, VehicleMission::snooze(
+						                        state, v,
+						                        std::max(smoke->lifetime, infiltration->lifetime)));
+					}
+					else if (subvert)
 					{
 						auto doodad = v.city->placeDoodad(
 						    StateRef<DoodadType>{&state, "DOODAD_11_SUBVERSION_BIG"},
@@ -2525,14 +2539,21 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 				// Played deposit animation fully, place aliens in building and retreat
 				case 1:
 				{
-					// Role 8 (Subversion): InfiltrateSubvert(subvert). On a successful
-					// micronoid-rain roll (difficulty micronoidRainChance), force-take
-					// the building's owner — same takeover path as infiltration 200.
-					if (subvert)
+					bool depositAliens = !subvert;
+					if (subvert && targetBuilding->base)
 					{
-						targetBuilding->owner->tryMicronoidRain(state, state.micronoidRainChance);
+						if (targetBuilding->base->knownToAliens)
+						{
+							// Marked-base follow-up uses the normal infiltration completion path.
+							depositAliens = true;
+						}
+						else
+						{
+							// UFO2P FUN_0007062c @ object-page file 0x6062B.
+							targetBuilding->base->knownToAliens = true;
+						}
 					}
-					else
+					if (depositAliens)
 					{
 						// Deposit aliens
 						for (auto &pair : v.type->crew_deposit)
@@ -2541,6 +2562,12 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 						}
 						if (targetBuilding->base)
 						{
+							if (!subvert && Base::alienExposureRollSucceeds(
+							                    randBoundsInclusive(state.rng, 0, 100), 1))
+							{
+								// UFO2P FUN_0005fddc @ object-page file 0x4FDDB.
+								targetBuilding->base->knownToAliens = true;
+							}
 							// Destroy empty base
 							if (targetBuilding->base->building->currentAgents.empty())
 							{

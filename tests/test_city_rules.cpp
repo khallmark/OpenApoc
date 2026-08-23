@@ -1422,6 +1422,22 @@ static bool test_detection_weights_from_exe()
 	TEST_REQUIRE(micro != state.agent_types.end() && micro->second, "MICRONOID missing");
 	TEST_REQUIRE(micro->second->detectionWeight == 1 && micro->second->movementPercent == 30,
 	             "micronoid det/move");
+	auto chrysalis = state.agent_types.find("AGENTTYPE_CHRYSALIS");
+	TEST_REQUIRE(chrysalis != state.agent_types.end() && chrysalis->second, "CHRYSALIS missing");
+	TEST_REQUIRE(chrysalis->second->detectionWeight == 1 && chrysalis->second->movementPercent == 0,
+	             "chrysalis det/move");
+	auto spitter = state.agent_types.find("AGENTTYPE_SPITTER");
+	TEST_REQUIRE(spitter != state.agent_types.end() && spitter->second, "SPITTER missing");
+	TEST_REQUIRE(spitter->second->detectionWeight == 3 && spitter->second->movementPercent == 33,
+	             "spitter det/move");
+	auto popper = state.agent_types.find("AGENTTYPE_POPPER");
+	TEST_REQUIRE(popper != state.agent_types.end() && popper->second, "POPPER missing");
+	TEST_REQUIRE(popper->second->detectionWeight == 2 && popper->second->movementPercent == 33,
+	             "popper det/move");
+	auto psimorph = state.agent_types.find("AGENTTYPE_PSIMORPH");
+	TEST_REQUIRE(psimorph != state.agent_types.end() && psimorph->second, "PSIMORPH missing");
+	TEST_REQUIRE(psimorph->second->detectionWeight == 8 && psimorph->second->movementPercent == 0,
+	             "psimorph det/move");
 	return true;
 }
 
@@ -1495,22 +1511,33 @@ static bool test_ufo_incursion_table()
 	             "I1 slot vectors");
 	TEST_REQUIRE(i1->second->primarySlots[0].followVehicleType.empty() &&
 	                 i1->second->primarySlots[0].zoneMode == 2 &&
-	                 i1->second->primarySlots[0].buildingFunction == 1 &&
+	                 i1->second->primarySlots[0].missionCounter == 1 &&
 	                 i1->second->primarySlots[0].scatter == 15 &&
 	                 i1->second->primarySlots[0].typePercent == 20,
 	             "I1 mothership tail");
 	TEST_REQUIRE(i1->second->primarySlots[1].followVehicleType.empty() &&
 	                 i1->second->primarySlots[1].zoneMode == 2 &&
-	                 i1->second->primarySlots[1].buildingFunction == 1 &&
+	                 i1->second->primarySlots[1].missionCounter == 1 &&
 	                 i1->second->primarySlots[1].scatter == 15 &&
 	                 i1->second->primarySlots[1].typePercent == 30,
 	             "I1 battleship tail");
 	TEST_REQUIRE(i1->second->escortSlots[0].followVehicleType == "VEHICLETYPE_ALIEN_MOTHERSHIP" &&
 	                 i1->second->escortSlots[0].zoneMode == 2 &&
-	                 i1->second->escortSlots[0].buildingFunction == 5 &&
+	                 i1->second->escortSlots[0].missionCounter == 5 &&
 	                 i1->second->escortSlots[0].scatter == 15 &&
 	                 i1->second->escortSlots[0].typePercent == 20,
 	             "I1 escort follows mothership (follow_slot 0)");
+
+	// Record A1 proves +0x1B is not an index into the ten dimension-gate slots:
+	// FUN_0003a910 decrements vehicle +0x171 as a mission-arrival counter.
+	auto a1 = state.ufo_incursions.find("UFO_INCURSION_A1");
+	TEST_REQUIRE(a1 != state.ufo_incursions.end() && a1->second &&
+	                 a1->second->primarySlots.size() == 3,
+	             "UFO_INCURSION_A1 slots");
+	TEST_REQUIRE(a1->second->primarySlots[0].missionCounter == 12 &&
+	                 a1->second->primarySlots[1].missionCounter == 12 &&
+	                 a1->second->primarySlots[2].missionCounter == 12,
+	             "A1 mission counters");
 
 	auto i5 = state.ufo_incursions.find("UFO_INCURSION_I5");
 	TEST_REQUIRE(
@@ -1998,11 +2025,11 @@ static bool test_aequip_artifact_and_resist()
 	TEST_REQUIRE(AEquipmentType::fireHazardDamage(10, 50) == 1, "Marsec factor-1 still takes 1");
 	TEST_REQUIRE(AEquipmentType::fireHazardDamage(10, 100) == 0, "X-COM factor-1 takes 0");
 	TEST_REQUIRE(AEquipmentType::fireHazardDamage(10, 200) == -1, "resist 200 signed delta");
-	TEST_REQUIRE(state.fireHazardPowerTable.size() == 27, "fire power table size {0}",
-	             state.fireHazardPowerTable.size());
-	TEST_REQUIRE(state.fireHazardPowerTable[0] == 5 && state.fireHazardPowerTable[1] == 10 &&
-	                 state.fireHazardPowerTable[14] == 75 && state.fireHazardPowerTable[26] == 5,
-	             "TACP fire power table @ 0x2E2AF4");
+	const std::vector<int> expectedFirePower = {5,  10, 15, 20, 25, 30, 35, 40, 45,
+	                                            50, 55, 60, 65, 70, 75, 70, 75, 70,
+	                                            75, 70, 65, 55, 45, 35, 25, 15, 5};
+	TEST_REQUIRE(state.fireHazardPowerTable == expectedFirePower,
+	             "TACP fire power table differs from 0x2E2AF4");
 
 	// FUN_000811fc hides artifacts; FUN_000ab440 clears on same-name type-1 complete.
 	auto gun = state.research.topics.find("RESEARCH_DISRUPTOR_GUN");
