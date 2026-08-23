@@ -258,6 +258,10 @@ class GameProcess:
             # Belt and braces alongside the engine-side guard: a modal error dialog blocks the
             # main loop forever when there is no human to dismiss it.
             "--Logger.dialogLevel=0",
+            # Frame limiting is honoured again now that the loop resynchronises after a hitch,
+            # and ticks advance per frame -- so an automated run asks for the headroom outright
+            # rather than relying on the limiter being broken.
+            "--Framework.TargetFPS=1000",
         ] + PAUSE_NOTIFICATION_FLAGS + self.extra
         self.logf = open(self.log_path, "w")
         self.proc = subprocess.Popen(

@@ -370,6 +370,17 @@ void Framework::run(sp<Stage> initialStage)
 		expected_frame_time += target_frame_duration;
 		frame++;
 
+		// expected_frame_time only ever advances one frame per iteration, so a single long frame
+		// -- city generation on load, a big save -- leaves it arbitrarily far behind wall-clock
+		// with no way to catch up: every later iteration sees it already in the past, never
+		// sleeps, and TargetFPS silently stops limiting anything for the rest of the session.
+		// That is why this fired on essentially every launch: it was reporting the load hitch,
+		// not a steady-state pacing problem. Resynchronise rather than accumulate a debt that
+		// cannot be paid.
+		if (frame_time_now > expected_frame_time + 5 * target_frame_duration)
+		{
+			expected_frame_time = frame_time_now + target_frame_duration;
+		}
 		if (!frame_time_limited_warning_shown &&
 		    frame_time_now > expected_frame_time + 5 * target_frame_duration)
 		{
