@@ -1,6 +1,7 @@
 #include "game/state/gamestateintrospect.h"
 #include "framework/harness.h"
 #include "game/state/battle/battle.h"
+#include "game/state/battle/battleunit.h"
 #include "game/state/city/base.h"
 #include "game/state/city/city.h"
 #include "game/state/city/research.h"
@@ -194,6 +195,51 @@ UString describeAgents(GameState &state)
 	return format("agents_total={0} agents_player={1}", state.agents.size(), mine);
 }
 
+
+UString describeBattle(GameState &state)
+{
+	if (!state.current_battle)
+	{
+		return "in_battle=0";
+	}
+	const auto &battle = *state.current_battle;
+	const auto player = state.getPlayer();
+	size_t mine = 0, mineAlive = 0, hostiles = 0, hostilesAlive = 0, retreated = 0;
+	for (const auto &u : battle.units)
+	{
+		const auto &unit = u.second;
+		if (!unit || !unit->owner)
+		{
+			continue;
+		}
+		const bool isMine = unit->owner.id == player.id;
+		if (isMine)
+		{
+			mine++;
+			if (!unit->isDead())
+			{
+				mineAlive++;
+			}
+			if (unit->retreated)
+			{
+				retreated++;
+			}
+		}
+		else
+		{
+			hostiles++;
+			if (!unit->isDead())
+			{
+				hostilesAlive++;
+			}
+		}
+	}
+	return format("in_battle=1 mode={0} units={1} mine={2} mine_alive={3} mine_retreated={4} "
+	              "foes={5} foes_alive={6} hazards={7}",
+	              battle.mode == Battle::Mode::RealTime ? "rt" : "tb", battle.units.size(), mine,
+	              mineAlive, retreated, hostiles, hostilesAlive, battle.hazards.size());
+}
+
 UString describeStage(GameState &state)
 {
 	const bool inBattle = state.current_battle != nullptr;
@@ -238,6 +284,10 @@ UString introspectGameState(GameState &state, const UString &query)
 	if (q == "turbo")
 	{
 		return describeTurbo(state);
+	}
+	if (q == "battle")
+	{
+		return describeBattle(state);
 	}
 	if (q == "stage")
 	{

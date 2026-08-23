@@ -170,6 +170,50 @@ class Harness:
         self.ok(f"screenshot {path}")
 
 
+# Every "pause on <event>" notification opens a modal that stops the clock. They exist so a human
+# does not miss things; in an unattended run they are pure interruption -- a single battle
+# produced dozens. Turned off at launch so the simulation keeps moving.
+PAUSE_NOTIFICATION_FLAGS = [
+            "--Notifications.Battle.AgentBadlyInjured=0",
+            "--Notifications.Battle.AgentBerserk=0",
+            "--Notifications.Battle.AgentBrainsucked=0",
+            "--Notifications.Battle.AgentCriticallyWounded=0",
+            "--Notifications.Battle.AgentDiedBattle=0",
+            "--Notifications.Battle.AgentFrozen=0",
+            "--Notifications.Battle.AgentInjured=0",
+            "--Notifications.Battle.AgentLeftCombat=0",
+            "--Notifications.Battle.AgentPanicOver=0",
+            "--Notifications.Battle.AgentPanicked=0",
+            "--Notifications.Battle.AgentPsiAttacked=0",
+            "--Notifications.Battle.AgentPsiControlled=0",
+            "--Notifications.Battle.AgentPsiOver=0",
+            "--Notifications.Battle.AgentUnconscious=0",
+            "--Notifications.Battle.AgentUnderFire=0",
+            "--Notifications.Battle.HostileDied=0",
+            "--Notifications.Battle.HostileSpotted=0",
+            "--Notifications.Battle.UnknownDied=0",
+            "--Notifications.City.AgentArrived=0",
+            "--Notifications.City.AgentDiedCity=0",
+            "--Notifications.City.BaseDestroyed=0",
+            "--Notifications.City.CargoArrived=0",
+            "--Notifications.City.NotEnoughAmmo=0",
+            "--Notifications.City.NotEnoughFuel=0",
+            "--Notifications.City.RecoveryArrived=0",
+            "--Notifications.City.TransferArrived=0",
+            "--Notifications.City.UfoSpotted=0",
+            "--Notifications.City.UnauthorizedVehicle=0",
+            "--Notifications.City.VehicleDestroyed=0",
+            "--Notifications.City.VehicleEscaping=0",
+            "--Notifications.City.VehicleHeavyDamage=0",
+            "--Notifications.City.VehicleLightDamage=0",
+            "--Notifications.City.VehicleLowFuel=0",
+            "--Notifications.City.VehicleModerateDamage=0",
+            "--Notifications.City.VehicleNoAmmo=0",
+            "--Notifications.City.VehicleRearmed=0",
+            "--Notifications.City.VehicleRefuelled=0",
+            "--Notifications.City.VehicleRepaired=0",
+]
+
 class GameProcess:
     """Owns a game instance so a run needs no human to start or stop anything."""
 
@@ -198,7 +242,7 @@ class GameProcess:
             "--Framework.AudioBackends=null",
             # Fixed RNG seed: GameState::startGame() otherwise reseeds from wall-clock.
             "--OpenApoc.NewFeature.SeedRng=0",
-        ] + self.extra
+        ] + PAUSE_NOTIFICATION_FLAGS + self.extra
         self.logf = open(self.log_path, "w")
         self.proc = subprocess.Popen(
             argv, cwd=str(self.repo), stdout=self.logf, stderr=subprocess.STDOUT,

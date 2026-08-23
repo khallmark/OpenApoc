@@ -3797,7 +3797,7 @@ void BattleUnit::updateAI(GameState &state, unsigned int)
 	auto decision = aiList.think(state, *this);
 	if (!decision.isEmpty())
 	{
-		LogWarning("AI {0} for unit {1} decided to {2}", decision.ai, id, decision.getName());
+		LogInfo("AI {0} for unit {1} decided to {2}", decision.ai, id, decision.getName());
 		executeAIDecision(state, decision);
 	}
 }
