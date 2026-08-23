@@ -402,25 +402,30 @@ class Driver:
         return st
 
     def select_assignment_rows(self, st: Status) -> int:
-        """Pick a craft and a squad in an alert/building screen's embedded assignment list.
+        """Select a squad and a craft in an alert/building screen's assignment list.
 
-        The list is a runtime-populated multilistbox mounted inside the AGENT_ASSIGNMENT graphic,
-        agents in the left column and vehicles in the right, so rows are addressed geometrically
-        off that rect.
+        BUTTON_EXTERMINATE and BUTTON_RAID both refuse outright when getSelectedAgents() is empty
+        (alertscreen.cpp:73), so this is what actually launches a mission. The list is a
+        runtime-populated MultilistBox nested inside the AGENT_ASSIGNMENT graphic -- agents in the
+        left column, craft in the right -- so rows are addressed by measured offsets from that
+        rect rather than by control id. Offsets verified against a captured AlertScreen: first row
+        centre is 63px down, rows are 26px apart, agent names sit ~103px in and craft names
+        ~383px in. Clicking the icon gutter at the far left does not select.
         """
         box = self.controls(st).get("AGENT_ASSIGNMENT")
         if box is None or box.w <= 0:
             return 0
-        picked = 0
         ROW_H, FIRST_ROW = 26, 63
-        for col_dx, rows in ((300, 1), (50, 4)):   # one vehicle, up to four agents
+        AGENT_DX, VEHICLE_DX = 103, 383
+        picked = 0
+        for dx, rows in ((AGENT_DX, 6), (VEHICLE_DX, 1)):
             for r in range(rows):
                 y = box.y + FIRST_ROW + r * ROW_H
-                if y >= box.y + box.h:
+                if y >= box.y + box.h - 8:
                     break
-                self.h.click_xy(box.x + col_dx, y)
+                self.h.click_xy(box.x + dx, y)
                 picked += 1
-                time.sleep(0.15)
+                time.sleep(0.12)
         return picked
 
     def respond_to_event(self, st: Status) -> bool:
