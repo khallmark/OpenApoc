@@ -574,8 +574,7 @@ void UfopaediaCategoryView::setFormStats()
 						if (ref->investmentValue > 0)
 						{
 							statsLabels[row]->setText(tr("Investment"));
-							statsValues[row++]->setText(
-							    Strings::fromInteger(ref->investmentValue));
+							statsValues[row++]->setText(Strings::fromInteger(ref->investmentValue));
 						}
 						if (ref->prestige != 0)
 						{

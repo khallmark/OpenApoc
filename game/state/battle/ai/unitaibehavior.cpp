@@ -12,7 +12,7 @@ namespace
 {
 static const std::tuple<AIDecision, bool> NULLTUPLE2 = std::make_tuple(AIDecision(), false);
 static const Vec3<int> NONE = {-1, -1, -1};
-}
+} // namespace
 
 UnitAIBehavior::UnitAIBehavior() { type = Type::Behavior; }
 

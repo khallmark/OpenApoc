@@ -66,12 +66,11 @@ static void drawOrgLine(sp<RGBImage> image, const Organisation &org, const Colou
 			const float t1 = static_cast<float>(sub + 1) / static_cast<float>(curve_segments);
 			const float s0 = (1.0f - std::cos(t0 * pi)) * 0.5f;
 			const float s1 = (1.0f - std::cos(t1 * pi)) * 0.5f;
-			const Vec3<int> start_point_int = {
-			    static_cast<int>(start_x + (end_x - start_x) * t0),
-			    static_cast<int>(start_y + (end_y - start_y) * s0), 0};
+			const Vec3<int> start_point_int = {static_cast<int>(start_x + (end_x - start_x) * t0),
+			                                   static_cast<int>(start_y + (end_y - start_y) * s0),
+			                                   0};
 			const Vec3<int> end_point_int = {static_cast<int>(start_x + (end_x - start_x) * t1),
-			                                 static_cast<int>(start_y + (end_y - start_y) * s1),
-			                                 0};
+			                                 static_cast<int>(start_y + (end_y - start_y) * s1), 0};
 
 			const auto line = LineSegment<int, false>(start_point_int, end_point_int);
 			for (auto point : line)
@@ -79,8 +78,7 @@ static void drawOrgLine(sp<RGBImage> image, const Organisation &org, const Colou
 				if (point.x < 0 || point.y < 0 || point.x >= image->size.x ||
 				    point.y >= image->size.y)
 				{
-					LogWarning("Point {0} out of bounds for image of size {1}", point,
-					           image->size);
+					LogWarning("Point {0} out of bounds for image of size {1}", point, image->size);
 					point.x = clamp(point.x, 0, static_cast<int>(image->size.x - 1));
 					point.y = clamp(point.y, 0, static_cast<int>(image->size.y - 1));
 				}

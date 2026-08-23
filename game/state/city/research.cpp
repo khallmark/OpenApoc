@@ -498,9 +498,8 @@ void Lab::update(unsigned int ticks, StateRef<Lab> lab, sp<GameState> state)
 									if (used + storeSpace > total)
 									{
 										auto event = new GameManufactureEvent(
-										    GameEventType::ManufactureHalted,
-										    lab->current_project, lab->manufacture_done,
-										    lab->manufacture_goal, lab);
+										    GameEventType::ManufactureHalted, lab->current_project,
+										    lab->manufacture_done, lab->manufacture_goal, lab);
 										fw().pushEvent(event);
 										Lab::setResearch(lab, {state.get(), ""}, state);
 										found = true;

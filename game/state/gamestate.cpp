@@ -900,9 +900,9 @@ void GameState::invasion()
 				case UFOIncursion::PrimaryMission::Overspawn:
 					// Overspawn dumps aliens into buildings rather than bombing them.
 					// Dedicated attackers still come from attackList below.
-					invader->addMission(*this, VehicleMission::infiltrateOrSubvertBuilding(
-					                               *this, *invader, false),
-					                    true);
+					invader->addMission(
+					    *this, VehicleMission::infiltrateOrSubvertBuilding(*this, *invader, false),
+					    true);
 					break;
 			}
 			escorted.emplace(this, invader);

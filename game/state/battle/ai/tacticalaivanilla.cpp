@@ -13,6 +13,16 @@ namespace OpenApoc
 
 TacticalAIVanilla::TacticalAIVanilla() { type = Type::Vanilla; }
 
+int TacticalAIVanilla::retreatChancePercent(int unitsTotal, int unitsActive)
+{
+	if (unitsTotal <= 0)
+	{
+		return 0;
+	}
+	const int neutralizedPercent = ((unitsTotal - unitsActive) * 100) / unitsTotal;
+	return std::max(0, neutralizedPercent - 50);
+}
+
 void TacticalAIVanilla::beginTurnRoutine(GameState &state, StateRef<Organisation> o)
 {
 	for (auto &u : state.current_battle->units)
@@ -56,8 +66,7 @@ TacticalAIVanilla::think(GameState &state, StateRef<Organisation> o)
 	LogAssert(unitsTotal > 0);
 	// Chance to retreat is [0 to 50]% as number of neutralised allies goes [50 to 100]%.
 	// Integer division of the old (active - total/2)/total form was always zero.
-	const int neutralizedPercent = ((unitsTotal - unitsActive) * 100) / unitsTotal;
-	const int retreatChance = std::max(0, neutralizedPercent - 50);
+	const int retreatChance = retreatChancePercent(unitsTotal, unitsActive);
 	bool retreat = randBoundsExclusive(state.rng, 0, 100) < retreatChance;
 
 	// Find an idle unit that needs orders

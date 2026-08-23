@@ -1224,7 +1224,8 @@ CityView::CityView(sp<GameState> state)
 	}
 	this->baseForm->findControl("BUTTON_FOLLOW_VEHICLE")
 	    ->addCallback(FormEventType::CheckBoxChange,
-	                  [this](FormsEvent *e) {
+	                  [this](FormsEvent *e)
+	                  {
 		                  this->followVehicle =
 		                      std::dynamic_pointer_cast<CheckBox>(e->forms().RaisedBy)->isChecked();
 	                  });
@@ -1257,7 +1258,8 @@ CityView::CityView(sp<GameState> state)
 	                  [this](Event *) { this->updateSpeed = CityUpdateSpeed::Speed5; });
 	this->baseForm->findControl("BUTTON_SHOW_ALIEN_INFILTRATION")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *) {
+	                  [this](Event *)
+	                  {
 		                  fw().stageQueueCommand(
 		                      {StageCmd::Command::PUSH, mksp<InfiltrationScreen>(this->state)});
 	                  });
@@ -1267,19 +1269,22 @@ CityView::CityView(sp<GameState> state)
 	        { fw().stageQueueCommand({StageCmd::Command::PUSH, mksp<ScoreScreen>(this->state)}); });
 	this->baseForm->findControl("BUTTON_SHOW_UFOPAEDIA")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *) {
+	                  [this](Event *)
+	                  {
 		                  fw().stageQueueCommand(
 		                      {StageCmd::Command::PUSH, mksp<UfopaediaView>(this->state)});
 	                  });
 	this->baseForm->findControl("BUTTON_SHOW_OPTIONS")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *) {
+	                  [this](Event *)
+	                  {
 		                  fw().stageQueueCommand(
 		                      {StageCmd::Command::PUSH, mksp<InGameOptions>(this->state)});
 	                  });
 	this->baseForm->findControl("BUTTON_SHOW_LOG")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *) {
+	                  [this](Event *)
+	                  {
 		                  fw().stageQueueCommand({StageCmd::Command::PUSH,
 		                                          mksp<MessageLogScreen>(this->state, *this)});
 	                  });
@@ -4068,8 +4073,7 @@ bool CityView::handleGameStateEvent(Event *e)
 			fw().stageQueueCommand(
 			    {StageCmd::Command::PUSH,
 			     mksp<NotificationScreen>(
-			         state, *this,
-			         format("ALIEN TAKEOVER: {0}", gameOrgEvent->organisation->name),
+			         state, *this, format("ALIEN TAKEOVER: {0}", gameOrgEvent->organisation->name),
 			         gameEvent->type)});
 		}
 		break;

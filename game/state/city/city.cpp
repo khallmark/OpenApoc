@@ -409,9 +409,9 @@ void City::generatePortals(GameState &state)
 						bool found = false;
 						for (int i = 0; i < iterLimit; i++)
 						{
-							Vec3<float> tryPos = pos + Vec3<float>{static_cast<float>(i % 7 - 3),
-							                                       static_cast<float>(i / 7 % 7 - 3),
-							                                       0};
+							Vec3<float> tryPos =
+							    pos + Vec3<float>{static_cast<float>(i % 7 - 3),
+							                      static_cast<float>(i / 7 % 7 - 3), 0};
 							if (canPlacePortal(tryPos))
 							{
 								place = tryPos;

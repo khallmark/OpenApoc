@@ -35,3 +35,29 @@ add_test(NAME ${TEST} COMMAND ${TEST}
 		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
 		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate
 		--Framework.CD=${CD_PATH} --Framework.Data=${CMAKE_SOURCE_DIR}/data)
+
+function(add_openapoc_test NAME)
+	cmake_parse_arguments(AOT "" "" "ARGS" ${ARGN})
+	add_executable(${NAME} ${NAME}.cpp)
+	target_link_libraries(${NAME} OpenApoc_Library OpenApoc_Framework
+			OpenApoc_GameState)
+	target_compile_definitions(${NAME} PRIVATE -DUNIT_TEST)
+	add_test(NAME ${NAME} COMMAND ${NAME} ${AOT_ARGS}
+			--Framework.CD=${CD_PATH} --Framework.Data=${CMAKE_SOURCE_DIR}/data)
+endfunction()
+
+add_openapoc_test(test_gametime)
+add_openapoc_test(test_vec)
+add_openapoc_test(test_line)
+add_openapoc_test(test_enum_traits)
+add_openapoc_test(test_damage_predicates)
+add_openapoc_test(test_tactical_ai_retreat)
+add_openapoc_test(test_economy)
+add_openapoc_test(test_organisation)
+add_openapoc_test(test_diplomacy)
+add_openapoc_test(test_research)
+add_openapoc_test(test_agent_mission)
+add_openapoc_test(test_vehicle_mission)
+add_openapoc_test(test_city_rules ARGS
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
