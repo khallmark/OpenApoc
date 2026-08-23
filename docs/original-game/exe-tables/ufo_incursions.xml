@@ -1,264 +1,98 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Reference copy of UFO2P non-4 UFO_mission_data at 0x13DDFC (45×42).
+     extract_ufo_incursions.cpp writes the live table. Do not put this file under
+     data/common_patch/gamestate/ — loadGame appends vectors and doubles fleets. -->
 <ufo_incursions>
-  <!-- Infiltrations Begin -->
   <entry>
-    <key>UFO_INCURSION_I20</key>
+    <key>UFO_INCURSION_I1</key>
     <value>
       <primaryMission>Infiltration</primaryMission>
       <primaryList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_SCOUT</first>
-          <second>2</second>
-        </entry>
-      </primaryList>
-      <escortList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_PROBE</first>
-          <second>1</second>
-        </entry>
-      </escortList>
-      <priority>20</priority>
-    </value>
-  </entry>
-  <entry>
-    <key>UFO_INCURSION_I19</key>
-    <value>
-      <primaryMission>Infiltration</primaryMission>
-      <primaryList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_SCOUT</first>
-          <second>3</second>
-        </entry>
-      </primaryList>
-      <escortList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_PROBE</first>
-          <second>2</second>
-        </entry>
-      </escortList>
-      <priority>19</priority>
-    </value>
-  </entry>
-  <entry>
-    <key>UFO_INCURSION_I18</key>
-    <value>
-      <primaryMission>Infiltration</primaryMission>
-      <primaryList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_TRANSPORTER</first>
+          <first>VEHICLETYPE_ALIEN_MOTHERSHIP</first>
           <second>1</second>
         </entry>
         <entry>
-          <first>VEHICLETYPE_ALIEN_SCOUT</first>
-          <second>2</second>
-        </entry>
-      </primaryList>
-      <priority>18</priority>
-    </value>
-  </entry>
-  <entry>
-    <key>UFO_INCURSION_I17</key>
-    <value>
-      <primaryMission>Infiltration</primaryMission>
-      <primaryList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_TRANSPORTER</first>
+          <first>VEHICLETYPE_ALIEN_BATTLESHIP</first>
           <second>1</second>
         </entry>
       </primaryList>
       <escortList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
+          <first>VEHICLETYPE_ALIEN_ESCORT</first>
           <second>2</second>
         </entry>
       </escortList>
-      <priority>17</priority>
+      <priority>1</priority>
     </value>
   </entry>
   <entry>
-    <key>UFO_INCURSION_I16</key>
+    <key>UFO_INCURSION_I2</key>
     <value>
       <primaryMission>Infiltration</primaryMission>
       <primaryList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_TRANSPORTER</first>
-          <second>2</second>
-        </entry>
-      </primaryList>
-      <escortList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
-          <second>2</second>
-        </entry>
-      </escortList>
-      <priority>16</priority>
-    </value>
-  </entry>
-  <entry>
-    <key>UFO_INCURSION_I15</key>
-    <value>
-      <primaryMission>Infiltration</primaryMission>
-      <primaryList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_TRANSPORTER</first>
+          <first>VEHICLETYPE_ALIEN_MOTHERSHIP</first>
           <second>1</second>
         </entry>
+      </primaryList>
+
+      <priority>2</priority>
+    </value>
+  </entry>
+  <entry>
+    <key>UFO_INCURSION_I3</key>
+    <value>
+      <primaryMission>Infiltration</primaryMission>
+      <primaryList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_DESTROYER</first>
+          <first>VEHICLETYPE_ALIEN_BATTLESHIP</first>
           <second>1</second>
         </entry>
       </primaryList>
       <escortList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
+          <first>VEHICLETYPE_ALIEN_ESCORT</first>
           <second>2</second>
         </entry>
       </escortList>
-      <priority>15</priority>
+      <priority>3</priority>
     </value>
   </entry>
   <entry>
-    <key>UFO_INCURSION_I14</key>
+    <key>UFO_INCURSION_I4</key>
     <value>
       <primaryMission>Infiltration</primaryMission>
       <primaryList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
+          <first>VEHICLETYPE_ALIEN_BATTLESHIP</first>
           <second>1</second>
         </entry>
       </primaryList>
       <escortList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_SCOUT</first>
-          <second>2</second>
+          <first>VEHICLETYPE_ALIEN_ESCORT</first>
+          <second>1</second>
         </entry>
       </escortList>
-      <priority>14</priority>
-    </value>
-  </entry>
-  <entry>
-    <key>UFO_INCURSION_I13</key>
-    <value>
-      <primaryMission>Infiltration</primaryMission>
-      <primaryList>
+      <attackList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
+          <first>VEHICLETYPE_ALIEN_BATTLESHIP</first>
           <second>1</second>
         </entry>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_DESTROYER</first>
-          <second>2</second>
-        </entry>
-      </primaryList>
-      <priority>13</priority>
+      </attackList>
+      <priority>4</priority>
     </value>
   </entry>
   <entry>
-    <key>UFO_INCURSION_I12</key>
+    <key>UFO_INCURSION_I5</key>
     <value>
       <primaryMission>Infiltration</primaryMission>
       <primaryList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
+          <first>VEHICLETYPE_ALIEN_BATTLESHIP</first>
           <second>1</second>
         </entry>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_TRANSPORTER</first>
-          <second>1</second>
-        </entry>
-      </primaryList>
-      <escortList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_SCOUT</first>
-          <second>3</second>
-        </entry>
-      </escortList>
-      <priority>12</priority>
-    </value>
-  </entry>
-  <entry>
-    <key>UFO_INCURSION_I11</key>
-    <value>
-      <primaryMission>Infiltration</primaryMission>
-      <primaryList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
-          <second>2</second>
-        </entry>
-      </primaryList>
-      <escortList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
-          <second>3</second>
-        </entry>
-      </escortList>
-      <priority>11</priority>
-    </value>
-  </entry>
-  <entry>
-    <key>UFO_INCURSION_I10</key>
-    <value>
-      <primaryMission>Infiltration</primaryMission>
-      <primaryList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
-          <second>1</second>
-        </entry>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_DESTROYER</first>
-          <second>2</second>
-        </entry>
-      </primaryList>
-      <priority>10</priority>
-    </value>
-  </entry>
-  <entry>
-    <key>UFO_INCURSION_I9</key>
-    <value>
-      <primaryMission>Infiltration</primaryMission>
-      <primaryList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
-          <second>1</second>
-        </entry>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_DESTROYER</first>
-          <second>1</second>
-        </entry>
-      </primaryList>
-      <escortList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
-          <second>3</second>
-        </entry>
-      </escortList>
-      <priority>9</priority>
-    </value>
-  </entry>
-  <entry>
-    <key>UFO_INCURSION_I8</key>
-    <value>
-      <primaryMission>Infiltration</primaryMission>
-      <primaryList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
-          <second>2</second>
-        </entry>
-      </primaryList>
-      <escortList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_BOMBER</first>
-          <second>2</second>
-        </entry>
-      </escortList>
-      <priority>8</priority>
-    </value>
-  </entry>
-  <entry>
-    <key>UFO_INCURSION_I7</key>
-    <value>
-      <primaryMission>Infiltration</primaryMission>
-      <primaryList>
         <entry>
           <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
           <second>2</second>
@@ -267,10 +101,10 @@
       <escortList>
         <entry>
           <first>VEHICLETYPE_ALIEN_ESCORT</first>
-          <second>3</second>
+          <second>2</second>
         </entry>
       </escortList>
-      <priority>7</priority>
+      <priority>5</priority>
     </value>
   </entry>
   <entry>
@@ -299,33 +133,10 @@
     </value>
   </entry>
   <entry>
-    <key>UFO_INCURSION_I5</key>
+    <key>UFO_INCURSION_I7</key>
     <value>
       <primaryMission>Infiltration</primaryMission>
       <primaryList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_BATTLESHIP</first>
-          <second>1</second>
-        </entry>
-      </primaryList>
-      <escortList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_ESCORT</first>
-          <second>2</second>
-        </entry>
-      </escortList>
-      <priority>5</priority>
-    </value>
-  </entry>
-  <entry>
-    <key>UFO_INCURSION_I4</key>
-    <value>
-      <primaryMission>Infiltration</primaryMission>
-      <primaryList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_BATTLESHIP</first>
-          <second>1</second>
-        </entry>
         <entry>
           <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
           <second>2</second>
@@ -334,75 +145,268 @@
       <escortList>
         <entry>
           <first>VEHICLETYPE_ALIEN_ESCORT</first>
-          <second>2</second>
+          <second>3</second>
         </entry>
       </escortList>
-      <priority>4</priority>
+      <priority>7</priority>
     </value>
   </entry>
   <entry>
-    <key>UFO_INCURSION_I3</key>
+    <key>UFO_INCURSION_I8</key>
     <value>
       <primaryMission>Infiltration</primaryMission>
       <primaryList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_BATTLESHIP</first>
+          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
+          <second>2</second>
+        </entry>
+      </primaryList>
+      <escortList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_BOMBER</first>
+          <second>2</second>
+        </entry>
+      </escortList>
+      <priority>8</priority>
+    </value>
+  </entry>
+  <entry>
+    <key>UFO_INCURSION_I9</key>
+    <value>
+      <primaryMission>Infiltration</primaryMission>
+      <primaryList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
+          <second>2</second>
+        </entry>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_DESTROYER</first>
           <second>1</second>
         </entry>
       </primaryList>
       <escortList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_ESCORT</first>
-          <second>1</second>
+          <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
+          <second>3</second>
         </entry>
       </escortList>
-      <attackList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_BATTLESHIP</first>
-          <second>1</second>
-        </entry>
-      </attackList>
-      <priority>3</priority>
+      <priority>9</priority>
     </value>
   </entry>
   <entry>
-    <key>UFO_INCURSION_I2</key>
+    <key>UFO_INCURSION_I10</key>
     <value>
       <primaryMission>Infiltration</primaryMission>
       <primaryList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_MOTHERSHIP</first>
+          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
           <second>1</second>
+        </entry>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_DESTROYER</first>
+          <second>2</second>
         </entry>
       </primaryList>
-      <priority>2</priority>
+
+      <priority>10</priority>
     </value>
   </entry>
   <entry>
-    <key>UFO_INCURSION_I1</key>
+    <key>UFO_INCURSION_I11</key>
     <value>
       <primaryMission>Infiltration</primaryMission>
       <primaryList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_MOTHERSHIP</first>
+          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
+          <second>2</second>
+        </entry>
+      </primaryList>
+      <escortList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
+          <second>3</second>
+        </entry>
+      </escortList>
+      <priority>11</priority>
+    </value>
+  </entry>
+  <entry>
+    <key>UFO_INCURSION_I12</key>
+    <value>
+      <primaryMission>Infiltration</primaryMission>
+      <primaryList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
           <second>1</second>
         </entry>
         <entry>
-          <first>VEHICLETYPE_ALIEN_BATTLESHIP</first>
+          <first>VEHICLETYPE_ALIEN_TRANSPORTER</first>
           <second>1</second>
         </entry>
       </primaryList>
       <escortList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_ESCORT</first>
+          <first>VEHICLETYPE_ALIEN_SCOUT</first>
+          <second>3</second>
+        </entry>
+      </escortList>
+      <priority>12</priority>
+    </value>
+  </entry>
+  <entry>
+    <key>UFO_INCURSION_I13</key>
+    <value>
+      <primaryMission>Infiltration</primaryMission>
+      <primaryList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
+          <second>1</second>
+        </entry>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_DESTROYER</first>
+          <second>2</second>
+        </entry>
+      </primaryList>
+
+      <priority>13</priority>
+    </value>
+  </entry>
+  <entry>
+    <key>UFO_INCURSION_I14</key>
+    <value>
+      <primaryMission>Infiltration</primaryMission>
+      <primaryList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_ASSAULT_SHIP</first>
+          <second>1</second>
+        </entry>
+      </primaryList>
+      <escortList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_SCOUT</first>
           <second>2</second>
         </entry>
       </escortList>
-      <priority>1</priority>
+      <priority>14</priority>
     </value>
   </entry>
-  <!-- Infiltrations End -->
-  <!-- Attacks Begin -->
+  <entry>
+    <key>UFO_INCURSION_I15</key>
+    <value>
+      <primaryMission>Infiltration</primaryMission>
+      <primaryList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_TRANSPORTER</first>
+          <second>1</second>
+        </entry>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_DESTROYER</first>
+          <second>1</second>
+        </entry>
+      </primaryList>
+      <escortList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
+          <second>2</second>
+        </entry>
+      </escortList>
+      <priority>15</priority>
+    </value>
+  </entry>
+  <entry>
+    <key>UFO_INCURSION_I16</key>
+    <value>
+      <primaryMission>Infiltration</primaryMission>
+      <primaryList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_TRANSPORTER</first>
+          <second>2</second>
+        </entry>
+      </primaryList>
+      <escortList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
+          <second>2</second>
+        </entry>
+      </escortList>
+      <priority>16</priority>
+    </value>
+  </entry>
+  <entry>
+    <key>UFO_INCURSION_I17</key>
+    <value>
+      <primaryMission>Infiltration</primaryMission>
+      <primaryList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_TRANSPORTER</first>
+          <second>1</second>
+        </entry>
+      </primaryList>
+      <escortList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
+          <second>2</second>
+        </entry>
+      </escortList>
+      <priority>17</priority>
+    </value>
+  </entry>
+  <entry>
+    <key>UFO_INCURSION_I18</key>
+    <value>
+      <primaryMission>Infiltration</primaryMission>
+      <primaryList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_TRANSPORTER</first>
+          <second>1</second>
+        </entry>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_SCOUT</first>
+          <second>2</second>
+        </entry>
+      </primaryList>
+
+      <priority>18</priority>
+    </value>
+  </entry>
+  <entry>
+    <key>UFO_INCURSION_I19</key>
+    <value>
+      <primaryMission>Infiltration</primaryMission>
+      <primaryList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_SCOUT</first>
+          <second>3</second>
+        </entry>
+      </primaryList>
+      <escortList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_PROBE</first>
+          <second>2</second>
+        </entry>
+      </escortList>
+      <priority>19</priority>
+    </value>
+  </entry>
+  <entry>
+    <key>UFO_INCURSION_I20</key>
+    <value>
+      <primaryMission>Infiltration</primaryMission>
+      <primaryList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_SCOUT</first>
+          <second>2</second>
+        </entry>
+      </primaryList>
+      <escortList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_PROBE</first>
+          <second>1</second>
+        </entry>
+      </escortList>
+      <priority>20</priority>
+    </value>
+  </entry>
   <entry>
     <key>UFO_INCURSION_A1</key>
     <value>
@@ -421,6 +425,7 @@
           <second>2</second>
         </entry>
       </primaryList>
+
       <priority>1</priority>
     </value>
   </entry>
@@ -438,6 +443,7 @@
           <second>2</second>
         </entry>
       </primaryList>
+
       <priority>2</priority>
     </value>
   </entry>
@@ -455,6 +461,7 @@
           <second>2</second>
         </entry>
       </primaryList>
+
       <priority>3</priority>
     </value>
   </entry>
@@ -468,7 +475,7 @@
           <second>2</second>
         </entry>
       </primaryList>
-	  <escortList>
+      <escortList>
         <entry>
           <first>VEHICLETYPE_ALIEN_ESCORT</first>
           <second>2</second>
@@ -484,18 +491,19 @@
       <primaryList>
         <entry>
           <first>VEHICLETYPE_ALIEN_BOMBER</first>
-          <second>2</second>
+          <second>3</second>
         </entry>
-		 <entry>
+        <entry>
           <first>VEHICLETYPE_ALIEN_DESTROYER</first>
           <second>2</second>
         </entry>
       </primaryList>
+
       <priority>5</priority>
     </value>
   </entry>
   <entry>
-  <key>UFO_INCURSION_A6</key>
+    <key>UFO_INCURSION_A6</key>
     <value>
       <primaryMission>Attack</primaryMission>
       <primaryList>
@@ -504,7 +512,7 @@
           <second>2</second>
         </entry>
       </primaryList>
-	  <escortList>
+      <escortList>
         <entry>
           <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
           <second>3</second>
@@ -514,7 +522,7 @@
     </value>
   </entry>
   <entry>
-  <key>UFO_INCURSION_A7</key>
+    <key>UFO_INCURSION_A7</key>
     <value>
       <primaryMission>Attack</primaryMission>
       <primaryList>
@@ -523,17 +531,17 @@
           <second>2</second>
         </entry>
       </primaryList>
-	  <escortList>
+      <escortList>
         <entry>
           <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
-          <second>3</second>
+          <second>2</second>
         </entry>
       </escortList>
       <priority>7</priority>
     </value>
   </entry>
   <entry>
-  <key>UFO_INCURSION_A8</key>
+    <key>UFO_INCURSION_A8</key>
     <value>
       <primaryMission>Attack</primaryMission>
       <primaryList>
@@ -542,20 +550,21 @@
           <second>3</second>
         </entry>
       </primaryList>
+
       <priority>8</priority>
     </value>
   </entry>
   <entry>
-  <key>UFO_INCURSION_A9</key>
+    <key>UFO_INCURSION_A9</key>
     <value>
       <primaryMission>Attack</primaryMission>
       <primaryList>
-          <entry>
+        <entry>
           <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
           <second>3</second>
         </entry>
       </primaryList>
-	  <escortList>
+      <escortList>
         <entry>
           <first>VEHICLETYPE_ALIEN_SCOUT</first>
           <second>2</second>
@@ -565,22 +574,21 @@
     </value>
   </entry>
   <entry>
-  <key>UFO_INCURSION_A10</key>
+    <key>UFO_INCURSION_A10</key>
     <value>
       <primaryMission>Attack</primaryMission>
       <primaryList>
-          <entry>
+        <entry>
           <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
           <second>2</second>
         </entry>
       </primaryList>
+
       <priority>10</priority>
     </value>
   </entry>
-  <!-- Attacks End -->  
-  <!-- Subversions Begin -->
   <entry>
-  <key>UFO_INCURSION_S1</key>
+    <key>UFO_INCURSION_S1</key>
     <value>
       <primaryMission>Subversion</primaryMission>
       <primaryList>
@@ -589,7 +597,7 @@
           <second>1</second>
         </entry>
       </primaryList>
-	  <escortList>
+      <escortList>
         <entry>
           <first>VEHICLETYPE_ALIEN_ESCORT</first>
           <second>1</second>
@@ -599,7 +607,7 @@
     </value>
   </entry>
   <entry>
-  <key>UFO_INCURSION_S2</key>
+    <key>UFO_INCURSION_S2</key>
     <value>
       <primaryMission>Subversion</primaryMission>
       <primaryList>
@@ -608,7 +616,7 @@
           <second>1</second>
         </entry>
       </primaryList>
-	  <escortList>
+      <escortList>
         <entry>
           <first>VEHICLETYPE_ALIEN_ESCORT</first>
           <second>1</second>
@@ -618,7 +626,7 @@
     </value>
   </entry>
   <entry>
-  <key>UFO_INCURSION_S3</key>
+    <key>UFO_INCURSION_S3</key>
     <value>
       <primaryMission>Subversion</primaryMission>
       <primaryList>
@@ -631,11 +639,12 @@
           <second>2</second>
         </entry>
       </primaryList>
+
       <priority>3</priority>
     </value>
   </entry>
   <entry>
-  <key>UFO_INCURSION_S4</key>
+    <key>UFO_INCURSION_S4</key>
     <value>
       <primaryMission>Subversion</primaryMission>
       <primaryList>
@@ -648,11 +657,12 @@
           <second>1</second>
         </entry>
       </primaryList>
+
       <priority>4</priority>
     </value>
   </entry>
   <entry>
-  <key>UFO_INCURSION_S5</key>
+    <key>UFO_INCURSION_S5</key>
     <value>
       <primaryMission>Subversion</primaryMission>
       <primaryList>
@@ -664,16 +674,17 @@
           <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
           <second>2</second>
         </entry>
-		<entry>
+        <entry>
           <first>VEHICLETYPE_ALIEN_SCOUT</first>
           <second>3</second>
         </entry>
       </primaryList>
+
       <priority>5</priority>
     </value>
   </entry>
   <entry>
-  <key>UFO_INCURSION_S6</key>
+    <key>UFO_INCURSION_S6</key>
     <value>
       <primaryMission>Subversion</primaryMission>
       <primaryList>
@@ -686,11 +697,12 @@
           <second>2</second>
         </entry>
       </primaryList>
+
       <priority>6</priority>
     </value>
   </entry>
   <entry>
-  <key>UFO_INCURSION_S7</key>
+    <key>UFO_INCURSION_S7</key>
     <value>
       <primaryMission>Subversion</primaryMission>
       <primaryList>
@@ -698,33 +710,35 @@
           <first>VEHICLETYPE_ALIEN_FAST_ATTACK_SHIP</first>
           <second>2</second>
         </entry>
-		<entry>
+        <entry>
           <first>VEHICLETYPE_ALIEN_SCOUT</first>
           <second>3</second>
         </entry>
       </primaryList>
+
       <priority>7</priority>
     </value>
   </entry>
   <entry>
-  <key>UFO_INCURSION_S8</key>
+    <key>UFO_INCURSION_S8</key>
     <value>
       <primaryMission>Subversion</primaryMission>
       <primaryList>
         <entry>
-          <first>VEHICLETYPE_ALIEN_PROBE</first>
-          <second>2</second>
-        </entry>
-		<entry>
           <first>VEHICLETYPE_ALIEN_SCOUT</first>
           <second>3</second>
         </entry>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_PROBE</first>
+          <second>3</second>
+        </entry>
       </primaryList>
+
       <priority>8</priority>
     </value>
   </entry>
- <entry>
-  <key>UFO_INCURSION_S9</key>
+  <entry>
+    <key>UFO_INCURSION_S9</key>
     <value>
       <primaryMission>Subversion</primaryMission>
       <primaryList>
@@ -733,11 +747,12 @@
           <second>4</second>
         </entry>
       </primaryList>
+
       <priority>9</priority>
     </value>
   </entry>
   <entry>
-  <key>UFO_INCURSION_S10</key>
+    <key>UFO_INCURSION_S10</key>
     <value>
       <primaryMission>Subversion</primaryMission>
       <primaryList>
@@ -746,11 +761,10 @@
           <second>3</second>
         </entry>
       </primaryList>
+
       <priority>10</priority>
     </value>
   </entry>
-  <!-- Subversions End -->
-  <!-- Overspawn Begin -->
   <entry>
     <key>UFO_INCURSION_O1</key>
     <value>
@@ -793,24 +807,24 @@
     <key>UFO_INCURSION_O3</key>
     <value>
       <primaryMission>Overspawn</primaryMission>
-	  <primaryList>
+      <primaryList>
         <entry>
           <first>VEHICLETYPE_ALIEN_MOTHERSHIP</first>
           <second>1</second>
         </entry>
       </primaryList>
-	  <attackList>
-        <entry>
-          <first>VEHICLETYPE_ALIEN_BOMBER</first>
-          <second>2</second>
-        </entry>
-      </attackList>
-	  <escortList>
+      <escortList>
         <entry>
           <first>VEHICLETYPE_ALIEN_ESCORT</first>
           <second>3</second>
         </entry>
       </escortList>
+      <attackList>
+        <entry>
+          <first>VEHICLETYPE_ALIEN_BOMBER</first>
+          <second>2</second>
+        </entry>
+      </attackList>
       <priority>3</priority>
     </value>
   </entry>
@@ -818,13 +832,13 @@
     <key>UFO_INCURSION_O4</key>
     <value>
       <primaryMission>Overspawn</primaryMission>
-	  <primaryList>
+      <primaryList>
         <entry>
           <first>VEHICLETYPE_ALIEN_MOTHERSHIP</first>
           <second>1</second>
         </entry>
       </primaryList>
-	  <escortList>
+      <escortList>
         <entry>
           <first>VEHICLETYPE_ALIEN_ESCORT</first>
           <second>2</second>
@@ -837,14 +851,14 @@
     <key>UFO_INCURSION_O5</key>
     <value>
       <primaryMission>Overspawn</primaryMission>
-	  <primaryList>
+      <primaryList>
         <entry>
           <first>VEHICLETYPE_ALIEN_MOTHERSHIP</first>
           <second>1</second>
         </entry>
       </primaryList>
+
       <priority>5</priority>
     </value>
   </entry>
-  <!-- Overspawn End -->
 </ufo_incursions>

@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Reference copy of UFO2P non-4 UFO_growth_rates at 0x155010.
+     extract_ufo_growth.cpp writes the live table. Do not put this file under
+     data/common_patch/gamestate/ — loadGame appends vectors and doubles spawn. -->
 <ufo_growth_lists>
   <entry>
     <key>UFO_GROWTH_DEFAULT</key>

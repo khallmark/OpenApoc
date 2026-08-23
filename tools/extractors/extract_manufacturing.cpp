@@ -2,7 +2,6 @@
 #include "game/state/city/research.h"
 #include "game/state/gamestate.h"
 #include "game/state/rules/aequipmenttype.h"
-#include "game/state/rules/city/vammotype.h"
 #include "game/state/rules/city/vehicletype.h"
 #include "game/state/rules/city/vequipmenttype.h"
 #include "tools/extractors/common/ufo2p.h"
@@ -70,7 +69,12 @@ void InitialGameStateExtractor::extractManufacturing(GameState &state) const
 				break;
 			case 2:
 				r->item_type = ResearchTopic::ItemType::VehicleEquipmentAmmo;
-				r->itemId = VAmmoType::getPrefix() + canon_string(r->name);
+				if (!data.craft_ammo_names || mdata.itemIndex >= data.craft_ammo_names->count())
+				{
+					LogError("Craft ammo index {0} out of range for {1}", mdata.itemIndex, id);
+					continue;
+				}
+				r->itemId = data.getVAmmoId(mdata.itemIndex);
 				break;
 			case 3:
 				r->item_type = ResearchTopic::ItemType::Craft;

@@ -50,6 +50,9 @@ inline bool loadStartedGameState(GameState &state, const UString &common, const 
 		LogError("Failed to load common gamestate \"{0}\"", common);
 		return false;
 	}
+	// difficulty submods and base_gamestate both carry extracted UFO incursions; loading
+	// the base zip must replace the table, not append fleet vectors onto existing keys.
+	state.ufo_incursions.clear();
 	if (!state.loadGame(gamestate))
 	{
 		LogError("Failed to load gamestate \"{0}\"", gamestate);

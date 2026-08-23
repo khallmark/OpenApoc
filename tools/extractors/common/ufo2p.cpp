@@ -119,6 +119,8 @@ UFO2P::UFO2P(std::string file_name)
 	    new DataChunk<EconomyData>(file, ECONOMY_DATA2_OFFSET_START, ECONOMY_DATA2_OFFSET_END));
 	this->economy_data3.reset(
 	    new DataChunk<EconomyData>(file, ECONOMY_DATA3_OFFSET_START, ECONOMY_DATA3_OFFSET_END));
+	this->craft_ammo_names.reset(
+	    new StrTab(file, CRAFT_AMMO_NAME_STRTAB_OFFSET_START, CRAFT_AMMO_NAME_STRTAB_OFFSET_END));
 
 	this->scenery_minimap_colour.reset(new DataChunk<SceneryMinimapColour>(
 	    file, SCENERY_MINIMAP_COLOUR_DATA_OFFSET_START, SCENERY_MINIMAP_COLOUR_DATA_OFFSET_END));
@@ -150,6 +152,8 @@ UFO2P::UFO2P(std::string file_name)
 	    file, BUILDING_COST_STRUCT_OFFSET_START, BUILDING_COST_STRUCT_OFFSET_END));
 	this->ufo_growth_rates.reset(new DataChunk<UfoGrowthRates>(file, UFO_GROWTH_RATES_OFFSET_START,
 	                                                           UFO_GROWTH_RATES_OFFSET_END));
+	this->ufo_mission_data.reset(new DataChunk<UfoMissionData>(file, UFO_MISSION_DATA_OFFSET_START,
+	                                                           UFO_MISSION_DATA_OFFSET_END));
 }
 
 void UFO2P::fillCrew(GameState &state, CrewData crew,

@@ -460,12 +460,32 @@ static bool test_overspawn_invasion()
 
 	state.invasion();
 
-	TEST_REQUIRE(mothership->city.id != "CITYMAP_ALIEN",
-	             "mothership never left CITYMAP_ALIEN (city={0})", mothership->city.id);
-	TEST_REQUIRE(!mothership->missions.empty(), "mothership has no missions after invasion");
+	// O1–O5 all require at least one mothership; startGame may already have one,
+	// so invasion() can consume an older mothership and leave this spawn in the alien city.
+	sp<Vehicle> invader;
+	int mothershipsInHuman = 0;
+	for (auto &vp : state.vehicles)
+	{
+		if (!vp.second || vp.second->owner.id != "ORG_ALIEN" ||
+		    vp.second->type.id != "VEHICLETYPE_ALIEN_MOTHERSHIP" ||
+		    vp.second->city.id != "CITYMAP_HUMAN")
+		{
+			continue;
+		}
+		mothershipsInHuman++;
+		if (!invader)
+		{
+			invader = vp.second;
+		}
+	}
+	TEST_REQUIRE(invader != nullptr,
+	             "no Overspawn mothership entered CITYMAP_HUMAN (placed still in {0})",
+	             mothership->city.id);
+	TEST_REQUIRE(mothershipsInHuman >= 1, "expected a human-city mothership");
+	TEST_REQUIRE(!invader->missions.empty(), "invading mothership has no missions");
 	bool sawInfiltrate = false;
 	bool sawAttackBuilding = false;
-	for (auto &m : mothership->missions)
+	for (auto &m : invader->missions)
 	{
 		if (m.type == VehicleMission::MissionType::InfiltrateSubvert && m.subvert == false)
 		{
@@ -479,7 +499,7 @@ static bool test_overspawn_invasion()
 	TEST_REQUIRE(sawInfiltrate,
 	             "Overspawn mothership has no InfiltrateSubvert (subvert=false); "
 	             "front={0} back={1}",
-	             (int)mothership->missions.front().type, (int)mothership->missions.back().type);
+	             (int)invader->missions.front().type, (int)invader->missions.back().type);
 	TEST_REQUIRE(!sawAttackBuilding, "Overspawn mothership was given AttackBuilding");
 	return true;
 }
@@ -515,9 +535,13 @@ static bool test_ufo_growth_rates_match_exe()
 	TEST_REQUIRE(growthCount(limit, "VEHICLETYPE_ALIEN_ESCORT") == 6, "limit escort");
 	TEST_REQUIRE(growthCount(limit, "VEHICLETYPE_ALIEN_BATTLESHIP") == 4, "limit battleship");
 	TEST_REQUIRE(growthCount(limit, "VEHICLETYPE_ALIEN_MOTHERSHIP") == 2, "limit mothership");
+	TEST_REQUIRE(limit.vehicleTypeList.size() == 10, "LIMIT list size {0} (patch overlay doubles)",
+	             limit.vehicleTypeList.size());
 
 	auto week1 = UFOGrowth::selectForWeek(state, 1);
 	TEST_REQUIRE(week1 && week1->week == 1, "week 1 growth missing");
+	TEST_REQUIRE(week1->vehicleTypeList.size() == 2, "week1 list size {0} (patch overlay doubles)",
+	             week1->vehicleTypeList.size());
 	TEST_REQUIRE(growthCount(*week1, "VEHICLETYPE_ALIEN_PROBE") == 9, "week1 probe");
 	TEST_REQUIRE(growthCount(*week1, "VEHICLETYPE_ALIEN_SCOUT") == 9, "week1 scout");
 
@@ -541,7 +565,9 @@ static bool test_manufacture_dimension_probe()
 	TEST_REQUIRE(topic.required_lab_size == ResearchTopic::LabSize::Large, "lab size");
 	TEST_REQUIRE(topic.item_type == ResearchTopic::ItemType::Craft, "item type");
 	TEST_REQUIRE(topic.itemId == "VEHICLETYPE_DIMENSION_PROBE", "itemId {0}", topic.itemId);
-	TEST_REQUIRE(!topic.dependencies.research.empty(), "missing tech prereq");
+	TEST_REQUIRE(topic.dependencies.research.size() == 1,
+	             "probe research groups {0} (extract+patch doubles)",
+	             topic.dependencies.research.size());
 	bool sawProbeResearch = false;
 	for (auto &dep : topic.dependencies.research)
 	{
@@ -554,6 +580,79 @@ static bool test_manufacture_dimension_probe()
 		}
 	}
 	TEST_REQUIRE(sawProbeResearch, "prereq is not RESEARCH_DIMENSION_PROBE");
+	return true;
+}
+
+static bool test_advanced_quantum_lab_any()
+{
+	auto &state = *g_state;
+	auto it = state.research.topics.find("RESEARCH_ADVANCED_QUANTUM_PHYSICS_LAB");
+	TEST_REQUIRE(it != state.research.topics.end() && it->second,
+	             "RESEARCH_ADVANCED_QUANTUM_PHYSICS_LAB missing");
+	const auto &deps = it->second->dependencies.research;
+	TEST_REQUIRE(deps.size() == 1, "quantum lab groups {0} (extractor All ANDs patch Any)",
+	             deps.size());
+	TEST_REQUIRE(deps.front().type == ResearchDependency::Type::Any, "quantum lab must be Any");
+	TEST_REQUIRE(deps.front().topics.size() == 3, "quantum lab topic count {0}",
+	             deps.front().topics.size());
+	return true;
+}
+
+static bool test_alien_building4_keeps_table_prereq()
+{
+	auto &state = *g_state;
+	auto it = state.research.topics.find("RESEARCH_ALIEN_BUILDING_4");
+	TEST_REQUIRE(it != state.research.topics.end() && it->second,
+	             "RESEARCH_ALIEN_BUILDING_4 missing");
+	bool sawDimension = false;
+	bool sawUnlock = false;
+	for (auto &dep : it->second->dependencies.research)
+	{
+		for (auto &t : dep.topics)
+		{
+			if (t.id == "RESEARCH_THE_ALIEN_DIMENSION")
+			{
+				sawDimension = true;
+			}
+			if (t.id == "RESEARCH_UNLOCK_ALIEN_BUILDING_4")
+			{
+				sawUnlock = true;
+			}
+		}
+	}
+	// UFO2P non-4 research_data[92] prereqTech[0] = 1 (The Alien Dimension).
+	// Patch adds the visit unlock; do not op=delete that list.
+	TEST_REQUIRE(sawDimension, "lost EXE prereq RESEARCH_THE_ALIEN_DIMENSION");
+	TEST_REQUIRE(sawUnlock, "lost patch unlock RESEARCH_UNLOCK_ALIEN_BUILDING_4");
+	return true;
+}
+
+static bool test_manufacture_type02_ammo_ids()
+{
+	auto &state = *g_state;
+	// UFO2P non-4 manufacturing_data type 2 indexes craft_ammo_names at 0x14B18E
+	// (rec 9 → 8 Disruptor Bomb, rec 11 → 9 Stasis Bomb, rec 13 → 10 Multi-Bomb).
+	// Using the manufacture name would emit DISRUPTOR_INVERSION_BOMB / STASIS_FIELD_BOMB.
+	struct Case
+	{
+		const char *topic;
+		const char *ammo;
+	};
+	const Case cases[] = {
+	    {"MANUFACTURE_DISRUPTOR_INVERSION_BOMB", "VEQUIPMENTAMMOTYPE_DISRUPTOR_BOMB"},
+	    {"MANUFACTURE_STASIS_FIELD_BOMB", "VEQUIPMENTAMMOTYPE_STASIS_BOMB"},
+	    {"MANUFACTURE_DISRUPTOR_MULTI-BOMB", "VEQUIPMENTAMMOTYPE_DISRUPTOR_MULTI-BOMB"},
+	};
+	for (const auto &c : cases)
+	{
+		auto it = state.research.topics.find(c.topic);
+		TEST_REQUIRE(it != state.research.topics.end() && it->second, "{0} missing", c.topic);
+		TEST_REQUIRE(it->second->item_type == ResearchTopic::ItemType::VehicleEquipmentAmmo,
+		             "{0} item_type", c.topic);
+		TEST_REQUIRE(it->second->itemId == c.ammo, "{0} itemId {1}", c.topic, it->second->itemId);
+		TEST_REQUIRE(state.vehicle_ammo.find(c.ammo) != state.vehicle_ammo.end(),
+		             "{0} ammo type missing", c.ammo);
+	}
 	return true;
 }
 
@@ -611,6 +710,39 @@ static bool test_organic_factory_gates_ufo_growth()
 	return true;
 }
 
+static bool test_ufo_incursion_table()
+{
+	auto &state = *g_state;
+	auto i1 = state.ufo_incursions.find("UFO_INCURSION_I1");
+	TEST_REQUIRE(i1 != state.ufo_incursions.end() && i1->second, "UFO_INCURSION_I1 missing");
+	TEST_REQUIRE(i1->second->primaryMission == UFOIncursion::PrimaryMission::Infiltration,
+	             "I1 primary");
+	TEST_REQUIRE(i1->second->priority == 1, "I1 priority");
+	TEST_REQUIRE(i1->second->primaryList.size() == 2, "I1 primaryList size");
+	TEST_REQUIRE(i1->second->primaryList[0].first == "VEHICLETYPE_ALIEN_MOTHERSHIP" &&
+	                 i1->second->primaryList[0].second == 1,
+	             "I1 mothership");
+	TEST_REQUIRE(i1->second->primaryList[1].first == "VEHICLETYPE_ALIEN_BATTLESHIP" &&
+	                 i1->second->primaryList[1].second == 1,
+	             "I1 battleship");
+	TEST_REQUIRE(i1->second->escortList.size() == 1 &&
+	                 i1->second->escortList[0].first == "VEHICLETYPE_ALIEN_ESCORT" &&
+	                 i1->second->escortList[0].second == 2,
+	             "I1 escort×2");
+
+	auto o5 = state.ufo_incursions.find("UFO_INCURSION_O5");
+	TEST_REQUIRE(o5 != state.ufo_incursions.end() && o5->second, "UFO_INCURSION_O5 missing");
+	TEST_REQUIRE(o5->second->primaryMission == UFOIncursion::PrimaryMission::Overspawn,
+	             "O5 primary");
+	TEST_REQUIRE(o5->second->primaryList.size() == 1 &&
+	                 o5->second->primaryList[0].first == "VEHICLETYPE_ALIEN_MOTHERSHIP" &&
+	                 o5->second->primaryList[0].second == 1,
+	             "O5 single mothership");
+	TEST_REQUIRE(o5->second->escortList.empty() && o5->second->attackList.empty(),
+	             "O5 extra lists");
+	return true;
+}
+
 static bool test_militarized_from_org_type()
 {
 	TEST_REQUIRE(!Organisation::militarizedFromType(0), "type 0");
@@ -658,8 +790,12 @@ int main(int argc, char **argv)
 	    {"infiltration_display_percent", test_infiltration_display_percent},
 	    {"ufo_growth_rates_match_exe", test_ufo_growth_rates_match_exe},
 	    {"manufacture_dimension_probe", test_manufacture_dimension_probe},
+	    {"advanced_quantum_lab_any", test_advanced_quantum_lab_any},
+	    {"alien_building4_keeps_table_prereq", test_alien_building4_keeps_table_prereq},
+	    {"manufacture_type02_ammo_ids", test_manufacture_type02_ammo_ids},
 	    {"ufopaedia_alien_craft_group", test_ufopaedia_alien_craft_group},
 	    {"organic_factory_gates_ufo_growth", test_organic_factory_gates_ufo_growth},
+	    {"ufo_incursion_table", test_ufo_incursion_table},
 	    {"militarized_from_org_type", test_militarized_from_org_type},
 	});
 }

@@ -78,6 +78,7 @@ class GameOrganisationEvent : public GameEvent
 
 	GameOrganisationEvent(GameEventType type, StateRef<Organisation> organisation);
 	~GameOrganisationEvent() override = default;
+	UString message() override;
 };
 
 class GameDefenseEvent : public GameEvent

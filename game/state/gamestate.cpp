@@ -1680,22 +1680,24 @@ void GameState::updateOrgFinances()
 
 int GameState::calculateFundingModifier() const
 {
+	// UFO2P non-4 ~0xF6EC7: cmp week-score then idiv funding. Matching bands overwrite;
+	// the tightest (largest |threshold|) wins. 10000 uses the 6400/5 band, not 400/20.
 	int fundingModifier = 0;
+	int bestAbs = -1;
 	const int totalRating = weekScore.getTotal();
 	for (const auto &threshold : weekly_rating_rules)
 	{
-		// If score threshold is negative or 0, then use it if our value is smaller
-		// (i.e. -2400 rating uses -1600 threshold)
-
-		// If score threshold is positive, then score has to be higher
-		// (i.e. 10000 rating uses 6400's value)
-		int scoreThreshold = threshold.first;
-		int modifier = threshold.second;
-
+		const int scoreThreshold = threshold.first;
+		const int modifier = threshold.second;
 		if ((scoreThreshold <= 0 && totalRating < scoreThreshold) ||
 		    (scoreThreshold > 0 && totalRating > scoreThreshold))
 		{
-			fundingModifier = modifier;
+			const int tightness = scoreThreshold < 0 ? -scoreThreshold : scoreThreshold;
+			if (tightness > bestAbs)
+			{
+				bestAbs = tightness;
+				fundingModifier = modifier;
+			}
 		}
 	}
 	return fundingModifier;

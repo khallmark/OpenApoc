@@ -9,28 +9,6 @@
 namespace OpenApoc
 {
 
-namespace
-{
-static std::vector<UString> vehicleAmmoNames = {
-
-    {"VEQUIPMENTAMMOTYPE_FUSION_POWERFUEL"},
-    {"VEQUIPMENTAMMOTYPE_ELERIUM_115"},
-    {"VEQUIPMENTAMMOTYPE_ZORIUM"},
-    {"VEQUIPMENTAMMOTYPE_MULTI_CANNON_ROUND"},
-    {"VEQUIPMENTAMMOTYPE_JANITOR_MISSILE"},
-    {"VEQUIPMENTAMMOTYPE_JUSTICE_MISSILE"},
-    {"VEQUIPMENTAMMOTYPE_PROPHET_MISSILE"},
-    {"VEQUIPMENTAMMOTYPE_RETRIBUTION_MISSILE"},
-    {"VEQUIPMENTAMMOTYPE_DISRUPTOR_BOMB"},
-    {"VEQUIPMENTAMMOTYPE_STASIS_BOMB"},
-    {"VEQUIPMENTAMMOTYPE_DISRUPTOR_MULTI-BOMB"},
-    {"VEQUIPMENTAMMOTYPE_REPEATER_40MM_CANNON_ROUND"},
-    {"VEQUIPMENTAMMOTYPE_AIRGUARD_52MM_CANNON_ROUND"},
-    {"VEQUIPMENTAMMOTYPE_GROUND_LAUNCHED_MISSILE"},
-    {"VEQUIPMENTAMMOTYPE_AIR_DEFENSE_MISSILE"},
-};
-}
-
 void InitialGameStateExtractor::extractEconomy(GameState &state) const
 {
 	auto &data = this->ufo2p;
@@ -76,6 +54,11 @@ void InitialGameStateExtractor::extractEconomy(GameState &state) const
 		}
 		state.economy[id] = economyInfo;
 	}
+	if (!data.craft_ammo_names || data.craft_ammo_names->count() != CRAFT_AMMO_NAME_COUNT)
+	{
+		LogError("craft_ammo_names count {0} expected {1}",
+		         data.craft_ammo_names ? data.craft_ammo_names->count() : 0, CRAFT_AMMO_NAME_COUNT);
+	}
 	for (unsigned idx = 0; idx < data.economy_data2->count(); idx++)
 	{
 		int i = idx;
@@ -91,9 +74,9 @@ void InitialGameStateExtractor::extractEconomy(GameState &state) const
 		economyInfo.minStock = e.minStock;
 
 		UString id = "";
-		if (i < 15)
+		if (i < CRAFT_AMMO_NAME_COUNT && data.craft_ammo_names)
 		{
-			id = vehicleAmmoNames[i];
+			id = data.getVAmmoId(i);
 		}
 		else
 		{

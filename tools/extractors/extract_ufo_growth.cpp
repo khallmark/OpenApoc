@@ -19,6 +19,9 @@ void InitialGameStateExtractor::extractUfoGrowth(GameState &state) const
 	}
 	const auto table = data.ufo_growth_rates->get(0);
 
+	// Do not keep a copy under common_patch/gamestate/ — loadGame appends vectors.
+	state.ufo_growth_lists.clear();
+
 	auto fill = [&](const UString &id, int week, const uint16_t *counts, int countSlots,
 	                int mothershipExtra)
 	{

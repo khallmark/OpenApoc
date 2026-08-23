@@ -47,11 +47,10 @@ void InitialGameStateExtractor::extractResearch(GameState &state) const
 				LogError("Unexpected labSize {0:02x} for research item {1}",
 				         (unsigned)rdata.labSize, id);
 		}
-		// FIXME: this assumed all listed techs are required, which is not true for some topics
-		// (It's possible that an unknown member in ResearchData marks this, or it's done
-		// in-code)
-		// This should be fixed up in the patch.
-
+		// Table lists up to 3 techs. Extractor emits All. unknown2==1 is only
+		// Genetic Structure / Advanced Security Station / Advanced Quantum Lab —
+		// do not map that byte to Any without a bound consumer. Topics whose
+		// patch replaces the graph use research.xml op="delete".
 		ResearchDependency dependency;
 		dependency.type = ResearchDependency::Type::All;
 
@@ -66,7 +65,10 @@ void InitialGameStateExtractor::extractResearch(GameState &state) const
 			}
 		}
 
-		r->dependencies.research.push_back(dependency);
+		if (!dependency.topics.empty())
+		{
+			r->dependencies.research.push_back(dependency);
+		}
 
 		/*ItemDependency itemdep;
 		itemdep.agentItemsRequired[{&state, "AEQUIPMENTTYPE_PSICLONE"}] = 1;

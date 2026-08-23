@@ -265,7 +265,7 @@
 		<picture>PCK:xcom3/ufodata/base.pck:xcom3/ufodata/base.tab:40:xcom3/ufodata/base.pcx</picture>
         <ufopaedia_entry>PAEDIAENTRY_ADVANCED_QUANTUM_PHYSICS_LAB</ufopaedia_entry>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>Any</type>
               <topics>
@@ -1213,7 +1213,7 @@
         <order>20110</order>
         <ufopaedia_entry>PAEDIAENTRY_THE_ALIEN_LIFE_CYCLE</ufopaedia_entry>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1236,7 +1236,7 @@
         <order>20120</order>
         <ufopaedia_entry>PAEDIAENTRY_THE_REAL_ALIEN_THREAT</ufopaedia_entry>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1310,7 +1310,7 @@
 		<picture>PCK:xcom3/ufodata/base.pck:xcom3/ufodata/base.tab:38:xcom3/ufodata/base.pcx</picture>
         <ufopaedia_entry>PAEDIAENTRY_ADVANCED_BIOCHEMISTRY_LAB</ufopaedia_entry>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>Any</type>
               <topics>
@@ -1528,7 +1528,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1555,7 +1555,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1582,7 +1582,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1609,7 +1609,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1635,7 +1635,7 @@
         <type>Engineering</type>
         <required_lab_size>Large</required_lab_size>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1664,7 +1664,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1691,7 +1691,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1718,7 +1718,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1744,7 +1744,7 @@
         <type>Engineering</type>
         <required_lab_size>Large</required_lab_size>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1770,7 +1770,7 @@
         <type>Engineering</type>
         <required_lab_size>Large</required_lab_size>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1797,7 +1797,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1824,7 +1824,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1851,7 +1851,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1878,7 +1878,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1907,7 +1907,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1932,7 +1932,7 @@
         <type>Engineering</type>
         <required_lab_size>Small</required_lab_size>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1959,7 +1959,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -1986,7 +1986,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2013,7 +2013,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2040,7 +2040,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2067,7 +2067,7 @@
         <required_lab_size>Large</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2096,7 +2096,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2123,7 +2123,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2150,7 +2150,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2177,7 +2177,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2204,7 +2204,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2231,7 +2231,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2258,7 +2258,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2285,7 +2285,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2312,7 +2312,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2339,7 +2339,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2366,7 +2366,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2393,7 +2393,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2420,7 +2420,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2447,7 +2447,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2474,7 +2474,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2501,7 +2501,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2530,7 +2530,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2557,7 +2557,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2584,7 +2584,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2611,7 +2611,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>
@@ -2638,7 +2638,7 @@
         <required_lab_size>Small</required_lab_size>
         <current_lab/>
         <dependencies>
-          <research>
+          <research op="delete">
             <entry>
               <type>All</type>
               <topics>

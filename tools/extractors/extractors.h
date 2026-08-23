@@ -102,6 +102,7 @@ class InitialGameStateExtractor
 	void extractDoodads(GameState &state) const;
 	void extractEconomy(GameState &state) const;
 	void extractUfoGrowth(GameState &state) const;
+	void extractUfoIncursions(GameState &state) const;
 
 	void extractBattlescapeMap(GameState &state, const std::vector<OpenApoc::UString> &paths) const;
 	void extractBattlescapeMapFromPath(GameState &state, const UString dirName,

@@ -4079,9 +4079,7 @@ bool CityView::handleGameStateEvent(Event *e)
 			auto gameOrgEvent = dynamic_cast<GameOrganisationEvent *>(e);
 			fw().stageQueueCommand(
 			    {StageCmd::Command::PUSH,
-			     mksp<NotificationScreen>(
-			         state, *this, format("ALIEN TAKEOVER: {0}", gameOrgEvent->organisation->name),
-			         gameEvent->type)});
+			     mksp<NotificationScreen>(state, *this, gameOrgEvent->message(), gameEvent->type)});
 		}
 		break;
 		case GameEventType::DefendTheBase:
