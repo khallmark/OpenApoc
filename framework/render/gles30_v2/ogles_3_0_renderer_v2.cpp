@@ -775,6 +775,7 @@ class GLSurface final : public RendererImageData
 		}
 	}
 	~GLSurface() override;
+	void resize(Vec2<unsigned int> newSize) override { this->size = newSize; }
 	sp<Image> readBack() override
 	{
 		BindFramebuffer b(this->fbo_id);
@@ -1362,11 +1363,11 @@ class OGLES30Renderer final : public Renderer
 		gl->BindTexture(GL::TEXTURE_2D, pal->tex_id);
 	}
 	sp<Palette> getPalette() override { return this->current_palette; }
-	void draw(sp<Image> i, Vec2<float> position) override
+	void draw(const sp<Image> &i, Vec2<float> position) override
 	{
 		this->drawScaled(i, position, i->size, Scaler::Nearest);
 	}
-	void drawRotated(sp<Image> i, Vec2<float> center, Vec2<float> position, float angle) override
+	void drawRotated(const sp<Image> &i, Vec2<float> center, Vec2<float> position, float angle) override
 	{
 		this->flush();
 		auto viewport_size = this->current_surface->size;
@@ -1396,7 +1397,7 @@ class OGLES30Renderer final : public Renderer
 		}
 		LogError("Unknown image type");
 	}
-	void drawScaled(sp<Image> i, Vec2<float> position, Vec2<float> size, Scaler scaler) override
+	void drawScaled(const sp<Image> &i, Vec2<float> position, Vec2<float> size, Scaler scaler) override
 	{
 		auto viewport_size = this->current_surface->size;
 		bool flip_y = (this->current_surface == this->default_surface);
@@ -1452,7 +1453,7 @@ class OGLES30Renderer final : public Renderer
 		}
 		LogError("Unknown image type");
 	}
-	void drawTinted(sp<Image> i, Vec2<float> position, Colour tint) override
+	void drawTinted(const sp<Image> &i, Vec2<float> position, Colour tint) override
 	{
 		auto viewport_size = this->current_surface->size;
 		bool flip_y = (this->current_surface == this->default_surface);

@@ -21,6 +21,7 @@ class Framework;
 //   KEYUP <name>
 //   TEXT <string>
 //   SCREENSHOT <path>
+//   RESIZE <width> <height>
 //   STATUS
 //   GS <query>
 //   SAVE <path>
@@ -53,6 +54,7 @@ struct HarnessCommand
 		Status,
 		Query,
 		Save,
+		Resize,
 		Quit,
 		Unknown
 	};

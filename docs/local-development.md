@@ -70,6 +70,8 @@ On macOS, the build copies OpenApoc `data/` into `OpenApoc.app/Contents/Resource
 
 Finder launch (`open ./build/bin/OpenApoc.app`) uses Resources for OpenApoc data and `~/Library/Application Support/OpenApoc/OpenApoc/` for settings, saves, and the CD path. The first run opens a file panel if the CD is missing. CLI `--Framework.Data` / `--Framework.CD` still override. `portable.txt` keeps the cwd-relative layout for terminal work.
 
+The window is resizable. `Framework.Screen.Width`/`Height` of `0` means desktop size. Mode is `windowed`, `fullscreen` (exclusive), or `borderless`. F11 or Alt+Enter toggles windowed ↔ borderless. City and battle tiles stay 1:1 with **window points** so a larger window shows more of the map; HiDPI backing-store pixels are one GPU upscale, not extra tile work. Forms stay at original 640-wide layout and are integer-scaled (`Framework.Screen.UiScale`, `0` = auto: 1× below 2560-wide, then `width/1280`). `Framework.Screen.AutoScale` is the older “scale the whole game to ~1280-wide” path and keeps UI and map tied together. Bundle first launch (no saved Screen.* overrides) uses native borderless + auto UI scale.
+
 ### Signed Mac app (Developer ID)
 
 ```sh

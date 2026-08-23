@@ -16,6 +16,7 @@ Commands (see framework/harness.h):
   keyup NAME
   text STRING
   screenshot PATH
+  resize W H
   quit
   wait SECONDS          (client-side)
 """

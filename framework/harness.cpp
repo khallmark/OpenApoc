@@ -299,6 +299,16 @@ bool parseHarnessCommand(const UString &line, HarnessCommand &out)
 		}
 		return true;
 	}
+	if (verb == "RESIZE")
+	{
+		if (parts.size() < 3 || !parseIntToken(parts[1], out.x) || !parseIntToken(parts[2], out.y))
+		{
+			out.error = "RESIZE width height";
+			return false;
+		}
+		out.type = HarnessCommand::Type::Resize;
+		return true;
+	}
 	if (verb == "MOVE")
 	{
 		if (parts.size() < 3 || !parseIntToken(parts[1], out.x) || !parseIntToken(parts[2], out.y))
@@ -693,6 +703,12 @@ UString Harness::execute(const HarnessCommand &cmd, Framework &fw)
 			}
 			std::replace(reply.begin(), reply.end(), '\n', ' ');
 			return format("OK {0}", reply);
+		}
+		case HarnessCommand::Type::Resize:
+		{
+			fw.displaySetSize({cmd.x, cmd.y});
+			const auto size = fw.displayGetSize();
+			return format("OK resized w={0} h={1}", size.x, size.y);
 		}
 		case HarnessCommand::Type::Quit:
 			fw.stageQueueCommand({StageCmd::Command::QUIT});

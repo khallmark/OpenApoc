@@ -68,9 +68,15 @@ class Framework
 
 	void displayInitialise();
 	void displayShutdown();
+	void displayRefreshSize();
+	void displayToggleFullscreen();
 	int displayGetWidth();
 	int displayGetHeight();
 	Vec2<int> displayGetSize();
+
+	// Resize the window as if the user dragged it. Test/automation hook.
+	void displaySetSize(Vec2<int> size);
+	int uiGetScale() const;
 	void displaySetTitle(UString NewTitle);
 	void displaySetIcon(sp<RGBImage> icon);
 	bool displayHasWindow() const;

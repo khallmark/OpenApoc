@@ -371,7 +371,7 @@ void VEquipScreen::eventOccurred(Event *e)
 			Vec2<int> equipmentPos = fw().getCursor().getPosition() + this->draggedEquipmentOffset;
 			// If this is within the grid try to snap it
 			Vec2<int> equipmentGridPos = equipmentPos - equipOffset;
-			equipmentGridPos /= EQUIP_GRID_SLOT_SIZE;
+			equipmentGridPos /= (EQUIP_GRID_SLOT_SIZE * fw().uiGetScale());
 			if (this->selected->canAddEquipment(equipmentGridPos, this->draggedEquipment))
 			{
 				if (!draggedEquipment->research_dependency.satisfied())
@@ -511,8 +511,9 @@ void VEquipScreen::render()
 		// Draw equipment we're currently dragging (snapping to the grid if possible)
 		Vec2<int> equipmentPos = fw().getCursor().getPosition() + this->draggedEquipmentOffset;
 		// If this is within the grid try to snap it
+		const Vec2<int> slotPx = EQUIP_GRID_SLOT_SIZE * fw().uiGetScale();
 		Vec2<int> equipmentGridPos = equipmentPos - equipOffset;
-		equipmentGridPos /= EQUIP_GRID_SLOT_SIZE;
+		equipmentGridPos /= slotPx;
 		if (equipmentGridPos.x < 0 || equipmentGridPos.x >= EQUIP_GRID_SLOTS.x ||
 		    equipmentGridPos.y < 0 || equipmentGridPos.y >= EQUIP_GRID_SLOTS.y)
 		{
@@ -521,7 +522,7 @@ void VEquipScreen::render()
 		else
 		{
 			// Inside the grid, snap
-			equipmentPos = equipmentGridPos * EQUIP_GRID_SLOT_SIZE;
+			equipmentPos = equipmentGridPos * slotPx;
 			equipmentPos += equipOffset;
 		}
 		fw().renderer->draw(this->draggedEquipment->equipscreen_sprite, equipmentPos);
