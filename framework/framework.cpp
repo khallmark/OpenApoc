@@ -260,7 +260,18 @@ Framework::Framework(const UString programName, bool createWindow)
 	if (createWindow)
 	{
 		displayInitialise();
-		enableSDLDialogLogger(p->window);
+		// SDL_ShowSimpleMessageBox is modal and blocks the thread that calls it until somebody
+		// dismisses it, and Logger.dialogLevel defaults to Error -- so under the harness a single
+		// LogError deadlocks the main loop forever, taking the harness (which is polled from that
+		// same loop) down with it. Nobody is there to click OK on an automated run.
+		if (Options::harnessEnable.get())
+		{
+			LogInfo("Harness enabled: not installing the modal SDL dialog logger");
+		}
+		else
+		{
+			enableSDLDialogLogger(p->window);
+		}
 	}
 	audioInitialise(!createWindow);
 

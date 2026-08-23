@@ -242,6 +242,9 @@ class GameProcess:
             "--Framework.AudioBackends=null",
             # Fixed RNG seed: GameState::startGame() otherwise reseeds from wall-clock.
             "--OpenApoc.NewFeature.SeedRng=0",
+            # Belt and braces alongside the engine-side guard: a modal error dialog blocks the
+            # main loop forever when there is no human to dismiss it.
+            "--Logger.dialogLevel=0",
         ] + PAUSE_NOTIFICATION_FLAGS + self.extra
         self.logf = open(self.log_path, "w")
         self.proc = subprocess.Popen(
