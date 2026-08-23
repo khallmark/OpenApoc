@@ -246,9 +246,15 @@ class Vehicle : public StateObject<Vehicle>,
 
 	// If the vehicle is currently traveling through a dimension gate
 	bool betweenDimensions = false;
+	// Dest-city portal index paired with the entry gate the player clicked.
+	// UFO2P non-4 string 0x149537 ("Click on Dimension Gate to set destination").
+	// -1 = unset; leaveDimensionGate then picks a random dest-city portal.
+	int destinationPortalIndex = -1;
 
 	/* leave the building and put vehicle into the city */
 	void leaveDimensionGate(GameState &state);
+	// Returns destinationPortalIndex when it is in [0, portalCount), else -1.
+	static int selectDimensionExitPortal(int destinationPortalIndex, int portalCount);
 	/* 'enter' the vehicle into a building*/
 	void enterDimensionGate(GameState &state);
 	/* leave the building and put vehicle into the city */

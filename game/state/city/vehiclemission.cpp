@@ -393,8 +393,12 @@ VehicleMission VehicleMission::gotoPortal(GameState &state, Vehicle &v)
 	return gotoPortal(state, v, target);
 }
 
-VehicleMission VehicleMission::gotoPortal(GameState &, Vehicle &, Vec3<int> target)
+VehicleMission VehicleMission::gotoPortal(GameState &, Vehicle &v, Vec3<int> target)
 {
+	if (v.city)
+	{
+		v.destinationPortalIndex = v.city->getNearestPortalIndex(Vec3<float>(target));
+	}
 	VehicleMission mission;
 	mission.type = MissionType::GotoPortal;
 	mission.targetLocation = target;
@@ -1358,6 +1362,11 @@ void VehicleMission::update(GameState &state, Vehicle &v, unsigned int ticks, bo
 						int incursionScore = -v.type->score / 4;
 						state.weekScore.incursions += incursionScore;
 						state.totalScore.incursions += incursionScore;
+					}
+
+					if (v.city)
+					{
+						v.destinationPortalIndex = v.city->getNearestPortalIndex(v.position);
 					}
 
 					for (auto &city : state.cities)
@@ -3185,11 +3194,11 @@ UString VehicleMission::getName()
 }
 
 GroundVehicleTileHelper::GroundVehicleTileHelper(TileMap &map, Vehicle &v)
-    : GroundVehicleTileHelper(map, v.type->type)
+    : map(map), type(v.type->type), v(&v)
 {
 }
 GroundVehicleTileHelper::GroundVehicleTileHelper(TileMap &map, VehicleType::Type type)
-    : map(map), type(type)
+    : map(map), type(type), v(nullptr)
 {
 }
 
@@ -3447,6 +3456,29 @@ bool GroundVehicleTileHelper::canEnterTile(Tile *from, Tile *to, bool, bool &, f
 						return false;
 					}
 					break;
+			}
+		}
+	}
+
+	// One vehicle per road tile. Same intersectingObjects rule as FlyingVehicleTileHelper.
+	if (v)
+	{
+		const auto self = v->shared_from_this();
+		for (auto &obj : to->intersectingObjects)
+		{
+			if (obj->getType() != TileObject::Type::Vehicle)
+			{
+				continue;
+			}
+			auto vehicleTile = std::static_pointer_cast<TileObjectVehicle>(obj);
+			if (vehicleTile->getVehicle() == self)
+			{
+				continue;
+			}
+			const bool vehicleCrashed = vehicleTile->getVehicle()->crashed;
+			if (v->crashed || !vehicleCrashed)
+			{
+				return false;
 			}
 		}
 	}

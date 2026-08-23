@@ -349,6 +349,26 @@ bool City::canPlacePortal(Vec3<float> position)
 	return true;
 }
 
+int City::getNearestPortalIndex(Vec3<float> position) const
+{
+	if (portals.empty())
+	{
+		return -1;
+	}
+	int best = 0;
+	float bestDist = std::numeric_limits<float>::max();
+	for (size_t i = 0; i < portals.size(); i++)
+	{
+		const float d = glm::length(portals[i]->getPosition() - position);
+		if (d < bestDist)
+		{
+			bestDist = d;
+			best = static_cast<int>(i);
+		}
+	}
+	return best;
+}
+
 void City::generatePortals(GameState &state)
 {
 	const static auto zWeight = {1, 1, 3, 4, 6};

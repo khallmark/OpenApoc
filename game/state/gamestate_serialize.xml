@@ -478,6 +478,7 @@
     <member>carriedVehicle</member>
     <member>carriedByVehicle</member>
     <member>betweenDimensions</member>
+    <member>destinationPortalIndex</member>
   </object>
   <object>
     <name>VEquipment</name>

@@ -4,7 +4,7 @@ Hexa ranges still **not** in extractor headers: `UFO_mission_data` at file `0x13
 
 Still missing or approximate in OpenApoc ([issue 264](https://github.com/OpenApoc/OpenApoc/issues/264)):
 
-- Destination gate selection — string `Click on Dimension Gate to set destination` at UFO2P non-4 `0x149537`. `leaveDimensionGate` picks a random portal from `city->portals`.
+- Destination gate selection — string `Click on Dimension Gate to set destination` at UFO2P non-4 `0x149537`. `gotoPortal` stores `destinationPortalIndex`; `leaveDimensionGate` exits that dest-city portal and falls back to random when unset.
 - Switching copy — `Switching to Alien Dimension` at `0x14D6C1`; `Go into Dimension Gate`.
 - Fixed alien-map portals are extracted as hardcoded `initial_portals` in [extract_city_map.cpp](../../../tools/extractors/extract_city_map.cpp) (`92,45,9` / `94,43,9` / `95,46,9`).
 - Umbilical collapse — **no printable `umbilical` in UFO2P**

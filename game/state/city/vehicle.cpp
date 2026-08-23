@@ -1269,6 +1269,19 @@ VehicleMover::~VehicleMover() = default;
 
 Vehicle::~Vehicle() = default;
 
+int Vehicle::selectDimensionExitPortal(int destinationPortalIndex, int portalCount)
+{
+	if (portalCount <= 0)
+	{
+		return -1;
+	}
+	if (destinationPortalIndex >= 0 && destinationPortalIndex < portalCount)
+	{
+		return destinationPortalIndex;
+	}
+	return -1;
+}
+
 void Vehicle::leaveDimensionGate(GameState &state)
 {
 	// No portals to leave from. return here
@@ -1276,10 +1289,23 @@ void Vehicle::leaveDimensionGate(GameState &state)
 	{
 		return;
 	}
-	auto portal = city->portals.begin();
-	std::uniform_int_distribution<int> portal_rng(0, city->portals.size() - 1);
-	std::advance(portal, portal_rng(state.rng));
-	auto initialPosition = (*portal)->getPosition();
+	// Paired exit when the player clicked a gate (UFO2P non-4 0x149537).
+	// Unset / out-of-range keeps the random dest-city pick.
+	const int exitIndex =
+	    selectDimensionExitPortal(destinationPortalIndex, static_cast<int>(city->portals.size()));
+	sp<Doodad> portal;
+	if (exitIndex >= 0)
+	{
+		portal = city->portals[exitIndex];
+	}
+	else
+	{
+		std::uniform_int_distribution<int> portal_rng(0,
+		                                              static_cast<int>(city->portals.size()) - 1);
+		portal = city->portals[portal_rng(state.rng)];
+	}
+	destinationPortalIndex = -1;
+	auto initialPosition = portal->getPosition();
 	auto initialFacing = 0.0f;
 
 	LogInfo("Leaving dimension gate {0}", this->name);

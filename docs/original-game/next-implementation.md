@@ -7,9 +7,9 @@ Priority is milestone + evidence confidence + local file locality. A row is not 
 1. **Ticks per second ([issue 997](https://github.com/OpenApoc/OpenApoc/issues/997))** — 144 TPS is `36 × 4` on purpose. City Speed1 already skips alternate city ticks. Next: fire rates / AOE / movement that still inherit a silent 4×.
    - Lock: `test_gametime` (`tick_constants`, `hardcoded_fuel_ticks_match_tps`), `test_battle_hazard`.
    - Pass: `VANILLA_TICKS_PER_SECOND == 36` stays; remaining subsystem rates no longer inherit a silent 4×; `FUEL_TICKS_PER_SECOND` tracks `TICKS_PER_SECOND`.
-2. **Ground vehicle lanes ([issue 785](https://github.com/OpenApoc/OpenApoc/issues/785))** — `connection[dir]` is used; remaining work is large-vehicle occupancy and engagement tables.
+2. **Ground vehicle lanes ([issue 785](https://github.com/OpenApoc/OpenApoc/issues/785))** — `connection[dir]` is used; 1-tile occupancy now matches the flying helper. Remaining work is large-vehicle footprint and engagement tables.
    - Lock: `test_vehicle_mission`.
-   - Pass: road occupancy and engagement match extracted road-layer rules.
+   - Pass: large-vehicle occupancy and engagement match extracted road-layer rules.
 3. **Organisation vehicle park sell-above-cap ([issue 1053](https://github.com/OpenApoc/OpenApoc/issues/1053))** — restock + seller credit are in. Selling surplus park vehicles is still open.
    - Lock: `test_city_rules` (`org_park_funds`, `purchase_deduct`).
    - Pass: weekly restock can sell surplus.
@@ -25,8 +25,8 @@ Priority is milestone + evidence confidence + local file locality. A row is not 
 7. **Vehicle weapon reload** — `VEquipment::reload` is instant (`vequipment.cpp:190`). Hexa vehicle weapon tables exist; speed is still TODO.
    - Lock: add a city-equipment test when a duration exists.
    - Pass: reload consumes time from the extracted weapon row, not a hardcoded instant.
-8. **Destination gate routing ([issue 264](https://github.com/OpenApoc/OpenApoc/issues/264))** — original UI asks for a destination gate (`0x149537`). `leaveDimensionGate` picks a random portal (`vehicle.cpp:1272`).
-   - Lock: city portal test when a destination is stored.
-   - Pass: exit portal is the one the player selected, not a random `city->portals` pick.
+8. **Destination gate routing ([issue 264](https://github.com/OpenApoc/OpenApoc/issues/264))** — done. `gotoPortal` stores `destinationPortalIndex`; `leaveDimensionGate` exits that dest-city portal (UFO2P non-4 `0x149537`). Random fallback remains when the index is unset.
+   - Lock: `test_vehicle_mission` (`select_dimension_exit_portal`), `test_city_rules` (`destination_gate`).
+   - Pass: clicked gate index exits the paired dest portal; unset index still random.
 
 Extractor CRC follow-on (not this experiment): teach [ufo2p.cpp](../../tools/extractors/common/ufo2p.cpp) / [tacp.cpp](../../tools/extractors/common/tacp.cpp) the `4`-build CRCs and the per-table deltas in the sibling rebase CSVs, or keep extracting from the ISO non-4 pair.

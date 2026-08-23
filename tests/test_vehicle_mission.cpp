@@ -38,6 +38,17 @@ static bool test_factories()
 	return true;
 }
 
+static bool test_select_dimension_exit_portal()
+{
+	TEST_REQUIRE(Vehicle::selectDimensionExitPortal(0, 3) == 0, "index 0 of 3");
+	TEST_REQUIRE(Vehicle::selectDimensionExitPortal(2, 3) == 2, "index 2 of 3");
+	TEST_REQUIRE(Vehicle::selectDimensionExitPortal(3, 3) == -1, "index 3 of 3 is out of range");
+	TEST_REQUIRE(Vehicle::selectDimensionExitPortal(-1, 3) == -1, "unset index");
+	TEST_REQUIRE(Vehicle::selectDimensionExitPortal(0, 0) == -1, "empty portal list");
+	TEST_REQUIRE(Vehicle::selectDimensionExitPortal(1, 1) == -1, "index 1 of 1 is out of range");
+	return true;
+}
+
 static bool test_noop_get_next_destination()
 {
 	GameState state;
@@ -71,6 +82,7 @@ int main(int argc, char **argv)
 	applyDeterministicTestConfig();
 	return runTestSuite({
 	    {"factories", test_factories},
+	    {"select_dimension_exit_portal", test_select_dimension_exit_portal},
 	    {"noop_get_next_destination", test_noop_get_next_destination},
 	});
 }

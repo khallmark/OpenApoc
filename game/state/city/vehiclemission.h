@@ -67,6 +67,7 @@ class GroundVehicleTileHelper : public CanEnterTileHelper
   private:
 	TileMap &map;
 	VehicleType::Type type;
+	const Vehicle *v = nullptr;
 
   public:
 	GroundVehicleTileHelper(TileMap &map, Vehicle &v);

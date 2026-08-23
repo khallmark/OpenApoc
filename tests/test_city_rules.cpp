@@ -13,6 +13,7 @@
 #include "game/state/rules/city/ufomissionpreference.h"
 #include "game/state/rules/city/vehicletype.h"
 #include "game/state/shared/agent.h"
+#include "game/state/shared/doodad.h"
 #include "game/state/shared/organisation.h"
 #include "library/sp.h"
 #include "tests/test_helpers.h"
@@ -210,6 +211,52 @@ static bool test_goto_building_fallback()
 	return true;
 }
 
+static bool test_destination_gate()
+{
+	auto &state = *g_state;
+	auto destCity = state.cities["CITYMAP_ALIEN"];
+	TEST_REQUIRE(destCity != nullptr, "CITYMAP_ALIEN missing");
+	if (destCity->portals.empty())
+	{
+		destCity->generatePortals(state);
+	}
+	TEST_REQUIRE(destCity->portals.size() >= 2, "need two dest portals, have {0}",
+	             destCity->portals.size());
+
+	TEST_REQUIRE(destCity->getNearestPortalIndex(destCity->portals[0]->getPosition()) == 0,
+	             "nearest portal 0");
+	TEST_REQUIRE(destCity->getNearestPortalIndex(destCity->portals[1]->getPosition()) == 1,
+	             "nearest portal 1");
+
+	TEST_REQUIRE(state.vehicle_types.find("VEHICLETYPE_PHOENIX_HOVERCAR") !=
+	                 state.vehicle_types.end(),
+	             "VEHICLETYPE_PHOENIX_HOVERCAR missing");
+	TEST_REQUIRE(state.getPlayer(), "no player org");
+
+	const Vec3<float> spawn = {40.0f, 40.0f, static_cast<float>(destCity->size.z - 1)};
+	auto v = destCity->placeVehicle(state, {&state, "VEHICLETYPE_PHOENIX_HOVERCAR"},
+	                                state.getPlayer(), spawn, 0.0f);
+	TEST_REQUIRE(v != nullptr, "placeVehicle phoenix failed");
+
+	auto order =
+	    VehicleMission::gotoPortal(state, *v, (Vec3<int>)destCity->portals[1]->getPosition());
+	TEST_REQUIRE(order.type == VehicleMission::MissionType::GotoPortal, "gotoPortal type");
+	TEST_REQUIRE(v->destinationPortalIndex == 1, "gotoPortal stored dest index {0}",
+	             v->destinationPortalIndex);
+
+	v->removeFromMap(state);
+	v->currentBuilding.clear();
+	v->betweenDimensions = true;
+	v->destinationPortalIndex = 1;
+	const auto expected = destCity->portals[1]->getPosition();
+	v->leaveDimensionGate(state);
+
+	TEST_REQUIRE(!v->betweenDimensions, "still between dimensions");
+	TEST_REQUIRE(v->destinationPortalIndex == -1, "dest index not consumed");
+	TEST_REQUIRE(v->position == expected, "left at {0} expected {1}", v->position, expected);
+	return true;
+}
+
 static bool test_overspawn_invasion()
 {
 	auto &state = *g_state;
@@ -291,6 +338,7 @@ int main(int argc, char **argv)
 	    {"org_park_funds", test_org_park_funds},
 	    {"purchase_deduct", test_purchase_deduct},
 	    {"goto_building_fallback", test_goto_building_fallback},
+	    {"destination_gate", test_destination_gate},
 	    {"overspawn_invasion", test_overspawn_invasion},
 	});
 }
