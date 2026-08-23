@@ -3,6 +3,7 @@
 #include "framework/framework.h"
 #include "game/ui/boot.h"
 #include "game/ui/components/controlgenerator.h"
+#include "game/ui/general/transactioncontrol.h"
 #include "game/ui/tileview/cityview.h"
 #include "version.h"
 #include <SDL_main.h>
@@ -26,6 +27,7 @@ int main(int argc, char *argv[])
 		// keeps its icon cache in a static singleton, so otherwise those images are destroyed at
 		// process exit -- after the renderer -- leaving their GL textures undeleted.
 		ControlGenerator::releaseCachedImages();
+		TransactionControl::releaseCachedImages();
 		UI::unload();
 	}
 
