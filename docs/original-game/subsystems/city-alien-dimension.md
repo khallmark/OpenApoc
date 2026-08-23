@@ -1,6 +1,6 @@
 # Alien dimension and city UFO flow
 
-`UFO_mission_data` at file `0x13DDFC` (VA `0x1119FC`), `UFO_growth_rates` at `0x155010` (VA `0x128C10`), and `UFO_mission_patterns` at `0x155164` (VA `0x128D64`) are extracted (`ufoincursion.h`, `ufogrowth.h`, `ufomissionpattern.h`). Pattern slots: 3=Infiltration, 1=Attack, 2=Subversion, 5=Overspawn (19 weeks + DEFAULT). Do not XInclude the growth/incursion reference XMLs — serialize appends vectors. The preference XInclude stays until extract-data writes the zip. Do not use file `0x154710` for growth. Crew / drop-troop / alien-building-defense tables **are** extracted (`crew_ufo_downed` `0x13E560` / VA `0x112160`, P↔P4 identical). Bound Scenario Generator xrefs are empty.
+`UFO_mission_data` at file `0x13DDFC` (VA `0x1119FC`), `UFO_growth_rates` at `0x155010` (VA `0x128C10`), and `UFO_mission_patterns` at `0x155164` (VA `0x128D64`) are extracted (`ufoincursion.h`, `ufogrowth.h`, `ufomissionpattern.h`). Pattern slots: 3=Infiltration, 1=Attack, 2=Subversion, 5=Overspawn (19 weeks + DEFAULT). Do not XInclude the reference XMLs — serialize appends vectors and doubles weights. Do not use file `0x154710` for growth. Crew / drop-troop / alien-building-defense tables **are** extracted (`crew_ufo_downed` `0x13E560` / VA `0x112160`, P↔P4 identical). Bound Scenario Generator xrefs are empty.
 
 Implemented: dest-gate pairing (`destinationPortalIndex`), Overspawn `InfiltrateSubvert`, organic-factory growth gate. Reference EXE dumps live in [exe-tables](../exe-tables/).
 

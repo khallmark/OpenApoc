@@ -3,6 +3,8 @@
 #include "game/state/gamestate.h"
 #include "library/sp.h"
 #include "tests/test_helpers.h"
+#include "tools/extractors/common/exe_slide.h"
+#include "tools/extractors/common/research.h"
 
 using namespace OpenApoc;
 using namespace OpenApoc::TestHelpers;
@@ -90,6 +92,24 @@ static bool test_research_dependency()
 	return true;
 }
 
+static bool test_exe_slide_crcs()
+{
+	int32_t slide = -1;
+	TEST_REQUIRE(ufo2pFileSlide(UFO2P_CRC_NON4, slide) && slide == 0, "ufo2p non-4");
+	TEST_REQUIRE(ufo2pFileSlide(UFO2P_CRC_4, slide) && slide == 0xE00, "ufo2p 4-build");
+	TEST_REQUIRE(!ufo2pFileSlide(0xdeadbeef, slide) && slide == 0, "ufo2p unknown");
+	TEST_REQUIRE(tacpFileSlide(TACP_CRC_NON4, slide) && slide == 0, "tacp non-4");
+	TEST_REQUIRE(tacpFileSlide(TACP_CRC_4, slide) && slide == -0x2200, "tacp 4-build");
+	TEST_REQUIRE(!tacpFileSlide(0xdeadbeef, slide) && slide == 0, "tacp unknown");
+	TEST_REQUIRE(ufo2pTableOffset(0xE00, CREW_UFO_DOWNED_OFFSET_START) ==
+	                 CREW_UFO_DOWNED_OFFSET_START,
+	             "crew_ufo_downed does not slide");
+	TEST_REQUIRE(ufo2pTableOffset(0xE00, RESEARCH_DATA_OFFSET_START) ==
+	                 RESEARCH_DATA_OFFSET_START + 0xE00,
+	             "research_data slides +0xE00");
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -101,5 +121,6 @@ int main(int argc, char **argv)
 	    {"is_complete", test_is_complete},
 	    {"force_complete", test_force_complete},
 	    {"research_dependency", test_research_dependency},
+	    {"exe_slide_crcs", test_exe_slide_crcs},
 	});
 }

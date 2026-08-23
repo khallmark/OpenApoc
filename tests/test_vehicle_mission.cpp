@@ -20,6 +20,7 @@ static bool test_factories()
 	auto subvert = VehicleMission::infiltrateOrSubvertBuilding(state, v, true);
 	TEST_REQUIRE(subvert.type == VehicleMission::MissionType::InfiltrateSubvert, "subvert type");
 	TEST_REQUIRE(subvert.subvert == true, "subvert flag");
+	// Effect: Organisation::tryMicronoidRain (locked in test_organisation).
 
 	auto recover = VehicleMission::recoverVehicle(state, v, {});
 	TEST_REQUIRE(recover.type == VehicleMission::MissionType::RecoverVehicle, "recover type");

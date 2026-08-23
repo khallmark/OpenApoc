@@ -22,6 +22,8 @@
 #include "library/rect.h"
 #include "library/sp.h"
 #include "tests/test_helpers.h"
+#include <list>
+#include <map>
 #include <vector>
 
 using namespace OpenApoc;
@@ -357,7 +359,16 @@ static bool test_ufo_mission_preference_loaded()
 	auto defIt = state.ufo_mission_preference.find("UFO_MISSION_PREFERENCE_DEFAULT");
 	TEST_REQUIRE(defIt != state.ufo_mission_preference.end() && defIt->second, "DEFAULT missing");
 	const auto &def = *defIt->second;
-	TEST_REQUIRE(def.missionList.size() == 10, "DEFAULT slots {0}", def.missionList.size());
+	if (def.missionList.size() != 10)
+	{
+		UString dump;
+		for (auto &p : state.ufo_mission_preference)
+		{
+			dump += format(" {0}={1}", p.first,
+			               p.second ? (int)p.second->missionList.size() : -1);
+		}
+		TEST_REQUIRE(false, "DEFAULT slots {0} keys{1}", def.missionList.size(), dump);
+	}
 	auto d = def.missionList.begin();
 	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Infiltration, "DEFAULT[0]");
 	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Attack, "DEFAULT[1]");
@@ -401,6 +412,14 @@ static bool test_ufo_mission_preference_loaded()
 	TEST_REQUIRE(countPref(w13It->second->missionList, UFOIncursion::PrimaryMission::Overspawn) ==
 	                 2,
 	             "week13 overspawn");
+
+	// Week 7 is the first Overspawn slot (EXE 3×7,1,2,5).
+	auto w7It = state.ufo_mission_preference.find("UFO_MISSION_PREFERENCE_7");
+	TEST_REQUIRE(w7It != state.ufo_mission_preference.end() && w7It->second, "week7 missing");
+	TEST_REQUIRE(countPref(w7It->second->missionList, UFOIncursion::PrimaryMission::Overspawn) == 1,
+	             "week7 overspawn");
+	TEST_REQUIRE(countPref(w7It->second->missionList, UFOIncursion::PrimaryMission::Attack) == 1,
+	             "week7 attack");
 	return true;
 }
 
@@ -503,8 +522,10 @@ static bool test_overspawn_invasion()
 	TEST_REQUIRE(state.organisations.find("ORG_ALIEN") != state.organisations.end(),
 	             "ORG_ALIEN missing");
 
+	std::map<UString, std::list<UFOIncursion::PrimaryMission>> savedLists;
 	for (auto &pref : state.ufo_mission_preference)
 	{
+		savedLists[pref.first] = pref.second->missionList;
 		pref.second->missionList = {UFOIncursion::PrimaryMission::Overspawn};
 	}
 
@@ -560,6 +581,14 @@ static bool test_overspawn_invasion()
 	             "front={0} back={1}",
 	             (int)invader->missions.front().type, (int)invader->missions.back().type);
 	TEST_REQUIRE(!sawAttackBuilding, "Overspawn mothership was given AttackBuilding");
+	for (auto &pref : state.ufo_mission_preference)
+	{
+		auto it = savedLists.find(pref.first);
+		if (it != savedLists.end())
+		{
+			pref.second->missionList = it->second;
+		}
+	}
 	return true;
 }
 
@@ -762,6 +791,24 @@ static bool test_research_item_prereq_gates()
 	TEST_REQUIRE(bit != beam->second->dependencies.items.vehicleItemsRequired.end() &&
 	                 bit->second == 1,
 	             "Light Disruptor Beam item gate");
+
+	// Patch only sets hidden; EXE research_data[60] type 1 / prereq 37.
+	auto dest = state.research.topics.find("RESEARCH_DIMENSION_DESTABILISER");
+	TEST_REQUIRE(dest != state.research.topics.end() && dest->second, "DESTABILISER missing");
+	StateRef<AEquipmentType> destItem{&state, "AEQUIPMENTTYPE_DIMENSION_DESTABILISER"};
+	auto dit = dest->second->dependencies.items.agentItemsRequired.find(destItem);
+	TEST_REQUIRE(dit != dest->second->dependencies.items.agentItemsRequired.end() &&
+	                 dit->second == 1,
+	             "Dimension Destabiliser item gate");
+
+	// EXE research_data[74] type 0 / prereq 48 → last vequip name (NUL at table end).
+	auto shift = state.research.topics.find("RESEARCH_DIMENSION_SHIFTER");
+	TEST_REQUIRE(shift != state.research.topics.end() && shift->second, "SHIFTER missing");
+	StateRef<VEquipmentType> shiftItem{&state, "VEQUIPMENTTYPE_DIMENSION_SHIFTER"};
+	auto sit = shift->second->dependencies.items.vehicleItemsRequired.find(shiftItem);
+	TEST_REQUIRE(sit != shift->second->dependencies.items.vehicleItemsRequired.end() &&
+	                 sit->second == 1,
+	             "Dimension Shifter item gate");
 	return true;
 }
 

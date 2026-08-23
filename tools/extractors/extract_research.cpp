@@ -79,10 +79,22 @@ void InitialGameStateExtractor::extractResearch(GameState &state) const
 			switch (rdata.prereqType)
 			{
 				case 0:
+					if (rdata.prereq >= data.vehicle_equipment_names->count())
+					{
+						LogError("research {0} craft-eq prereq {1} >= name table {2}", id,
+						         rdata.prereq, data.vehicle_equipment_names->count());
+						break;
+					}
 					r->dependencies.items
 					    .vehicleItemsRequired[{&state, data.getVequipmentId(rdata.prereq)}] = 1;
 					break;
 				case 1:
+					if (rdata.prereq >= data.agent_equipment_names->count())
+					{
+						LogError("research {0} agent-eq prereq {1} >= name table {2}", id,
+						         rdata.prereq, data.agent_equipment_names->count());
+						break;
+					}
 					r->dependencies.items
 					    .agentItemsRequired[{&state, data.getAEquipmentId(rdata.prereq)}] = 1;
 					break;

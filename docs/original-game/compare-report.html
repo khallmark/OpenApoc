@@ -510,7 +510,7 @@ footer {
     <tr><td>Vehicle freight / rescue / UFO frame counts / equip icons</td><td>Hardcoded sets in <code>extract_vehicles.cpp</code>, not <code>VehicleData</code> fields.</td></tr>
     <tr><td>Research <code>ufopaedia_entry</code></td><td>Extractor still writes an empty link; patch <code>research.xml</code> wires entries.</td></tr>
     <tr><td>Damage modifier names</td><td>Values from TACP; names hand-filled in <code>tacp.cpp</code>.</td></tr>
-    <tr><td><code>ufo_mission_preference.xml</code></td><td>Matches EXE <code>UFO_mission_patterns</code> at <code>0x155164</code> (20×10 uint16). XInclude until extract-data writes the zip.</td></tr>
+    <tr><td><code>ufo_mission_preference.xml</code></td><td>Reference dump of EXE <code>UFO_mission_patterns</code> at <code>0x155164</code> (20×10 uint16). Extracted into <code>base_gamestate</code>; do not XInclude.</td></tr>
   </tbody>
   </table></div>
   <div class="table-wrap"><table id="pipe-hard">
@@ -519,7 +519,7 @@ footer {
   <tbody>
     <tr><td><code>UFO_GROWTH_*</code> weekly lists</td><td>extracted (<code>extract_ufo_growth.cpp</code>); reference <code>docs/original-game/exe-tables/ufo_growth_lists.xml</code> — do not load from <code>common_patch/gamestate/</code></td><td>hexa <code>UFO_growth_rates</code> <code>0x155010</code></td></tr>
     <tr><td>UFO mission / incursion defs</td><td>extracted (<code>extract_ufo_incursions.cpp</code>); reference <code>docs/original-game/exe-tables/ufo_incursions.xml</code> — do not load from <code>common_patch/gamestate/</code></td><td>hexa <code>UFO_mission_data</code> <code>0x13DDFC</code> (VA <code>0x1119FC</code>)</td></tr>
-    <tr><td>UFO mission patterns</td><td>extracted; patch XInclude matches EXE</td><td>hexa <code>UFO_mission_patterns</code> <code>0x155164</code> (VA <code>0x128D64</code>)</td></tr>
+    <tr><td>UFO mission patterns</td><td>extracted into <code>base_gamestate</code></td><td>hexa <code>UFO_mission_patterns</code> <code>0x155164</code> (VA <code>0x128D64</code>)</td></tr>
     <tr><td>Engineering topic overlay (descriptions / order)</td><td><code>data/common_patch/gamestate/research.xml</code></td><td>hours/cost/item extracted from <code>manufacturing_data</code> <code>0x13FD34</code></td></tr>
     <tr><td><code>HAZARD_SPREAD_CHANCE = 10</code></td><td><code>battlehazard.h:12</code></td><td>No extractor table; tactical constant</td></tr>
     <tr><td>Org raid probabilities / recurring missions</td><td><code>extract_organisations.cpp</code> switches</td><td>Only park tier is table-driven</td></tr>

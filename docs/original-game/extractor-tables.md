@@ -47,7 +47,7 @@ Every range below is dumped. Classification is against current OpenApoc, not a p
 | `manufacturing_data` | `0x13FD34` (VA `0x113934`) | extracted | `extract_manufacturing.cpp` (43×50) + patch overlay |
 | `manufacturing_items` | `0x1501F3` | extracted | `manufacturing_names` strtab |
 | `UFO_growth_rates` | `0x155010` (VA `0x128C10`) | extracted | `extract_ufo_growth.cpp`. Reference: `docs/original-game/exe-tables/ufo_growth_lists.xml` (must not live under `common_patch/gamestate/`). |
-| `UFO_mission_patterns` | `0x155164` (VA `0x128D64`) | extracted | `extract_ufo_mission_preference.cpp` (20×10 uint16). Patch XInclude matches EXE until extract-data. |
+| `UFO_mission_patterns` | `0x155164` (VA `0x128D64`) | extracted | `extract_ufo_mission_preference.cpp` (20×10 uint16). Do not XInclude a patch copy. |
 | `vehicle_park_spawn_table` | `0x188F18` | hardcoded | switches in `extract_organisations.cpp` |
 | `starting_available_UFOPaedia_entries` | `0x19196A` | patch | empty `<dependency>` in `ufopaedia_entries.xml` |
 | `senate_relationships` | `0x15055B` | patch | `weekly_rating_rules` in `gamestate.xml` |

@@ -1,4 +1,5 @@
 #include "framework/configfile.h"
+#include "framework/framework.h"
 #include "game/state/city/building.h"
 #include "game/state/city/vehicle.h"
 #include "game/state/gamestate.h"
@@ -123,6 +124,33 @@ static bool test_raid_relation_pressure()
 	return true;
 }
 
+static bool test_micronoid_rain_takeover()
+{
+	Framework fw("OpenApoc", false);
+	GameState state;
+	sp<Organisation> player;
+	sp<Organisation> aliens;
+	sp<Organisation> victim;
+	addOrg(state, "ORG_XCOM", player);
+	addOrg(state, "ORG_ALIEN", aliens);
+	addOrg(state, "ORG_VICTIM", victim);
+	state.player = {&state, "ORG_XCOM"};
+	state.aliens = {&state, "ORG_ALIEN"};
+
+	TEST_REQUIRE(!victim->tryMicronoidRain(state, 0), "chance 0 must fail");
+	TEST_REQUIRE(!victim->takenOver, "chance 0 must not take over");
+
+	TEST_REQUIRE(victim->tryMicronoidRain(state, 100), "chance 100 must succeed");
+	TEST_REQUIRE(victim->takenOver, "subversion must set takenOver");
+	TEST_REQUIRE(victim->infiltrationValue == 200, "infiltration {0}", victim->infiltrationValue);
+	TEST_REQUIRE(victim->militarized, "taken-over org militarizes");
+	StateRef<Organisation> playerRef{&state, "ORG_XCOM"};
+	TEST_REQUIRE(victim->getRelationTo(playerRef) == -100.0f, "hostile to player {0}",
+	             victim->getRelationTo(playerRef));
+	TEST_REQUIRE(!victim->tryMicronoidRain(state, 100), "already taken over");
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -136,5 +164,6 @@ int main(int argc, char **argv)
 	    {"adjust_clamp_and_sign", test_adjust_clamp_and_sign},
 	    {"can_purchase_hostile", test_can_purchase_hostile},
 	    {"raid_relation_pressure", test_raid_relation_pressure},
+	    {"micronoid_rain_takeover", test_micronoid_rain_takeover},
 	});
 }

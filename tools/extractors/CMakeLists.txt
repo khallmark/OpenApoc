@@ -56,6 +56,7 @@ set (DATAEXTRACTOR_HEADER_FILES
 	common/baselayout.h
 	common/doodads.h
 	common/economy.h
+	common/exe_slide.h
 	common/facilities.h
 	common/organisations.h
 	common/ufopaedia.h
