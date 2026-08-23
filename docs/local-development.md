@@ -201,6 +201,80 @@ python3 tools/oa_harness.py quit
 
 Click/move coordinates are **display** pixels (the size `status` reports), not OS window pixels when the window is scaled. Key names are SDL names (`Escape`, `Return`, `Space`, `Left Shift`). Task: `openapoc: launch harness`.
 
+## Automated play (harness)
+
+The game can be driven over a localhost socket so a whole campaign runs with no human input.
+Enable it at launch:
+
+```sh
+./build/bin/OpenApoc.app/Contents/MacOS/OpenApoc \
+  --Framework.Data="$PWD/data" --Framework.CD="$PWD/data/cd.iso" \
+  --Framework.Harness.Enable=1 --Framework.Harness.Port=17321 \
+  --Game.SkipIntro=1 --Config.Save=0 --Config.Read=0 \
+  --Framework.AudioBackends=null --OpenApoc.NewFeature.SeedRng=0
+```
+
+`SeedRng=0` keeps the RNG fixed; without it `GameState::startGame()` reseeds from the clock.
+
+### Protocol
+
+One command per line, one line back, `OK ...` or `ERR ...` (see `framework/harness.h`).
+
+| Command | Purpose |
+| ------- | ------- |
+| `STATUS` | current stage class name, display size, mouse position |
+| `CLICK x y [left\|right\|middle]`, `MOVE`, `DOWN`, `UP`, `SCROLL` | mouse input |
+| `KEY <name>`, `KEYDOWN`, `KEYUP`, `TEXT <s>` | keyboard input; names may contain spaces (`Left Shift`) |
+| `SCREENSHOT <path>` | write a PNG |
+| `GS <query>` | inspect the running game (below) |
+| `QUIT` | quit cleanly |
+
+`GS` accepts `time`, `funds`, `bases`, `research`, `orgs`, `vehicles`, `agents`, `turbo`,
+`battle`, `stage`, `all`, plus the CityView-only `ufos_screen`, `vehicles_screen` and
+`centre_on_ufo`. Replies are one line of `key=value` pairs.
+
+`GS` is answered by the game layer, not the framework: `OpenApoc_GameState` links
+`OpenApoc_Framework` and never the reverse, so `harness.cpp` cannot name a `GameState`. The
+handler is installed with `setHarnessQueryHandler()` (the same shape as `logger.h`'s
+`LogFunction`) from both `CityView` and `BattleView`, so it survives the `REPLACEALL` transition
+between city and battle.
+
+`Framework.Harness.WarpCursor` (default off) moves the OS pointer to follow injected input. The
+engine tracks the cursor from the event itself, so this is cosmetic — leave it off or a long run
+will fight you for the mouse.
+
+### Driving a campaign
+
+```sh
+python3 tools/oa_play.py --days 30 --leg 6 --out build/e2e
+```
+
+It launches the game itself, plays, and writes `game.log`, `warnings.txt`, `events.txt` and
+screenshots to `--out`. `tools/oa_harness.py` remains available for one-off commands.
+
+Two pieces make this work without hard-coded pixel positions:
+
+- `tools/oa_forms.py` parses the shipped `data/forms/**.form` files and resolves any control id
+  to an absolute screen rect, replicating the engine's own layout rules (numeric vs
+  `centre`/`right`/`bottom` anchors, percentage sizes, `<subform src=...>`, and the fact that
+  `forms/form.cpp` applies every `<style>` block in document order).
+- Every popup in this engine is its own `Stage`, so `STATUS` alone identifies the screen. The
+  driver maps stage -> response and *acts* on events (dispatching a squad to an alien incident,
+  entering a base defence) rather than closing them, and falls back to Return/Escape on any
+  stage it does not recognise so an unattended run cannot deadlock.
+
+Runs launch with every `Notifications.City.*` / `Notifications.Battle.*` pause option off. Each
+one opens a modal that stops the clock; useful for a human, pure interruption unattended.
+
+### Pacing
+
+Ticks are advanced per frame, so wall-clock speed is frame-rate bound. City speeds 1-4 give
+roughly 30/120/240/360 ticks per second — about 6.7 real hours per game day at speed 4. Only
+turbo (speed 5, a five-minute jump per frame) is fast enough for a long campaign, and
+`GameState::canTurbo()` disables it whenever an aggressive hostile craft, a live projectile or an
+attack mission exists on the current map. `GS turbo` reports that gate and its causes, which is
+usually the answer to "why has the campaign stopped advancing".
+
 ## Cursor / VS Code tasks
 
 Tasks live in [`.vscode/tasks.json`](../.vscode/tasks.json). Run via **Tasks: Run Task** or **Terminal → Run Build Task** (`Cmd+Shift+B`).
