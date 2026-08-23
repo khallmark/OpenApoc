@@ -92,6 +92,10 @@ RESPONSES = {
     "NotificationScreen":     {"ack": "BUTTON_RESUME"},
     "MessageLogScreen":       {"ack": "BUTTON_OK"},
     "BattleDebriefing":       {"ack": "BUTTON_OK"},
+    # Escape in CityView cancels an armed order if one is pending and otherwise opens this menu,
+    # so the driver lands here by accident. play_battle drives it deliberately (Exit Battle) in
+    # one synchronous block of its own, so simply closing it here is safe.
+    "InGameOptions":          {"ack": "BUTTON_OK"},
 }
 
 # Stages constructed in code rather than from a .form, so there are no control ids to resolve.
