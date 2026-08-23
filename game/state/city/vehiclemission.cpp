@@ -1291,11 +1291,13 @@ bool VehicleMission::getNextDestination(GameState &state, Vehicle &v, Vec3<float
 		case MissionType::DepartToSpace:
 		case MissionType::OfferService:
 		case MissionType::InfiltrateSubvert:
+		case MissionType::RecoverVehicle:
+		case MissionType::Teleport:
 		{
 			return false;
 		}
 		default:
-			LogWarning("TODO: Implement getNextDestination");
+			LogWarning("Unhandled vehicle mission getNextDestination {0}", getName());
 			return false;
 	}
 	return false;
@@ -1482,8 +1484,10 @@ void VehicleMission::update(GameState &state, Vehicle &v, unsigned int ticks, bo
 		case MissionType::Snooze:
 			updateTimer(ticks);
 			return;
+		case MissionType::Teleport:
+			return;
 		default:
-			LogWarning("TODO: Implement update");
+			LogWarning("Unhandled vehicle mission update {0}", getName());
 			return;
 	}
 } // namespace OpenApoc
@@ -1588,7 +1592,7 @@ bool VehicleMission::isFinishedInternal(GameState &state, Vehicle &v)
 			return targetBuilding &&
 			       (!targetBuilding->isAlive() || !v.canDamageBuilding(targetBuilding));
 		default:
-			LogWarning("TODO: Implement isFinishedInternal");
+			LogWarning("Unhandled vehicle mission isFinishedInternal {0}", getName());
 			return false;
 	}
 }
@@ -2620,7 +2624,7 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 			// No setup
 			return;
 		default:
-			LogError("TODO: Implement start {0}", getName());
+			LogError("Unhandled vehicle mission start {0}", getName());
 			return;
 	}
 }

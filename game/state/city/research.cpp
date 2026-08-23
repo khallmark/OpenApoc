@@ -9,7 +9,9 @@
 #include "game/state/gameevent.h"
 #include "game/state/gamestate.h"
 #include "game/state/rules/aequipmenttype.h"
+#include "game/state/rules/city/vammotype.h"
 #include "game/state/rules/city/vehicletype.h"
+#include "game/state/rules/city/vequipmenttype.h"
 #include "game/state/shared/organisation.h"
 #include "library/strings_format.h"
 
@@ -450,6 +452,7 @@ void Lab::update(unsigned int ticks, StateRef<Lab> lab, sp<GameState> state)
 				{
 					// Add item to base
 					bool found = false;
+					bool haltedForStores = false;
 					UString item_name;
 					for (auto &base : state->player_bases)
 					{
@@ -458,6 +461,53 @@ void Lab::update(unsigned int ticks, StateRef<Lab> lab, sp<GameState> state)
 							if (facility->type->capacityType == FacilityType::Capacity::Workshop &&
 							    facility->lab == lab)
 							{
+								int storeSpace = 0;
+								switch (lab->current_project->item_type)
+								{
+									case ResearchTopic::ItemType::VehicleEquipment:
+									{
+										StateRef<VEquipmentType> ve = {
+										    state.get(), lab->current_project->itemId};
+										storeSpace = ve->store_space;
+										break;
+									}
+									case ResearchTopic::ItemType::VehicleEquipmentAmmo:
+									{
+										StateRef<VAmmoType> va = {state.get(),
+										                          lab->current_project->itemId};
+										storeSpace = va->store_space;
+										break;
+									}
+									case ResearchTopic::ItemType::AgentEquipment:
+									{
+										StateRef<AEquipmentType> ae = {
+										    state.get(), lab->current_project->itemId};
+										storeSpace = ae->store_space;
+										break;
+									}
+									case ResearchTopic::ItemType::Craft:
+										storeSpace = 0;
+										break;
+								}
+								if (storeSpace > 0)
+								{
+									const int used = base.second->getCapacityUsed(
+									    *state, FacilityType::Capacity::Stores);
+									const int total = base.second->getCapacityTotal(
+									    FacilityType::Capacity::Stores);
+									if (used + storeSpace > total)
+									{
+										auto event = new GameManufactureEvent(
+										    GameEventType::ManufactureHalted,
+										    lab->current_project, lab->manufacture_done,
+										    lab->manufacture_goal, lab);
+										fw().pushEvent(event);
+										Lab::setResearch(lab, {state.get(), ""}, state);
+										found = true;
+										haltedForStores = true;
+										break;
+									}
+								}
 								switch (lab->current_project->item_type)
 								{
 									case ResearchTopic::ItemType::VehicleEquipment:
@@ -515,6 +565,11 @@ void Lab::update(unsigned int ticks, StateRef<Lab> lab, sp<GameState> state)
 						}
 						if (found)
 							break;
+					}
+
+					if (haltedForStores)
+					{
+						break;
 					}
 
 					lab->manufacture_done++;

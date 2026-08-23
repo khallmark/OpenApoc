@@ -63,6 +63,8 @@ Pirated disc images and archives are not supported and will cause issues such as
 Please use [Discord](https://discord.gg/f8Rayre) for contributing and FAQ.
 > You can support the project by testing, translating, modding, drawing, modeling, concepting etc.
 
+This fork’s agent working agreement is [AGENTS.md](AGENTS.md).
+
 ## Building
 
 OpenApocalypse is built leveraging a number of libraries - to provide needed functionality (and save us the time of implementing it badly ourselves).

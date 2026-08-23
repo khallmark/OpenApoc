@@ -4064,13 +4064,12 @@ bool CityView::handleGameStateEvent(Event *e)
 	{
 		case GameEventType::AlienTakeover:
 		{
-			// FIXME: Proper takeover message
 			auto gameOrgEvent = dynamic_cast<GameOrganisationEvent *>(e);
 			fw().stageQueueCommand(
 			    {StageCmd::Command::PUSH,
 			     mksp<NotificationScreen>(
 			         state, *this,
-			         format("Aliens have taken over {0}", gameOrgEvent->organisation->name),
+			         format("ALIEN TAKEOVER: {0}", gameOrgEvent->organisation->name),
 			         gameEvent->type)});
 		}
 		break;

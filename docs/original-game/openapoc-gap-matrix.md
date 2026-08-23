@@ -1,6 +1,6 @@
 # OpenApoc gap matrix
 
-Evidence kinds, strongest first: `table`, `string`, `xref`, `prior-art`, `openapoc-todo`. Decompiler-only rows would be `confidence=low`; none are listed that way here.
+Evidence kinds, strongest first: `table`, `string`, `xref`, `decompiler`, `prior-art`, `openapoc-todo`. Decompiler listings are allowed on this fork; cite binary + generation + file offset.
 
 Offsets in the evidence column are **ISO non-4** file offsets unless marked `4-build`.
 

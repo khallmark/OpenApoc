@@ -12,4 +12,4 @@
 
 TACP printable confirmation: `Cautious mode`, `Aggressive mode`, `Kneel down`, `Reserve TUs for kneel`, `Unit critically wounded`, `Unit under fire`, `Unit has gone berserk`, `Medi-kit`. No printable `cover`, `potshot`, or `evasive` — those behaviors stay prior-art from [ai.txt](../../../tools/extractors/docs/ai.txt), not string-backed.
 
-Those rows are observational / prior-art, not decompiler reconstructions. Ghidra work on TACP should only confirm unknowns after this list.
+Those names are prior-art from [ai.txt](../../../tools/extractors/docs/ai.txt) until a TACP decompile cites them. Ghidra on TACP is allowed; confirm these modes before inventing new ones.

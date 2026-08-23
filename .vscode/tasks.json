@@ -152,6 +152,35 @@
         "openapoc: launch"
       ],
       "problemMatcher": []
+    },
+    {
+      "label": "openapoc: configure tests",
+      "type": "shell",
+      "command": "mkdir -p build && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_PREFIX_PATH=\"$(brew --prefix qt@6);$(brew --prefix boost);/opt/homebrew\" -DENABLE_TESTS=ON -DBUILD_IMAGEDUMP=OFF -DBUILD_SERIALIZATIONTOOL=OFF -S . -B build",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: test",
+      "type": "shell",
+      "command": "cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_PREFIX_PATH=\"$(brew --prefix qt@6);$(brew --prefix boost);/opt/homebrew\" -DENABLE_TESTS=ON -DBUILD_IMAGEDUMP=OFF -DBUILD_SERIALIZATIONTOOL=OFF -S . -B build && cmake --build build -j$(sysctl -n hw.ncpu) && ctest --test-dir build --output-on-failure",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
     }
   ]
 }

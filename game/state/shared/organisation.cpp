@@ -744,7 +744,16 @@ void Organisation::updateVehicleAgentPark(GameState &state)
 		}
 		while (countVehicles < entry.second)
 		{
-			// FIXME: Check if org has funds before buying vehicle
+			int price = 0;
+			auto economyIt = state.economy.find(entry.first.id);
+			if (economyIt != state.economy.end())
+			{
+				price = economyIt->second.currentPrice;
+			}
+			if (price > 0 && balance < price)
+			{
+				break;
+			}
 
 			std::list<StateRef<Building>> buildingsRandomizer;
 
@@ -772,6 +781,10 @@ void Organisation::updateVehicleAgentPark(GameState &state)
 
 			auto v = building->city->placeVehicle(state, entry.first, {&state, id}, building);
 			v->homeBuilding = {&state, building};
+			if (price > 0)
+			{
+				balance -= price;
+			}
 
 			countVehicles++;
 		}

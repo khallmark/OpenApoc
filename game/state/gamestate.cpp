@@ -898,9 +898,10 @@ void GameState::invasion()
 					    true);
 					break;
 				case UFOIncursion::PrimaryMission::Overspawn:
-					LogWarning("Implement Overspawn, just attacking for now");
-					// FIXME: Implement Overspawn, just attacking for now
-					invader->addMission(*this, VehicleMission::attackBuilding(*this, *invader),
+					// Overspawn dumps aliens into buildings rather than bombing them.
+					// Dedicated attackers still come from attackList below.
+					invader->addMission(*this, VehicleMission::infiltrateOrSubvertBuilding(
+					                               *this, *invader, false),
 					                    true);
 					break;
 			}

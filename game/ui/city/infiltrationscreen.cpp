@@ -13,6 +13,7 @@
 #include "library/line.h"
 #include <algorithm>
 #include <array>
+#include <cmath>
 
 namespace OpenApoc
 {
@@ -45,35 +46,48 @@ static void drawOrgLine(sp<RGBImage> image, const Organisation &org, const Colou
 	auto image_lock = RGBImageLock(image);
 
 	float x_offset = step_width;
+	constexpr int curve_segments = 8;
+	constexpr float pi = 3.14159265358979323846f;
 
-	// TODO: Make curved lines
 	for (step = 0; step < steps - 1; step++)
 	{
-		const Vec3<float> start_point = {
-		    static_cast<float>(image->size.x - 1) - static_cast<float>(step) * step_width -
-		        x_offset,
-		    static_cast<float>(image->size.y - 1) - step_values[step] * infiltration_y_scale, 0};
-		const Vec3<float> end_point = {static_cast<float>(image->size.x - 1) -
-		                                   static_cast<float>(step + 1) * step_width - x_offset,
-		                               static_cast<float>(image->size.y - 1) -
-		                                   step_values[step + 1] * infiltration_y_scale,
-		                               0};
+		const float start_x = static_cast<float>(image->size.x - 1) -
+		                      static_cast<float>(step) * step_width - x_offset;
+		const float end_x = static_cast<float>(image->size.x - 1) -
+		                    static_cast<float>(step + 1) * step_width - x_offset;
+		const float start_y =
+		    static_cast<float>(image->size.y - 1) - step_values[step] * infiltration_y_scale;
+		const float end_y =
+		    static_cast<float>(image->size.y - 1) - step_values[step + 1] * infiltration_y_scale;
 
-		const auto start_point_int = Vec3<int>(start_point);
-		const auto end_point_int = Vec3<int>(end_point);
-
-		const auto line = LineSegment<int, false>(start_point_int, end_point_int);
-		for (auto point : line)
+		for (int sub = 0; sub < curve_segments; sub++)
 		{
-			if (point.x < 0 || point.y < 0 || point.x >= image->size.x || point.y >= image->size.y)
+			const float t0 = static_cast<float>(sub) / static_cast<float>(curve_segments);
+			const float t1 = static_cast<float>(sub + 1) / static_cast<float>(curve_segments);
+			const float s0 = (1.0f - std::cos(t0 * pi)) * 0.5f;
+			const float s1 = (1.0f - std::cos(t1 * pi)) * 0.5f;
+			const Vec3<int> start_point_int = {
+			    static_cast<int>(start_x + (end_x - start_x) * t0),
+			    static_cast<int>(start_y + (end_y - start_y) * s0), 0};
+			const Vec3<int> end_point_int = {static_cast<int>(start_x + (end_x - start_x) * t1),
+			                                 static_cast<int>(start_y + (end_y - start_y) * s1),
+			                                 0};
+
+			const auto line = LineSegment<int, false>(start_point_int, end_point_int);
+			for (auto point : line)
 			{
-				LogWarning("Point {0} out of bounds for image of size {1}", point, image->size);
-				point.x = clamp(point.x, 0, static_cast<int>(image->size.x - 1));
-				point.y = clamp(point.y, 0, static_cast<int>(image->size.y - 1));
+				if (point.x < 0 || point.y < 0 || point.x >= image->size.x ||
+				    point.y >= image->size.y)
+				{
+					LogWarning("Point {0} out of bounds for image of size {1}", point,
+					           image->size);
+					point.x = clamp(point.x, 0, static_cast<int>(image->size.x - 1));
+					point.y = clamp(point.y, 0, static_cast<int>(image->size.y - 1));
+				}
+				image_lock.set(Vec2<unsigned int>{static_cast<unsigned int>(point.x),
+				                                  static_cast<unsigned int>(point.y)},
+				               colour);
 			}
-			image_lock.set(Vec2<unsigned int>{static_cast<unsigned int>(point.x),
-			                                  static_cast<unsigned int>(point.y)},
-			               colour);
 		}
 	}
 }

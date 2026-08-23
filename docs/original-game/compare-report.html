@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenApoc vs original Apocalypse — extraction compare</title>
+<style>
+:root {
+  --bg: #101214;
+  --bg-2: #181b1f;
+  --bg-3: #22262c;
+  --text: #f2f4f7;
+  --muted: #b7bec8;
+  --line: #3a4048;
+  --ok: #5dcaa0;
+  --ok-bg: #163528;
+  --warn: #e6c36a;
+  --warn-bg: #3a2f10;
+  --bad: #f08a7a;
+  --bad-bg: #3a1c18;
+  --accent: #d7b56d;
+  --focus: #8ec8ff;
+  --max: 72rem;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; animation: none !important; }
+}
+body {
+  margin: 0;
+  font: 16px/1.55 "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+a { color: var(--focus); }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.skip {
+  position: absolute; left: 0; top: -3rem;
+  background: var(--accent); color: #111; padding: .5rem 1rem; font-weight: 700;
+}
+.skip:focus { top: 0; }
+header.hero {
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+  padding: 2rem 1.25rem 1.5rem;
+}
+.wrap { max-width: var(--max); margin: 0 auto; }
+h1 { font-size: 1.85rem; line-height: 1.2; margin: 0 0 .5rem; letter-spacing: .02em; }
+.lede { color: var(--muted); max-width: 46rem; margin: 0 0 1.25rem; }
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  gap: .75rem;
+}
+.kpi {
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  padding: .85rem 1rem;
+}
+.kpi b { display: block; font-size: 1.7rem; line-height: 1.1; }
+.kpi span { color: var(--muted); font-size: .85rem; }
+nav.toc {
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+  padding: .75rem 1.25rem;
+  position: sticky; top: 0; z-index: 5;
+}
+nav.toc ul {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: .4rem .9rem;
+}
+nav.toc a { color: var(--text); text-decoration: none; font-size: .92rem; }
+nav.toc a:hover, nav.toc a:focus { text-decoration: underline; }
+main { padding: 1.5rem 1.25rem 4rem; }
+section {
+  margin: 0 0 2.5rem;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  padding: 1.25rem 1.25rem 1.5rem;
+}
+h2 { margin: 0 0 .75rem; font-size: 1.35rem; }
+h3 { margin: 1.25rem 0 .5rem; font-size: 1.05rem; }
+p { margin: 0 0 .85rem; }
+.muted { color: var(--muted); }
+.verdict {
+  border-left: 4px solid var(--accent);
+  padding: .15rem 0 .15rem 1rem;
+  margin-bottom: 1rem;
+}
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+.bar {
+  height: .65rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  width: 8rem;
+}
+.bar-fill { display: block; height: 100%; background: var(--ok); }
+.bar-fill.warn { background: var(--warn); }
+.bar-fill.bad { background: var(--bad); }
+.pill {
+  display: inline-block;
+  padding: .1rem .45rem;
+  font-size: .78rem;
+  font-weight: 650;
+  letter-spacing: .02em;
+  text-transform: lowercase;
+}
+.pill.ok { background: var(--ok-bg); color: var(--ok); }
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.bad { background: var(--bad-bg); color: var(--bad); }
+.pill.muted { background: var(--bg-3); color: var(--muted); }
+.table-wrap { overflow-x: auto; margin: .75rem 0 0; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .9rem;
+}
+caption {
+  text-align: left;
+  font-weight: 650;
+  padding: 0 0 .4rem;
+  color: var(--muted);
+}
+th, td {
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+  padding: .4rem .45rem;
+}
+th { color: var(--muted); font-weight: 650; }
+code { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: .86em; }
+.filters {
+  display: flex; flex-wrap: wrap; gap: .5rem .75rem;
+  align-items: end; margin: .5rem 0 0;
+}
+.filters label { display: flex; flex-direction: column; gap: .2rem; font-size: .85rem; color: var(--muted); }
+.filters input, .filters select {
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); padding: .35rem .5rem; min-width: 10rem;
+}
+.stack {
+  display: flex; flex-direction: column; gap: .45rem;
+}
+.stack-row {
+  display: grid; grid-template-columns: 12rem 1fr auto;
+  gap: .6rem; align-items: center;
+}
+@media (max-width: 40rem) {
+  .stack-row { grid-template-columns: 1fr; }
+  .bar { width: 100%; }
+}
+.stack-row .bar { width: 100%; height: .85rem; }
+footer {
+  max-width: var(--max); margin: 0 auto; padding: 0 1.25rem 2rem;
+  color: var(--muted); font-size: .85rem;
+}
+.callout {
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  padding: .85rem 1rem;
+  margin: .75rem 0;
+}
+.callout strong { color: var(--accent); }
+.arch {
+  display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+  margin: .75rem 0 0;
+}
+.arch .box {
+  border: 1px solid var(--line);
+  background: var(--bg-3);
+  padding: .55rem .75rem;
+  min-width: 8rem;
+}
+.arch .box small { display: block; color: var(--muted); }
+.arch .arr { color: var(--muted); }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to report</a>
+<header class="hero">
+  <div class="wrap">
+    <p class="muted" style="margin:0 0 .35rem; letter-spacing:.08em; text-transform:uppercase; font-size:.75rem;">Clean-room compare · 23 August 2026</p>
+    <h1>Original Apocalypse versus OpenApoc</h1>
+    <p class="lede">What we extracted from the ISO non-4 and Steam <code>4</code> binaries, mapped onto OpenApoc source. Facts, tables, strings, and file offsets only — no decompiled C.</p>
+    <div class="kpis" role="group" aria-label="Headline counts">
+      <div class="kpi"><b>3,140</b><span>functions exported and classified</span></div>
+      <div class="kpi"><b>175</b><span>decompile failures (5.6%)</span></div>
+      <div class="kpi"><b>117</b><span>table ranges audited (85 in extractors)</span></div>
+      <div class="kpi"><b>32</b><span>hexa ranges not in extractor headers</span></div>
+      <div class="kpi"><b>33</b><span>gameplay gap rows</span></div>
+      <div class="kpi"><b>171</b><span>TODO+FIXME in game/state and game/ui</span></div>
+    </div>
+  </div>
+</header>
+<nav class="toc" aria-label="Report sections">
+  <div class="wrap">
+    <ul>
+      <li><a href="#verdict">Verdict</a></li>
+      <li><a href="#arch">Architecture</a></li>
+      <li><a href="#functions">Functions</a></li>
+      <li><a href="#tables">Tables</a></li>
+      <li><a href="#rebase">P vs 4</a></li>
+      <li><a href="#features">Leftovers</a></li>
+      <li><a href="#gaps">Gaps</a></li>
+      <li><a href="#debt">OpenApoc debt</a></li>
+      <li><a href="#priority">What to build</a></li>
+    </ul>
+  </div>
+</nav>
+<main id="main" class="wrap">
+
+<section id="verdict">
+  <h2>Verdict</h2>
+  <div class="verdict">
+    <p>OpenApoc already <strong>extracts the bulk of the live rule tables</strong> from the ISO non-4 EXEs (research, vehicles, economy, orgs, TACP equipment). The remaining original-game work is not “find more blobs.” It is <strong>logic that the tables do not encode</strong>: 36 TPS, mission defaults, org vehicle purchases, cover AI, and hazard constants.</p>
+  </div>
+  <div class="grid-2">
+    <div class="callout">
+      <strong>Steam depot is the wrong extract target.</strong>
+      Depot <code>UFO2P.EXE</code> / <code>TACP.EXE</code> are the Pentium <code>4</code> builds (CRC <code>0xdbd3b41d</code> / <code>0x3ec9c268</code>). Extractors expect non-4 (<code>0x4749ffc1</code> / <code>0xfebbe39e</code>), log an error, and still apply non-4 offsets — garbage tables.
+    </div>
+    <div class="callout">
+      <strong>The tick lie is a 4× scalar.</strong>
+      Original simulation is 36 TPS. OpenApoc sets <code>TICKS_PER_SECOND = 144</code>. Training, fire, enzyme, wounds, and AOE all inherit that until each subsystem is rebased.
+    </div>
+    <div class="callout">
+      <strong>32 hexa ranges have no extractor header.</strong>
+      Highest-value city misses: <code>UFO_mission_data</code>, <code>manufacturing_data</code>, <code>UFO_growth_rates</code>, <code>vehicle_park_spawn_table</code>, <code>senate_relationships</code>. Some aequip/damage copies in UFO2P are TACP-owned in OpenApoc.
+    </div>
+    <div class="callout">
+      <strong>Original stubs exist too.</strong>
+      <code>selmode==7/8</code> is explicitly “Not implemented” in UFO2P. Designer/Editor, GRAB, Scenario Generator, and SPARES samples have no OpenApoc analogue — do not implement them.
+    </div>
+  </div>
+</section>
+
+<section id="arch">
+  <h2>Process graph</h2>
+  <p class="muted">Original: three child EXEs spawned by a 16-bit launcher. OpenApoc: one process, in-memory city↔battle handoff.</p>
+  <div class="arch" aria-hidden="false">
+    <div class="box">XCOMAPOC<small>16-bit MZ launcher · 18,171 B</small></div>
+    <span class="arr" aria-hidden="true">→</span>
+    <div class="box">UFO2P<small>city / strategy · LE</small></div>
+    <span class="arr" aria-hidden="true">↔</span>
+    <div class="box">TACP<small>battle / tactical · LE</small></div>
+    <span class="arr" aria-hidden="true">+</span>
+    <div class="box">SMKP<small>Smacker only</small></div>
+  </div>
+  <p class="muted" style="margin-top:1rem;">XCOMAPOC strings: <code>ufoexe/ufo2p.exe</code>, <code>tacexe/tacp.exe</code>, <code>ufoexe/smkp.exe</code>, <code>smk/intro1.smk</code>, <code>smk/lose1.smk</code>, <code>smk/wingame2.smk</code>, <code>xcom3.cfg</code>, <code>GOFORIT</code>.</p>
+</section>
+
+<section id="functions">
+  <h2>Function census</h2>
+  <p>Flattened LE images (page map + BinaryLoader). Classification is family-first: city binaries → game-city, battle → game-battle, failures → decompile-suspect. Watcom register convention is still unproven, so these counts are coverage, not proven control-flow.</p>
+  <div class="stack" aria-label="Functions exported per program">
+<div class="stack-row">
+      <div>UFO2P non-4 (city)</div>
+      <div class="bar" role="img" aria-label="100 percent"><span class="bar-fill ok" style="width:100.0%"></span></div>
+      <div class="muted">689 · 61 fail</div>
+    </div>
+<div class="stack-row">
+      <div>UFO2P 4 (Steam city)</div>
+      <div class="bar" role="img" aria-label="82 percent"><span class="bar-fill ok" style="width:81.9%"></span></div>
+      <div class="muted">564 · 29 fail</div>
+    </div>
+<div class="stack-row">
+      <div>TACP non-4 (battle)</div>
+      <div class="bar" role="img" aria-label="99 percent"><span class="bar-fill ok" style="width:99.0%"></span></div>
+      <div class="muted">682 · 37 fail</div>
+    </div>
+<div class="stack-row">
+      <div>TACP 4 (Steam battle)</div>
+      <div class="bar" role="img" aria-label="96 percent"><span class="bar-fill ok" style="width:95.9%"></span></div>
+      <div class="muted">661 · 48 fail</div>
+    </div>
+<div class="stack-row">
+      <div>SMKP (video)</div>
+      <div class="bar" role="img" aria-label="8 percent"><span class="bar-fill ok" style="width:7.5%"></span></div>
+      <div class="muted">52 · 0 fail</div>
+    </div>
+<div class="stack-row">
+      <div>XCOMAPOC (launcher)</div>
+      <div class="bar" role="img" aria-label="20 percent"><span class="bar-fill ok" style="width:20.3%"></span></div>
+      <div class="muted">140 · 0 fail</div>
+    </div>
+<div class="stack-row">
+      <div>ESETUP (sound UI)</div>
+      <div class="bar" role="img" aria-label="51 percent"><span class="bar-fill ok" style="width:50.8%"></span></div>
+      <div class="muted">350 · 0 fail</div>
+    </div>
+<div class="stack-row">
+      <div>INSTALL.EXE</div>
+      <div class="bar" role="img" aria-label="0 percent"><span class="bar-fill ok" style="width:0.1%"></span></div>
+      <div class="muted">1 · 0 fail</div>
+    </div>
+<div class="stack-row">
+      <div>GSETUP.EXE</div>
+      <div class="bar" role="img" aria-label="0 percent"><span class="bar-fill ok" style="width:0.1%"></span></div>
+      <div class="muted">1 · 0 fail</div>
+    </div>
+
+  </div>
+  <div class="table-wrap"><table id="fn-table" class="">
+<caption>Exported functions by program</caption>
+<thead><tr><th scope='col'>Program</th><th scope='col'>Total</th><th scope='col'>Decompile ok</th><th scope='col'>Failed</th><th scope='col'>Ok rate</th><th scope='col'>Classes</th></tr></thead>
+<tbody>
+<tr><td>UFO2P non-4 (city)</td><td>689</td><td>628</td><td>61</td><td><div class="bar" role="img" aria-label="91 percent"><span class="bar-fill ok" style="width:91.1%"></span></div></td><td>game-city 628, decompile-suspect 61</td></tr><tr><td>UFO2P 4 (Steam city)</td><td>564</td><td>535</td><td>29</td><td><div class="bar" role="img" aria-label="95 percent"><span class="bar-fill ok" style="width:94.9%"></span></div></td><td>game-city 535, decompile-suspect 29</td></tr><tr><td>TACP non-4 (battle)</td><td>682</td><td>645</td><td>37</td><td><div class="bar" role="img" aria-label="95 percent"><span class="bar-fill ok" style="width:94.6%"></span></div></td><td>game-battle 645, decompile-suspect 37</td></tr><tr><td>TACP 4 (Steam battle)</td><td>661</td><td>613</td><td>48</td><td><div class="bar" role="img" aria-label="93 percent"><span class="bar-fill ok" style="width:92.7%"></span></div></td><td>game-battle 613, decompile-suspect 48</td></tr><tr><td>SMKP (video)</td><td>52</td><td>52</td><td>0</td><td><div class="bar" role="img" aria-label="100 percent"><span class="bar-fill ok" style="width:100.0%"></span></div></td><td>smacker 52</td></tr><tr><td>XCOMAPOC (launcher)</td><td>140</td><td>140</td><td>0</td><td><div class="bar" role="img" aria-label="100 percent"><span class="bar-fill ok" style="width:100.0%"></span></div></td><td>installer 140</td></tr><tr><td>ESETUP (sound UI)</td><td>350</td><td>350</td><td>0</td><td><div class="bar" role="img" aria-label="100 percent"><span class="bar-fill ok" style="width:100.0%"></span></div></td><td>installer 350</td></tr><tr><td>INSTALL.EXE</td><td>1</td><td>1</td><td>0</td><td><div class="bar" role="img" aria-label="100 percent"><span class="bar-fill ok" style="width:100.0%"></span></div></td><td>installer 1</td></tr><tr><td>GSETUP.EXE</td><td>1</td><td>1</td><td>0</td><td><div class="bar" role="img" aria-label="100 percent"><span class="bar-fill ok" style="width:100.0%"></span></div></td><td>installer 1</td></tr>
+</tbody></table></div>
+  <p class="muted">P vs 4 function-count delta: UFO2P 689→564 (−125). TACP 682→661 (−21). Do not stamp non-4 labels onto the 4 programs.</p>
+</section>
+
+<section id="tables">
+  <h2>Table audit</h2>
+  <p>117 ranges: extractor headers plus hexa.txt KNOWN DATA against ISO UFO2P non-4. Status <em>overlap</em> means both sources name the same bytes. TACP-only extractor offsets that fall outside UFO2P are listed as extracted but “not dumped.”</p>
+  <div class="stack" aria-label="Table range status mix">
+    <div class="stack-row"><div>In both sources</div><div class="bar" role="img" aria-label="55 percent"><span class="bar-fill ok" style="width:54.7%"></span></div><div>64</div></div>
+    <div class="stack-row"><div>Extractor only</div><div class="bar" role="img" aria-label="18 percent"><span class="bar-fill warn" style="width:17.9%"></span></div><div>21</div></div>
+    <div class="stack-row"><div>Hexa only</div><div class="bar" role="img" aria-label="27 percent"><span class="bar-fill bad" style="width:27.4%"></span></div><div>32</div></div>
+  </div>
+  <h3>Highest-value hexa-only ranges</h3>
+  <div class="table-wrap"><table id="hexa-priority" class="">
+<caption>Hexa KNOWN DATA not present in extractor headers (priority subset)</caption>
+<thead><tr><th scope='col'>Name</th><th scope='col'>Non-4 file offset</th><th scope='col'>Bytes</th><th scope='col'>Why it matters</th></tr></thead>
+<tbody>
+<tr><td>UFO_mission_data</td><td><code>0x13DDFC</code></td><td>1890</td><td>City UFO missions — not in extractor headers</td></tr><tr><td>manufacturing_data</td><td><code>0x13FD34</code></td><td>2149</td><td>Dimension Probe man-hours live here on non-4</td></tr><tr><td>UFO_growth_rates</td><td><code>0x155010</code></td><td>339</td><td>Weekly UFO growth; OpenApoc hardcodes UFO_GROWTH_{week}</td></tr><tr><td>UFO_mission_patterns</td><td><code>0x155164</code></td><td>399</td><td>Mission pattern table</td></tr><tr><td>vehicle_park_spawn_table</td><td><code>0x188F18</code></td><td>157</td><td>Sits next to extracted org vehicle park</td></tr><tr><td>starting_available_UFOPaedia_entries</td><td><code>0x19196A</code></td><td>282</td><td>Starting ufopaedia unlocks</td></tr><tr><td>senate_relationships</td><td><code>0x15055B</code></td><td>313</td><td>Senate attitude table</td></tr><tr><td>equipment_sets_builtin</td><td><code>0x1568EC</code></td><td>1837</td><td>City-side equipment sets (hexa); TACP also has sets</td></tr><tr><td>aequip_sets_data</td><td><code>0x19BF40</code></td><td>2639</td><td>Hexa city-side aequip sets — TACP extractors cover battle copies</td></tr><tr><td>damage_mod_data</td><td><code>0x19AA10</code></td><td>827</td><td>City-side copy; TACP extractors have DAMAGE_MODIFIER_DATA</td></tr>
+</tbody></table></div>
+  <h3>Full audit</h3>
+  <div class="filters">
+    <label>Filter status
+      <select id="tbl-status" aria-controls="tbl-audit">
+        <option value="">All statuses</option>
+        <option value="overlap">overlap</option>
+        <option value="extracted">extracted</option>
+        <option value="documented-not-extracted">documented-not-extracted</option>
+      </select>
+    </label>
+    <label>Search name
+      <input id="tbl-q" type="search" aria-controls="tbl-audit" placeholder="research, vehicle, ufo…">
+    </label>
+  </div>
+  <div class="table-wrap"><table id="tbl-audit" class="">
+<caption>All audited table ranges on UFO2P non-4</caption>
+<thead><tr><th scope='col'>Status</th><th scope='col'>Name</th><th scope='col'>Start</th><th scope='col'>Size</th><th scope='col'>Notes</th></tr></thead>
+<tbody>
+<tr><td><span class="pill ok">overlap</span></td><td>FACILITY_DATA</td><td><code>0x13D794</code></td><td>320</td><td>overlaps hexa: facility_data[1300148-1300692)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>SCENERY_MINIMAP_COLOUR_DATA</td><td><code>0x13D8D4</code></td><td>957</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>CREW_UFO_DOWNED</td><td><code>0x13E560</code></td><td>560</td><td>overlaps hexa: UFO_crew_data[1303904-1304464)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>CREW_UFO_DEPOSIT</td><td><code>0x13E790</code></td><td>560</td><td>overlaps hexa: UFO_drop_troops_data[1304464-1305024)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>RESEARCH_DATA</td><td><code>0x13EE80</code></td><td>2772</td><td>overlaps hexa: research_data[1306240-1309012)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>BUILDING_COST_STRUCT</td><td><code>0x1405C0</code></td><td>588</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>ORGANISATION_DATA</td><td><code>0x141468</code></td><td>504</td><td>overlaps hexa: funding_data[1315942-1316443)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>BUILDING_INFILTRATION_SPEED</td><td><code>0x1423EC</code></td><td>196</td><td>overlaps hexa: unknown_used_for_equipping_routine[1319679-1320331)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>ORGANISATION_INFILTRATION_SPEED</td><td><code>0x1424B0</code></td><td>112</td><td>overlaps hexa: unknown_used_for_equipping_routine[1319679-1320331)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>BASELAYOUT</td><td><code>0x14258C</code></td><td>1024</td><td>overlaps hexa: base_layout_data[1320332-1321356)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>VEHICLE_NAME_STRTAB</td><td><code>0x1495A2</code></td><td>460</td><td>overlaps hexa: vehicle_names[1349026-1349487)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>AGENT_EQUIPMENT_NAMES</td><td><code>0x149770</code></td><td>1600</td><td>overlaps hexa: aequip_names[1349488-1351088)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>BUILDING_NAME_STRTAB</td><td><code>0x149DD2</code></td><td>2200</td><td>overlaps hexa: building_names[1351122-1353323)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>FACILITY_STRTAB</td><td><code>0x14A66C</code></td><td>315</td><td>overlaps hexa: facility_names[1353324-1353640)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>VEHICLE_EQUIPMENT_NAMES</td><td><code>0x14A7A9</code></td><td>923</td><td>overlaps hexa: cequip_names[1353641-1354565)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>BUILDING_FUNCTION_STRTAB</td><td><code>0x14AB46</code></td><td>645</td><td>overlaps hexa: building_functions[1354566-1355305)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>ALIEN_BUILDING_NAME_STRTAB</td><td><code>0x14AD23</code></td><td>168</td><td>overlaps hexa: building_functions[1354566-1355305)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>ORGANISATION_NAME_STRTAB</td><td><code>0x14AF11</code></td><td>285</td><td>overlaps hexa: org_names[1355537-1355823)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>RESEARCH_NAME_STRTAB</td><td><code>0x14E3BA</code></td><td>1638</td><td>overlaps hexa: research_topics[1369018-1370657)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>RESEARCH_DESCRIPTION_STRTAB</td><td><code>0x14EA22</code></td><td>6095</td><td>overlaps hexa: research_short_descriptions[1370658-1376754)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>UFOPAEDIA_GROUP_STRTAB</td><td><code>0x152ADD</code></td><td>121</td><td>overlaps hexa: ufopaedia_categories[1387229-1387319)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>AGENT_TYPE_NAMES</td><td><code>0x153C0F</code></td><td>657</td><td>overlaps hexa: unit_names[1391631-1392288)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>AGENT_INFILTRATION_SPEED</td><td><code>0x15541C</code></td><td>56</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>AGENT_TYPE_DATA</td><td><code>0x155574</code></td><td>4982</td><td>overlaps hexa: unit_stats_data[1398132-1403113)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>ORGANISATION_VEHICLE_PARK_DATA</td><td><code>0x188EA8</code></td><td>112</td><td>overlaps hexa: organization_vehicles[1609384-1609493)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>ORGANISATION_STARTING_RELATIONSHIPS_DATA</td><td><code>0x189040</code></td><td>3136</td><td>overlaps hexa: default_relations[1609792-1612925)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>VEHICLE_DATA</td><td><code>0x189C8C</code></td><td>4158</td><td>overlaps hexa: vehicle_data[1612940-1617224)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>VEHICLE_EQUIPMENT_DATA</td><td><code>0x18AD48</code></td><td>1176</td><td>overlaps hexa: cequip1_data[1617224-1618399)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>VEHICLE_WEAPON_DATA</td><td><code>0x18B1E0</code></td><td>848</td><td>overlaps hexa: cequip3_data_weapons[1618400-1619249)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>VEHICLE_ENGINE_DATA</td><td><code>0x18B534</code></td><td>66</td><td>overlaps hexa: cequip3_data_engines[1619252-1619317)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>VEHICLE_GENERAL_EQUIPMENT_DATA</td><td><code>0x18B576</code></td><td>234</td><td>overlaps hexa: cequip3_data_cargo[1619318-1619551)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>BULLETSPRITE_DATA_UFO2P</td><td><code>0x18B660</code></td><td>324</td><td></td></tr><tr><td><span class="pill ok">extracted</span></td><td>PROJECTILESPRITES_DATA_UFO2P</td><td><code>0x18B7A4</code></td><td>540</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>VEHICLE_EQUIPMENT_LAYOUT</td><td><code>0x18B9C0</code></td><td>8688</td><td>overlaps hexa: vehicle_slot_data[1620416-1629104)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>ECONOMY_DATA1</td><td><code>0x18DBB0</code></td><td>1826</td><td>overlaps hexa: market_data_vehicles_cequip[1629104-1630927)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>ECONOMY_DATA2</td><td><code>0x18E2D4</code></td><td>330</td><td>overlaps hexa: market_data_cequip_ammo[1630932-1631259)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>ECONOMY_DATA3</td><td><code>0x18E7E8</code></td><td>1914</td><td>overlaps hexa: market_data_aequip[1632232-1634143)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>CREW_ALIEN_BUILDING</td><td><code>0x191BA4</code></td><td>612</td><td>overlaps hexa: alien_building_defenses_data[1645484-1646021)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>ORGANISATION_RAID_LOOT_DATA</td><td><code>0x192004</code></td><td>1620</td><td></td></tr><tr><td><span class="pill ok">extracted</span></td><td>RAWSOUND</td><td><code>0x19337C</code></td><td>13760</td><td></td></tr><tr><td><span class="pill ok">extracted</span></td><td>DAMAGE_TYPE_DATA</td><td><code>0x2020A0</code></td><td>16</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>BULLETSPRITE_DATA_TACP</td><td><code>0x202254</code></td><td>522</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>PROJECTILESPRITES_DATA_TACP</td><td><code>0x20245E</code></td><td>504</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>DAMAGE_TYPE_NAMES</td><td><code>0x2E25E1</code></td><td>216</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>AGENT_EQUIPMENT_SET_BUILTIN_DATA</td><td><code>0x300E70</code></td><td>1840</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>DAMAGE_MODIFIER_DATA</td><td><code>0x30165C</code></td><td>828</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>AGENT_PAYLOAD_DATA</td><td><code>0x301998</code></td><td>1672</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>AGENT_ARMOR_DATA</td><td><code>0x302020</code></td><td>150</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>AGENT_WEAPON_DATA</td><td><code>0x3020B6</code></td><td>576</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>AGENT_EQUIPMENT_DATA</td><td><code>0x3022F6</code></td><td>1566</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>AGENT_GENERAL_DATA</td><td><code>0x302914</code></td><td>492</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>AGENT_EQUIPMENT_SET_SCORE_REQUIREMENT_DATA</td><td><code>0x302B00</code></td><td>140</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>AGENT_EQUIPMENT_SET_SCORE_ALIEN_DATA</td><td><code>0x302B8C</code></td><td>1120</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">extracted</span></td><td>AGENT_EQUIPMENT_SET_SCORE_HUMAN_DATA</td><td><code>0x302FEC</code></td><td>1680</td><td>not dumped (out of UFO2P P or empty)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>facility_data</td><td><code>0x13D6B4</code></td><td>544</td><td>overlaps extractor: FACILITY_DATA[1300372-1300692)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>UFO_mission_data</td><td><code>0x13DDFC</code></td><td>1890</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>not_used</td><td><code>0x13E55E</code></td><td>2</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>UFO_crew_data</td><td><code>0x13E560</code></td><td>560</td><td>overlaps extractor: CREW_UFO_DOWNED[1303904-1304464)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>UFO_drop_troops_data</td><td><code>0x13E790</code></td><td>560</td><td>overlaps extractor: CREW_UFO_DEPOSIT[1304464-1305024)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>craft_ammo_manufacturers_data</td><td><code>0x13EB6A</code></td><td>29</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>research_data</td><td><code>0x13EE80</code></td><td>2772</td><td>overlaps extractor: RESEARCH_DATA[1306240-1309012)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>not_used</td><td><code>0x13F954</code></td><td>992</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>manufacturing_data</td><td><code>0x13FD34</code></td><td>2149</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>funding_data</td><td><code>0x141466</code></td><td>501</td><td>overlaps extractor: ORGANISATION_DATA[1315944-1316448)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>same_as_below_not_used_for_megaprime_vehicles</td><td><code>0x142174</code></td><td>80</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>cequip_score_req_data</td><td><code>0x1421C4</code></td><td>100</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>aequip_alien_artifact_data</td><td><code>0x1422A8</code></td><td>87</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>unknown_used_for_equipping_routine</td><td><code>0x1422FF</code></td><td>652</td><td>overlaps extractor: BUILDING_INFILTRATION_SPEED[1319916-1320112), ORGANISATION_INFILTRATION_SPEED[1320112-1320224)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>base_layout_data</td><td><code>0x14258C</code></td><td>1024</td><td>overlaps extractor: BASELAYOUT[1320332-1321356)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>vehicle_names</td><td><code>0x1495A2</code></td><td>461</td><td>overlaps extractor: VEHICLE_NAME_STRTAB[1349026-1349486)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>aequip_names</td><td><code>0x149770</code></td><td>1600</td><td>overlaps extractor: AGENT_EQUIPMENT_NAMES[1349488-1351088)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>unit_measurements</td><td><code>0x149DB1</code></td><td>32</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>building_names</td><td><code>0x149DD2</code></td><td>2201</td><td>overlaps extractor: BUILDING_NAME_STRTAB[1351122-1353322)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>facility_names</td><td><code>0x14A66C</code></td><td>316</td><td>overlaps extractor: FACILITY_STRTAB[1353324-1353639)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>cequip_names</td><td><code>0x14A7A9</code></td><td>924</td><td>overlaps extractor: VEHICLE_EQUIPMENT_NAMES[1353641-1354564)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>building_functions</td><td><code>0x14AB46</code></td><td>739</td><td>overlaps extractor: ALIEN_BUILDING_NAME_STRTAB[1355043-1355211), BUILDING_FUNCTION_STRTAB[1354566-1355211)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>org_names</td><td><code>0x14AF11</code></td><td>286</td><td>overlaps extractor: ORGANISATION_NAME_STRTAB[1355537-1355822)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>craft_ammo_names</td><td><code>0x14B18E</code></td><td>269</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>research_topics</td><td><code>0x14E3BA</code></td><td>1639</td><td>overlaps extractor: RESEARCH_NAME_STRTAB[1369018-1370656)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>research_short_descriptions</td><td><code>0x14EA22</code></td><td>6096</td><td>overlaps extractor: RESEARCH_DESCRIPTION_STRTAB[1370658-1376753)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>manufacturing_items</td><td><code>0x1501F3</code></td><td>871</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>senate_relationships</td><td><code>0x15055B</code></td><td>313</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>alien_unit_names</td><td><code>0x150695</code></td><td>163</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>agent_ranks</td><td><code>0x150739</code></td><td>64</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>ufopaedia_categories</td><td><code>0x152ADD</code></td><td>90</td><td>overlaps extractor: UFOPAEDIA_GROUP_STRTAB[1387229-1387350)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>unit_names</td><td><code>0x153C0F</code></td><td>657</td><td>overlaps extractor: AGENT_TYPE_NAMES[1391631-1392288)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>difficulty_levels</td><td><code>0x1541F6</code></td><td>35</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>damage_types</td><td><code>0x154896</code></td><td>217</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>UFO_growth_rates</td><td><code>0x155010</code></td><td>339</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>UFO_mission_patterns</td><td><code>0x155164</code></td><td>399</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>unit_stats_data</td><td><code>0x155574</code></td><td>4981</td><td>overlaps extractor: AGENT_TYPE_DATA[1398132-1403114)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>equipment_sets_builtin</td><td><code>0x1568EC</code></td><td>1837</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>organization_vehicles</td><td><code>0x188EA8</code></td><td>109</td><td>overlaps extractor: ORGANISATION_VEHICLE_PARK_DATA[1609384-1609496)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>vehicle_park_spawn_table</td><td><code>0x188F18</code></td><td>157</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>default_relations</td><td><code>0x189040</code></td><td>3133</td><td>overlaps extractor: ORGANISATION_STARTING_RELATIONSHIPS_DATA[1609792-1612928)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>vehicle_data</td><td><code>0x189C8C</code></td><td>4284</td><td>overlaps extractor: VEHICLE_DATA[1612940-1617098)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>cequip1_data</td><td><code>0x18AD48</code></td><td>1175</td><td>overlaps extractor: VEHICLE_EQUIPMENT_DATA[1617224-1618400)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>cequip3_data_weapons</td><td><code>0x18B1E0</code></td><td>849</td><td>overlaps extractor: VEHICLE_WEAPON_DATA[1618400-1619248)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>not_used</td><td><code>0x18B532</code></td><td>1</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>cequip3_data_engines</td><td><code>0x18B534</code></td><td>65</td><td>overlaps extractor: VEHICLE_ENGINE_DATA[1619252-1619318)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>cequip3_data_cargo</td><td><code>0x18B576</code></td><td>233</td><td>overlaps extractor: VEHICLE_GENERAL_EQUIPMENT_DATA[1619318-1619552)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>vehicle_slot_data</td><td><code>0x18B9C0</code></td><td>8688</td><td>overlaps extractor: VEHICLE_EQUIPMENT_LAYOUT[1620416-1629104)</td></tr><tr><td><span class="pill ok">overlap</span></td><td>market_data_vehicles_cequip</td><td><code>0x18DBB0</code></td><td>1823</td><td>overlaps extractor: ECONOMY_DATA1[1629104-1630930)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>not_used</td><td><code>0x18E2D2</code></td><td>2</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>market_data_cequip_ammo</td><td><code>0x18E2D4</code></td><td>327</td><td>overlaps extractor: ECONOMY_DATA2[1630932-1631262)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>not_used</td><td><code>0x18E41E</code></td><td>970</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>market_data_aequip</td><td><code>0x18E7E8</code></td><td>1911</td><td>overlaps extractor: ECONOMY_DATA3[1632232-1634146)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>starting_available_UFOPaedia_entries</td><td><code>0x19196A</code></td><td>282</td><td></td></tr><tr><td><span class="pill ok">overlap</span></td><td>alien_building_defenses_data</td><td><code>0x191BAC</code></td><td>537</td><td>overlaps extractor: CREW_ALIEN_BUILDING[1645476-1646088)</td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>damage_mod_data</td><td><code>0x19AA10</code></td><td>827</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>aequip3_data</td><td><code>0x19AD4C</code></td><td>1671</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>aequip2_data_protection</td><td><code>0x19B3D4</code></td><td>149</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>aequip2_data_weapons</td><td><code>0x19B46A</code></td><td>575</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>aequip1_data</td><td><code>0x19B6AA</code></td><td>1565</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>aequip2_data_other</td><td><code>0x19BCC8</code></td><td>492</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>aequip_score_req_data</td><td><code>0x19BEB4</code></td><td>137</td><td></td></tr><tr><td><span class="pill warn">documented-not-extracted</span></td><td>aequip_sets_data</td><td><code>0x19BF40</code></td><td>2639</td><td></td></tr>
+</tbody></table></div>
+</section>
+
+<section id="rebase">
+  <h2>Non-4 versus Pentium 4</h2>
+  <p>Signature search. <strong>Not a global slide.</strong> UFO2P <code>4</code> is +0xE00 (3584) on 29/30 tables; <code>crew_ufo_downed</code> at the documented non-4 offset is all zeros. TACP <code>4</code> is −0x2200 (−8704) on all 11 checked tables.</p>
+  <div class="table-wrap"><table id="ufo-rebase" class="">
+<caption>UFO2P table rebase (non-4 → 4)</caption>
+<thead><tr><th scope='col'>Table</th><th scope='col'>Non-4</th><th scope='col'>4-build</th><th scope='col'>Delta</th><th scope='col'>Confidence</th><th scope='col'>Method</th></tr></thead>
+<tbody>
+<tr><td>research_data</td><td><code>0x13ee80</code></td><td><code>0x13fc80</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>research_names</td><td><code>0x14e3ba</code></td><td><code>0x14f1ba</code></td><td><code>0xe00</code></td><td><span class="pill warn">medium</span></td><td>plus_0xE00_among_many</td></tr><tr><td>research_descriptions</td><td><code>0x14ea22</code></td><td><code>0x14f822</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>facility_data</td><td><code>0x13d794</code></td><td><code>0x13e594</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>facility_names</td><td><code>0x14a66c</code></td><td><code>0x14b46c</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>vehicle_data</td><td><code>0x189c8c</code></td><td><code>0x18aa8c</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>vehicle_names</td><td><code>0x1495a2</code></td><td><code>0x14a3a2</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>vehicle_equipment_names</td><td><code>0x14a7a9</code></td><td><code>0x14b5a9</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>vehicle_equipment_data</td><td><code>0x18ad48</code></td><td><code>0x18bb48</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>vehicle_weapon_data</td><td><code>0x18b1e0</code></td><td><code>0x18bfe0</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>vehicle_engine_data</td><td><code>0x18b534</code></td><td><code>0x18c334</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>organisation_names</td><td><code>0x14af11</code></td><td><code>0x14bd11</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>organisation_data</td><td><code>0x141468</code></td><td><code>0x142268</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>organisation_starting_relationships</td><td><code>0x189040</code></td><td><code>0x189e40</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>organisation_vehicle_park</td><td><code>0x188ea8</code></td><td><code>0x189ca8</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>building_names</td><td><code>0x149dd2</code></td><td><code>0x14abd2</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>building_functions</td><td><code>0x14ab46</code></td><td><code>0x14b946</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>alien_building_names</td><td><code>0x14ad23</code></td><td><code>0x14bb23</code></td><td><code>0xe00</code></td><td><span class="pill warn">medium</span></td><td>plus_0xE00_among_many</td></tr><tr><td>crew_ufo_downed</td><td><code>0x13e560</code></td><td><code>—</code></td><td><code>—</code></td><td><span class="pill muted">low</span></td><td>non4_all_zero</td></tr><tr><td>crew_ufo_deposit</td><td><code>0x13e790</code></td><td><code>0x13f590</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>economy_data1</td><td><code>0x18dbb0</code></td><td><code>0x18e9b0</code></td><td><code>0xe00</code></td><td><span class="pill warn">medium</span></td><td>plus_0xE00_among_many</td></tr><tr><td>agent_type_names</td><td><code>0x153c0f</code></td><td><code>0x154a0f</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>agent_type_data</td><td><code>0x155574</code></td><td><code>0x156374</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>agent_equipment_names</td><td><code>0x149770</code></td><td><code>0x14a570</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>ufopaedia_group</td><td><code>0x152add</code></td><td><code>0x1538dd</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>scenery_minimap_colour</td><td><code>0x13d8d4</code></td><td><code>0x13e6d4</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>building_cost</td><td><code>0x1405c0</code></td><td><code>0x1413c0</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>baselayout</td><td><code>0x14258c</code></td><td><code>0x14338c</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>rawsound</td><td><code>0x19337c</code></td><td><code>0x19417c</code></td><td><code>0xe00</code></td><td><span class="pill warn">medium</span></td><td>plus_0xE00_among_many</td></tr><tr><td>bulletsprite_ufo2p</td><td><code>0x18b660</code></td><td><code>0x18c460</code></td><td><code>0xe00</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr>
+</tbody></table></div>
+  <div class="table-wrap"><table id="tacp-rebase" class="">
+<caption>TACP table rebase (non-4 → 4)</caption>
+<thead><tr><th scope='col'>Table</th><th scope='col'>Non-4</th><th scope='col'>4-build</th><th scope='col'>Delta</th><th scope='col'>Confidence</th><th scope='col'>Method</th></tr></thead>
+<tbody>
+<tr><td>damage_type_data</td><td><code>0x2020a0</code></td><td><code>0x1ffea0</code></td><td><code>-0x2200</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>damage_type_names</td><td><code>0x2e25e1</code></td><td><code>0x2e03e1</code></td><td><code>-0x2200</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>damage_modifier_data</td><td><code>0x30165c</code></td><td><code>0x2ff45c</code></td><td><code>-0x2200</code></td><td><span class="pill muted">low</span></td><td>near_first_of_2</td></tr><tr><td>agent_equipment_data</td><td><code>0x3022f6</code></td><td><code>0x3000f6</code></td><td><code>-0x2200</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>agent_armor_data</td><td><code>0x302020</code></td><td><code>0x2ffe20</code></td><td><code>-0x2200</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>agent_weapon_data</td><td><code>0x3020b6</code></td><td><code>0x2ffeb6</code></td><td><code>-0x2200</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>agent_general_data</td><td><code>0x302914</code></td><td><code>0x300714</code></td><td><code>-0x2200</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>agent_payload_data</td><td><code>0x301998</code></td><td><code>0x2ff798</code></td><td><code>-0x2200</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>agent_equipment_set_builtin</td><td><code>0x300e70</code></td><td><code>0x2fec70</code></td><td><code>-0x2200</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>bulletsprite_tacp</td><td><code>0x202254</code></td><td><code>0x200054</code></td><td><code>-0x2200</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr><tr><td>projectilesprites_tacp</td><td><code>0x20245e</code></td><td><code>0x20025e</code></td><td><code>-0x2200</code></td><td><span class="pill ok">high</span></td><td>near_unique</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="features">
+  <h2>Leftovers in the original EXEs</h2>
+  <p>String mine across ISO + XCOMA copies. Live systems (scenario files, RAWSOUND) are used at runtime. Editor / GRAB / Designer and selmode stubs should stay out of OpenApoc.</p>
+  <div class="table-wrap"><table id="feat-table" class="">
+<caption>Feature mine (string hits)</caption>
+<thead><tr><th scope='col'>Feature</th><th scope='col'>Class</th><th scope='col'>Hits</th><th scope='col'>Unique texts</th></tr></thead>
+<tbody>
+<tr><td>Designer/Editor</td><td><span class="pill warn">editor</span></td><td>9</td><td>2</td></tr><tr><td>Scenario Generator</td><td><span class="pill warn">editor</span></td><td>12</td><td>3</td></tr><tr><td>scenario runtime files</td><td><span class="pill ok">live</span></td><td>198</td><td>49</td></tr><tr><td>selmode</td><td><span class="pill bad">stub</span></td><td>12</td><td>4</td></tr><tr><td>GRAB</td><td><span class="pill warn">editor</span></td><td>111</td><td>36</td></tr><tr><td>Debug Autosave</td><td><span class="pill muted">debug</span></td><td>6</td><td>1</td></tr><tr><td>Not implemented</td><td><span class="pill bad">stub</span></td><td>12</td><td>4</td></tr><tr><td>SPARES</td><td><span class="pill muted">unreferenced-data</span></td><td>60</td><td>5</td></tr><tr><td>RAWSOUND</td><td><span class="pill ok">live</span></td><td>2523</td><td>211</td></tr><tr><td>WATCOM</td><td><span class="pill muted">debug</span></td><td>34</td><td>5</td></tr><tr><td>DOS4G</td><td><span class="pill muted">debug</span></td><td>219</td><td>20</td></tr><tr><td>TODO</td><td><span class="pill bad">stub</span></td><td>0</td><td>0</td></tr><tr><td>unused</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>0</td></tr><tr><td>tactical:AI Target Priority</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:Pathing (waypoint) information</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:Intensity/Time Table</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:TacEdit unused +37/55</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:TacEdit unused +38/56</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:TacEdit unused +39/57</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:TacEdit unused +3B/59</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:Transparent</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:LOS Through Terrain?</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:TacEdit unused +49/73</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:Object required for alternative</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:Alternative object</td><td><span class="pill ok">live</span></td><td>0</td><td>1</td></tr><tr><td>tactical:Alternative Object Type</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:Climbable</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:Auto-loop animation</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:FLOOR.* leftover</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:STRATMAP.PCK/.TAB</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr><tr><td>tactical:SOB unused loot slots</td><td><span class="pill muted">unreferenced-data</span></td><td>0</td><td>1</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="gaps">
+  <h2>Gameplay gap matrix</h2>
+  <p>Weighted table / string / OpenApoc TODO. Filter by domain or status. Issue numbers are GitHub milestones: 263 alpha, 264 beta, 265 1.0, 997 TPS, 1053 org vehicles, 618 music.</p>
+  <div class="filters">
+    <label>Domain
+      <select id="gap-domain" aria-controls="gap-table">
+        <option value="">All</option>
+        <option value="city">city</option>
+        <option value="battle">battle</option>
+      </select>
+    </label>
+    <label>Status
+      <select id="gap-status" aria-controls="gap-table">
+        <option value="">All</option>
+        <option value="missing">missing</option>
+        <option value="wrong">wrong</option>
+        <option value="approximate">approximate</option>
+        <option value="partial">partial</option>
+        <option value="implemented">implemented</option>
+      </select>
+    </label>
+    <label>Search
+      <input id="gap-q" type="search" aria-controls="gap-table" placeholder="overspawn, cover, enzyme…">
+    </label>
+  </div>
+  <p class="muted">Status mix:
+    approximate 9, implemented 4, missing 15, partial 2, wrong 3.</p>
+  <div class="table-wrap"><table id="gap-table" class="">
+<caption>Original system versus OpenApoc status</caption>
+<thead><tr><th scope='col'>Domain</th><th scope='col'>System</th><th scope='col'>Binary</th><th scope='col'>Evidence</th><th scope='col'>OpenApoc</th><th scope='col'>Issue</th><th scope='col'>Status</th><th scope='col'>Conf.</th></tr></thead>
+<tbody>
+<tr><td>city</td><td>Research / manufacturing tables</td><td>UFO2P</td><td>table research_data 0x13EE80 / 4-build 0x13FC80</td><td><code>tools/extractors/common/research.h</code></td><td>#263</td><td><span class="pill ok">implemented</span></td><td><span class="pill ok">high</span></td></tr><tr><td>city</td><td>Economy / weekly funding</td><td>UFO2P</td><td>table economy_data1; WEEKLY FUNDING ASSESSMENT</td><td><code>game/state/city/economyinfo.cpp</code></td><td>#263</td><td><span class="pill ok">implemented</span></td><td><span class="pill ok">high</span></td></tr><tr><td>city</td><td>Two-way org diplomacy</td><td>UFO2P</td><td>organisation_starting_relationships; Diplomacy string</td><td><code>game/state/shared/organisation.cpp</code></td><td>#996</td><td><span class="pill warn">approximate</span></td><td><span class="pill warn">medium</span></td></tr><tr><td>city</td><td>Org vehicle buy/sell</td><td>UFO2P</td><td>organisation_vehicle_park 0x188EA8</td><td><code>game/state/shared/organisation.cpp</code></td><td>#1053</td><td><span class="pill bad">missing</span></td><td><span class="pill warn">medium</span></td></tr><tr><td>city</td><td>Ground vehicle lanes</td><td>UFO2P</td><td>Road type / illegal road vehicle strings</td><td><code>game/state/city/vehiclemission.cpp</code></td><td>#785</td><td><span class="pill bad">missing</span></td><td><span class="pill ok">high</span></td></tr><tr><td>city</td><td>Vehicle mission stubs</td><td>UFO2P</td><td>default getNextDestination / update / start</td><td><code>game/state/city/vehiclemission.cpp</code></td><td>#264</td><td><span class="pill bad">missing</span></td><td><span class="pill ok">high</span></td></tr><tr><td>city</td><td>Agent city missions</td><td>UFO2P</td><td>Investigate Building string; Teleport misses getNextDestination</td><td><code>game/state/city/agentmission.cpp</code></td><td>#263</td><td><span class="pill warn">partial</span></td><td><span class="pill ok">high</span></td></tr><tr><td>city</td><td>Agent training rate</td><td>UFO2P</td><td>TPS mismatch (36 vs 144)</td><td><code>game/state/shared/agent.cpp</code></td><td>#997</td><td><span class="pill bad">wrong</span></td><td><span class="pill ok">high</span></td></tr><tr><td>city</td><td>Ticks per second</td><td>UFO2P+TACP</td><td>observational 36 TPS; no literal string</td><td><code>game/state/gametime.h</code></td><td>#997</td><td><span class="pill bad">wrong</span></td><td><span class="pill ok">high</span></td></tr><tr><td>city</td><td>Alien dimension portals</td><td>UFO2P</td><td>Dimension Gates / Switching to Alien Dimension</td><td><code>game/state/city/city.cpp</code></td><td>#264</td><td><span class="pill bad">missing</span></td><td><span class="pill warn">medium</span></td></tr><tr><td>city</td><td>Umbilical collapse</td><td>UFO2P</td><td>no printable umbilical</td><td><code>game/state/city</code></td><td>#264</td><td><span class="pill bad">missing</span></td><td><span class="pill muted">low</span></td></tr><tr><td>city</td><td>Overspawn</td><td>UFO2P</td><td>Overspawn / Overspawn Autopsy; falls back to attackBuilding</td><td><code>game/state/gamestate.cpp</code></td><td>#264</td><td><span class="pill bad">missing</span></td><td><span class="pill ok">high</span></td></tr><tr><td>city</td><td>UFO mushrooms</td><td>UFO2P</td><td>no printable mushroom</td><td><code>game/state/city</code></td><td>#264</td><td><span class="pill bad">missing</span></td><td><span class="pill muted">low</span></td></tr><tr><td>city</td><td>Stop UFO growth after destroy</td><td>UFO2P</td><td>UFO_growth_rates hexa-only 0x155010</td><td><code>game/state/rules/city/ufogrowth.cpp</code></td><td>#264</td><td><span class="pill bad">missing</span></td><td><span class="pill warn">medium</span></td></tr><tr><td>city</td><td>Victory / defeat screens</td><td>UFO2P+XCOMAPOC</td><td>X-COM IS DEFEATED; smk/lose1.smk; smk/wingame2.smk</td><td><code>game/ui</code></td><td>#264</td><td><span class="pill bad">missing</span></td><td><span class="pill ok">high</span></td></tr><tr><td>city</td><td>Alien takeover screen</td><td>UFO2P</td><td>ALIEN TAKEOVER</td><td><code>game/ui/tileview/cityview.cpp</code></td><td>#264</td><td><span class="pill bad">missing</span></td><td><span class="pill ok">high</span></td></tr><tr><td>city</td><td>Infiltration graph curves</td><td>UFO2P</td><td>Alien infiltration graph; straight lines in UI</td><td><code>game/ui/city/infiltrationscreen.cpp</code></td><td>#263</td><td><span class="pill warn">approximate</span></td><td><span class="pill ok">high</span></td></tr><tr><td>city</td><td>Dynamic / action music</td><td>UFO2P</td><td>Action music; /MUSIC/GROUP_1..4; SMKP is cutscenes</td><td><code>framework/jukebox.cpp</code></td><td>#618</td><td><span class="pill bad">missing</span></td><td><span class="pill ok">high</span></td></tr><tr><td>city</td><td>Building / base death</td><td>UFO2P</td><td>openapoc-todo</td><td><code>game/state/city/building.cpp</code></td><td>#264</td><td><span class="pill warn">approximate</span></td><td><span class="pill warn">medium</span></td></tr><tr><td>battle</td><td>Damage types / modifiers</td><td>TACP</td><td>damage_type_data 0x2020A0 / 4-build 0x1FFEA0</td><td><code>tools/extractors/common/aequipment.h</code></td><td>—</td><td><span class="pill ok">implemented</span></td><td><span class="pill ok">high</span></td></tr><tr><td>battle</td><td>Agent equipment / armor / weapons</td><td>TACP</td><td>aequipment.h tables</td><td><code>game/state/shared/aequipment.cpp</code></td><td>—</td><td><span class="pill ok">implemented</span></td><td><span class="pill ok">high</span></td></tr><tr><td>battle</td><td>Vanilla attack priority</td><td>TACP</td><td>prior-art ai.txt</td><td><code>game/state/battle/ai/unitaivanilla.cpp</code></td><td>#265</td><td><span class="pill warn">approximate</span></td><td><span class="pill warn">medium</span></td></tr><tr><td>battle</td><td>Cautious / Normal cover + potshots</td><td>TACP</td><td>Cautious mode / Aggressive mode / Kneel; no cover/potshot literals</td><td><code>game/state/battle/ai/unitaibehavior.cpp</code></td><td>#265</td><td><span class="pill bad">missing</span></td><td><span class="pill ok">high</span></td></tr><tr><td>battle</td><td>Evasive seek-cover</td><td>TACP</td><td>no printable evasive</td><td><code>game/state/battle/ai</code></td><td>#265</td><td><span class="pill bad">missing</span></td><td><span class="pill warn">medium</span></td></tr><tr><td>battle</td><td>Wounded move/shoot penalty</td><td>TACP</td><td>Unit critically wounded</td><td><code>game/state/battle/battleunit.cpp</code></td><td>#265</td><td><span class="pill bad">missing</span></td><td><span class="pill warn">medium</span></td></tr><tr><td>battle</td><td>Wounded medkit in cover</td><td>TACP</td><td>Medi-kit</td><td><code>game/state/battle/ai</code></td><td>#265</td><td><span class="pill bad">missing</span></td><td><span class="pill warn">medium</span></td></tr><tr><td>battle</td><td>Enzyme</td><td>TACP</td><td>Entropy Enzyme; TICKS_PER_ENZYME_EFFECT = 16 (144/9)</td><td><code>game/state/battle/battlehazard.cpp</code></td><td>#265</td><td><span class="pill warn">approximate</span></td><td><span class="pill ok">high</span></td></tr><tr><td>battle</td><td>Fire</td><td>TACP</td><td>Fire / FireGrenade; HAZARD_SPREAD_CHANCE = 10/100 made-up</td><td><code>game/state/battle/battlehazard.cpp</code></td><td>#265</td><td><span class="pill warn">approximate</span></td><td><span class="pill ok">high</span></td></tr><tr><td>battle</td><td>Cloak</td><td>TACP</td><td>Personal Cloaking Field</td><td><code>game/state/battle + vehicle.cpp</code></td><td>#265</td><td><span class="pill warn">approximate</span></td><td><span class="pill ok">high</span></td></tr><tr><td>battle</td><td>Multi-tile unit path / draw</td><td>TACP</td><td>openapoc-todo</td><td><code>game/state/battle/battleunit.h</code></td><td>#265</td><td><span class="pill warn">approximate</span></td><td><span class="pill warn">medium</span></td></tr><tr><td>battle</td><td>Battle fire rates / AOE</td><td>TACP</td><td>Fire rate string; TPS contamination</td><td><code>game/state/battle</code></td><td>#997</td><td><span class="pill bad">wrong</span></td><td><span class="pill ok">high</span></td></tr><tr><td>battle</td><td>Psionics timing</td><td>TACP</td><td>Psionic attack on unit / Exit Psionics</td><td><code>game/state/battle</code></td><td>#265</td><td><span class="pill warn">approximate</span></td><td><span class="pill warn">medium</span></td></tr><tr><td>battle</td><td>TU reservation UI</td><td>TACP</td><td>TUs reserved for kneeling / aimed / snap / auto</td><td><code>game/state/battle</code></td><td>#265</td><td><span class="pill warn">partial</span></td><td><span class="pill ok">high</span></td></tr>
+</tbody></table></div>
+</section>
+
+<section id="debt">
+  <h2>OpenApoc source debt</h2>
+  <p>TODO + FIXME only (171) under <code>game/state</code> and <code>game/ui</code>. The word “vanilla” is excluded here — it mostly names <code>UnitAIVanilla</code>, not unfinished work.</p>
+  <div class="table-wrap"><table id="todo-dirs" class="">
+<caption>TODO+FIXME by directory</caption>
+<thead><tr><th scope='col'>Directory</th><th scope='col'>Count</th><th scope='col'>Share of 171</th></tr></thead>
+<tbody>
+<tr><td>game/state/city</td><td>38</td><td><div class="bar" role="img" aria-label="22 percent"><span class="bar-fill warn" style="width:22.2%"></span></div></td></tr><tr><td>game/state/battle</td><td>36</td><td><div class="bar" role="img" aria-label="21 percent"><span class="bar-fill warn" style="width:21.1%"></span></div></td></tr><tr><td>game/state/shared</td><td>11</td><td><div class="bar" role="img" aria-label="6 percent"><span class="bar-fill warn" style="width:6.4%"></span></div></td></tr><tr><td>game/ui/ufopaedia</td><td>3</td><td><div class="bar" role="img" aria-label="2 percent"><span class="bar-fill ok" style="width:1.8%"></span></div></td></tr><tr><td>game/ui/battle</td><td>2</td><td><div class="bar" role="img" aria-label="1 percent"><span class="bar-fill ok" style="width:1.2%"></span></div></td></tr><tr><td>game/state/battle/ai</td><td>2</td><td><div class="bar" role="img" aria-label="1 percent"><span class="bar-fill ok" style="width:1.2%"></span></div></td></tr><tr><td>game/ui/city</td><td>1</td><td><div class="bar" role="img" aria-label="1 percent"><span class="bar-fill ok" style="width:0.6%"></span></div></td></tr><tr><td>other game/state + game/ui</td><td>78</td><td><div class="bar" role="img" aria-label="46 percent"><span class="bar-fill warn" style="width:45.6%"></span></div></td></tr>
+</tbody></table></div>
+  <div class="table-wrap"><table id="todo-files" class="">
+<caption>Hottest files</caption>
+<thead><tr><th scope='col'>File</th><th scope='col'>TODO+FIXME</th></tr></thead>
+<tbody>
+<tr><td><code>game/state/battle/battleunit.cpp</code></td><td>15</td></tr><tr><td><code>game/state/city/vehiclemission.cpp</code></td><td>13</td></tr><tr><td><code>game/state/city/vehicle.cpp</code></td><td>12</td></tr><tr><td><code>game/state/tilemap/tilemap.cpp</code></td><td>8</td></tr><tr><td><code>game/state/battle/battle.cpp</code></td><td>7</td></tr><tr><td><code>game/ui/tileview/cityview.cpp</code></td><td>6</td></tr><tr><td><code>game/ui/components/controlgenerator.cpp</code></td><td>6</td></tr><tr><td><code>game/state/city/agentmission.cpp</code></td><td>5</td></tr><tr><td><code>game/state/gamestate.cpp</code></td><td>5</td></tr><tr><td><code>game/state/tilemap/pathfinding.cpp</code></td><td>5</td></tr><tr><td><code>game/ui/tileview/battletileview.cpp</code></td><td>5</td></tr><tr><td><code>game/ui/tileview/battleview.cpp</code></td><td>5</td></tr><tr><td><code>game/state/battle/battleunitmission.cpp</code></td><td>4</td></tr><tr><td><code>game/state/shared/organisation.cpp</code></td><td>4</td></tr><tr><td><code>game/state/city/city.cpp</code></td><td>3</td></tr>
+</tbody></table></div>
+  <h3>Constants that inherit the 4× tick</h3>
+  <div class="table-wrap"><table id="const-table" class="">
+<caption>Timing and hazard constants</caption>
+<thead><tr><th scope='col'>Symbol</th><th scope='col'>Value</th><th scope='col'>Where</th><th scope='col'>Note</th></tr></thead>
+<tbody>
+<tr><td><code>VANILLA_TICKS_PER_SECOND</code></td><td>36</td><td><code>game/state/gametime.h:9</code></td><td>Original city/battle sim rate</td></tr><tr><td><code>TICKS_MULTIPLIER</code></td><td>4</td><td><code>game/state/gametime.h:10</code></td><td>OpenApoc runs 4× vanilla</td></tr><tr><td><code>TICKS_PER_SECOND</code></td><td>144</td><td><code>game/state/gametime.h:11</code></td><td>36 × 4 — contaminates rates</td></tr><tr><td><code>TICKS_PER_TURN</code></td><td>576</td><td><code>game/state/battle/battle.h:30</code></td><td>144 × 4</td></tr><tr><td><code>TICKS_PER_WOUND_EFFECT</code></td><td>576</td><td><code>game/state/battle/battleunit.h:44</code></td><td>FIXME: ensure vanilla</td></tr><tr><td><code>TICKS_PER_ENZYME_EFFECT</code></td><td>16</td><td><code>game/state/battle/battleunit.h:45</code></td><td>144/9 — unverified</td></tr><tr><td><code>TICKS_PER_FIRE_EFFECT</code></td><td>144</td><td><code>game/state/battle/battleunit.h:46</code></td><td>Unverified vs original</td></tr><tr><td><code>HAZARD_SPREAD_CHANCE</code></td><td>10 / 100</td><td><code>game/state/battle/battlehazard.h:12</code></td><td>Explicitly made up</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="priority">
+  <h2>What to build next</h2>
+  <p>From the matrix. Ghidra and decompiler output are allowed on this fork.</p>
+  <ol>
+    <li><strong>Ticks per second (#997)</strong> — one subsystem at a time against original observation. Everything else is wrong until this agrees with 36 TPS.</li>
+    <li><strong>Agent mission defaults</strong> — <code>agentmission.cpp</code>. Investigate Building is string-backed. Teleport still falls into default <code>getNextDestination</code>.</li>
+    <li><strong>Vehicle mission stubs</strong> — <code>vehiclemission.cpp</code>. Needed before ground lanes (#785). Road strings exist; lane-keep rules do not.</li>
+    <li><strong>Org vehicle buy/sell (#1053)</strong> — table already extracted (<code>organisation_vehicle_park</code>). Runtime skips a funds check at <code>organisation.cpp:747</code>.</li>
+    <li><strong>Battle cover / potshot (#265)</strong> — implement from <code>tools/extractors/docs/ai.txt</code>. TACP only names Cautious / Aggressive / kneel.</li>
+    <li><strong>Enzyme / fire / cloak constants</strong> — names are string-backed. Replace made-up <code>HAZARD_SPREAD_CHANCE</code> after observation.</li>
+    <li><strong>Victory / defeat / takeover</strong> — city strings exist; SMK playback already works.</li>
+  </ol>
+  <div class="callout">
+    <strong>Extractor follow-on (not gameplay):</strong>
+    teach <code>ufo2p.cpp</code> / <code>tacp.cpp</code> the <code>4</code>-build CRCs and the per-table deltas, or keep extracting from the ISO non-4 pair only.
+  </div>
+</section>
+
+<section id="method">
+  <h2>Method and limits</h2>
+  <ul>
+    <li>ISO non-4 is extractor-canonical. Depot un-suffixed EXEs are the <code>4</code> pair.</li>
+    <li>Table offsets are bound-file offsets. Do not unbind with DOS32A.</li>
+    <li>Function export used a reconstructed LE image + BinaryLoader. String literals did not survive into those decompiles; string evidence comes from the EXE catalogs.</li>
+    <li>Classification is complete; naming is not. Decompile-suspect = export failed or convention-unknown.</li>
+    <li>Listings live in the sibling lab and <code>depot_7661/analysis/</code>. Cite binary + generation + file offset when pasting names here.</li>
+  </ul>
+</section>
+</main>
+<footer>
+  <p>Sources: <code>docs/original-game/</code>, sibling rebase CSVs, <code>depot_7661/analysis/checklist.json</code>, table audit, feature mine, OpenApoc <code>game/state</code> and <code>game/ui</code>. Generated 2026-08-23.</p>
+</footer>
+<script>
+(function () {
+  function bind(qId, sId, tableId, col) {
+    var q = document.getElementById(qId);
+    var s = document.getElementById(sId);
+    var table = document.getElementById(tableId);
+    if (!table) return;
+    function run() {
+      var query = (q && q.value || "").toLowerCase();
+      var status = (s && s.value || "").toLowerCase();
+      var rows = table.tBodies[0].rows;
+      for (var i = 0; i < rows.length; i++) {
+        var text = rows[i].innerText.toLowerCase();
+        var st = rows[i].cells[col] ? rows[i].cells[col].innerText.toLowerCase() : text;
+        var okQ = !query || text.indexOf(query) !== -1;
+        var okS = !status || st.indexOf(status) !== -1;
+        rows[i].hidden = !(okQ && okS);
+      }
+    }
+    if (q) q.addEventListener("input", run);
+    if (s) s.addEventListener("change", run);
+  }
+  bind("tbl-q", "tbl-status", "tbl-audit", 0);
+  bind("gap-q", "gap-status", "gap-table", 6);
+  var gd = document.getElementById("gap-domain");
+  var gt = document.getElementById("gap-table");
+  var gs = document.getElementById("gap-status");
+  var gq = document.getElementById("gap-q");
+  function gapRun() {
+    if (!gt) return;
+    var query = (gq && gq.value || "").toLowerCase();
+    var status = (gs && gs.value || "").toLowerCase();
+    var domain = (gd && gd.value || "").toLowerCase();
+    var rows = gt.tBodies[0].rows;
+    for (var i = 0; i < rows.length; i++) {
+      var text = rows[i].innerText.toLowerCase();
+      var d = rows[i].cells[0].innerText.toLowerCase();
+      var st = rows[i].cells[6].innerText.toLowerCase();
+      rows[i].hidden = !((!query || text.indexOf(query) !== -1) && (!status || st.indexOf(status) !== -1) && (!domain || d === domain));
+    }
+  }
+  if (gd) gd.addEventListener("change", gapRun);
+  if (gs) gs.addEventListener("change", gapRun);
+  if (gq) gq.addEventListener("input", gapRun);
+})();
+</script>
+</body>
+</html>

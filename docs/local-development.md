@@ -68,6 +68,27 @@ cmake --build build --target extract-data
 
 On macOS, the build also copies `data/` into `build/bin/OpenApoc.app/Contents/Resources/data`. If `open` launches an empty bundle, run `extract-data` again after the `.app` exists.
 
+## Testing
+
+Default `openapoc: configure` keeps `-DENABLE_TESTS=OFF` so the first boot stays short. Any game-logic change must reconfigure with tests on:
+
+```sh
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_PREFIX_PATH="$(brew --prefix qt@6);$(brew --prefix boost);/opt/homebrew" \
+  -DENABLE_TESTS=ON \
+  -DBUILD_IMAGEDUMP=OFF \
+  -DBUILD_SERIALIZATIONTOOL=OFF \
+  -S . -B build
+cmake --build build -j$(sysctl -n hw.ncpu)
+ctest --test-dir build --output-on-failure
+```
+
+Or run the Cursor task `openapoc: test`. Confirm depot/ISO stay untracked:
+
+```sh
+./tools/check_ignored_binaries.sh
+```
+
 ## Running
 
 **Recommended** — Mach-O from the repo root with explicit data paths (works regardless of Finder cwd):
@@ -100,10 +121,12 @@ Tasks live in [`.vscode/tasks.json`](../.vscode/tasks.json). Run via **Tasks: Ru
 | ------ | ---------------- |
 | `openapoc: init submodules` | `git submodule update --init --recursive` |
 | `openapoc: link game data` | Symlink `depot_7661/cd.iso` → `data/cd.iso` |
-| `openapoc: configure` | CMake configure (RelWithDebInfo, dev-oriented options) |
+| `openapoc: configure` | CMake configure (RelWithDebInfo, tests off) |
+| `openapoc: configure tests` | Same configure with `-DENABLE_TESTS=ON` |
 | `openapoc: build` | Default **build** task (`Cmd+Shift+B`) |
 | `openapoc: extract data` | Re-run `OpenApoc_DataExtractor` |
 | `openapoc: configure and build` | Configure, then build |
+| **`openapoc: test`** | Reconfigure with tests on, build, `ctest` |
 | **`openapoc: run`** | **Fresh run:** clean runtime state → build → launch |
 | `openapoc: run (open .app)` | Fresh run, then `open` the `.app` |
 | `openapoc: launch only` | Launch without clean or rebuild |

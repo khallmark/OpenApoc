@@ -2057,6 +2057,8 @@
     <name>UnitAIBehavior</name>
     <member>type</member>
     <member>active</member>
+    <member>attackerPosition</member>
+    <member>hitsSinceThink</member>
   </object>
   <object external="true" full="true">
     <name>UnitAIVanilla</name>

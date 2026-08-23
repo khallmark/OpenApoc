@@ -1,19 +1,18 @@
 # Original-game analysis
 
-Clean-room map of X-COM Apocalypse binaries onto OpenApoc. This folder is the public, in-repo deliverable. Ghidra projects, decompiler exports, and Steam/ISO executables live only in the sibling lab:
+Map of X-COM Apocalypse binaries onto this OpenApoc fork. Ghidra projects, bound EXEs, and Steam/ISO copies live in the sibling lab:
 
 `/Users/khallmark/Desktop/Code/OpenSource/OpenApoc-og-research`
 
-## Isolation rules
+This is a fork. Ghidra and decompiler output are allowed here and in the same session as `game/` edits.
 
-- Do not commit `depot_7661/`, Ghidra databases, decompiled C, or sibling-lab catalogs. Place the Steam depot beside the repo and symlink `data/cd.iso` — see [../local-development.md](../local-development.md).
-- Do not paste decompiler listings into this tree.
-- Forbidden residue: Ghidra auto-generated function names, default labels, default data labels, `undefined` plus a width, and `param` plus an underscore and index. Write behavior, not reconstructed identifiers.
-- Allowed evidence: table names, file offsets from the rebase CSVs, printable strings, OpenApoc paths, GitHub issue numbers.
-- Weight evidence as table / string / xref first. Decompiler-only claims stay `confidence=low` and are written as behavior, not as reconstructed source.
+## Isolation (binaries, not listings)
+
+- Do not commit `depot_7661/`, Ghidra databases (`.rep` / `.gpr`), or original EXEs. Place the Steam depot beside the repo and symlink `data/cd.iso` — see [../local-development.md](../local-development.md).
+- Listings, `FUN_*` names, and reconstructed identifiers are allowed in this folder if they carry a binary + generation + file offset.
+- Weight evidence as table / string / xref / decompiler / prior-art / openapoc-todo.
 - Do not index Ghidra C in codebase-memory-mcp. Index OpenApoc only.
-- Codebase-memory skip-lists `tools/` and `docs/`, so the extractor class `OpenApoc::UFO2P` is not in the graph. The smoke test is `OpenApoc.City` in `game/state/city/city.h`.
-- Do not write OpenApoc game logic in the same session that reads decompiler output.
+- Codebase-memory skip-lists `tools/`, so the extractor class `OpenApoc::UFO2P` is not in the graph. Grep `tools/extractors/common`. The smoke test is `OpenApoc.City` in `game/state/city/city.h`.
 
 ## Method
 
@@ -21,8 +20,8 @@ Clean-room map of X-COM Apocalypse binaries onto OpenApoc. This folder is the pu
 2. Treat depot / ISO `UFO2P4.EXE` / `TACP4.EXE` as the Steam-running pair (this depot ships the `4` files under the un-suffixed names).
 3. Confirm every extractor table at the non-4 file offset, then relocate the same bytes on the `4` build. Never assume a global slide.
 4. Import bound Linear Executables with the community LX loader. Do not unbind; extractor offsets are bound-file offsets.
-5. Seed labels from the matching rebase column. Walk strings and xrefs for systems OpenApoc still approximates.
-6. Record gaps in [openapoc-gap-matrix.md](openapoc-gap-matrix.md).
+5. Seed labels from the matching rebase column. Walk strings, xrefs, and decompiler for systems OpenApoc still approximates.
+6. Record gaps in [openapoc-gap-matrix.md](openapoc-gap-matrix.md). Interactive compare: [compare-report.html](compare-report.html).
 
 ## Spec template for binary notes
 
@@ -37,10 +36,8 @@ Each `binaries/*.md` file uses:
 
 ## Validation
 
-From the sibling lab:
-
 ```bash
-/Users/khallmark/Desktop/Code/OpenSource/OpenApoc-og-research/scripts/check_docs_clean.sh
+./tools/check_ignored_binaries.sh
 git check-ignore -v depot_7661/cd.iso
 ```
 

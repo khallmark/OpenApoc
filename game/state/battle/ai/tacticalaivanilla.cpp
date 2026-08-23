@@ -5,6 +5,7 @@
 #include "game/state/battle/battle.h"
 #include "game/state/battle/battleunit.h"
 #include "game/state/gamestate.h"
+#include <algorithm>
 #include <glm/glm.hpp>
 
 namespace OpenApoc
@@ -53,9 +54,11 @@ TacticalAIVanilla::think(GameState &state, StateRef<Organisation> o)
 		}
 	}
 	LogAssert(unitsTotal > 0);
-	// Chance to retreat is [0 to 50]% as number of neutralised allies goes [50 to 100]%
-	bool retreat =
-	    randBoundsExclusive(state.rng, 0, 100) < (unitsActive - unitsTotal / 2) / unitsTotal;
+	// Chance to retreat is [0 to 50]% as number of neutralised allies goes [50 to 100]%.
+	// Integer division of the old (active - total/2)/total form was always zero.
+	const int neutralizedPercent = ((unitsTotal - unitsActive) * 100) / unitsTotal;
+	const int retreatChance = std::max(0, neutralizedPercent - 50);
+	bool retreat = randBoundsExclusive(state.rng, 0, 100) < retreatChance;
 
 	// Find an idle unit that needs orders
 	for (auto &u : state.current_battle->units)

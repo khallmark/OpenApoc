@@ -12,6 +12,7 @@
 #include "game/state/shared/agent.h"
 #include "game/state/tilemap/tilemap.h"
 #include "library/strings_format.h"
+#include <cfloat>
 #include <glm/glm.hpp>
 
 namespace OpenApoc
@@ -286,11 +287,12 @@ bool AgentMission::getNextDestination(GameState &state, Agent &a, Vec3<float> &d
 		case MissionType::Snooze:
 		case MissionType::RestartNextMission:
 		case MissionType::AwaitPickup:
+		case MissionType::Teleport:
 		{
 			return false;
 		}
 		default:
-			LogWarning("TODO: Implement getNextDestination");
+			LogWarning("Unhandled agent mission getNextDestination {0}", getName());
 			return false;
 	}
 	return false;
@@ -322,8 +324,10 @@ void AgentMission::update(GameState &state, Agent &a, unsigned int ticks, bool f
 				this->timeToSnooze -= ticks;
 			return;
 		}
+		case MissionType::Teleport:
+			return;
 		default:
-			LogWarning("TODO: Implement update");
+			LogWarning("Unhandled agent mission update {0}", getName());
 			return;
 	}
 }
@@ -359,7 +363,7 @@ bool AgentMission::isFinishedInternal(GameState &, Agent &a)
 		case MissionType::Teleport:
 			return true;
 		default:
-			LogWarning("TODO: Implement isFinishedInternal");
+			LogWarning("Unhandled agent mission isFinishedInternal {0}", getName());
 			return false;
 	}
 }
@@ -420,12 +424,6 @@ void AgentMission::start(GameState &state, Agent &a)
 					}
 					else
 					{
-						// FIXME: Implement agent pathing to closest building when in the field and
-						// unable to path
-						LogWarning("Implement agent pathing to closest building when in the field "
-						           "and unable to path to "
-						           "building");
-						// For now just get into closest building
 						fw().pushEvent(new GameAgentEvent(GameEventType::AgentUnableToReach,
 						                                  {&state, a.shared_from_this()}, true));
 						float closestDistance = FLT_MAX;
@@ -435,14 +433,18 @@ void AgentMission::start(GameState &state, Agent &a)
 							auto distance = glm::length(a.position - (Vec3<float>)b->crewQuarters);
 							if (distance < closestDistance)
 							{
-								distance = closestDistance;
+								closestDistance = distance;
 								closestBuilding = b;
 							}
 						}
-						a.enterBuilding(state, closestBuilding);
+						if (closestBuilding)
+						{
+							a.enterBuilding(state, closestBuilding);
+						}
 					}
 				}
 			}
+			break;
 		}
 		case MissionType::Teleport:
 		{
@@ -464,7 +466,7 @@ void AgentMission::start(GameState &state, Agent &a)
 			// No setup
 			return;
 		default:
-			LogError("TODO: Implement start");
+			LogError("Unhandled agent mission start {0}", getName());
 			return;
 	}
 }
