@@ -19,13 +19,14 @@
 * [Building](#building)
   * [Building on Windows](#building-on-windows)
   * [Building on Linux](#building-on-linux)
-  * [Building on macOS](#building-on-macos)  
+  * [Building on macOS](#building-on-macos)
+  * [Local development (macOS checkout)](docs/local-development.md)
 * [OpenApoc Coding Style](#openapoc-coding-style)
 * [How to setup OpenApoc](#how-to-setup-openapoc)
 * [Contact us](#contact-us)
 
-
 ## Copyright
+
 All rights for the original game and its resources belong to their respective owners.
 We do not encourage and do not support any form of illegal usage of the original game.
 We strongly advise to purchase the original game on STEAM or another platform of your choosing.
@@ -57,16 +58,14 @@ Pirated disc images and archives are not supported and will cause issues such as
 3. [TO REACH OPENAPOC RELEASE 1.0 (Final polishing and testing to match or exceed Original Game state)](https://github.com/OpenApoc/OpenApoc/issues/265)
 4. [Modding Functions, Extra Features, Enhancements and Quality of Life Updates](https://github.com/OpenApoc/OpenApoc/issues/941)
 
-
 ## Contribute and FAQ
 
 Please use [Discord](https://discord.gg/f8Rayre) for contributing and FAQ.
 > You can support the project by testing, translating, modding, drawing, modeling, concepting etc.
 
-
 ## Building
 
-OpenApocalypse is built leveraging a number of libraries - to provide needed functionality (and save us the time of implementing it badly ourselves). 
+OpenApocalypse is built leveraging a number of libraries - to provide needed functionality (and save us the time of implementing it badly ourselves).
 Note: The following libraries will be fetched and built with vcpkg in a later step, ensuring you get the correct version.
 
 * [SDL2](https://www.libsdl.org)
@@ -85,7 +84,6 @@ The following libraries are also used, but are shipped as submodules in the repo
 * [pugixml](https://pugixml.org) - XML library used for reading/writing the game data files.
 * [fmtlib](https://github.com/fmtlib/fmt) - A c++ string formatting library - proposed for c++20 standard.
 * [magic_enum](https://github.com/Neargye/magic_enum) - Header-only C++17 library provides static reflection for enums, work with any enum type without any macro or boilerplate code.
-
 
 ### Building on Windows
 
@@ -106,13 +104,13 @@ git submodule update --init --recursive
 vcpkg --triplet x64-windows install sdl2 boost-locale boost-program-options boost-uuid boost-crc qt-base6-dev libvorbis
 ```
 
-  * For x86 builds:
+* For x86 builds:
 
 ```cmd
 vcpkg --triplet x86-windows install sdl2 boost-locale boost-program-options boost-uuid boost-crc qt-base6-dev libvorbis
 ```
 
-  * For list of all supported by Vcpkg architectures: `vcpkg help triplet`
+* For list of all supported by Vcpkg architectures: `vcpkg help triplet`
 
 * Copy the original XCom:Apocalypse .iso file into the "data/" directory. This could also be a directory containing all the extracted files from the CD, and it should be named the same (IE the directory should be data/cd.iso/). This is used during the build to extract some data tables.
 * Open the OpenApoc directory in Visual Studio (if you don't have an Open Folder option, generate a project with [CMake](https://cmake.org/)).
@@ -129,11 +127,11 @@ vcpkg --triplet x86-windows install sdl2 boost-locale boost-program-options boos
     }
 ]
 ```
-  * Visual Studio 2019: Build > CMake Settings > Toolchain file > `<path to vcpkg>\\scripts\\buildsystems\\vcpkg.cmake`
+
+* Visual Studio 2019: Build > CMake Settings > Toolchain file > `<path to vcpkg>\\scripts\\buildsystems\\vcpkg.cmake`
 
 * Build OpenApoc. This will take a while on the first build, especially if Vcpkg hasn't installed all the dependencies yet. If you get errors, clear your cache from the Project/CMake menu and try again.
 * When running OpenApoc from the Visual Studio UI, the working directory is set to the root of the project, so the data folder should already be in the right place. If you want to run outside of Visual Studio, you need to copy the whole 'data' folder (including the cd.iso file) into the folder openapoc.exe resides in.
-
 
 ### Building on Linux
 
@@ -193,7 +191,6 @@ make -j4
 ./build/bin/OpenApoc
 ```
 
-
 ### Building on macOS
 
 (Tested on macOS Sequoia 15.6 (24G84)
@@ -226,10 +223,13 @@ brew install cmake boost pkg-config sdl2 qt@6 libvorbis
 * Add the Qt install to path.
 
 * If using zsh (MacOS default since Catalina 10.15):
+
 ```sh
 echo 'export PATH="/opt/homebrew/opt/qt@6/bin:$PATH"' >> ~/.zprofile
 ```
+
 * Or if using bash:
+
 ```sh
 echo 'export PATH="/opt/homebrew/opt/qt@6/bin:$PATH"' >> ~/.bashrc
 ```
@@ -263,45 +263,50 @@ cd ..
 open ./build/bin/OpenApoc.app
 ```
 
+For this checkout (Steam depot at `depot_7661/`, symlinks, Cursor/VS Code tasks, and a fresh-run workflow), see [docs/local-development.md](docs/local-development.md).
 
 ## OpenApoc Coding Style
 
-https://www.ufopaedia.org/index.php/Coding_Style_(OpenApoc)
+<https://www.ufopaedia.org/index.php/Coding_Style_(OpenApoc)>
 >This document specifies the guidelines for writing and formatting the c++ code that forms the core of OpenApoc.
-
 
 ## How to setup OpenApoc
 
 OPENGL 2.0 SUPPORTIVE VIDEO CARDS ARE REQUIRED
 
 WINDOWS USERS: You will require the LATEST Visual C++ Redistributable obtained from windows update to run OpenApoc
-https://docs.microsoft.com/en-US/cpp/windows/latest-supported-vc-redist?view=msvc-170
+<https://docs.microsoft.com/en-US/cpp/windows/latest-supported-vc-redist?view=msvc-170>
 
 Simple steps to play OpenApoc on Windows right now
-(Keep in mind that it is ALPHA - this means bugs, crashes and not all features implemented, use our bug-tracker at https://github.com/OpenApoc/OpenApoc/issues to report bugs and navigate known ones)
+(Keep in mind that it is ALPHA - this means bugs, crashes and not all features implemented, use our bug-tracker at <https://github.com/OpenApoc/OpenApoc/issues> to report bugs and navigate known ones)
 
-1) Download the OpenApoc core files from https://github.com/OpenApoc/OpenApoc/releases
-- For experimental builds visit  https://ci.appveyor.com/project/OpenApoc/openapoc/history
-- If you see a green bar next to the latest build then you can download it, click a build that is green, or use "Show More" to list all builds
-- Click ARTIFACTS (Currently only Windows x64)
-- Download the option that ends with a ".exe" (and without "debug" in it)
-- Run the downloaded exe installer, this will guide you through the installation
-- Use "portable install" if you want saves and settings to remain in the install directory
+1) Download the OpenApoc core files from <https://github.com/OpenApoc/OpenApoc/releases>
 
-2) Acquire the original X-Com Apocalypse CD-ROM and create an ISO Image of that, or use Steam's "cd.iso" or GOGs "xcom.cue"/"xcom.bin"
-- If you have already specified the "cd.iso" location in the installer, you don't need to do this step
-- You need have all files in the disc ISO file including MUSIC so only legit ISOs will work and not torrents that often lack the music
-- If the disc image is in .iso format, rename it to "cd.iso"
-- We also support the GOG .cue / .bin files!
+* For experimental builds visit  <https://ci.appveyor.com/project/OpenApoc/openapoc/history>
 
-3) Put cd.iso (image or folder) into the "data" folder under the specified OpenApoc install folder
-- If you have already specified the "cd.iso" location in the installer, you don't need to do this step
-- To use GOG .cue/.bin you rename the XCOM.cue file to "cd.iso", put that in the OpenApoc data folder, then put the XCOM.BIN, without renaming it, into the data folder too
+* If you see a green bar next to the latest build then you can download it, click a build that is green, or use "Show More" to list all builds
+* Click ARTIFACTS (Currently only Windows x64)
+* Download the option that ends with a ".exe" (and without "debug" in it)
+* Run the downloaded exe installer, this will guide you through the installation
+* Use "portable install" if you want saves and settings to remain in the install directory
 
-4) Run and enjoy!
+1) Acquire the original X-Com Apocalypse CD-ROM and create an ISO Image of that, or use Steam's "cd.iso" or GOGs "xcom.cue"/"xcom.bin"
+
+* If you have already specified the "cd.iso" location in the installer, you don't need to do this step
+
+* You need have all files in the disc ISO file including MUSIC so only legit ISOs will work and not torrents that often lack the music
+* If the disc image is in .iso format, rename it to "cd.iso"
+* We also support the GOG .cue / .bin files!
+
+1) Put cd.iso (image or folder) into the "data" folder under the specified OpenApoc install folder
+
+* If you have already specified the "cd.iso" location in the installer, you don't need to do this step
+
+* To use GOG .cue/.bin you rename the XCOM.cue file to "cd.iso", put that in the OpenApoc data folder, then put the XCOM.BIN, without renaming it, into the data folder too
+
+1) Run and enjoy!
 
 Linux and macOS users: After compiling (see [Building on Linux](#building-on-linux) or [Building on macOS](#building-on-macos) above), copy `cd.iso` into the `data/` directory and run the executable from the repository root.
-
 
 ## Contact us
 
