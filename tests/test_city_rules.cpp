@@ -1734,11 +1734,10 @@ static bool test_subversion_prefers_one_known_base()
 	knownBase->knownToAliens = true;
 
 	const UString customTypeId = "VEHICLETYPE_TEST_KNOWN_BASE_TARGET";
-	auto sourceType = state.vehicle_types.find("VEHICLETYPE_ALIEN_PROBE");
-	TEST_REQUIRE(sourceType != state.vehicle_types.end() && sourceType->second,
-	             "alien probe type missing");
-	auto customType = mksp<VehicleType>(*sourceType->second);
-	customType->id = customTypeId;
+	auto customType = mksp<VehicleType>();
+	customType->name = "Known Base Target Test";
+	customType->type = VehicleType::Type::UFO;
+	customType->health = 100;
 	state.vehicle_types[customTypeId] = customType;
 
 	const UString incursionId = "UFO_INCURSION_TEST_KNOWN_BASE_TARGET";
@@ -1749,11 +1748,20 @@ static bool test_subversion_prefers_one_known_base()
 	incursion->primarySlots.emplace_back();
 	state.ufo_incursions[incursionId] = incursion;
 
-	const Vec3<float> pos = {42.0f, 42.0f, static_cast<float>(alienCity->size.z - 1)};
 	StateRef<Organisation> aliens{&state, "ORG_ALIEN"};
-	auto first = alienCity->placeVehicle(state, {&state, customTypeId}, aliens, pos, 0.0f);
-	auto second = alienCity->placeVehicle(state, {&state, customTypeId}, aliens, pos, 0.0f);
-	TEST_REQUIRE(first && second, "failed to place synthetic subversion fleet");
+	auto createInvader = [&]()
+	{
+		auto vehicle = mksp<Vehicle>();
+		vehicle->type = {&state, customTypeId};
+		vehicle->owner = aliens;
+		vehicle->city = {&state, "CITYMAP_ALIEN"};
+		vehicle->health = customType->health;
+		const UString id = Vehicle::generateObjectID(state);
+		state.vehicles[id] = vehicle;
+		return std::make_pair(id, vehicle);
+	};
+	auto first = createInvader();
+	auto second = createInvader();
 
 	struct Restore
 	{
@@ -1763,7 +1771,7 @@ static bool test_subversion_prefers_one_known_base()
 		std::map<UString, std::list<UFOIncursion::PrimaryMission>> preferences;
 		UString incursionId;
 		UString vehicleTypeId;
-		std::vector<sp<Vehicle>> vehicles;
+		std::vector<std::pair<UString, sp<Vehicle>>> vehicles;
 		~Restore()
 		{
 			for (auto &pref : state.ufo_mission_preference)
@@ -1779,13 +1787,14 @@ static bool test_subversion_prefers_one_known_base()
 				base->knownToAliens = known;
 			}
 			state.ufo_incursions.erase(incursionId);
-			for (auto &vehicle : vehicles)
+			for (auto &entry : vehicles)
 			{
+				auto &vehicle = entry.second;
 				if (vehicle->tileObject)
 				{
 					vehicle->removeFromMap(state);
 				}
-				state.vehicles.erase(vehicle->id);
+				state.vehicles.erase(entry.first);
 			}
 			state.vehicle_types.erase(vehicleTypeId);
 		}
@@ -1797,8 +1806,9 @@ static bool test_subversion_prefers_one_known_base()
 	int subversionMissions = 0;
 	int targetedKnownBase = 0;
 	int fallbackTargets = 0;
-	for (auto &vehicle : restore.vehicles)
+	for (auto &entry : restore.vehicles)
 	{
+		auto &vehicle = entry.second;
 		for (const auto &mission : vehicle->missions)
 		{
 			if (mission.type != VehicleMission::MissionType::InfiltrateSubvert || !mission.subvert)
