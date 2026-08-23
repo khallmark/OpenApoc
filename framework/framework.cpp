@@ -402,7 +402,13 @@ void Framework::run(sp<Stage> initialStage)
 			p->ProgramStages.current()->update();
 		}
 
-		for (StageCmd cmd : stageCommands)
+		// Iterate a copy. REPLACEALL/QUIT below clear the stage stack, which destroys stages and
+		// everything they own; anything in that teardown that queues another stage command would
+		// append to this very vector mid-iteration and invalidate the range-for. Copying keeps
+		// the existing semantics -- commands raised while processing this batch are discarded by
+		// the clear() below, exactly as before -- without the undefined behaviour.
+		const auto commandsThisFrame = stageCommands;
+		for (const StageCmd &cmd : commandsThisFrame)
 		{
 			switch (cmd.cmd)
 			{
