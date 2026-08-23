@@ -28,7 +28,7 @@ Full setup: [docs/local-development.md](docs/local-development.md). Style:
 ## Verify
 
 | Change | Command |
-|--------|---------|
+| -------- | --------- |
 | Game logic | Task `openapoc: test`, or the command below |
 | Extractor | `cmake --build build --target extract-data` |
 | Ignore rules | `./tools/check_ignored_binaries.sh` |
@@ -51,7 +51,7 @@ disabled (`#if 0`); do not treat a green serialize test as a full roundtrip.
 ## Layout
 
 | Path | Role |
-|------|------|
+| ------ | ------ |
 | `game/state/` | City + battle simulation |
 | `game/ui/` | Screens / forms |
 | `tools/extractors/` | EXE table extractors (`common/ufo2p.*`, `tacp.*`) |
@@ -81,5 +81,6 @@ for parity or Ghidra work.
 
 ## Cursor tasks
 
-`.vscode/tasks.json`: `openapoc: run` (fresh launch), `openapoc: test` (enable
-tests + `ctest`), `openapoc: extract data`.
+`.vscode/tasks.json`: `openapoc: run` (fresh launch), `openapoc: test` (tests +
+`ctest`), `openapoc: extract data`, `openapoc: regen compare report`,
+`openapoc: check ignored binaries`. Debug: `.vscode/launch.json` (lldb).

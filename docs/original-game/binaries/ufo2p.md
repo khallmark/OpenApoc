@@ -12,7 +12,7 @@
 
 ## Tables
 
-Extractor headers apply to **non-4** only. On this Steam `4` build, signature search found the same bytes at **non-4 + 0xE00** for research, facilities, vehicles, organisations, economy, agent types, UFOPaedia groups, and bullet sprites. `crew_ufo_downed` at the documented non-4 offset is all zeros; do not invent a `4` address from that needle.
+Extractor headers apply to **non-4** only. On this Steam `4` build, signature search found the same bytes at **non-4 + 0xE00** for research, facilities, vehicles, organisations, economy, agent types, UFOPaedia groups, and bullet sprites. `crew_ufo_downed` at non-4 `0x13E560` (4-build `0x13F360`) is 560 B and identical on both builds.
 
 See sibling `labels/ufo2p_rebase.csv` and [address-maps/README.md](../address-maps/README.md).
 

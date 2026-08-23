@@ -1,9 +1,11 @@
 # Timing and ticks per second
 
-Original city and battle logic is documented by the OpenApoc community as **36 TPS** for simulation.
+Community observation of the original city and battle sim is **36 TPS**. Neither UFO2P nor TACP has a printable “36 ticks” banner.
 
-OpenApoc mixes 36, 60, and 144 in different subsystems ([issue 997](https://github.com/OpenApoc/OpenApoc/issues/997)). That skews weapon rates, explosion radii, movement, armor checks, and agent training.
+OpenApoc uses that on purpose as `VANILLA_TICKS_PER_SECOND = 36` × `TICKS_MULTIPLIER = 4` → `TICKS_PER_SECOND = 144` ([gametime.h](../../../game/state/gametime.h)). Extracted delays that already multiply by 4 are not automatically wrong.
 
-Evidence kind: community observation plus inconsistent constants in [game/state](../../../game/state). Not a decompiler listing. Neither UFO2P nor TACP has a printable “36 ticks” banner; TACP does expose TU reservation and `Fire rate` strings that will skew if the tick base is wrong.
+City Speed1 now zeros city ticks on alternate `CityView::update` frames ([cityview.cpp](../../../game/ui/tileview/cityview.cpp)), matching vanilla half-rate Speed1.
 
-Fix incrementally, one system at a time, validated against original play — not a single global rewrite.
+Issue [997](https://github.com/OpenApoc/OpenApoc/issues/997) is a per-mechanic audit: which rates already scale, which still run 4× too fast, and which constants (`HAZARD_SPREAD_CHANCE`, enzyme/fire ticks, `FUEL_TICKS_PER_SECOND`) are still invented or hardcoded.
+
+TACP strings `Fire rate` and the TU-reservation copy will skew if a given mechanic uses the wrong base.

@@ -1575,9 +1575,10 @@ void BattleView::update()
 
 	if (config().getBool("Options.Misc.ActionMusic"))
 	{
-		const auto seenIdle = battle.ticksWithoutSeenAction[battle.currentPlayer];
-		fw().jukebox->play(seenIdle < TICKS_END_TURN ? JukeBox::PlayList::Action
-		                                             : JukeBox::PlayList::Tactical);
+		const auto seen = battle.ticksWithoutSeenAction.find(battle.currentPlayer);
+		const bool actionHeard =
+		    seen != battle.ticksWithoutSeenAction.end() && seen->second < TICKS_END_TURN;
+		fw().jukebox->play(actionHeard ? JukeBox::PlayList::Action : JukeBox::PlayList::Tactical);
 	}
 
 	updateSelectedUnits();

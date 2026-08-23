@@ -2,7 +2,7 @@
 
 This checkout is set up for engine work against a **Steam depot** of X-COM Apocalypse. The original game files are not committed; only the OpenApoc source and extracted/generated data under `data/` are in git.
 
-For reverse-engineering notes on the original binaries, see [original-game/](original-game/README.md).
+For reverse-engineering and parity work on the original binaries, see [original-game/](original-game/README.md) and [AGENTS.md](../AGENTS.md). Ghidra and decompiler output are allowed on this fork.
 
 ## Prerequisites
 
@@ -95,6 +95,34 @@ Confirm depot/ISO stay untracked:
 ./tools/check_ignored_binaries.sh
 ```
 
+## Original-game / Ghidra parity
+
+This fork allows Ghidra and decompiler listings in the same session as `game/` edits. Do **not** commit `depot_7661/`, `data/cd.iso`, original EXEs, or Ghidra `.rep` / `.gpr` databases.
+
+| Resource | Location |
+| -------- | -------- |
+| Agent agreement | [AGENTS.md](../AGENTS.md) |
+| Parity skill (import, rebase, workflow) | [`.cursor/skills/openapoc-parity/SKILL.md`](../.cursor/skills/openapoc-parity/SKILL.md) |
+| Gap matrix & implement queue | [original-game/openapoc-gap-matrix.md](original-game/openapoc-gap-matrix.md), [next-implementation.md](original-game/next-implementation.md) |
+| Extractor table index | [original-game/extractor-tables.md](original-game/extractor-tables.md) |
+| Compare report (HTML) | [original-game/compare-report.html](original-game/compare-report.html) |
+| Sibling lab (Ghidra projects, rebase CSVs) | `/Users/khallmark/Desktop/Code/OpenSource/OpenApoc-og-research` |
+| Private analysis notes (gitignored) | `depot_7661/analysis/` |
+
+Key rules:
+
+- ISO **non-4** `UFO2P.EXE` / `TACP.EXE` = extractor-canonical file offsets.
+- Steam depot unsuffixed names are the Pentium **`4`** pair — rebase per table, never assume a global slide.
+- Import bound LE with the community LX loader; do not unbind before reading offsets.
+
+After gap-matrix or TODO edits:
+
+```sh
+python3 tools/regen_compare_report.py
+```
+
+Or run task `openapoc: regen compare report`.
+
 ## Running
 
 **Recommended** — Mach-O from the repo root with explicit data paths (works regardless of Finder cwd):
@@ -131,13 +159,17 @@ Tasks live in [`.vscode/tasks.json`](../.vscode/tasks.json). Run via **Tasks: Ru
 | `openapoc: configure tests` | Same configure with `-DENABLE_TESTS=ON` |
 | `openapoc: build` | Default **build** task (`Cmd+Shift+B`) |
 | `openapoc: extract data` | Re-run `OpenApoc_DataExtractor` |
+| `openapoc: regen compare report` | Regenerate `docs/original-game/compare-report.html` |
+| `openapoc: check ignored binaries` | Fail if binaries or Ghidra DBs are tracked |
 | `openapoc: configure and build` | Configure, then build |
 | **`openapoc: test`** | Reconfigure with tests on, build, `ctest` |
 | **`openapoc: run`** | **Fresh run:** clean runtime state → build → launch |
 | `openapoc: run (open .app)` | Fresh run, then `open` the `.app` |
 | `openapoc: launch only` | Launch without clean or rebuild |
 
-**`openapoc: run`** clears `log.txt`, `OpenApoc_settings.conf`, `saves/`, stops any running `OpenApoc`, rebuilds incrementally, then launches with pinned `Framework.Data` / `Framework.CD`.
+Debug: [`.vscode/launch.json`](../.vscode/launch.json) — **OpenApoc (lldb)** with pinned data paths.
+
+**`openapoc: run`** clears runtime state, rebuilds, then launches. **`openapoc: test`** reconfigures with tests on, builds, and runs `ctest`.
 
 ## Troubleshooting
 

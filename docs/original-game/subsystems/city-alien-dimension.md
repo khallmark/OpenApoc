@@ -1,15 +1,15 @@
 # Alien dimension and city UFO flow
 
-Tables already extracted from non-4 UFO2P: UFO mission data, crew, drop troops, growth rates, mission patterns, alien building defenses ([hexa.txt](../../../tools/extractors/docs/hexa.txt)).
+Hexa ranges still **not** in extractor headers: `UFO_mission_data` at file `0x13DDFC` (VA `0x1119FC`), `UFO_growth_rates` at `0x155010` (VA `0x128C10`), `UFO_mission_patterns` at `0x155164` (VA `0x128D64`). Do not use file `0x154710` for growth. Crew / drop-troop / alien-building-defense tables **are** extracted (`crew_ufo_downed` `0x13E560` / VA `0x112160`, P↔P4 identical). OpenApoc stands in with `ufo_incursions.xml` and `ufo_growth_lists.xml`. `ufo_mission_preference.xml` exists but is not XIncluded from `gamestate.xml`. Bound Scenario Generator xrefs are empty.
 
 Still missing or approximate in OpenApoc ([issue 264](https://github.com/OpenApoc/OpenApoc/issues/264)):
 
-- Portal locations and portal movement in the city — strings `Dimension Gates`, `Click on Dimension Gate to set destination`, `Switching to Alien Dimension`, `Go into Dimension Gate`
-- Umbilical collapse in the alien dimension — **no printable `umbilical` in UFO2P**
-- Overspawn — strings `Overspawn`, `Overspawn Autopsy`, “extremely dangerous Alien terror weapon”; [gamestate.cpp](../../../game/state/gamestate.cpp) still logs `Implement Overspawn, just attacking for now`
+- Destination gate selection — string `Click on Dimension Gate to set destination` at UFO2P non-4 `0x149537`. `leaveDimensionGate` picks a random portal from `city->portals`.
+- Switching copy — `Switching to Alien Dimension` at `0x14D6C1`; `Go into Dimension Gate`.
+- Fixed alien-map portals are extracted as hardcoded `initial_portals` in [extract_city_map.cpp](../../../tools/extractors/extract_city_map.cpp) (`92,45,9` / `94,43,9` / `95,46,9`).
+- Umbilical collapse — **no printable `umbilical` in UFO2P**
+- Overspawn — strings `Overspawn`, `Overspawn Autopsy`. Primaries now `InfiltrateSubvert`; `attackList` still `AttackBuilding`.
 - UFO mushrooms as next-week spawn feedback — **no printable `mushroom` in UFO2P**
 - Stop UFO growth when the relevant building is destroyed
 - Large-UFO bombing after first alien-dimension entry
 - City-wide “Apocalypse” attack after the control centre dies
-
-[city.cpp](../../../game/state/city/city.cpp) still has a FIXME that alien-city portals stay put.
