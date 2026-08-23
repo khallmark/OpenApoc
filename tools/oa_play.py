@@ -647,6 +647,7 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
             if int(turbo.get("hostiles", "0")) > 0 and time.time() - last_intercept > 8:
                 last_intercept = time.time()
                 d.checks["intercepts"] = d.checks.get("intercepts", 0) + intercept_ufos(d)
+                d.checks["recoveries"] = d.checks.get("recoveries", 0) + recover_crash_sites(d)
 
         time.sleep(1.0)
         now = int(d.h.gs("time")["ticks"])
@@ -931,6 +932,48 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
 
     d.say("[battle] budget exhausted without a decision")
     return "timeout"
+
+
+def recover_crash_sites(d: Driver) -> int:
+    """Send a craft to any downed UFO so its wreck can be recovered.
+
+    This is the gateway to the whole research tree: every alien-tech topic depends on artifacts
+    from a recovered UFO, so a campaign that shoots craft down but never collects them can never
+    progress. Uses the same select-then-order flow as interception, but with GOTO_LOCATION onto
+    the crash tile rather than an attack order.
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return 0
+    crashed = [(x, y) for (x, y, down) in d.h.screen_craft("ufos_screen") if down]
+    if not crashed:
+        # Nothing visible; try to bring a wreck into view before giving up.
+        if d.h.gs("centre_on_ufo").get("centred") != "1":
+            return 0
+        time.sleep(0.5)
+        crashed = [(x, y) for (x, y, down) in d.h.screen_craft("ufos_screen") if down]
+    if not crashed:
+        return 0
+
+    if not d.click_id("BUTTON_TAB_2", st):
+        return 0
+    time.sleep(0.4)
+    st = d.status()
+    lst = d.controls(st).get("OWNED_VEHICLE_LIST")
+    if lst is None or lst.w <= 0:
+        return 0
+    d.h.click_xy(lst.x + 16, lst.y + lst.h // 2)
+    time.sleep(0.3)
+    st = d.status()
+    if not d.click_id("BUTTON_GOTO_LOCATION", st):
+        d.h.key("Escape")
+        return 0
+    time.sleep(0.3)
+    cx, cy = crashed[0]
+    d.h.click_xy(cx, cy)
+    time.sleep(0.4)
+    d.say(f"  [recover] craft sent to crash site at {cx},{cy}")
+    return 1
 
 
 def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float = 7.0) -> dict:
