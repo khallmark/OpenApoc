@@ -630,39 +630,41 @@ def visit_ufopaedia(d: Driver) -> bool:
 
 
 def intercept_ufos(d: Driver) -> int:
-    """Send our craft after any UFO currently visible on the city map.
+    """Send our craft after a UFO on the city map.
 
-    This is the event the driver used to ignore: while hostile craft are up, canTurbo() is false
-    and the campaign crawls, because the game expects the player to actually engage. Selecting an
-    interceptor and right-clicking a UFO issues the AttackVehicle mission.
+    Two camera moves are needed and the order matters: select one of our craft first (it must be
+    on screen to be clicked), then bring the UFO into view to right-click it. Selection survives
+    the camera move; visibility does not.
     """
-    ufos = d.h.screen_craft("ufos_screen")
+    def on_screen(kind: str, centre_query: str):
+        found = d.h.screen_craft(kind)
+        if found:
+            return found
+        if d.h.gs(centre_query).get("centred") != "1":
+            return []
+        time.sleep(0.5)
+        return d.h.screen_craft(kind)
+
+    mine = on_screen("vehicles_screen", "centre_on_own")
+    if not mine:
+        d.say("  [intercept] no craft of ours on the map; skipping")
+        return 0
+    mx, my, _ = mine[0]
+    d.h.click_xy(mx, my)          # select
+    time.sleep(0.3)
+
+    ufos = on_screen("ufos_screen", "centre_on_ufo")
     live = [(x, y) for (x, y, crashed) in ufos if not crashed]
     if not live:
-        # Nothing targetable on screen. Bring a UFO into view -- an off-screen craft cannot be
-        # clicked at all, which silently made interception a no-op.
-        centred = d.h.gs("centre_on_ufo")
-        if centred.get("centred") != "1":
-            return 0
-        time.sleep(0.5)
-        ufos = d.h.screen_craft("ufos_screen")
-        live = [(x, y) for (x, y, crashed) in ufos if not crashed]
-        if not live:
-            return 0
-    mine = d.h.screen_craft("vehicles_screen")
-    if not mine:
+        d.say("  [intercept] no live UFO reachable on screen")
         return 0
-    ordered = 0
-    for i, (ux, uy) in enumerate(live[:3]):
-        mx, my, _ = mine[i % len(mine)]
-        d.h.click_xy(mx, my)          # select our craft
-        time.sleep(0.25)
-        d.h.send(f"click {ux} {uy} right")   # order attack
-        time.sleep(0.25)
-        ordered += 1
+    ux, uy = live[0]
+    d.h.send(f"click {ux} {uy} right")   # order attack
+    time.sleep(0.4)
     after = d.h.gs("turbo")
-    d.say(f"  [intercept] {len(live)} UFO(s) on screen, ordered {ordered} attack(s); {after}")
-    return ordered
+    d.say(f"  [intercept] ordered attack on UFO at {ux},{uy}; {after}")
+    return 1
+
 
 def play_battle(d: Driver, budget_s: float = 300.0) -> str:
     """Drive a tactical mission from briefing to debriefing without human input.

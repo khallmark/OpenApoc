@@ -2091,9 +2091,28 @@ void CityView::registerCityViewIntrospection()
 		    // "centre_on_ufo": bring the nearest live UFO into view so a driver can click it.
 		    // Craft off the visible area cannot be targeted at all, which made automated
 		    // interception a no-op whenever the camera sat over the player's base.
-		    if (gameState && q == "centre_on_ufo")
+		    if (gameState && (q == "centre_on_ufo" || q == "centre_on_own"))
 		    {
 			    const auto aliens = gameState->getAliens();
+			    if (q == "centre_on_own")
+			    {
+				    const auto owner = gameState->getPlayer();
+				    for (const auto &v : gameState->vehicles)
+				    {
+					    const auto &vehicle = v.second;
+					    if (!vehicle || !vehicle->owner || !vehicle->tileObject ||
+					        vehicle->city != gameState->current_city ||
+					        vehicle->owner.id != owner.id)
+					    {
+						    continue;
+					    }
+					    view->setScreenCenterTile(vehicle->getPosition());
+					    return format("centred=1 at={0},{1},{2}", (int)vehicle->getPosition().x,
+					                  (int)vehicle->getPosition().y,
+					                  (int)vehicle->getPosition().z);
+				    }
+				    return UString("centred=0");
+			    }
 			    for (const auto &v : gameState->vehicles)
 			    {
 				    const auto &vehicle = v.second;
