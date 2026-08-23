@@ -73,3 +73,12 @@ struct BuildingInfiltrationSpeed
 static_assert(sizeof(struct BuildingInfiltrationSpeed) == 4, "Invalid OrgInfiltrationSpeed size");
 #define BUILDING_INFILTRATION_SPEED_OFFSET_START 1319916
 #define BUILDING_INFILTRATION_SPEED_OFFSET_END 1320112
+
+// UFO2P non-4 file 0x155354 (4-build +0xE00). 49×uint32, immediately after
+// UFO_mission_patterns and before agent infiltration speeds. Index matches
+// building_functions (0 is the dummy "-"; 1 Senate = 155). The 49th dword is
+// unused — the strtab has 48 names.
+#define BUILDING_DETECTION_WEIGHT_COUNT 49
+#define BUILDING_DETECTION_WEIGHT_OFFSET_START 0x155354
+#define BUILDING_DETECTION_WEIGHT_OFFSET_END                                                       \
+	(BUILDING_DETECTION_WEIGHT_OFFSET_START + BUILDING_DETECTION_WEIGHT_COUNT * 4)

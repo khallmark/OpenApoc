@@ -1,4 +1,5 @@
 #include "framework/configfile.h"
+#include "framework/data.h"
 #include "framework/framework.h"
 #include "game/state/city/agentmission.h"
 #include "game/state/city/base.h"
@@ -23,7 +24,11 @@
 #include "library/rect.h"
 #include "library/sp.h"
 #include "tests/test_helpers.h"
+#include "tools/extractors/common/agent.h"
+#include "tools/extractors/common/building.h"
+#include "tools/extractors/common/exe_slide.h"
 #include "tools/extractors/common/research.h"
+#include <boost/crc.hpp>
 #include <list>
 #include <map>
 #include <vector>
@@ -1355,6 +1360,71 @@ static bool test_ufopaedia_alien_craft_group()
 	return true;
 }
 
+static bool test_detection_weights_from_exe()
+{
+	auto &state = *g_state;
+	auto exe = fw().data->fs.open("xcom3/ufoexe/ufo2p.exe");
+	TEST_REQUIRE(static_cast<bool>(exe), "open UFO2P.EXE");
+	const auto blob = exe.readAll();
+	boost::crc_32_type crc;
+	crc.process_bytes(blob.get(), exe.size());
+	int32_t slide = 0;
+	TEST_REQUIRE(ufo2pFileSlide(crc.checksum(), slide), "known UFO2P CRC");
+	const auto at = [slide](std::streamoff off) { return ufo2pTableOffset(slide, off); };
+	auto dwordAt = [&](std::streamoff off) -> uint32_t
+	{
+		exe.clear();
+		exe.seekg(off, std::ios::beg);
+		uint32_t v = 0;
+		exe.readule32(v);
+		return v;
+	};
+	TEST_REQUIRE(dwordAt(at(BUILDING_DETECTION_WEIGHT_OFFSET_START) + 1 * 4) == 155,
+	             "EXE Senate weight");
+	TEST_REQUIRE(dwordAt(at(BUILDING_DETECTION_WEIGHT_OFFSET_START) + 2 * 4) == 135,
+	             "EXE Police weight");
+	TEST_REQUIRE(dwordAt(at(ALIEN_DETECTION_WEIGHT_OFFSET_START)) == 1, "EXE egg det");
+	TEST_REQUIRE(dwordAt(at(ALIEN_DETECTION_WEIGHT_OFFSET_START) + 11 * 4) == 20, "EXE queen det");
+	TEST_REQUIRE(dwordAt(at(ALIEN_MOVEMENT_PERCENT_OFFSET_START)) == 40, "EXE egg move");
+	TEST_REQUIRE(dwordAt(at(ALIEN_MOVEMENT_PERCENT_OFFSET_START) + 12 * 4) == 30,
+	             "EXE micronoid move");
+	// building_functions[1/2/36/37/44] at file 0x155354.
+	auto senate = state.building_functions.find("BUILDINGFUNCTION_SENATE");
+	TEST_REQUIRE(senate != state.building_functions.end() && senate->second, "SENATE missing");
+	TEST_REQUIRE(senate->second->detectionWeight == 155, "Senate weight");
+	auto police = state.building_functions.find("BUILDINGFUNCTION_POLICE_STATION");
+	TEST_REQUIRE(police != state.building_functions.end() && police->second, "POLICE missing");
+	TEST_REQUIRE(police->second->detectionWeight == 135, "Police weight");
+	auto temple = state.building_functions.find("BUILDINGFUNCTION_TEMPLE_OF_SIRIUS");
+	TEST_REQUIRE(temple != state.building_functions.end() && temple->second, "TEMPLE missing");
+	TEST_REQUIRE(temple->second->detectionWeight == 0, "Temple weight");
+	auto xcom = state.building_functions.find("BUILDINGFUNCTION_X-COM_BASE");
+	TEST_REQUIRE(xcom != state.building_functions.end() && xcom->second, "X-COM BASE missing");
+	TEST_REQUIRE(xcom->second->detectionWeight == 0, "X-COM Base weight");
+	auto organ = state.building_functions.find("BUILDINGFUNCTION_ORGANIC_FACTORY");
+	TEST_REQUIRE(organ != state.building_functions.end() && organ->second, "ORGANIC missing");
+	TEST_REQUIRE(organ->second->detectionWeight == 100, "Organic Factory weight");
+
+	// alien infiltrationID 0/9/11/12 at file 0x142374 / 0x1423B0.
+	auto egg = state.agent_types.find("AGENTTYPE_MULTIWORM_EGG");
+	TEST_REQUIRE(egg != state.agent_types.end() && egg->second, "EGG missing");
+	TEST_REQUIRE(egg->second->detectionWeight == 1 && egg->second->movementPercent == 40,
+	             "egg det/move");
+	auto mega = state.agent_types.find("AGENTTYPE_MEGASPAWN");
+	TEST_REQUIRE(mega != state.agent_types.end() && mega->second, "MEGASPAWN missing");
+	TEST_REQUIRE(mega->second->detectionWeight == 10 && mega->second->movementPercent == 0,
+	             "megaspawn det/move");
+	auto queen = state.agent_types.find("AGENTTYPE_QUEENSPAWN");
+	TEST_REQUIRE(queen != state.agent_types.end() && queen->second, "QUEEN missing");
+	TEST_REQUIRE(queen->second->detectionWeight == 20 && queen->second->movementPercent == 0,
+	             "queen det/move");
+	auto micro = state.agent_types.find("AGENTTYPE_MICRONOID_AGGREGATE");
+	TEST_REQUIRE(micro != state.agent_types.end() && micro->second, "MICRONOID missing");
+	TEST_REQUIRE(micro->second->detectionWeight == 1 && micro->second->movementPercent == 30,
+	             "micronoid det/move");
+	return true;
+}
+
 static bool test_organic_factory_gates_ufo_growth()
 {
 	auto &state = *g_state;
@@ -2439,6 +2509,7 @@ int main(int argc, char **argv)
 	    {"dimension_probe_manufacturer", test_dimension_probe_manufacturer},
 	    {"research_item_prereq_gates", test_research_item_prereq_gates},
 	    {"ufopaedia_alien_craft_group", test_ufopaedia_alien_craft_group},
+	    {"detection_weights_from_exe", test_detection_weights_from_exe},
 	    {"organic_factory_gates_ufo_growth", test_organic_factory_gates_ufo_growth},
 	    {"ufo_incursion_table", test_ufo_incursion_table},
 	    {"ufo_incursion_spawn_xy", test_ufo_incursion_spawn_xy},

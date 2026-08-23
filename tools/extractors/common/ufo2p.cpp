@@ -165,6 +165,13 @@ UFO2P::UFO2P(std::string file_name)
 	this->infiltration_speed_building.reset(
 	    new DataChunk<BuildingInfiltrationSpeed>(file, at(BUILDING_INFILTRATION_SPEED_OFFSET_START),
 	                                             at(BUILDING_INFILTRATION_SPEED_OFFSET_END)));
+	this->building_detection_weight.reset(
+	    new DataChunk<uint32_t>(file, at(BUILDING_DETECTION_WEIGHT_OFFSET_START),
+	                            at(BUILDING_DETECTION_WEIGHT_OFFSET_END)));
+	this->alien_detection_weight.reset(new DataChunk<uint32_t>(
+	    file, at(ALIEN_DETECTION_WEIGHT_OFFSET_START), at(ALIEN_DETECTION_WEIGHT_OFFSET_END)));
+	this->alien_movement_percent.reset(new DataChunk<uint32_t>(
+	    file, at(ALIEN_MOVEMENT_PERCENT_OFFSET_START), at(ALIEN_MOVEMENT_PERCENT_OFFSET_END)));
 	this->building_cost_data.reset(new DataChunk<BuildingCostData>(
 	    file, at(BUILDING_COST_STRUCT_OFFSET_START), at(BUILDING_COST_STRUCT_OFFSET_END)));
 	this->ufo_growth_rates.reset(new DataChunk<UfoGrowthRates>(

@@ -37,9 +37,9 @@ void InitialGameStateExtractor::extractBuildingFunctions(GameState &state) const
 		{
 			f->infiltrationSpeed = data.infiltration_speed_building->get(i).speed;
 		}
-		if (i < buildingFunctionDetectionWeights.size())
+		if (data.building_detection_weight && i < data.building_detection_weight->count())
 		{
-			f->detectionWeight = buildingFunctionDetectionWeights[i];
+			f->detectionWeight = static_cast<int>(data.building_detection_weight->get(i));
 		}
 		auto id = format("{0}{1}", BuildingFunction::getPrefix(), canon_string(f->name));
 		auto ped = format("{0}{1}", UfopaediaEntry::getPrefix(), canon_string(f->name));

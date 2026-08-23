@@ -110,6 +110,9 @@ class UFO2P
 	std::unique_ptr<DataChunk<OrgInfiltrationSpeed>> infiltration_speed_org;
 	std::unique_ptr<DataChunk<AgentInfiltrationSpeed>> infiltration_speed_agent;
 	std::unique_ptr<DataChunk<BuildingInfiltrationSpeed>> infiltration_speed_building;
+	std::unique_ptr<DataChunk<uint32_t>> building_detection_weight;
+	std::unique_ptr<DataChunk<uint32_t>> alien_detection_weight;
+	std::unique_ptr<DataChunk<uint32_t>> alien_movement_percent;
 	std::unique_ptr<DataChunk<UfoGrowthRates>> ufo_growth_rates;
 	std::unique_ptr<DataChunk<UfoMissionData>> ufo_mission_data;
 	std::unique_ptr<DataChunk<UfoMissionPatterns>> ufo_mission_patterns;

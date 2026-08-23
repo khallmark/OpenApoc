@@ -523,7 +523,7 @@ footer {
     <tr><td>Engineering topic overlay (descriptions / order)</td><td><code>data/common_patch/gamestate/research.xml</code></td><td>hours/cost/item extracted from <code>manufacturing_data</code> <code>0x13FD34</code></td></tr>
     <tr><td><code>HAZARD_SPREAD_CHANCE = 10</code></td><td><code>battlehazard.h:12</code></td><td>No extractor table; tactical constant</td></tr>
     <tr><td>Org raid probabilities / recurring missions</td><td><code>extract_organisations.cpp</code> switches</td><td>Only park tier is table-driven</td></tr>
-    <tr><td>Building detection weights</td><td><code>extractors.cpp:307</code></td><td>Not in hexa known-data</td></tr>
+    <tr><td>Building detection weights</td><td>extracted (<code>building_detection_weight</code> @ <code>0x155354</code>, 49×uint32)</td><td>UFO2P non-4 after <code>UFO_mission_patterns</code>; 4-build <code>+0xE00</code>. Alien det/move at <code>0x142374</code> / <code>0x1423B0</code></td></tr>
     <tr><td>Vehicle attack-mode dodge 100/80/50/10</td><td><code>vehicle.cpp:167</code></td><td>Hexa <code>vehicle_data</code> +0x28 <code>loftemps_index</code> (sample <code>79 00</code> at <code>0x189CB4</code>) is used for voxelmaps, not this RNG</td></tr>
     <tr><td>Starting UFOPaedia unlocks</td><td><code>UfopaediaEntry::startVisible</code> from catalog PCX overlay</td><td>hexa <code>starting_available_UFOPaedia_entries</code> <code>0x19196A</code> extracted</td></tr>
     <tr><td>Senate weekly rating</td><td><code>weekly_rating_rules</code> in <code>gamestate.xml</code></td><td>hexa <code>senate_relationships</code> <code>0x15055B</code></td></tr>

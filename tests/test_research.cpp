@@ -5,6 +5,8 @@
 #include "game/state/rules/city/vequipmenttype.h"
 #include "library/sp.h"
 #include "tests/test_helpers.h"
+#include "tools/extractors/common/agent.h"
+#include "tools/extractors/common/building.h"
 #include "tools/extractors/common/exe_slide.h"
 #include "tools/extractors/common/research.h"
 
@@ -159,6 +161,23 @@ static bool test_alien_lifeform_prereq_ids()
 	return true;
 }
 
+static bool test_detection_weight_table_bounds()
+{
+	// UFO2P non-4 file 0x155354 / 0x142374. 4-build +0xE00.
+	TEST_REQUIRE(BUILDING_DETECTION_WEIGHT_COUNT == 49, "49 building-function weights");
+	TEST_REQUIRE(BUILDING_DETECTION_WEIGHT_OFFSET_END - BUILDING_DETECTION_WEIGHT_OFFSET_START ==
+	                 BUILDING_DETECTION_WEIGHT_COUNT * 4,
+	             "building weight span");
+	TEST_REQUIRE(ALIEN_INFILTRATION_SLOT_COUNT == 13, "13 alien infiltration slots");
+	TEST_REQUIRE(ALIEN_DETECTION_WEIGHT_OFFSET_END - ALIEN_DETECTION_WEIGHT_OFFSET_START ==
+	                 ALIEN_INFILTRATION_SLOT_COUNT * 4,
+	             "alien weight span");
+	TEST_REQUIRE(ALIEN_MOVEMENT_PERCENT_OFFSET_START - ALIEN_DETECTION_WEIGHT_OFFSET_END == 8,
+	             "8-byte pad between alien det and move");
+	TEST_REQUIRE(ALIEN_MOVEMENT_PERCENT_OFFSET_END == 0x1423E4, "move table ends at 0x1423E4");
+	return true;
+}
+
 static bool test_aa7a8_hardcoded_topic_lists()
 {
 	// Listing @ VA 0xAAABE / file 0x10D162. 0xDE420 = 0xDE2B8 + 36*10.
@@ -191,6 +210,7 @@ int main(int argc, char **argv)
 	    {"item_dependency_any", test_item_dependency_any},
 	    {"exe_slide_crcs", test_exe_slide_crcs},
 	    {"alien_lifeform_prereq_ids", test_alien_lifeform_prereq_ids},
+	    {"detection_weight_table_bounds", test_detection_weight_table_bounds},
 	    {"aa7a8_hardcoded_topic_lists", test_aa7a8_hardcoded_topic_lists},
 	});
 }

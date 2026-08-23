@@ -82,3 +82,15 @@ struct AgentInfiltrationSpeed
 static_assert(sizeof(struct AgentInfiltrationSpeed) == 4, "Invalid OrgInfiltrationSpeed size");
 #define AGENT_INFILTRATION_SPEED_OFFSET_START 1397788
 #define AGENT_INFILTRATION_SPEED_OFFSET_END 1397844
+
+// UFO2P non-4 file 0x142374 (4-build +0xE00). 13×uint32 detection + 8 B pad +
+// 13×uint32 movement percent, indexed by the same infiltrationID as
+// infiltration_speed_agent (egg=0 … micronoid=12). Hexa lumped this into
+// “unknown; used for equipping routine??” at 1319679.
+#define ALIEN_INFILTRATION_SLOT_COUNT 13
+#define ALIEN_DETECTION_WEIGHT_OFFSET_START 0x142374
+#define ALIEN_DETECTION_WEIGHT_OFFSET_END                                                          \
+	(ALIEN_DETECTION_WEIGHT_OFFSET_START + ALIEN_INFILTRATION_SLOT_COUNT * 4)
+#define ALIEN_MOVEMENT_PERCENT_OFFSET_START 0x1423B0
+#define ALIEN_MOVEMENT_PERCENT_OFFSET_END                                                          \
+	(ALIEN_MOVEMENT_PERCENT_OFFSET_START + ALIEN_INFILTRATION_SLOT_COUNT * 4)
