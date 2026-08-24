@@ -685,6 +685,55 @@ UString introspectGameState(GameState &state, const UString &query)
 	// a Stormdog -- a road vehicle -- after an airborne UFO is not interception, it is a craft
 	// wandering the streets while the UFO bombs the city. Reported in list order so the driver
 	// can pick the right icons out of OWNED_VEHICLE_LIST.
+	if (q == "buyable_guns")
+	{
+		// Which agent weapons the market will actually sell, and how hard they hit. The driver
+		// had been stocking the armoury from its own equipment template, which names the exact
+		// rifles the starting squad happened to carry -- and those cannot always be re-bought, so
+		// the armoury stayed empty and recruits went unarmed while a campaign fielded six armed
+		// soldiers of fifteen. Buying by capability instead of by name fixes that at the source.
+		UString out;
+		int n = 0;
+		for (auto &et : state.agent_equipment)
+		{
+			const auto econ = state.economy.find(et.first);
+			if (econ == state.economy.end() || !et.second)
+			{
+				continue;
+			}
+			if (econ->second.currentStock <= 0)
+			{
+				continue;
+			}
+			if (et.second->type != AEquipmentType::Type::Weapon)
+			{
+				continue;
+			}
+			if (!et.second->research_dependency.satisfied())
+			{
+				continue;
+			}
+			UString name = et.second->name;
+			std::replace(name.begin(), name.end(), ' ', '_');
+			int damage = et.second->damage;
+			// A weapon that fires ammunition reports its damage on the ammo, not the gun.
+			if (damage == 0 && !et.second->ammo_types.empty())
+			{
+				const auto &ammo = *et.second->ammo_types.begin();
+				if (ammo)
+				{
+					damage = ammo->damage;
+				}
+			}
+			if (n++ > 0)
+			{
+				out += "|";
+			}
+			out += format("{0}:damage={1}:price={2}:stock={3}", name, damage,
+			               econ->second.currentPrice, econ->second.currentStock);
+		}
+		return format("count={0} detail={1}", n, out.empty() ? UString("-") : out);
+	}
 	if (q == "buyable_craft")
 	{
 		// Which craft can actually be bought, and crucially which of them FLY. Every campaign

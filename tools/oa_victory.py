@@ -45,6 +45,7 @@ from oa_play import (
     manufacture,
     buy_equipment,
     buy_vehicles,
+    stock_best_guns,
     stock_for_template,
     arm_agents_directly,
     template_weapon_in_stock,
@@ -537,7 +538,9 @@ class Victory:
                 # sniper rifle nobody can buy.
                 self.say("loadout weapon not in stores; arming from what the armoury has")
                 if arm_agents_directly(self.d, agents=24) <= 0:
-                    stock_for_template(self.d, qty=self.armoury_size())
+                    # Nothing to hand out. Buy guns by capability rather than by the template's
+                    # name, which is the whole reason the armoury was empty.
+                    stock_best_guns(self.d, qty=self.armoury_size())
             elif equip_squad(self.d, agents=24) <= 0:
                 # Stores ran dry rather than the mechanism failing: the market only restocks so
                 # much per week, so keep re-ordering the loadout's own item types.

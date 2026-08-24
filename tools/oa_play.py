@@ -3497,6 +3497,48 @@ def buy_named(d: Driver, wanted: list, qty: int = 8, category: str = "BUTTON_AGE
     return ordered
 
 
+def stock_best_guns(d: Driver, qty: int = 20) -> int:
+    """Buy the hardest-hitting agent weapon the market will actually sell. Returns lines ordered.
+
+    The armoury was being stocked from the squad's equipment template, which names the exact
+    rifles the starting soldiers happened to carry -- and those cannot always be re-bought. So the
+    template ordered a Megapol Laser Sniper Gun every few minutes, none arrived, and a campaign
+    fielded six armed soldiers of fifteen while the money sat in the bank. Buy by capability
+    instead of by name: whatever hits hardest among the guns actually on sale, plus its ammunition.
+    """
+    info = d.h.gs("buyable_guns")
+    detail = info.get("detail", "-")
+    if not detail or detail == "-":
+        d.say("  [buy] no agent weapons on sale")
+        return 0
+    funds = int(d.h.gs("funds").get("balance", "0") or 0)
+    best = None
+    for part in detail.split("|"):
+        bits = part.split(":")
+        if not bits:
+            continue
+        attrs = {}
+        for kv in bits[1:]:
+            if "=" in kv:
+                k, v = kv.split("=", 1)
+                try:
+                    attrs[k] = int(v)
+                except ValueError:
+                    attrs[k] = 0
+        price = attrs.get("price", 0)
+        if not price or price * 4 > funds:
+            continue
+        if best is None or attrs.get("damage", 0) > best[0]:
+            best = (attrs.get("damage", 0), bits[0].replace("_", " "), price)
+    if not best:
+        d.say(f"  [buy] nothing affordable among the guns on sale (${funds})")
+        return 0
+    dmg, name, price = best
+    want = [name, f"{name} Clip", f"{name} Ammo"]
+    d.say(f"  [buy] stocking {qty} x {name} (damage {dmg}, ${price} each)")
+    return buy_named(d, want, qty=qty, category="BUTTON_AGENTS")
+
+
 def stock_for_template(d: Driver, qty: int = 8) -> int:
     """Buy exactly the items the stored equipment template names.
 
