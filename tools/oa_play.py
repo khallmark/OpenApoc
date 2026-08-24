@@ -927,28 +927,46 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
             time.sleep(0.5)
             d.say(f"[battle] {b}")
 
-        # Advance the squads. Only ever selecting squad 1 left every other soldier standing
-        # where it deployed, which is what a "no progress" stall at 15 live hostiles actually
-        # was: the engine will shoot for us, but only at what someone can see.
-        squad = f"{(rounds % 6) + 1}"
-        d.h.key(squad)
-        time.sleep(0.2)
+        # Select the squad, then advance it. BattleView binds no number keys at all -- SDLK_1 is
+        # simply not handled -- so the old d.h.key("1") did nothing whatsoever and the squad
+        # never moved. Units are selected by clicking them, and Ctrl+click is what *adds* to the
+        # selection rather than replacing it (battleview.cpp:3855-3865, capped at 6 by
+        # orderSelect).
+        friends = d.h.screen_craft("friends_screen")
+        if friends:
+            d.h.send("keydown Left Ctrl")
+            try:
+                for fx, fy, _ in friends[:6]:
+                    d.h.click_xy(fx, fy)
+                    time.sleep(0.08)
+            finally:
+                d.h.send("keyup Left Ctrl")
+            time.sleep(0.15)
+
         foes = d.h.screen_craft("enemies_screen")
+        if not foes:
+            # enemies_screen only reports hostiles already on screen, so survivors scattered
+            # across the map are invisible to the driver. Walk the camera to the next one.
+            info = d.h.gs("centre_on_enemy")
+            if info.get("centred") == "1":
+                time.sleep(0.4)
+                foes = d.h.screen_craft("enemies_screen")
+
         if foes:
-            # Rotate targets rather than piling every squad onto foes[0], and aim a short way
-            # off the hostile's own tile -- that tile is occupied, so a move ordered onto it can
-            # fail outright and leave the squad standing.
             fx, fy, _ = foes[rounds % len(foes)]
-            if stalls > 3:
-                fx += (48, -48, 0, 0)[rounds % 4]
-                fy += (0, 0, 32, -32)[rounds % 4]
+            # Aim a short way off the hostile's own tile: that tile is occupied, and a left
+            # click on an occupied tile selects rather than moves (battleview.cpp:3778-3790).
+            fx += (40, -40, 0, 0)[rounds % 4]
+            fy += (0, 0, 28, -28)[rounds % 4]
             d.h.click_xy(max(0, min(st.w - 1, fx)), max(0, min(st.h - 1, fy)))
         else:
-            # Nothing in sight yet; sweep toward different parts of the map to find contact
-            # instead of walking into the same spot every time.
+            # Nothing anywhere in view; sweep the map, and change floor now and then since
+            # hostiles hole up on other levels.
             tx = int(st.w * (0.3 + 0.2 * (rounds % 3)))
             ty = int(st.h * (0.3 + 0.15 * (rounds % 3)))
             d.h.click_xy(tx, ty)
+            if rounds % 5 == 4:
+                d.h.key("Page Up" if (rounds // 5) % 2 == 0 else "Page Down")
         rounds += 1
         time.sleep(2.5)
 
