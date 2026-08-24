@@ -33,6 +33,7 @@ from oa_play import (
     HarnessError,
     assign_research,
     build_second_base,
+    sell_ground_fleet,
     buy_interceptor,
     equip_craft,
     verify_battle_capabilities,
@@ -72,10 +73,12 @@ BASE_COOLDOWN_S = 120.0
 # Below this, with funding cut and nobody armed, a campaign cannot recover: no income, and not
 # enough left to buy a single weapon.
 BANKRUPT_FLOOR = 5000
-# How many armed fliers to keep in reserve. Not a swarm: every projectile that hits a building
-# costs relation with its owner, so a bigger wing over the city is a faster route to a hostile
-# government, not a safer one. Three covers losses without multiplying stray fire.
-AIR_PATROL = 3
+# How many armed fliers to keep in reserve. The guide puts the mainstay at "10 or so,
+# strategically placed around the city", expecting to lose two or three a battle -- they are
+# cheap enough that attrition does not matter. That is a RESERVE, not a strike group: every
+# projectile that hits a building costs relation with its owner, so intercepts still go out two
+# craft at a time. Large fleet, small sortie.
+AIR_PATROL = 8
 # Soldiers are lost permanently. Below this many fit soldiers there is no squad left to send.
 MIN_SOLDIERS = 10
 # Fewer than this and an incident is not worth answering: the squad dies and the score hit from
@@ -225,6 +228,11 @@ class Victory:
             # Stock the armoury immediately. Unarmed personnel are not neutral -- they are
             # casualties: the campaign was lost when a base defence pitted 21 mostly-unarmed
             # agents against 11 aliens and every one of them died, taking the base with it.
+            # "Like every guide states - sell off ground vehicles." They cannot reach a crash
+            # site or cross broken road, so they are upkeep with no capability, and the proceeds
+            # fund the fleet that does the work. Do it before anything else is bought.
+            sold = sell_ground_fleet(self.d)
+            self.say(f"sold {sold} ground vehicle line(s) to fund the air fleet")
             stock_for_template(self.d, qty=12)
             crew_transport(self.d)
             # Capture the squad loadout now, while the starting ten are all home and armed.

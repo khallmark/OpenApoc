@@ -993,6 +993,18 @@ def _lab_skill_total(d: Driver) -> int:
 # none hidden, none Engineering-type (an Engineering lab takes MANUFACTURE_* projects, a
 # different namespace this list cannot address), and no topic precedes one it depends on.
 PRIORITY_RESEARCH = [
+    # -- 0. the critical path AllOutWar's guide names outright: "The goal here is to shoot down
+    #       UFO type 3, and then let the games begin. One alien tech -> Advanced Quantum Lab ->
+    #       Other two alien techs -> Dimension Probe. Don't delay!" The lab is the gate on
+    #       everything after it, so it goes ahead of the cheap roots that merely pay well. Note
+    #       the guide's other warning, which cost it real time: the disruptor must be researched
+    #       before ship shields can be.
+    "RESEARCH_ALIEN_PROPULSION_SYSTEM",
+    "RESEARCH_ALIEN_CONTROL_SYSTEM",
+    "RESEARCH_ALIEN_ENERGY_SOURCE",
+    "RESEARCH_ADVANCED_QUANTUM_PHYSICS_LAB",
+    "RESEARCH_ADVANCED_BIOCHEMISTRY_LAB",
+
     # -- 1. cheap item-gated roots: fastest payback, and they open the rest of the tree --
     "RESEARCH_BIO-TRANSPORT_MODULE",
     "RESEARCH_DISRUPTOR_GUN",
@@ -1096,6 +1108,12 @@ PRIORITY_RESEARCH = [
     "RESEARCH_RETALIATOR",
     "RESEARCH_ANNIHILATOR",
 ]
+
+
+# The critical-path entries above also appear in their thematic sections below; keep the first
+# occurrence so the order reads as written, and drop the repeats so the list is honest about its
+# length.
+PRIORITY_RESEARCH = list(dict.fromkeys(PRIORITY_RESEARCH))
 
 
 def pick_topic_row(d: Driver) -> int:
@@ -2675,6 +2693,89 @@ def equip_craft(d: Driver) -> str:
     return "fitted"
 
 
+# ---------------------------------------------------------------------------
+# Strategy from AllOutWar's X-Com Apocalypse guide (ufopaedia.org)
+#
+# The guide is specific where guesswork had been expensive, and it contradicts two rules this
+# driver had arrived at by measurement -- both worth correcting:
+#
+#   * "Like every guide states - sell off ground vehicles." A campaign starts with a Stormdog, a
+#     Wolfhound APC and a road bike, none of which can reach a crash site. They were being kept,
+#     counted as fleet strength, and even sent to intercept. Selling them funds the real fleet.
+#   * "the most useful vehicle, by far, is the Hoverbike ... these guys should be your main force.
+#     10 or so, strategically placed around the city", losing "2 or 3 a battle". This driver had
+#     banned single-weapon craft precisely because hoverbikes kept dying -- but by cost per gun a
+#     Hoverbike is $5,000 against a Phoenix Hovercar's $6,304, and the guide's point is that they
+#     are meant to be expendable. Buy them in numbers instead of refusing them.
+# ---------------------------------------------------------------------------
+
+GROUND_VEHICLES = ("Stormdog", "Wolfhound APC", "Blazer Turbo Bike", "Griffon AFV")
+
+
+def sell_named(d: Driver, wanted: list, qty: int = 4,
+               category: str = "BUTTON_VEHICLES") -> int:
+    """Sell items or craft by name. Returns the number of lines sold.
+
+    A purchase row is a balance, not a counter: lowering it buys and raising it sells, which is
+    how an early version of the buying code cheerfully sold the armoury. Selling is the same
+    control moved the other way.
+    """
+    if not open_buysell(d):
+        return 0
+    if not d.click_id(category, d.status()):
+        close_buysell(d, commit=False)
+        return 0
+    time.sleep(0.8)
+    keys = {_norm(w) for w in wanted}
+    sold = 0
+    try:
+        listing = d.h.send("controls LIST").split()
+    except (HarnessError, OSError):
+        close_buysell(d, commit=False)
+        return 0
+    for entry in listing[2:]:
+        parts = entry.split(":")
+        if len(parts) < 2 or not parts[0].isdigit():
+            continue
+        label = ""
+        for i, part in enumerate(parts):
+            if part.startswith("text="):
+                label = ":".join([part[5:]] + parts[i + 1:])
+                break
+        if _norm(label) not in keys:
+            continue
+        idx = parts[0]
+        try:
+            cur = d.h.send(f"control LIST item {idx} get")
+            have, high = 0, 0
+            for kv in cur.split():
+                if kv.startswith("value="):
+                    have = int(kv.split("=")[1] or 0)
+                elif kv.startswith("max="):
+                    high = int(kv.split("=")[1] or 0)
+            target = min(high, have + qty) if high else have + qty
+            if target != have and d.h.send(f"control LIST item {idx} set {target}").startswith("OK"):
+                sold += 1
+        except (HarnessError, OSError):
+            break
+    before = int(d.h.gs("funds").get("balance", "0") or 0)
+    close_buysell(d, commit=sold > 0)
+    after = int(d.h.gs("funds").get("balance", "0") or 0)
+    d.say(f"  [sell] {sold} line(s); funds {before}->{after}")
+    return sold
+
+
+def sell_ground_fleet(d: Driver) -> int:
+    """Sell the road vehicles a campaign starts with.
+
+    They cannot reach a UFO crash site and cannot cross destroyed road, so they contribute
+    nothing but upkeep -- and the driver had been counting them as fleet strength, which is how
+    "four craft" meant no air capability at all. The guide is blunt about it: sell them off. The
+    proceeds fund the hoverbikes that do the actual work.
+    """
+    return sell_named(d, list(GROUND_VEHICLES), qty=4, category="BUTTON_VEHICLES")
+
+
 def buy_interceptor(d: Driver, want: int = 2) -> int:
     """Buy armed FLYING craft. Returns the number of purchase lines ordered.
 
@@ -2719,11 +2820,9 @@ def buy_interceptor(d: Driver, want: int = 2) -> int:
     # out in one engagement, leaving nothing and no money to replace it.
     #
     # A Phoenix Hovercar is two guns for $12,607; a Hawk is three for $101,000. Eight Phoenixes
-    # cost less than one Hawk and can be in eight places. Rank by cost per weapon and refuse the
-    # single-slot craft entirely, which is what actually kept dying.
-    real = [o for o in options if o[2] >= 2]
-    if real:
-        options = real
+    # cost less than one Hawk and can be in eight places. Rank by cost per weapon -- which puts
+    # the $5,000 Hoverbike first, and the guide agrees: they are the mainstay precisely because
+    # they are cheap enough to lose two or three a battle without it mattering.
     options.sort(key=lambda o: (o[0] / max(1, o[2]), o[0]))
     # Leave enough behind to keep paying wages and stocking weapons; a fleet with no armoury
     # loses the ground war instead of the air one.
