@@ -670,16 +670,24 @@ class Driver:
             # not answer to Return, so a key-only responder sat on one forever: 110 strandings in
             # a single run, the campaign clock stopped the whole time. Press an actual button
             # first and only fall back to keys.
-            for cid in ("BUTTON_OK", "BUTTON_YES", "BUTTON_NO", "BUTTON_CANCEL"):
+            # Button ids vary by box shape and are not what you would guess: a YesNoCancel box
+            # carries BUTTON_YES / BUTTON_NO2 / BUTTON_CANCEL -- note NO2, there is no BUTTON_NO
+            # -- and no BUTTON_OK at all. Decline before confirming: this responder runs when
+            # something is already stuck, and confirming an order the campaign cannot afford just
+            # raises the next box.
+            #
+            # Judging success by "the stage changed" is also wrong here, because dismissing one
+            # box often reveals another and the stage is still MessageBox. Treat a button that
+            # the engine accepted as progress, and let the next pass handle whatever appears.
+            for cid in ("BUTTON_OK", "BUTTON_CANCEL", "BUTTON_NO2", "BUTTON_NO", "BUTTON_YES"):
                 try:
                     if not self.h.send(f"control {cid}").startswith("OK"):
                         continue
                 except (HarnessError, OSError):
                     continue
-                time.sleep(0.35)
-                if self.h.status().stage != st.stage:
-                    self.say(f"  [event] MessageBox -> {cid}")
-                    return True
+                time.sleep(0.3)
+                self.say(f"  [event] MessageBox -> {cid}")
+                return True
 
         keys = KEY_RESPONSES.get(st.stage)
         if keys:
@@ -922,7 +930,7 @@ def return_to_city(d: Driver, tries: int = 12) -> bool:
             # clock stopped. When unwinding, decline rather than confirm: this path only runs
             # because something already went wrong, and abandoning a half-built order is the safe
             # side of that.
-            for cid in ("BUTTON_OK", "BUTTON_NO", "BUTTON_CANCEL"):
+            for cid in ("BUTTON_OK", "BUTTON_CANCEL", "BUTTON_NO2", "BUTTON_NO"):
                 try:
                     if d.h.send(f"control {cid}").startswith("OK"):
                         break
