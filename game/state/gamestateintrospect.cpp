@@ -742,8 +742,15 @@ UString introspectGameState(GameState &state, const UString &query)
 				continue;
 			}
 			n++;
+			// Report the craft type and whether recovering it costs a battle. A wreck whose type
+			// has no battle_map is recovered unmanned and force-completes the same alien-craft
+			// research for free (cityview.cpp:4363-4380), so a driver short of soldiers should
+			// go for those first rather than take a crash-site fight it will lose.
 			out += (out.empty() ? "" : "|") +
-			       format("{0}:tile={1},here={2},falling={3},sliding={4},pos={5},{6},{7}", v.first,
+			       format("{0}:type={1},battle={2},tile={3},here={4},falling={5},sliding={6},"
+			              "pos={7},{8},{9}",
+			              v.first, vehicle->type ? vehicle->type.id : UString("-"),
+			              (vehicle->type && vehicle->type->battle_map) ? 1 : 0,
 			              vehicle->tileObject ? 1 : 0,
 			              vehicle->city == state.current_city ? 1 : 0, vehicle->falling ? 1 : 0,
 			              vehicle->sliding ? 1 : 0, (int)vehicle->getPosition().x,

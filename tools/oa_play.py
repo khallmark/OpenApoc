@@ -2223,7 +2223,16 @@ def recover_crash_sites(d: Driver) -> int:
         d.say("  [recover] could not arm the attack order")
         return 0
     time.sleep(0.3)
-    if d.h.gs("centre_on_crash").get("centred") != "1":
+    # Prefer a wreck that can be recovered without a battle. Every alien craft type unlocks the
+    # same alien-craft research when recovered, but only some cost a tactical mission to collect
+    # -- and those missions have been costing more soldiers than they are worth (six of ten, then
+    # three of six, then two of three, all withdrawals). Probes and Scouts give the same unlocks
+    # for free, so go for those first and only take a fighting recovery when there is no
+    # alternative and the squad can afford it.
+    free_first = d.h.gs("centre_on_free_crash")
+    if free_first.get("centred") == "1":
+        d.say(f"  [recover] going for a battle-free wreck ({free_first.get('type', '?')})")
+    elif d.h.gs("centre_on_crash").get("centred") != "1":
         return 0
     time.sleep(0.5)
 

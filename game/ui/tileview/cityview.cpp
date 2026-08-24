@@ -2258,6 +2258,34 @@ void CityView::registerCityViewIntrospection()
 			    const auto screen = view->tileToOffsetScreenCoords<float>(mid);
 			    return format("centred=1 at={0},{1},0", (int)screen.x, (int)screen.y);
 		    }
+		    // Centre on a wreck that can be recovered without a battle: a craft type with no
+		    // battle_map is recovered unmanned and force-completes the same alien-craft research
+		    // for free (cityview.cpp UfoRecoveryBegin). With soldiers scarce, these are the only
+		    // wrecks worth going to.
+		    if (gameState && q == "centre_on_free_crash")
+		    {
+			    const auto aliens = gameState->getAliens();
+			    for (const auto &v : gameState->vehicles)
+			    {
+				    const auto &vehicle = v.second;
+				    if (!vehicle || !vehicle->owner || !vehicle->tileObject ||
+				        vehicle->city != gameState->current_city || !vehicle->crashed ||
+				        vehicle->owner.id != aliens.id)
+				    {
+					    continue;
+				    }
+				    if (vehicle->type && vehicle->type->battle_map)
+				    {
+					    continue;
+				    }
+				    view->setScreenCenterTile(vehicle->getPosition());
+				    return format("centred=1 type={0} at={1},{2},{3}",
+				                  vehicle->type ? vehicle->type.id : UString("-"),
+				                  (int)vehicle->getPosition().x, (int)vehicle->getPosition().y,
+				                  (int)vehicle->getPosition().z);
+			    }
+			    return UString("centred=0");
+		    }
 		    if (gameState && (q == "centre_on_ufo" || q == "centre_on_own" ||
 		                      q == "centre_on_crash"))
 		    {
