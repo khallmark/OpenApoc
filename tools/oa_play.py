@@ -341,8 +341,12 @@ def _disable_window_restore() -> None:
     never opening. An automated run has no windows worth restoring, so turn the whole mechanism
     off and clear anything already on disk rather than relying on the SDL-side workaround alone.
     """
+    # NSAppSleepDisabled belongs here too: App Nap throttles an occluded, silent app's run loop,
+    # and an unattended campaign is occluded and silent by definition. Setting it by hand once
+    # left the launcher unable to reproduce its own working configuration.
     for key, val in (("ApplePersistenceIgnoreState", "YES"),
-                     ("NSQuitAlwaysKeepsWindows", "NO")):
+                     ("NSQuitAlwaysKeepsWindows", "NO"),
+                     ("NSAppSleepDisabled", "YES")):
         try:
             subprocess.run(["defaults", "write", "org.openapoc.OpenApoc", key, "-bool", val],
                            capture_output=True, timeout=10)
