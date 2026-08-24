@@ -59,6 +59,9 @@ CREW_COOLDOWN_S = 60.0
 RESEARCH_COOLDOWN_S = 45.0
 # Soldiers are lost permanently. Below this many fit soldiers there is no squad left to send.
 MIN_SOLDIERS = 10
+# Fewer than this and an incident is not worth answering: the squad dies and the score hit from
+# losing it dwarfs the hit from declining.
+MIN_SQUAD = 6
 # Below this much total lab skill the research chain is crawling and worth spending money on.
 MIN_LAB_SKILL = 700
 CHECKPOINT_EVERY_S = 300.0
@@ -347,6 +350,17 @@ class Victory:
                     # produced an endless dispatch/refuse loop that froze the clock for as long
                     # as the alert stood. Try once, then get out of the way and let the city run;
                     # the incident will come back around when a craft is free.
+                    # Do not send a token force. Mission #2 of the losing run put four agents
+                    # against twenty-three aliens and lost all four; the guides put a working
+                    # squad at around six. A refused incident costs score, but a wiped squad
+                    # costs the campaign.
+                    fit_now = int(self.d.h.gs("agents").get("soldiers_fit", "0") or 0)
+                    if fit_now < MIN_SQUAD:
+                        self.say(f"only {fit_now} fit soldiers; not dispatching a token force")
+                        if not self.d.click_id("BUTTON_QUIT", st):
+                            self.d.h.key("Escape")
+                        time.sleep(0.6)
+                        continue
                     n = self.d.select_assignment_rows(st)
                     self.d.click_id("BUTTON_EXTERMINATE", st)
                     time.sleep(1.2)

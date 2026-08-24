@@ -1183,6 +1183,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
     # current_battle having already been torn down by then.
     last_player_won = False
     last_mine_alive = "?"
+    started_with = 0
 
     while time.time() - t0 < budget_s:
         st = d.status()
@@ -1217,6 +1218,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
             if b.get("mode") != "rt":
                 d.say(f"[battle] ABORT: mode is {b.get('mode')}, not real-time")
                 return "wrong-mode"
+            started_with = int(b.get("mine_alive", "0") or 0)
             d.shot("battle_start")
             d.click_id("BUTTON_SPEED3", st)      # fastest real-time battle speed
             time.sleep(0.5)
@@ -1284,6 +1286,32 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         last_foes = foes_alive
         if stalls and stalls % 12 == 0:
             d.say(f"  [battle] no progress for a while: {b}")
+
+        # Retreat rather than be annihilated. "No mission is important enough to lose good men
+        # on" -- and losing a whole squad is the biggest single economic hit in the game, which
+        # is what drove this campaign into a losing spiral: four agents sent against twenty-three
+        # aliens, all four dead, defeat eight days later. Escape opens InGameOptions, which
+        # carries BUTTON_EXIT_BATTLE.
+        try:
+            alive = int(mine_alive or 0)
+            foes_n = int(foes_alive or 0)
+        except ValueError:
+            alive, foes_n = 0, 0
+        if started_with and alive and foes_n > alive * 2 and alive <= max(1, started_with // 2):
+            d.say(f"  [battle] retreating: {alive} left of {started_with} against {foes_n}")
+            d.h.key("Escape")
+            time.sleep(0.8)
+            if d.click_id("BUTTON_EXIT_BATTLE", d.status()):
+                time.sleep(1.5)
+                for _ in range(5):
+                    stt = d.status()
+                    if stt.stage not in ("BattleView", "InGameOptions", "MessageBox"):
+                        break
+                    if not d.dismiss_modal(stt):
+                        d.h.key("Return")
+                    time.sleep(0.6)
+                return "withdrew"
+            d.h.key("Escape")
 
     d.say("[battle] budget exhausted without a decision")
     return "timeout"
