@@ -297,14 +297,15 @@ PAUSE_NOTIFICATION_FLAGS = [
 ]
 
 def bring_to_front() -> None:
-    """Raise the game window so a human watching this machine can actually see it.
+    """Raise the game window, only when explicitly asked for via OA_RAISE_WINDOW=1.
 
-    A windowed launch is visible by default, but nothing was ever done to keep it that way: a
-    debug session opening several instances on different ports leaves them stacked or scattered,
-    and none of them is guaranteed to be the frontmost window. This is best-effort -- it only
-    does anything on macOS, and a failure here must never abort a run that is otherwise fine.
+    OFF BY DEFAULT, and it must stay that way. This used to run on every launch and every resume,
+    which was intolerable in practice: each call steals focus from whatever the human is actually
+    doing, and during a restart loop it fires every few seconds. A windowed launch is already
+    visible without any of this -- raising it is a convenience, not a requirement -- so the
+    default is to leave the user's focus alone entirely.
     """
-    if sys.platform != "darwin":
+    if sys.platform != "darwin" or os.environ.get("OA_RAISE_WINDOW") != "1":
         return
     try:
         subprocess.run(
