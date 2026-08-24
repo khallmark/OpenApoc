@@ -72,6 +72,28 @@ void BuildingScreen::resume() {}
 
 void BuildingScreen::finish() {}
 
+UString BuildingScreen::harnessDetail() const
+{
+	// EXTERMINATE and RAID both refuse outright when getSelectedAgents() is empty
+	// (buildingscreen.cpp:124-140), and a driver selecting rows by measured pixel offsets has no
+	// way to tell a click that landed from one that missed -- it was reporting success on the
+	// number of clicks it issued, so every raid "succeeded" into a refusal box. Report the real
+	// count, plus the crew actually present, so a refusal names its own cause.
+	size_t crew = 0;
+	if (building)
+	{
+		for (const auto &c : building->current_crew)
+		{
+			crew += c.second;
+		}
+	}
+	const size_t selected = agentAssignment ? agentAssignment->getSelectedAgents().size() : 0;
+	UString name = building ? building->name : UString("-");
+	std::replace(name.begin(), name.end(), ' ', '_');
+	return format("building={0} crew={1} selected_agents={2}", name.empty() ? UString("-") : name,
+	              (int)crew, (int)selected);
+}
+
 void BuildingScreen::eventOccurred(Event *e)
 {
 	menuform->eventOccured(e);

@@ -1287,10 +1287,39 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
         return_to_city(d)
         return f"no-building-screen ({d.status().stage})"
 
-    picked = d.select_assignment_rows(d.status())
-    if not picked:
+    # Select, then CHECK. select_assignment_rows counts the clicks it issued, not the agents it
+    # actually selected, so it reported success even when every click missed -- which is how every
+    # raid "succeeded" straight into a "No Agents Selected" box. BuildingScreen now reports the
+    # real count, so try the measured offsets and, if nothing took, sweep the row for the column
+    # that does. Those offsets were measured on AlertScreen and this is a different screen.
+    def selected_count() -> int:
+        detail = d.status().detail or ""
+        if "selected_agents=" not in detail:
+            return -1
+        try:
+            return int(detail.split("selected_agents=", 1)[1].split()[0].rstrip("_"))
+        except (ValueError, IndexError):
+            return -1
+
+    d.select_assignment_rows(d.status())
+    time.sleep(0.3)
+    if selected_count() == 0:
+        box = d.controls(d.status()).get("AGENT_ASSIGNMENT")
+        if box and box.w > 0:
+            for dx in (60, 80, 130, 160, 200, 240):
+                for r in range(6):
+                    y = box.y + 63 + r * 26
+                    if y >= box.y + box.h - 8:
+                        break
+                    d.h.click_xy(box.x + dx, y)
+                    time.sleep(0.08)
+                if selected_count() > 0:
+                    d.say(f"  [raid] agent rows select at x+{dx}, not the AlertScreen offset")
+                    break
+    if selected_count() == 0:
         return_to_city(d)
         return "no-agents-selectable"
+
     # EXTERMINATE, never RAID. They look interchangeable and are not: BUTTON_RAID is a deliberate
     # attack on the ORGANISATION and costs 200 relation with the owner outright
     # (buildingscreen.cpp:223-226), which for a government building is the funding cut in one
