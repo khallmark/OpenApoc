@@ -32,6 +32,7 @@ from oa_play import (
     HarnessError,
     assign_research,
     buy_equipment,
+    hire_scientists,
     hire_soldiers,
     crew_transport,
     clear_attack_orders,
@@ -53,9 +54,11 @@ CREW_COOLDOWN_S = 60.0
 # Topics finish and labs fall idle; an idle lab is research that is not happening. Re-checking
 # costs a few seconds of game time and is the difference between a campaign that advances up the
 # alien-building chain and one that stops after its first two topics.
-RESEARCH_COOLDOWN_S = 120.0
+RESEARCH_COOLDOWN_S = 45.0
 # Soldiers are lost permanently. Below this many fit soldiers there is no squad left to send.
 MIN_SOLDIERS = 10
+# Below this much total lab skill the research chain is crawling and worth spending money on.
+MIN_LAB_SKILL = 700
 CHECKPOINT_EVERY_S = 300.0
 
 
@@ -77,6 +80,7 @@ class Victory:
         self.alert_refusals = 0
         self.last_research = 0.0
         self.last_hire = 0.0
+        self.stuck_since = 0.0
         self.last_checkpoint = 0.0
         self.best_crashed = 0
 
@@ -213,8 +217,19 @@ class Victory:
             r = self.d.h.gs("research")
             idle = int(r.get("assignable", "0") or 0) - int(r.get("assignable_busy", "0") or 0)
             done = int(r.get("complete", "0") or 0)
-            if idle > 0:
-                self.say(f"{idle} lab(s) idle, {done} topics complete - reassigning")
+            skill = 0
+            for part in r.get("labs_detail", "").split("|"):
+                for kv in part.split(":"):
+                    if kv.startswith("skill="):
+                        skill += int(kv.split("=")[1] or 0)
+            if skill < MIN_LAB_SKILL and time.time() - self.last_hire > 180.0:
+                # Scientists get dispatched to incidents along with everyone else and die there,
+                # which silently throttles the whole research chain.
+                self.last_hire = time.time()
+                self.say(f"lab skill down to {skill} - recruiting scientists")
+                hire_scientists(self.d, want=4)
+            if idle > 0 or skill < MIN_LAB_SKILL:
+                self.say(f"{idle} lab(s) idle, skill {skill}, {done} topics complete - reassigning")
                 assign_research(self.d)
             self.progress["research_complete"] = done
             self.flush()
@@ -314,9 +329,25 @@ class Victory:
                     time.sleep(0.5)
                     continue
                 if st.stage == "CityView":
+                    self.stuck_since = 0.0
                     self.city_turn()
                 elif not self.d.dismiss_modal(st):
+                    # dismiss_modal deliberately does nothing on "working" stages -- the
+                    # UFOpaedia among them -- because a test that is exercising those screens
+                    # wants to stay. A campaign does not: finishing a research topic opens
+                    # UfopaediaCategoryView, and the runner sat in it with the clock stopped.
+                    # That only became reachable once research started completing at all.
+                    if not self.stuck_since:
+                        self.stuck_since = time.time()
+                    elif time.time() - self.stuck_since > 6.0:
+                        self.say(f"stranded on {st.stage}; backing out to the city")
+                        if not self.d.click_id("BUTTON_QUIT", st):
+                            if not self.d.click_id("BUTTON_OK", st):
+                                self.d.h.key("Escape")
+                        self.stuck_since = time.time()
                     time.sleep(0.4)
+                else:
+                    self.stuck_since = 0.0
 
                 if time.time() - self.last_checkpoint > CHECKPOINT_EVERY_S:
                     self.save("periodic")

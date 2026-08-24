@@ -1187,7 +1187,8 @@ def buy_category(d: Driver, category: str, qty: int, rows: int, sub: str = "") -
     return changed
 
 
-def hire_soldiers(d: Driver, want: int = 6) -> int:
+def hire_staff(d: Driver, want: int = 6, role: str = "BUTTON_SOLDIERS",
+               counter: str = "soldiers") -> int:
     """Recruit soldiers to replace losses. Returns the change in soldier count.
 
     Soldiers are lost permanently and nothing was replacing them, so the campaign walked itself
@@ -1203,7 +1204,7 @@ def hire_soldiers(d: Driver, want: int = 6) -> int:
     the screen refuses and reports if funds or living quarters would be exceeded
     (recruitscreen.cpp:431-490, 571-673).
     """
-    before = int(d.h.gs("agents").get("soldiers", "0") or 0)
+    before = int(d.h.gs("agents").get(counter, "0") or 0)
     funds_before = int(d.h.gs("funds").get("balance", "0") or 0)
 
     st = d.status()
@@ -1224,7 +1225,7 @@ def hire_soldiers(d: Driver, want: int = 6) -> int:
         d.h.key("Escape")
         return 0
 
-    d.click_id("BUTTON_SOLDIERS", d.status())  # role filter
+    d.click_id(role, d.status())  # role filter
     time.sleep(0.7)
 
     hired = 0
@@ -1265,11 +1266,30 @@ def hire_soldiers(d: Driver, want: int = 6) -> int:
             d.h.key("Escape")
         time.sleep(0.6)
 
-    after = int(d.h.gs("agents").get("soldiers", "0") or 0)
+    after = int(d.h.gs("agents").get(counter, "0") or 0)
     funds_after = int(d.h.gs("funds").get("balance", "0") or 0)
-    d.say(f"  [hire] clicked {hired} candidates; soldiers {before}->{after}; "
+    d.say(f"  [hire] {role}: clicked {hired}; {counter} {before}->{after}; "
           f"funds {funds_before}->{funds_after}")
     return after - before
+
+
+def hire_soldiers(d: Driver, want: int = 6) -> int:
+    """Recruit combat troops."""
+    return hire_staff(d, want, "BUTTON_SOLDIERS", "soldiers")
+
+
+def hire_scientists(d: Driver, want: int = 6) -> int:
+    """Recruit lab staff.
+
+    Research runs on lab skill, and lab skill walks out of the door: the squad sent to an
+    incident is chosen from whoever is standing in the building, scientists included, and they
+    die there like anyone else. Observed: player agents 25 -> 18 and lab staffing 5/5/5 -> 2/3/0
+    across a handful of missions, which quietly throttles the whole research chain. Replacing
+    them is cheaper than being clever about the dispatch list.
+    """
+    got = hire_staff(d, want, "BUTTON_BIOSCIS", "agents_player")
+    got += hire_staff(d, want, "BUTTON_PHYSCIS", "agents_player")
+    return got
 
 
 def equip_squad(d: Driver, agents: int = 16) -> int:
