@@ -283,6 +283,13 @@ class Victory:
             hire_soldiers(self.d, want=MIN_SOLDIERS - fit + 2)
             buy_equipment(self.d, rows=8, qty=8)
 
+        # Follow the action in the city too, so a watching human sees what the driver is doing
+        # rather than an empty corner of the map.
+        try:
+            self.d.h.gs("centre_on_selected")
+        except (HarnessError, OSError):
+            pass
+
         if in_city > 0:
             if time.time() - self.last_intercept > INTERCEPT_COOLDOWN_S:
                 self.last_intercept = time.time()

@@ -1229,6 +1229,11 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         # never moved. Units are selected by clicking them, and Ctrl+click is what *adds* to the
         # selection rather than replacing it (battleview.cpp:3855-3865, capped at 6 by
         # orderSelect).
+        # Keep the camera on the squad. Units are moved by clicking their screen positions, so
+        # anything off-camera is neither watchable nor clickable.
+        if rounds % 2 == 0:
+            d.h.gs("centre_on_friends")
+            time.sleep(0.2)
         friends = d.h.screen_craft("friends_screen")
         if friends:
             d.h.send("keydown Left Ctrl")

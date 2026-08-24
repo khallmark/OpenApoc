@@ -2229,6 +2229,22 @@ void CityView::registerCityViewIntrospection()
 			    return format("selected={0} with_soldier={1} mission={2} ids={3}", count,
 			                  withSoldier, mission, ids.empty() ? UString("-") : ids);
 		    }
+		    // Follow whatever craft the driver currently has selected, so the view tracks the
+		    // action instead of staying wherever it was last pointed.
+		    if (gameState && q == "centre_on_selected")
+		    {
+			    for (auto &v : gameState->current_city->cityViewSelectedOwnedVehicles)
+			    {
+				    if (!v || v->owner != gameState->getPlayer() || !v->tileObject)
+				    {
+					    continue;
+				    }
+				    view->setScreenCenterTile(v->getPosition());
+				    const auto screen = view->tileToOffsetScreenCoords<float>(v->getPosition());
+				    return format("centred=1 at={0},{1},0", (int)screen.x, (int)screen.y);
+			    }
+			    return UString("centred=0");
+		    }
 		    if (gameState && q == "centre_on_base")
 		    {
 			    const auto base = gameState->current_base;
@@ -4847,12 +4863,16 @@ void CityView::setUpdateSpeed(CityUpdateSpeed updateSpeed)
 
 void CityView::zoomLastEvent()
 {
-	if (!state->messages.empty())
+	// Walk back to the most recent message that actually has a location. Only inspecting the very
+	// last one meant the button did nothing whenever that message happened to be locationless --
+	// a funding report, a research completion -- even though the ticker was still showing older
+	// events the player could reasonably expect to be taken to.
+	for (auto it = state->messages.rbegin(); it != state->messages.rend(); ++it)
 	{
-		auto message = state->messages.back();
-		if (message.location != EventMessage::NO_LOCATION)
+		if (it->location != EventMessage::NO_LOCATION)
 		{
-			setScreenCenterTile(message.location);
+			setScreenCenterTile(it->location);
+			return;
 		}
 	}
 }

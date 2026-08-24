@@ -1454,6 +1454,35 @@ void BattleView::registerBattleViewIntrospection()
 		    // on screen, so a mission with survivors scattered across the map looked, to the
 		    // driver, exactly like a mission with one unreachable alien: it would sit clicking
 		    // at the same visible foe while six others waited off-camera and the clock burned.
+		    // Keep the camera on our own squad. The driver moves units by clicking their screen
+		    // positions, so anything off-camera is both unwatchable and unclickable -- and a
+		    // human wanting to watch the AI play needs the view to follow the action rather than
+		    // sit wherever the last order left it.
+		    if (gameState && gameState->current_battle && q == "centre_on_friends")
+		    {
+			    const auto player = gameState->getPlayer();
+			    Vec3<float> sum{0.0f, 0.0f, 0.0f};
+			    int n = 0;
+			    for (const auto &u : gameState->current_battle->units)
+			    {
+				    const auto &unit = u.second;
+				    if (!unit || !unit->owner || !unit->tileObject || !unit->isConscious() ||
+				        unit->owner.id != player.id)
+				    {
+					    continue;
+				    }
+				    sum += unit->position;
+				    n++;
+			    }
+			    if (n == 0)
+			    {
+				    return UString("centred=0");
+			    }
+			    const Vec3<float> mid{sum.x / n, sum.y / n, sum.z / n};
+			    view->setScreenCenterTile(mid);
+			    return format("centred=1 units={0} at={1},{2},{3}", n, (int)mid.x, (int)mid.y,
+			                  (int)mid.z);
+		    }
 		    if (gameState && gameState->current_battle && q == "centre_on_enemy")
 		    {
 			    const auto player = gameState->getPlayer();
