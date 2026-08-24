@@ -4,6 +4,7 @@
 #include "game/state/battle/battleunit.h"
 #include "game/state/city/base.h"
 #include "game/state/city/building.h"
+#include "game/state/rules/battle/battlemap.h"
 #include "game/state/city/facility.h"
 #include "game/state/rules/city/facilitytype.h"
 #include "game/state/rules/aequipmenttype.h"
@@ -621,8 +622,14 @@ UString introspectGameState(GameState &state, const UString &query)
 			{
 				unlocks += (unlocks.empty() ? "" : "+") + u.id;
 			}
+			// battle_map is what decides whether recovering this craft costs a battle at all:
+			// UfoRecoveryBegin only starts a mission when the type has one, and otherwise fires
+			// UfoRecoveryUnmanned and force-completes the same research for free
+			// (cityview.cpp:4363-4380). Recovering the battle-free types is therefore a way to
+			// advance the alien-craft tech chain without feeding soldiers into a fight.
 			n++;
-			out += (out.empty() ? "" : "|") + format("{0}=>{1}", v.first, unlocks);
+			out += (out.empty() ? "" : "|") +
+			       format("{0}:battle={1}=>{2}", v.first, v.second->battle_map ? 1 : 0, unlocks);
 		}
 		return format("types_with_unlocks={0} detail={1}", n, out.empty() ? UString("-") : out);
 	}

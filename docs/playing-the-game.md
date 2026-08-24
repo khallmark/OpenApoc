@@ -77,6 +77,15 @@ The chain, strictly in order:
 
    So the recovery chain is not a side quest, it is the critical path: crew a craft, intercept,
    shoot down, recover, research what the recovery unlocked, repeat.
+
+   **Two UFO types can be recovered without a battle at all.** `UfoRecoveryBegin` only starts a
+   tactical mission when the craft type has a `battle_map`; otherwise it fires
+   `UfoRecoveryUnmanned` and force-completes the same research for free
+   (cityview.cpp:4363-4380). `gs ufo_types` reports the flag per type, and on this data
+   `VEHICLETYPE_ALIEN_PROBE` and `VEHICLETYPE_ALIEN_SCOUT` are battle-free while the other eight
+   are not. Since every type unlocks the same three alien-craft topics (plus its own
+   `RESEARCH_UNLOCK_UFO_TYPE_<n>`), a driver that is losing soldiers in crash-site fights can
+   advance the tech chain by prioritising Probes and Scouts and declining the rest.
 4. Fit it to a craft. `Vehicle::hasDimensionShifter()` is the sole gate on crossing.
 5. Order that craft into a Dimension Gate → `VehicleMission::gotoPortal`. Without a shifter the
    craft is stranded or crashes on arrival.
