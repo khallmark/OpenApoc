@@ -4,7 +4,8 @@ How to drive a full Novice campaign to victory with no human input and no cheati
 here was learned by doing it and being wrong first; each entry says what actually happens, not
 what the UI appears to offer.
 
-**Status: victory not yet achieved.** The chain below is mapped end to end and every step up to
+**Status: victory not yet achieved.** The campaign has been losing for strategic reasons as much
+as mechanical ones — see Strategy below. The chain below is mapped end to end and every step up to
 and including base construction is verified working in a live game. Manufacturing, vehicle
 equipping, portal travel and the alien raids are specified but not yet driven. This file is
 rewritten as steps are proven.
@@ -216,6 +217,54 @@ unguarded reference on the same path.
 
 Note that macOS does not write a report for SIGKILL, so a report means a genuine fault. The
 driver already sends `QUIT` and waits before killing anything, so a clean shutdown produces none.
+
+## Strategy (from player guides, not from the source)
+
+The driver kept losing for reasons that are not harness defects at all. Distilled from UFOpaedia
+(NKF's Starter's Guide, AllOutWar's Guide, the Base Defense / Agents / Relations pages), the
+Wikibooks and StrategyWiki guides, the Roger Wong and Loodwig GameFAQs FAQs, and Lilura1's
+playthrough notes.
+
+**Technical personnel cannot fight.** Scientists, biochemists, engineers and quantum physicists
+have no inventory, cannot use weapons, cannot kneel, and simply die or get captured. They are not
+defensive strength. Sending "whoever is standing in the building" to an incident kills them and
+guts research at the same time — exactly what happened here: player agents 25 → 18, lab staffing
+5/5/5 → 2/3/0.
+
+**A base with no armed defender is destroyed automatically the moment it is attacked.** Never let
+any base sit undefended, and never run on a single base — buy a second early purely as a
+failure-recovery hedge. This is precisely how the first full run ended: a base defence fought by
+21 unarmed people.
+
+**Armour is not optional.** Buy a full Megapol suit — helmet, chest, both arms, legs — for every
+agent from day one; it is cheap and immediately available. "Under no circumstances should an agent
+be sent into combat without armour." Marsec body armour (grants flight) is worth switching to
+later.
+
+**Security Stations**: build up to three per base, adjacent to the Access Lift, forming a choke
+point. Beyond three never activate. They auto-fire in real time.
+
+**Squad**: cap around six combat agents. Standard early loadout is a weapon plus two spare clips,
+two AP grenades, two stun grenades, and a medi-kit. Early weapons: Megapol Lawpistol or Marsec
+M4000 Machine Gun.
+
+**Turn-based is safer for a scripted player** on ordinary missions; real-time is preferable for
+base defence, where Security Stations fire on their own regardless.
+
+**Retreat is a legitimate move.** Every battlescape has blue exit tiles at its edges; standing an
+agent on one extracts them safely. "No mission is important enough to lose good men on." Fighting
+every mission to the death is what produces a losing spiral.
+
+**Money** comes from raiding as much as from UFOs. The Cult of Sirius is permanently hostile by
+design, so raiding them costs no diplomacy. Sell researched alien tech.
+
+**Reaching the alien dimension** is a chain, not one unlock: research Dimension Gates, then shoot
+down *and recover* a UFO Type 3 Transporter, which is what opens the alien-craft research leading
+to dimension travel. Treat capturing a Transporter as a hard objective once Type 3s appear.
+
+Sources: [UFOpaedia Apocalypse](https://www.ufopaedia.org/index.php/X-COM:_Apocalypse),
+[Wikibooks strategy guide](https://en.wikibooks.org/wiki/X-COM:_Apocalypse),
+[StrategyWiki](https://strategywiki.org/wiki/X-COM:_Apocalypse).
 
 ## Running a campaign
 
