@@ -679,8 +679,13 @@ class Driver:
             # Judging success by "the stage changed" is also wrong here, because dismissing one
             # box often reveals another and the stage is still MessageBox. Treat a button that
             # the engine accepted as progress, and let the next pass handle whatever appears.
-            for cid in ("BUTTON_OK", "BUTTON_NO2", "BUTTON_NO", "BUTTON_CANCEL",
-                        "BUTTON_YES"):
+            # Confirm before declining HERE. Decline-first belongs to return_to_city, which only
+            # runs once something is already stuck; in ordinary play the boxes worth answering are
+            # ones we raised on purpose. Putting NO2 first cancelled every recruitment the driver
+            # attempted -- BUTTON_NO2 fired eleven times and BUTTON_YES not once, while soldiers
+            # stayed at 8 and funds never moved.
+            for cid in ("BUTTON_OK", "BUTTON_YES", "BUTTON_NO2", "BUTTON_NO",
+                        "BUTTON_CANCEL"):
                 try:
                     if not self.h.send(f"control {cid}").startswith("OK"):
                         continue
@@ -2779,6 +2784,12 @@ def sell_ground_fleet(d: Driver) -> int:
     return sell_named(d, list(GROUND_VEHICLES), qty=4, category="BUTTON_VEHICLES")
 
 
+# Substrings that identify alien-derived equipment worth selling. Human ammunition and armour
+# are excluded deliberately: they are what the squad fights with.
+ALIEN_LOOT_MARKS = ("DISRUPTOR", "BOOMEROID", "DEVASTATOR", "VORTEX", "ENTROPY",
+                    "BRAINSUCKER", "TOXIN", "ALIEN", "PSICLONE", "DIMENSION")
+
+
 def sell_surplus_loot(d: Driver, keep: int = 1) -> int:
     """Sell captured gear the guide says is the campaign's real income. Returns lines sold.
 
@@ -2821,6 +2832,12 @@ def sell_surplus_loot(d: Driver, keep: int = 1) -> int:
             continue                      # unresearched: keep every one, it is a specimen
         if _norm(item) in template_types:
             continue                      # the squad wears this
+        # Only sell alien gear. "researched" is true of ordinary human kit too, so the first pass
+        # cheerfully offered up Marsec M4000 clips and Megapol Lawpistol clips -- the ammunition
+        # for the squad's own guns. The guide's list of what to sell is specific: disruptors,
+        # boomeroids, devastator cannons, vortex mines, personal shields, alien grenades.
+        if not any(mark in item.upper() for mark in ALIEN_LOOT_MARKS):
+            continue
         try:
             have = int(attrs.get("have", "0") or 0)
         except ValueError:
