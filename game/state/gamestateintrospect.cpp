@@ -593,7 +593,7 @@ UString introspectGameState(GameState &state, const UString &query)
 	}
 	if (q == "stores")
 	{
-		size_t kinds = 0, total = 0;
+		size_t kinds = 0, total = 0, weapons = 0;
 		UString top;
 		for (const auto &b : state.player_bases)
 		{
@@ -609,14 +609,22 @@ UString introspectGameState(GameState &state, const UString &query)
 				}
 				kinds++;
 				total += e.second;
+				// Weapons specifically: applying an equipment template strips an agent and
+				// re-equips from stores, so doing it with no weapons in stock disarms people
+				// instead of arming them.
+				const auto type = StateRef<AEquipmentType>{&state, e.first};
+				if (type && type->type == AEquipmentType::Type::Weapon)
+				{
+					weapons += e.second;
+				}
 				if (kinds <= 8)
 				{
 					top += (top.empty() ? "" : "|") + format("{0}x{1}", e.first, e.second);
 				}
 			}
 		}
-		return format("agent_equipment_kinds={0} agent_equipment_total={1} top={2}", kinds, total,
-		              top.empty() ? UString("-") : top);
+		return format("agent_equipment_kinds={0} agent_equipment_total={1} weapons={2} top={3}",
+		              kinds, total, weapons, top.empty() ? UString("-") : top);
 	}
 	if (q == "crashes")
 	{

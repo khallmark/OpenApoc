@@ -1457,7 +1457,7 @@ def hire_scientists(d: Driver, want: int = 6) -> int:
     return got
 
 
-def equip_squad(d: Driver, agents: int = 16) -> int:
+def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
     """Arm unequipped soldiers from base stores. Returns the change in armed count.
 
     New recruits arrive carrying nothing -- after hiring, soldiers went 10 to 15 while armed
@@ -1519,17 +1519,60 @@ def equip_squad(d: Driver, agents: int = 16) -> int:
                         return int(kv.split("=")[1] or 0)
         return 0
 
+    # Templates live in GameState and persist, so a loadout captured once at the start of the
+    # campaign -- while the original ten soldiers are all home and armed -- stays usable for
+    # ever. Re-capturing later is what failed: called after a mission, the list holds only the
+    # people who did not go, and none of them are armed. The refusal was right; the timing was
+    # not.
     source = -1
-    for row in range(agents):
-        got = capture(row)
-        if got < 0:
-            break
-        if got > 0:
-            source = row
-            d.say(f"  [equip] captured a {got}-weapon loadout from row {row}")
-            break
-    if source < 0:
+    already = 0
+    for part in d.h.gs("templates").get("detail", "").split("|"):
+        if part.startswith("1:"):
+            for kv in part.split(":", 1)[1].split(","):
+                if kv.startswith("weapons="):
+                    already = int(kv.split("=")[1] or 0)
+    if already > 0:
+        d.say(f"  [equip] reusing the stored {already}-weapon loadout")
+    else:
+        for row in range(agents):
+            got = capture(row)
+            if got < 0:
+                break
+            if got > 0:
+                source = row
+                d.say(f"  [equip] captured a {got}-weapon loadout from row {row}")
+                break
+    if source < 0 and already <= 0:
         d.say("  [equip] no armed agent to copy a loadout from; leaving everyone as they are")
+        for _ in range(6):
+            st = d.status()
+            if st.stage == "CityView":
+                break
+            if st.stage in ("AEquipScreen", "BaseScreen"):
+                d.click_id("BUTTON_OK", st)
+            elif not d.dismiss_modal(st):
+                d.h.key("Escape")
+            time.sleep(0.5)
+        return 0
+
+    if not apply:
+        d.say("  [equip] loadout captured; not applying yet")
+        for _ in range(6):
+            st = d.status()
+            if st.stage == "CityView":
+                break
+            if st.stage in ("AEquipScreen", "BaseScreen"):
+                d.click_id("BUTTON_OK", st)
+            elif not d.dismiss_modal(st):
+                d.h.key("Escape")
+            time.sleep(0.5)
+        return 0
+
+    # Applying with an empty armoury strips people rather than arming them: the template is
+    # re-equipped from base stores, and purchases take a couple of game-days to arrive.
+    stock = int(d.h.gs("stores").get("weapons", "0") or 0)
+    if stock <= 0:
+        d.say("  [equip] no weapons in stores; not applying (would disarm the squad)")
         for _ in range(6):
             st = d.status()
             if st.stage == "CityView":

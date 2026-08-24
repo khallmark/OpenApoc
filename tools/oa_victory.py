@@ -137,6 +137,9 @@ class Victory:
             # agents against 11 aliens and every one of them died, taking the base with it.
             buy_equipment(self.d, rows=14, qty=12)
             crew_transport(self.d)
+            # Capture the squad loadout now, while the starting ten are all home and armed.
+            # It persists in GameState, so every later recruit can be equipped from it.
+            equip_squad(self.d, agents=20, apply=False)
             self.save("campaign start")
 
     def alive(self) -> bool:

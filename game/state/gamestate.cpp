@@ -144,9 +144,20 @@ void GameState::initState()
 	}
 
 	// Populate persistent UFO2P base slots for older saves and repair duplicates.
+	// Everything below walks references that a *loaded* save may not have resolved. A save whose
+	// object graph is even slightly incomplete -- a city listing a building id that is not in the
+	// state, a scenery tile whose type went missing -- turns into a null dereference at a tiny
+	// offset on a thread-pool worker, which is what the crash reports from resumed campaigns all
+	// look like: SIGSEGV in GameState::initState via BootUp::update. Loading a bad save should
+	// fail visibly, not take the process down.
 	std::array<bool, UFO2P_BASE_SLOT_COUNT> usedBaseSlots{};
 	for (auto &entry : player_bases)
 	{
+		if (!entry.second)
+		{
+			LogWarning("Base \"{0}\" did not resolve while initialising state", entry.first);
+			continue;
+		}
 		auto &slot = entry.second->ufo2pSlot;
 		if (slot >= 0 && slot < UFO2P_BASE_SLOT_COUNT && !usedBaseSlots[slot])
 		{
@@ -159,7 +170,7 @@ void GameState::initState()
 	}
 	for (auto &entry : player_bases)
 	{
-		if (entry.second->ufo2pSlot >= 0)
+		if (!entry.second || entry.second->ufo2pSlot >= 0)
 		{
 			continue;
 		}
@@ -177,10 +188,23 @@ void GameState::initState()
 	for (auto &c : this->cities)
 	{
 		auto &city = c.second;
+		if (!city)
+		{
+			LogWarning("City \"{0}\" did not resolve while initialising state", c.first);
+			continue;
+		}
 		for (auto &s : city->scenery)
 		{
+			if (!s || !s->type)
+			{
+				continue;
+			}
 			for (auto &b : city->buildings)
 			{
+				if (!b)
+				{
+					continue;
+				}
 				Vec2<int> pos2d{s->initialPosition.x, s->initialPosition.y};
 				if (b->bounds.within(pos2d))
 				{
