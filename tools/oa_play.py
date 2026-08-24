@@ -835,15 +835,32 @@ def return_to_city(d: Driver, tries: int = 12) -> bool:
     CityView's event handler and the framework delivers each event to the current stage alone, so
     time spent anywhere else is score quietly forfeited.
     """
+    # Deliberately bypasses click_id. Its resolved-rect fallback returns True for a control that
+    # is not on the current screen at all -- it finds a rect in some .form and clicks empty space
+    # -- so `click_id("BUTTON_QUIT") or click_id("BUTTON_OK")` short-circuited on a click that did
+    # nothing, and the real exit was never tried. The driver reported "backing out to the city"
+    # every twelve seconds for an hour while never leaving the screen. Ask the engine directly
+    # and judge by whether the stage actually changed.
     for _ in range(tries):
-        st = d.status()
-        if st.stage == "CityView":
+        stage = d.status().stage
+        if stage == "CityView":
             return True
-        if st.stage == "MessageBox":
+        if stage == "MessageBox":
             d.h.key("Return")
-        elif not (d.click_id("BUTTON_QUIT", st) or d.click_id("BUTTON_OK", st)):
+        else:
+            for cid in ("BUTTON_QUIT", "BUTTON_OK"):
+                try:
+                    if d.h.send(f"control {cid}").startswith("OK"):
+                        break
+                except (HarnessError, OSError):
+                    continue
+            else:
+                d.h.key("Escape")
+        time.sleep(0.6)
+        if d.status().stage == stage:
+            # That exit did nothing; fall back to the keyboard before trying again.
             d.h.key("Escape")
-        time.sleep(0.5)
+            time.sleep(0.4)
     return d.status().stage == "CityView"
 
 
