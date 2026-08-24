@@ -65,10 +65,18 @@ The chain, strictly in order:
    game*, so the merged truth is not readable from this repo at all. Use `gs topic <ID>`.
 
    Its dependency, `RESEARCH_DIMENSION_SHIFTER`, is `hidden=1` and 190,000 man-hours. Hidden
-   topics are permanently excluded from the manual research list
-   (researchselect.cpp:234), so it can never be researched by hand — it has to be force-completed
-   by an event, the same way the `RESEARCH_UNLOCK_*` topics are. Reaching the shifter therefore
-   depends on whatever in-game event unlocks it, not on queueing research.
+   topics are permanently excluded from the manual research list (researchselect.cpp:234), so it
+   can never be researched by hand — it has to be force-completed by an event.
+
+   **That event is recovering a UFO.** `CityView` force-completes every topic in the recovered
+   craft type's `researchUnlock` list (cityview.cpp:4376-4379). `gs ufo_types` shows all ten
+   alien craft types carry the same set: `RESEARCH_UNLOCK_ALIEN_CRAFT_CONTROL_SYSTEMS`,
+   `..._ENERGY_SOURCE`, `..._PROPULSION`, and `RESEARCH_UNLOCK_UFO_TYPE_<n>`. Those open the
+   alien-craft research chain, which is what eventually reaches the shifter — matching the player
+   guides' insistence that you must shoot down *and recover* UFOs, not merely destroy them.
+
+   So the recovery chain is not a side quest, it is the critical path: crew a craft, intercept,
+   shoot down, recover, research what the recovery unlocked, repeat.
 4. Fit it to a craft. `Vehicle::hasDimensionShifter()` is the sole gate on crossing.
 5. Order that craft into a Dimension Gate → `VehicleMission::gotoPortal`. Without a shifter the
    craft is stranded or crashes on arrival.
@@ -335,7 +343,10 @@ satisfied *right now*, man-hours progress and cost. Verified readings on a fresh
 | `RESEARCH_DIMENSION_GATES` | yes — `deps_satisfied=1`, 5,000 hours |
 | `RESEARCH_ADVANCED_WORKSHOP` | **no** — `deps_satisfied=0`, despite being a plain Physics topic |
 | `MANUFACTURE_DIMENSION_SHIFTER` | **no** — `deps_satisfied=0`, needs a Large lab |
-| `RESEARCH_DIMENSION_SHIFTER` | **never manually** — `hidden=1`, 190,000 hours |
+| `RESEARCH_DIMENSION_SHIFTER` | **never manually** — `hidden=1`, 190,000 hours; unlocked only by recovering UFOs |
+
+`gs ufo_types` answers "which craft unlocks what when recovered" — also unreadable from the repo,
+since vehicle types come from the extractor rather than `data/`.
 
 This is the tool to reach for before planning any research route. Reading the repo's XML produced
 a confidently wrong plan; one query would have caught it.

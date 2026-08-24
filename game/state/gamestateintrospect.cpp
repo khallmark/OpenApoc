@@ -598,6 +598,31 @@ UString introspectGameState(GameState &state, const UString &query)
 		return format("buildable={0} pending={1} offer={2} base={3}", idx, pending,
 		              out.empty() ? UString("-") : out, built.empty() ? UString("-") : built);
 	}
+	// Which craft unlock what when recovered. Recovering a UFO force-completes its type's
+	// researchUnlock list (cityview.cpp:4376-4379), and that is the *only* way hidden topics like
+	// RESEARCH_DIMENSION_SHIFTER can ever complete -- they are excluded from the manual research
+	// list for good. None of this is in data/: vehicle types come from the extractor, so the repo
+	// cannot answer "which UFO do I need to shoot down", only the running game can.
+	if (q == "ufo_types")
+	{
+		UString out;
+		size_t n = 0;
+		for (const auto &v : state.vehicle_types)
+		{
+			if (!v.second || v.second->researchUnlock.empty())
+			{
+				continue;
+			}
+			UString unlocks;
+			for (const auto &u : v.second->researchUnlock)
+			{
+				unlocks += (unlocks.empty() ? "" : "+") + u.id;
+			}
+			n++;
+			out += (out.empty() ? "" : "|") + format("{0}=>{1}", v.first, unlocks);
+		}
+		return format("types_with_unlocks={0} detail={1}", n, out.empty() ? UString("-") : out);
+	}
 	if (q == "alien_buildings")
 	{
 		const auto it = state.cities.find("CITYMAP_ALIEN");
