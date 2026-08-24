@@ -2946,6 +2946,16 @@ def hire_staff(d: Driver, want: int = 6, role: str = "BUTTON_SOLDIERS",
     d.click_id(role, d.status())  # role filter
     time.sleep(0.7)
 
+    # Report what the two lists actually hold. "clicked 0" says the first click did not land but
+    # not whether the candidate pool was empty, the wrong list was addressed, or the control was
+    # not found at all -- and those want completely different fixes.
+    try:
+        l1 = d.h.send("controls LIST1").split()
+        l2 = d.h.send("controls LIST2").split()
+        d.say(f"  [hire] {role}: LIST1 {len(l1) - 2} row(s), LIST2 {len(l2) - 2} row(s)")
+    except (HarnessError, OSError):
+        d.say(f"  [hire] {role}: could not read the candidate lists")
+
     hired = 0
     for _ in range(want):
         # Always click row 0: a hired candidate leaves LIST2 immediately, so the next one takes
