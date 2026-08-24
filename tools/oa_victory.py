@@ -239,7 +239,7 @@ class Victory:
             # fund the fleet that does the work. Do it before anything else is bought.
             sold = sell_ground_fleet(self.d)
             self.say(f"sold {sold} ground vehicle line(s) to fund the air fleet")
-            stock_for_template(self.d, qty=12)
+            stock_for_template(self.d, qty=self.armoury_size())
             crew_transport(self.d)
             # Capture the squad loadout now, while the starting ten are all home and armed.
             # It persists in GameState, so every later recruit can be equipped from it.
@@ -336,6 +336,19 @@ class Victory:
         self.flush()
         if self.alive():
             self.save(f"after mission {n}")
+
+    def armoury_size(self) -> int:
+        """How many of each loadout item to stock: one per soldier, plus spares.
+
+        A fixed twelve was written when a roster was ten and never revisited. Once hiring started
+        working the roster reached fifteen and stores held ten weapons, so nine of fifteen
+        soldiers went into the field with nothing -- the armoury has to follow the payroll.
+        """
+        try:
+            fit = int(self.d.h.gs("agents").get("soldiers", "0") or 0)
+        except (HarnessError, OSError):
+            fit = 12
+        return max(12, fit + 6)
 
     def city_turn(self) -> None:
         # Watch the actual game-over condition. fundingTerminated latches for good the first week
@@ -518,7 +531,7 @@ class Victory:
             if equip_squad(self.d, agents=24) <= 0:
                 # Stores ran dry rather than the mechanism failing: the market only restocks so
                 # much per week, so keep re-ordering the loadout's own item types.
-                stock_for_template(self.d, qty=12)
+                stock_for_template(self.d, qty=self.armoury_size())
 
         # Replace losses, and arm them if the armoury can.
         fit = int(ag.get("soldiers_fit", "0") or 0)
@@ -532,7 +545,7 @@ class Victory:
             if stock <= 0:
                 self.last_hire = time.time()
                 self.say(f"{fit} fit soldiers but no weapons in stores - buying before hiring")
-                stock_for_template(self.d, qty=12)
+                stock_for_template(self.d, qty=self.armoury_size())
             else:
                 self.last_hire = time.time()
                 want = min(MIN_SOLDIERS - fit + 2, stock)
