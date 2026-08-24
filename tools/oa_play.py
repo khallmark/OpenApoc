@@ -1345,8 +1345,27 @@ def buy_category(d: Driver, category: str, qty: int, rows: int, sub: str = "") -
     changed = 0
     for i in range(rows):
         try:
-            if d.h.send(f"control LIST item {i} set {qty}").startswith("OK"):
-                changed += 1
+            # A row's quantity is a *balance*, not an order size: setting it below what the base
+            # already holds sells the difference. Blindly writing a fixed number therefore sold
+            # equipment while the log claimed a purchase -- funds went up, not down. Read first
+            # and only ever increase.
+            # A row's scrollbar is a balance across the two sides of the trade, and on the
+            # buy/sell screen *raising* it sells: measured directly, setting have+qty took stores
+            # from 60 items to 30 and put money back in the bank while the log claimed a
+            # purchase. Buying means moving the balance the other way.
+            cur = d.h.send(f"control LIST item {i} get")
+            have, low = 0, 0
+            for kv in cur.split():
+                if kv.startswith("value="):
+                    have = int(kv.split("=")[1] or 0)
+                elif kv.startswith("min="):
+                    low = int(kv.split("=")[1] or 0)
+            target = max(low, have - qty)
+            if target == have:
+                continue
+            if not d.h.send(f"control LIST item {i} set {target}").startswith("OK"):
+                continue
+            changed += 1
         except (HarnessError, OSError):
             break
     return changed

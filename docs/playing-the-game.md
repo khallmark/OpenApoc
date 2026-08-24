@@ -167,9 +167,11 @@ treating its arrival as a win records a total squad wipe as a victory.
   and `BUTTON_YES` is pressed. Role filters: `BUTTON_SOLDIERS`, `BUTTON_BIOSCIS`,
   `BUTTON_PHYSCIS`, `BUTTON_ENGINRS`.
 - **Buy** on the buy/sell screen, where `BUTTON_AGENTS` means agent *equipment* — the role
-  buttons are hidden there and belong to RecruitScreen. Set a row quantity with
-  `CONTROL LIST item <N> set <q>`, commit with `BUTTON_OK`, confirm the dialog. Goods arrive as
-  cargo a couple of game-days later.
+  buttons are hidden there and belong to RecruitScreen. A row's scrollbar is a **balance across
+  both sides of the trade, not an order size**, and *raising* it sells: writing `have + qty` took
+  stores from 60 items to 30 and put money back in the bank while the log claimed a purchase.
+  Read the current value with `CONTROL LIST item <N> get`, then move it *down* to buy. Commit with
+  `BUTTON_OK` and confirm. Goods arrive as cargo a couple of game-days later.
 - **Equip** via the engine's equipment templates (`--OpenApoc.NewFeature.EnableAgentTemplates=1`).
   Ctrl+`<n>` stores the shown agent's loadout, a bare `<n>` strips and re-equips every selected
   agent from base stores. Two traps: `AGENT_SELECT_BOX` is a ListBox, so use `set` not `click`;

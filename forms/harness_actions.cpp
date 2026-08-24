@@ -243,6 +243,32 @@ UString applyToControl(const sp<Control> &control, const UString &id, const UStr
 		}
 		return format("OK toggled {0}", id);
 	}
+	// Reading a widget's current value matters as much as writing it: a transaction row's
+	// quantity is a balance, so setting it *below* what the base already holds sells the
+	// difference. A driver that cannot read the current value ends up selling the squad's
+	// weapons while believing it is buying them.
+	if (op == "get")
+	{
+		if (auto *box = dynamic_cast<CheckBox *>(control.get()))
+		{
+			return format("OK {0} checked={1}", id, box->isChecked() ? 1 : 0);
+		}
+		if (auto *bar = dynamic_cast<ScrollBar *>(control.get()))
+		{
+			return format("OK {0} value={1} min={2} max={3}", id, bar->getValue(),
+			              bar->getMinimum(), bar->getMaximum());
+		}
+		if (auto *list = dynamic_cast<ListBox *>(control.get()))
+		{
+			return format("OK {0} items={1}", id, static_cast<int>(list->Controls.size()));
+		}
+		if (auto inner = firstSettableDescendant(control))
+		{
+			return applyToControl(inner, format("{0}/inner", id), "get", "");
+		}
+		return format("ERR control \"{0}\" ({1}) has no readable value", id,
+		              controlTypeName(control.get()));
+	}
 	if (op == "set")
 	{
 		if (auto *box = dynamic_cast<CheckBox *>(control.get()))
@@ -311,7 +337,7 @@ UString handleFormAction(const UString &verb, const std::vector<UString> &args)
 	const auto action = to_lower(verb);
 	if (action == "help")
 	{
-		return "OK verbs=help,controls,control,click,set,toggle,item "
+		return "OK verbs=help,controls,control,click,set,get,toggle,item "
 		       "usage=CONTROL <id> [click|toggle|set <value>|item <N> [op] [value]] "
 		       "CONTROLS [<id>] lists children of <id> by position";
 	}
