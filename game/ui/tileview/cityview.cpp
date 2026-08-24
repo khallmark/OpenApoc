@@ -2272,6 +2272,60 @@ void CityView::registerCityViewIntrospection()
 		    // accessTopic researched, since BuildingScreen refuses the raid otherwise
 		    // (buildingscreen.cpp:112-122). Winning one force-completes the unlock for the next,
 		    // and the last of them ends the game.
+		    if (gameState && q == "centre_on_basesite")
+		    {
+			    // Frame a building that could become a second base. XComDefeated is raised on
+			    // exactly one condition -- player_bases.empty() (base.cpp:150-159) -- so a
+			    // campaign with two bases cannot be ended by losing one, however badly a base
+			    // defence goes. Funding termination merely zeroes income; it is not defeat.
+			    // BaseSelectScreen only accepts a building with a base_layout owned by the
+			    // government (baseselectscreen.cpp:93-97), and the price is set from its
+			    // footprint, so report the cheapest eligible site and whether it is affordable.
+			    if (!gameState->current_city)
+			    {
+				    return UString("centred=0");
+			    }
+			    const auto gov = gameState->getGovernment();
+			    sp<Building> best;
+			    UString bestId;
+			    int bestPrice = 0;
+			    for (const auto &ref : gameState->current_city->buildings)
+			    {
+				    const auto bld = ref.getSp();
+				    if (!bld || bld->base_layout.id.empty() || !bld->owner ||
+				        bld->owner.id != gov.id)
+				    {
+					    continue;
+				    }
+				    if (bld->base)
+				    {
+					    continue;
+				    }
+				    const Vec2<int> size = bld->bounds.size();
+				    // BaseBuyScreen::COST_PER_TILE is private; it is 2000
+				    // (basebuyscreen.h:18) and the formula is basebuyscreen.cpp:31.
+				    const int price = std::min(size.x, 8) * std::min(size.y, 8) * 2000;
+				    if (!best || price < bestPrice)
+				    {
+					    best = bld;
+					    bestId = ref.id;
+					    bestPrice = price;
+				    }
+			    }
+			    if (!best)
+			    {
+				    return UString("centred=0");
+			    }
+			    const auto &bb = best->bounds;
+			    const Vec3<float> mid{(bb.p0.x + bb.p1.x) / 2.0f, (bb.p0.y + bb.p1.y) / 2.0f, 2.0f};
+			    view->setScreenCenterTile(mid);
+			    const auto screen = view->tileToOffsetScreenCoords<float>(mid);
+			    return format("centred=1 building={0} price={1} balance={2} affordable={3} "
+			                  "bases={4} at={5},{6},0",
+			                  bestId, bestPrice, gameState->getPlayer()->balance,
+			                  gameState->getPlayer()->balance >= bestPrice ? 1 : 0,
+			                  gameState->player_bases.size(), (int)screen.x, (int)screen.y);
+		    }
 		    if (gameState && q == "centre_on_raidable")
 		    {
 			    const auto aliens = gameState->getAliens();

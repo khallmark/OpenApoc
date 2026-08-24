@@ -1257,6 +1257,63 @@ def goto_portal(d: Driver) -> bool:
     return False
 
 
+def build_second_base(d: Driver) -> str:
+    """Buy a second base. Returns "bought", or why it could not.
+
+    This is the single most valuable insurance a campaign can buy. XComDefeated is raised on
+    exactly one condition -- state.player_bases.empty() (base.cpp:150-159) -- so with two bases,
+    losing one to a botched base defence no longer ends the game. Funding termination is a
+    separate and much milder thing: weeklyPlayerUpdate merely sets income to zero
+    (gamestate.cpp:1668-1680), and a campaign with money in the bank can still research and
+    manufacture its way to victory afterwards.
+
+    BaseSelectScreen accepts only a building with a base_layout owned by the government
+    (baseselectscreen.cpp:93-97), and it is constructed with CityView's current centre
+    (cityview.cpp:1321) -- so centring the city on the site first puts it under the middle of the
+    screen, which is what makes it clickable without pixel-hunting.
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return f"not-in-city ({st.stage})"
+    info = d.h.gs("centre_on_basesite")
+    if info.get("centred") != "1":
+        return "no-eligible-site"
+    if info.get("affordable") != "1":
+        return f"too-expensive (price {info.get('price')} vs {info.get('balance')})"
+    price = info.get("price")
+    d.say(f"  [base] buying a second base: {info.get('building')} for ${price}")
+
+    d.click_id("BUTTON_TAB_1", st)
+    time.sleep(0.35)
+    if not d.click_id("BUTTON_BUILD_BASE", d.status()):
+        return "no-build-base-button"
+    try:
+        st = d.wait_for("BaseSelectScreen", 20)
+    except TimeoutError:
+        return f"base-select-not-reached ({d.status().stage})"
+
+    # The site sits under the centre of the screen; nudge outward a little if the exact middle
+    # lands on a gap between scenery blocks rather than the building itself.
+    for dx, dy in ((0, 0), (0, -24), (0, 24), (-32, 0), (32, 0), (-24, -16), (24, 16)):
+        d.h.click_xy(max(0, min(st.w - 1, st.w // 2 + dx)),
+                     max(0, min(st.h - 1, st.h // 2 + dy)))
+        time.sleep(0.55)
+        if d.status().stage == "BaseBuyScreen":
+            break
+    if d.status().stage != "BaseBuyScreen":
+        return_to_city(d)
+        return "could-not-open-buy-screen"
+
+    if not d.click_id("BUTTON_BUY_BASE", d.status()):
+        return_to_city(d)
+        return "buy-button-refused"
+    time.sleep(0.8)
+    return_to_city(d)
+    after = d.h.gs("centre_on_basesite")
+    d.say(f"  [base] bases now {after.get('bases', '?')}")
+    return "bought"
+
+
 def build_facility(d: Driver, want: str = "FACILITYTYPE_ADVANCED_WORKSHOP") -> bool:
     """Construct a base facility. Returns True when one is actually placed.
 

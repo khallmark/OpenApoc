@@ -31,6 +31,7 @@ from oa_play import (
     Harness,
     HarnessError,
     assign_research,
+    build_second_base,
     build_facility,
     return_to_city,
     goto_portal,
@@ -62,7 +63,8 @@ CREW_COOLDOWN_S = 60.0
 # Topics finish and labs fall idle; an idle lab is research that is not happening. Re-checking
 # costs a few seconds of game time and is the difference between a campaign that advances up the
 # alien-building chain and one that stops after its first two topics.
-RESEARCH_COOLDOWN_S = 90.0
+RESEARCH_COOLDOWN_S = 90
+BASE_COOLDOWN_S = 120.0
 # Soldiers are lost permanently. Below this many fit soldiers there is no squad left to send.
 MIN_SOLDIERS = 10
 # Fewer than this and an incident is not worth answering: the squad dies and the score hit from
@@ -99,6 +101,8 @@ class Victory:
         self.last_score_warn = 0.0
         self.last_endgame = 0.0
         self.last_checkpoint = 0.0
+        self.last_base_try = 0.0
+        self.second_base = False
         self.best_crashed = 0
 
     # -- durability -------------------------------------------------------
@@ -381,6 +385,28 @@ class Victory:
             if recover_crash_sites(self.d):
                 self.progress["recoveries"] += 1
                 self.flush()
+
+        # A second base is the cheapest insurance in the game. XComDefeated is raised on exactly
+        # one condition -- player_bases.empty() (base.cpp:150-159) -- so with two bases, losing
+        # one to a base defence that goes badly no longer ends the campaign. The last three runs
+        # all ended that way. Funding termination is a much milder thing than it looks: it only
+        # zeroes income (gamestate.cpp:1668-1680), and a campaign with money banked can still
+        # research and manufacture its way to victory afterwards. Buy it as soon as it is
+        # affordable, ahead of any other spending.
+        if not self.second_base and time.time() - self.last_base_try > BASE_COOLDOWN_S:
+            self.last_base_try = time.time()
+            site = self.d.h.gs("centre_on_basesite")
+            if site.get("centred") == "1" and int(site.get("bases", "1") or 1) >= 2:
+                self.second_base = True
+                self.say("second base already established")
+            elif site.get("affordable") == "1":
+                outcome = build_second_base(self.d)
+                self.say(f"second base: {outcome}")
+                if outcome == "bought":
+                    self.second_base = True
+                    self.progress["bases"] = 2
+                    self.flush()
+                    self.save("second base")
 
         # Keep every lab busy and staffed. assign_research staffs first, then fills idle labs.
         if time.time() - self.last_research > RESEARCH_COOLDOWN_S:
