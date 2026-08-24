@@ -692,9 +692,21 @@ UString introspectGameState(GameState &state, const UString &query)
 			// three were sitting on the pad.
 			UString safeName = veh->name;
 			std::replace(safeName.begin(), safeName.end(), ' ', '_');
+			// Soldiers aboard too: recovering a wreck needs a *flying* craft carrying troops.
+			// Picking the first crewed craft regardless of type selected a Stormdog -- a road
+			// vehicle -- and every recovery was refused, which stalls the entire research chain
+			// since UFO recovery is what unlocks it.
+			size_t crew = 0;
+			for (const auto &a : veh->currentAgents)
+			{
+				if (a && a->type && a->type->role == AgentType::Role::Soldier)
+				{
+					crew++;
+				}
+			}
 			out += (out.empty() ? "" : "|") +
-			       format("{0}:{1}:flying={2},armed={3}", idx, safeName, flying ? 1 : 0,
-			              armed ? 1 : 0);
+			       format("{0}:{1}:flying={2},armed={3},crew={4}", idx, safeName, flying ? 1 : 0,
+			              armed ? 1 : 0, crew);
 			idx++;
 		}
 		return format("craft={0} interceptors={1} detail={2}", idx, usable,

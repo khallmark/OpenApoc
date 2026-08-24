@@ -1322,18 +1322,30 @@ def intercept_ufos(d: Driver) -> int:
     # interception -- it is a vehicle driving around while the UFO keeps bombing the city, which
     # is the largest score drain on the board. gs interceptors reports the flying/armed flags in
     # the same order the icons appear in OWNED_VEHICLE_LIST.
+    # Send fighters, and keep the troop transport out of it. A crewed craft sent to dogfight
+    # risks the squad aboard as well as the airframe, and it is the only thing that can collect a
+    # downed UFO -- which is what unlocks the research chain. Losing it stalls the entire route to
+    # victory, so crewed craft are used for interception only if there is nothing else flying.
     ICON_W = 36
-    fighters = []
+    fighters, crewed_fighters = [], []
     for part in d.h.gs("interceptors").get("detail", "").split("|"):
         bits = part.split(":")
         if len(bits) < 3 or not bits[0].isdigit():
             continue
-        if "flying=1" in bits[-1] and "armed=1" in bits[-1]:
+        flags = bits[-1]
+        if "flying=1" not in flags or "armed=1" not in flags:
+            continue
+        if "crew=0" in flags:
             fighters.append(int(bits[0]))
+        else:
+            crewed_fighters.append(int(bits[0]))
     if not fighters:
-        d.say("  [intercept] no armed flying craft available; not sending anyone")
-        d.h.key("Escape")
-        return 0
+        if not crewed_fighters:
+            d.say("  [intercept] no armed flying craft available; not sending anyone")
+            d.h.key("Escape")
+            return 0
+        d.say("  [intercept] only the crewed transport can fly; sending it reluctantly")
+        fighters = crewed_fighters
 
     d.h.send("keydown Left Ctrl")
     try:
@@ -2065,6 +2077,21 @@ def buy_equipment(d: Driver, rows: int = 10, qty: int = 6) -> bool:
     return funds_after != funds_before
 
 
+def _flying_crewed(d: Driver) -> int:
+    """How many *flying* craft are carrying troops.
+
+    Plain crewed counts are not enough: a Stormdog or Wolfhound APC can hold a squad and still be
+    useless for reaching a downed UFO, and recovery is refused outright when the selected craft
+    cannot get there. Recovery unlocks the research chain, so this distinction gates the endgame.
+    """
+    n = 0
+    for part in d.h.gs("interceptors").get("detail", "").split("|"):
+        flags = part.split(":")[-1]
+        if "flying=1" in flags and "crew=0" not in flags:
+            n += 1
+    return n
+
+
 def crew_transport(d: Driver) -> int:
     """Put soldiers aboard a craft so it can recover downed UFOs.
 
@@ -2107,7 +2134,9 @@ def crew_transport(d: Driver) -> int:
         return 0
 
     ROW_H, FIRST_ROW, AGENT_DX, VEHICLE_DX = 26, 63, 103, 383
-    before = int(d.h.gs("vehicles").get("crewed", "0") or 0)
+    # Count only flying crewed craft: loading a road vehicle looks like success and then fails
+    # every recovery.
+    before = _flying_crewed(d)
     crewed = before
 
     # Select the squad once, then try each craft row: the right column starts with the building
@@ -2143,9 +2172,9 @@ def crew_transport(d: Driver) -> int:
         d.h.ok(f"up {box.x + VEHICLE_DX} {dy}")
         time.sleep(0.6)
 
-        crewed = int(d.h.gs("vehicles").get("crewed", "0") or 0)
+        crewed = _flying_crewed(d)
         if crewed > before:
-            d.say(f"  [crew] squad boarded a craft on row {row}")
+            d.say(f"  [crew] squad boarded a flying craft on row {row}")
             break
 
     # Leave by the screen's own quit button. dismiss_modal would pick this stage's "act" control,
@@ -2157,7 +2186,8 @@ def crew_transport(d: Driver) -> int:
         if not d.click_id("BUTTON_QUIT", st):
             d.h.key("Escape")
         time.sleep(0.4)
-    d.say(f"  [crew] crewed craft {before} -> {crewed}")
+    crewed = _flying_crewed(d)
+    d.say(f"  [crew] flying crewed craft {before} -> {crewed}")
     return crewed
 
 
@@ -2184,12 +2214,32 @@ def select_crewed_craft(d: Driver) -> bool:
     lst = d.controls(d.status()).get("OWNED_VEHICLE_LIST")
     if lst is None or lst.w <= 0:
         return False
+    # The craft must be able to *reach* the wreck, so it has to fly as well as carry troops.
+    # Selecting the first crewed craft regardless of type picked a Stormdog -- a road vehicle --
+    # and every recovery was refused with "mission: none", stalling the whole research chain,
+    # since recovering UFOs is what unlocks it.
+    wanted = []
+    for part in d.h.gs("interceptors").get("detail", "").split("|"):
+        bits = part.split(":")
+        if len(bits) < 3 or not bits[0].isdigit():
+            continue
+        flags = bits[-1]
+        if "flying=1" in flags and "crew=0" not in flags:
+            wanted.append(int(bits[0]))
+    if not wanted:
+        d.say("  [select] no flying craft with troops aboard")
+        return False
+
+    ICON_W = 36
     y = lst.y + lst.h // 2
-    for x in range(lst.x + 6, lst.x + lst.w, 12):
+    for slot in wanted:
+        x = lst.x + 16 + slot * ICON_W
+        if x >= lst.x + lst.w:
+            continue
         d.h.click_xy(x, y)
-        time.sleep(0.12)
+        time.sleep(0.15)
         if int(d.h.gs("selected").get("with_soldier", "0") or 0) > 0:
-            d.say(f"  [select] crewed craft selected at x={x}")
+            d.say(f"  [select] flying crewed craft selected (slot {slot})")
             return True
     return False
 
