@@ -679,7 +679,8 @@ class Driver:
             # Judging success by "the stage changed" is also wrong here, because dismissing one
             # box often reveals another and the stage is still MessageBox. Treat a button that
             # the engine accepted as progress, and let the next pass handle whatever appears.
-            for cid in ("BUTTON_OK", "BUTTON_CANCEL", "BUTTON_NO2", "BUTTON_NO", "BUTTON_YES"):
+            for cid in ("BUTTON_OK", "BUTTON_NO2", "BUTTON_NO", "BUTTON_CANCEL",
+                        "BUTTON_YES"):
                 try:
                     if not self.h.send(f"control {cid}").startswith("OK"):
                         continue
@@ -930,7 +931,7 @@ def return_to_city(d: Driver, tries: int = 12) -> bool:
             # clock stopped. When unwinding, decline rather than confirm: this path only runs
             # because something already went wrong, and abandoning a half-built order is the safe
             # side of that.
-            for cid in ("BUTTON_OK", "BUTTON_CANCEL", "BUTTON_NO2", "BUTTON_NO"):
+            for cid in ("BUTTON_OK", "BUTTON_NO2", "BUTTON_NO", "BUTTON_CANCEL"):
                 try:
                     if d.h.send(f"control {cid}").startswith("OK"):
                         break
