@@ -3210,7 +3210,11 @@ def arm_agents_directly(d: Driver, agents: int = 24) -> int:
         detail = items.get("detail", "-")
         if not detail or detail == "-":
             continue
-        best = None
+        # Fill both hands. The guide wants a firearm AND a stun grapple on every agent -- "use
+        # stun grapples as often as possible" -- because an alien taken alive keeps its equipment,
+        # and that equipment is the campaign's income. Handing out one gun and leaving the other
+        # hand empty wastes half of every soldier.
+        firearm, grapple = None, None
         for part in detail.split("|"):
             bits = part.split(":")
             if not bits:
@@ -3227,20 +3231,27 @@ def arm_agents_directly(d: Driver, agents: int = 24) -> int:
                 sw, sh = (int(v) for v in attrs.get("size", "0,0").split(","))
             except ValueError:
                 continue
-            best = (bits[0], ax + sw // 2, ay + sh // 2)
-            break
-        if not best:
+            spot = (bits[0], ax + sw // 2, ay + sh // 2)
+            if "GRAPPLE" in bits[0].upper() or "STUN" in bits[0].upper():
+                grapple = grapple or spot
+            elif firearm is None:
+                firearm = spot
+            if firearm and grapple:
+                break
+        picks = [p for p in (firearm, grapple) if p]
+        if not picks:
             continue
-        name, cx, cy = best
-        d.h.send("keydown Left Shift")
-        try:
-            settle(d)
-            d.h.ok(f"down {cx} {cy}")
+        for _name, cx, cy in picks:
+            d.h.send("keydown Left Shift")
+            try:
+                settle(d)
+                d.h.ok(f"down {cx} {cy}")
+                time.sleep(0.15)
+                d.h.ok(f"up {cx} {cy}")
+                time.sleep(0.2)
+            finally:
+                d.h.send("keyup Left Shift")
             time.sleep(0.15)
-            d.h.ok(f"up {cx} {cy}")
-            time.sleep(0.2)
-        finally:
-            d.h.send("keyup Left Shift")
         armed_now += 1
         time.sleep(0.2)
 
@@ -3512,6 +3523,28 @@ def stock_best_guns(d: Driver, qty: int = 20) -> int:
         d.say("  [buy] no agent weapons on sale")
         return 0
     funds = int(d.h.gs("funds").get("balance", "0") or 0)
+
+    # The guide's weapon policy is phased, not "buy the hardest hitter":
+    #
+    #   "At the beginning when all they have is brainsuckers, you can use the AutoCannon or
+    #    missles on everything with no harm done. Soon, however, they have disruptor guns, which
+    #    are $2500 a pop and should be saved ... stun, lasers, and machine guns as MUCH as
+    #    possible, as soon as they get boomeroid/disruptors."
+    #
+    # Explosives destroy the loot that pays for the campaign -- "Personal Shields are one of the
+    # most valuable assets in the game, and destroying them all with explosions doesn't help you
+    # at all" -- so once the aliens are carrying anything worth recovering, switch to lasers and
+    # machine guns. Detect the phase from what has already turned up in stores.
+    loot = d.h.gs("loot").get("detail", "-")
+    valuable_aliens = any(m in (loot or "").upper()
+                          for m in ("DISRUPTOR", "BOOMEROID", "DEVASTATOR", "SHIELD", "VORTEX"))
+    if valuable_aliens:
+        preferred = ("LASER", "MACHINE_GUN", "MACHINE GUN")
+        avoid = ("GRENADE", "MISSILE", "MISSLE", "CANNON", "LAUNCHER", "EXPLOSIVE")
+    else:
+        preferred = ()
+        avoid = ()
+
     best = None
     for part in detail.split("|"):
         bits = part.split(":")
@@ -3534,14 +3567,24 @@ def stock_best_guns(d: Driver, qty: int = 20) -> int:
         # primary weapon armed the squad with truncheons.
         if any(m in bits[0].upper() for m in ("GRAPPLE", "STUN", "MEDI", "SCANNER", "SHIELD")):
             continue
-        if best is None or attrs.get("damage", 0) > best[0]:
-            best = (attrs.get("damage", 0), bits[0].replace("_", " "), price)
+        if avoid and any(m in bits[0].upper() for m in avoid):
+            continue
+        # Score preferred families above raw damage so a laser beats a bigger explosive once
+        # there is alien equipment on the field worth bringing home intact.
+        rank = (1 if any(m in bits[0].upper() for m in preferred) else 0, attrs.get("damage", 0))
+        if best is None or rank > best[0]:
+            best = (rank, bits[0].replace("_", " "), price)
     if not best:
         d.say(f"  [buy] nothing affordable among the guns on sale (${funds})")
         return 0
-    dmg, name, price = best
-    want = [name, f"{name} Clip", f"{name} Ammo"]
-    d.say(f"  [buy] stocking {qty} x {name} (damage {dmg}, ${price} each)")
+    rank, name, price = best
+    # And always a stun grapple each. The guide is explicit -- "use stun grapples as often as
+    # possible" -- because an alien taken alive keeps its equipment, and that equipment is the
+    # campaign's income. Agents have two hands; there is no reason to fill only one.
+    want = [name, f"{name} Clip", f"{name} Ammo", "Megapol Stun Grapple", "Stun Grapple"]
+    phase = "lasers and machine guns" if rank[0] else "whatever hits hardest"
+    d.say(f"  [buy] stocking {qty} x {name} (damage {rank[1]}, ${price}) plus stun grapples "
+          f"[{phase}]")
     return buy_named(d, want, qty=qty, category="BUTTON_AGENTS")
 
 
