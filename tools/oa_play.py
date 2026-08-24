@@ -1621,6 +1621,13 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
             # Stores ran dry: further applications now strip people rather than arm them.
             d.say(f"  [equip] stopping at row {i}: armed fell {best}->{now}")
             break
+        if applied >= 3 and now <= before:
+            # processTemplate re-equips the template's *exact* item types from stores. If the
+            # armoury holds different weapons than the captured loadout names, every application
+            # strips an agent and gives nothing back -- armed went 10 to 4 that way, with 25
+            # weapons sitting in stores the whole time. Three no-ops is enough to know.
+            d.say(f"  [equip] template is not arming anyone ({before}->{now}); stopping")
+            break
         best = max(best, now)
 
     for _ in range(6):

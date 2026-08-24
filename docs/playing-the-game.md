@@ -178,6 +178,14 @@ treating its arrival as a win records a total squad wipe as a victory.
   and applying an *empty* template disarms people — captured from the wrong row it took armed
   from 10 down to 4. Verify with `gs templates` before applying, and stop if `armed` falls.
 
+  **Templates are not a general arming mechanism.** `processTemplate` strips the agent and
+  re-equips the template's *exact* item types from stores. If the armoury holds different weapons
+  than the captured loadout names, every application takes a weapon away and gives nothing back:
+  measured, `applied to 12 agents; armed 4->4` with 25 weapons in stores. Abort after a few
+  applications that do not raise `armed`. Arming recruits with arbitrary stock still needs the
+  Shift+mousedown quick-equip, whose ground-inventory rects are computed at runtime and are not
+  in the .form file.
+
 ## Base construction
 
 Genuinely a drag, not a named action. `BaseScreen` keys off raw mouse events against whatever
