@@ -463,60 +463,51 @@ UString handleFormAction(const UString &verb, const std::vector<UString> &args)
 		{
 			return "ERR CONTROL needs a control id";
 		}
-		UString op = "click";
-		UString value;
-		if (args.size() >= 2)
+		auto control = findNamedControl(args[0]);
+		if (!control)
 		{
-			op = to_lower(args[1]);
+			return format("ERR unknown control \"{0}\"", args[0]);
 		}
-		// CONTROL <id> item <N> [op] [value] -- address a list row by position. This is what
-		// makes nameless runtime widgets reachable without pixel arithmetic.
-		if (op == "item")
+		UString label = args[0];
+		size_t i = 1;
+		// Walk any number of "item <N>" hops before the terminal operation. One level covers a
+		// plain list row; some widgets need more. MapSelector's map rows are the case that
+		// forced this: the row itself is an inert Control with no click handler at all, and the
+		// button that actually picks the map (calling Skirmish::setLocation) is a *second-level*
+		// child of that row -- not the row itself, and not something ListBox selection reaches
+		// either, since MapSelector never listens for ListBoxChangeSelected. Only
+		// `item <N> item 1 click` reaches it without pixel geometry.
+		while (i + 1 < args.size() && to_lower(args[i]) == "item")
 		{
-			if (args.size() < 3)
-			{
-				return "ERR CONTROL <id> item needs an index";
-			}
-			auto parent = findNamedControl(args[0]);
-			if (!parent)
-			{
-				return format("ERR unknown control \"{0}\"", args[0]);
-			}
 			int index = 0;
-			if (!parseIntValue(args[2], index))
+			if (!parseIntValue(args[i + 1], index))
 			{
-				return format("ERR item index \"{0}\" is not a number", args[2]);
+				return format("ERR item index \"{0}\" is not a number", args[i + 1]);
 			}
-			auto item = itemAt(parent, index);
-			if (!item)
+			auto next = itemAt(control, index);
+			if (!next)
 			{
-				return format("ERR {0} has no item {1} (items={2})", args[0], index,
-				              static_cast<int>(parent->Controls.size()));
+				return format("ERR {0} has no item {1} (items={2})", label, index,
+				              static_cast<int>(control->Controls.size()));
 			}
-			UString itemOp = args.size() >= 4 ? to_lower(args[3]) : UString("click");
-			UString itemValue;
-			for (size_t i = 4; i < args.size(); i++)
-			{
-				if (i > 4)
-				{
-					itemValue += " ";
-				}
-				itemValue += args[i];
-			}
-			return applyToControl(item, format("{0}[{1}]", args[0], index), itemOp, itemValue);
+			control = next;
+			label = format("{0}[{1}]", label, index);
+			i += 2;
 		}
+		UString op = i < args.size() ? to_lower(args[i]) : UString("click");
+		UString value;
 		if (op == "set")
 		{
-			for (size_t i = 2; i < args.size(); i++)
+			for (size_t j = i + 1; j < args.size(); j++)
 			{
-				if (i > 2)
+				if (j > i + 1)
 				{
 					value += " ";
 				}
-				value += args[i];
+				value += args[j];
 			}
 		}
-		return applyControl(args[0], op, value);
+		return applyToControl(control, label, op, value);
 	}
 	return "";
 }
