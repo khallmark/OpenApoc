@@ -72,6 +72,9 @@ BASE_COOLDOWN_S = 120.0
 # Below this, with funding cut and nobody armed, a campaign cannot recover: no income, and not
 # enough left to buy a single weapon.
 BANKRUPT_FLOOR = 5000
+# How many armed fliers to keep. Two was not enough to stop infiltration turning the government
+# hostile; the cheap two-gun craft make a patrol affordable.
+AIR_PATROL = 5
 # Soldiers are lost permanently. Below this many fit soldiers there is no squad left to send.
 MIN_SOLDIERS = 10
 # Fewer than this and an incident is not worth answering: the squad dies and the score hit from
@@ -536,7 +539,13 @@ class Victory:
             if "flying=1" in part and "armed=1" in part:
                 fliers += 1
         mine = int(v.get("player_vehicles", "0") or 0)
-        if fliers < 3 and time.time() - self.last_craft > 240.0:
+        # Two interceptors cannot cover a city. Measured: 39 buildings infiltrated by day 17,
+        # government relation down to -80 -- past the Hostile threshold that terminates funding
+        # outright (gamestate.cpp:1668-1680) -- while the fleet stood at two Phoenixes and only
+        # eleven UFOs had been shot down. Infiltration is what turns the government hostile, and
+        # interception is the only thing that prevents it, so buy a real patrol. At $12,607 for
+        # two guns they are cheap next to losing the campaign.
+        if fliers < AIR_PATROL and time.time() - self.last_craft > 240.0:
             self.last_craft = time.time()
             self.say(f"{fliers} armed flier(s) of {mine} craft - buying air cover")
             if not buy_interceptor(self.d, want=2) and mine < 3:
