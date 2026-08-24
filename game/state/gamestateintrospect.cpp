@@ -647,6 +647,51 @@ UString introspectGameState(GameState &state, const UString &query)
 		}
 		return format("types_with_unlocks={0} detail={1}", n, out.empty() ? UString("-") : out);
 	}
+	// Human-city buildings that actually contain aliens right now, plus how the player stands
+	// with the government. Investigating a building and finding nothing costs the owner
+	// -5 - difficulty relation every time (buildingscreen.cpp:154-166), and alien crews relocate
+	// between buildings on a timer -- so answering stale alerts steadily angers organisations.
+	// If that organisation is the government, weeklyPlayerUpdate latches fundingTerminated and
+	// income is gone permanently, which is how a campaign died at score -1312, nowhere near the
+	// -2400 score cutoff.
+	if (q == "infiltrated")
+	{
+		const auto player = state.getPlayer();
+		size_t n = 0;
+		UString out;
+		if (state.current_city)
+		{
+			for (const auto &ref : state.current_city->buildings)
+			{
+				const auto b = ref.getSp();
+				if (!b || b->current_crew.empty())
+				{
+					continue;
+				}
+				size_t crew = 0;
+				for (const auto &c : b->current_crew)
+				{
+					crew += c.second;
+				}
+				if (crew == 0)
+				{
+					continue;
+				}
+				n++;
+				if (n <= 12)
+				{
+					out += (out.empty() ? "" : "|") + format("{0}:crew={1}", ref.id, crew);
+				}
+			}
+		}
+		int govRelation = 0;
+		if (state.government && player)
+		{
+			govRelation = (int)state.government->getRelationTo(player);
+		}
+		return format("infiltrated={0} gov_relation={1} detail={2}", n, govRelation,
+		              out.empty() ? UString("-") : out);
+	}
 	if (q == "alien_buildings")
 	{
 		const auto it = state.cities.find("CITYMAP_ALIEN");

@@ -79,8 +79,13 @@ RESPONSES = {
     "AlertScreen":            {"act": "BUTTON_EXTERMINATE", "ack": "BUTTON_QUIT", "select": True},
     # Our base is under attack -- proceed into the defence battle.
     "BaseDefenseScreen":      {"act": "BUTTON_QUIT", "ack": "BUTTON_QUIT", "select": False},
-    # A building we can raid.
-    "BuildingScreen":         {"act": "BUTTON_RAID", "ack": "BUTTON_QUIT", "select": True},
+    # Leave buildings alone. Investigating one and finding no aliens costs the owner
+    # -5 - difficulty relation every single time (buildingscreen.cpp:154-166), and alien crews
+    # relocate between buildings on a timer, so a speculative raid usually finds nothing. Anger
+    # the government this way and weeklyPlayerUpdate latches fundingTerminated -- income gone
+    # permanently. A campaign died exactly that way at score -1312, nowhere near the -2400 score
+    # cutoff. Deliberate raids still happen, but only where aliens are known to be.
+    "BuildingScreen":         {"act": "BUTTON_QUIT", "ack": "BUTTON_QUIT", "select": False},
     "LocationScreen":         {"act": "BUTTON_EQUIPAGENT", "ack": "BUTTON_QUIT", "select": False},
     # Diplomacy: decline the bribe (accepting drains funds); the decision itself is the exercise.
     "DiplomaticTreatyScreen": {"act": "BUTTON_QUIT", "ack": "BUTTON_QUIT", "select": False},

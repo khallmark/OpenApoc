@@ -273,7 +273,17 @@ class Victory:
                 self.flush()
                 self.say("FUNDING TERMINATED PERMANENTLY - income is 0 for the rest of this "
                          "campaign; it cannot be recovered")
-        elif margin < 1200 and time.time() - self.last_score_warn > 120.0:
+        elif time.time() - self.last_score_warn > 120.0:
+            rel = int(self.d.h.gs("infiltrated").get("gov_relation", "0") or 0)
+            if rel < 20:
+                # The other latch: government relation going Hostile terminates funding just as
+                # permanently as the score cutoff, and speculative building investigations are
+                # what drives it down.
+                self.say(f"government relation down to {rel} - funding is at risk from relations, "
+                         f"not score")
+                self.last_score_warn = time.time()
+        if (not money.get("funding_terminated") == "1" and margin < 1200
+                and time.time() - self.last_score_warn > 120.0):
             self.last_score_warn = time.time()
             self.say(f"score {money.get('score_total')} - {margin} from permanent funding cutoff "
                      f"(incidents={money.get('incidents')} damage={money.get('city_damage')} "
