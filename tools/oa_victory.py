@@ -658,11 +658,34 @@ class Victory:
 
     def run(self, max_hours: float) -> int:
         deadline = time.time() + max_hours * 3600
-        self.start()
+        # start() can raise: it waits for stages and issues STATUS, and if the game dies during a
+        # resume those calls raise ConnectionRefusedError from inside wait_for, outside the loop's
+        # own guard. That killed the whole unattended run outright -- 48 hours of budget ended by
+        # one refused socket -- so treat a failed start the same way as a game that dies later.
+        for attempt in range(4):
+            try:
+                self.start()
+                break
+            except (HarnessError, OSError, TimeoutError, RuntimeError) as exc:
+                self.say(f"start failed ({exc}); retrying ({attempt + 1}/4)")
+                try:
+                    self.game.stop()
+                except Exception:
+                    pass
+                time.sleep(5.0)
+        else:
+            self.say("could not start the game at all")
+            return 1
         last_report = 0.0
 
         while time.time() < deadline:
-            if not self.alive():
+            try:
+                if not self.alive():
+                    if not self.restart():
+                        return 1
+                    continue
+            except (HarnessError, OSError, TimeoutError) as exc:
+                self.say(f"liveness check failed ({exc}); restarting")
                 if not self.restart():
                     return 1
                 continue
@@ -771,6 +794,9 @@ class Victory:
                     t = self.d.h.gs("time")
                     self.say(f"progress {self.progress} | {t}")
                 time.sleep(0.8)
+            except TimeoutError as exc:
+                self.say(f"timed out waiting on a stage: {exc}")
+                time.sleep(1.0)
             except HarnessError as exc:
                 self.say(f"harness error: {exc}")
                 time.sleep(1.0)
