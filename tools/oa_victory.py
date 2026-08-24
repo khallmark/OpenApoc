@@ -33,6 +33,7 @@ from oa_play import (
     assign_research,
     build_facility,
     buy_equipment,
+    buy_vehicles,
     stock_for_template,
     equip_squad,
     hire_scientists,
@@ -90,6 +91,7 @@ class Victory:
         self.last_build = 0.0
         self.built_workshop = False
         self.last_equip = 0.0
+        self.last_craft = 0.0
         self.last_checkpoint = 0.0
         self.best_crashed = 0
 
@@ -362,6 +364,15 @@ class Victory:
             self.d.h.gs("centre_on_selected")
         except (HarnessError, OSError):
             pass
+
+        # Replace lost craft. Interceptor attrition costs twice: fewer craft means UFOs go
+        # unintercepted, and unintercepted UFOs mean aliens infiltrating buildings, which is what
+        # actually drives score into the ground.
+        mine = int(v.get("player_vehicles", "0") or 0)
+        if mine < 4 and time.time() - self.last_craft > 240.0:
+            self.last_craft = time.time()
+            self.say(f"down to {mine} craft - buying replacements")
+            buy_vehicles(self.d, want=2)
 
         if in_city > 0:
             if time.time() - self.last_intercept > INTERCEPT_COOLDOWN_S:

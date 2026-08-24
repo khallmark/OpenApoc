@@ -1576,6 +1576,60 @@ def buy_category(d: Driver, category: str, qty: int, rows: int, sub: str = "") -
     return changed
 
 
+def buy_vehicles(d: Driver, want: int = 2) -> int:
+    """Replace lost craft. Returns the change in player vehicle count.
+
+    Interceptors die. The campaign that was bleeding score had gone from five craft to two, which
+    costs twice over: fewer craft means UFOs go unintercepted, and unintercepted UFOs mean aliens
+    infiltrating buildings -- 35 hostiles in the city while score fell 1,427 in a week. Craft are
+    cheap next to that, and the buy/sell screen sells them under BUTTON_VEHICLES.
+    """
+    before = int(d.h.gs("vehicles").get("player_vehicles", "0") or 0)
+    funds = int(d.h.gs("funds").get("balance", "0") or 0)
+    if funds < 40000:
+        d.say(f"  [craft] only ${funds}; not buying")
+        return 0
+    if not open_buysell(d):
+        return 0
+    if not d.click_id("BUTTON_VEHICLES", d.status()):
+        close_buysell(d, commit=False)
+        return 0
+    time.sleep(0.8)
+
+    ordered = 0
+    try:
+        listing = d.h.send("controls LIST").split()
+    except (HarnessError, OSError):
+        close_buysell(d, commit=False)
+        return 0
+    for entry in listing[2:]:
+        if ordered >= want:
+            break
+        parts = entry.split(":")
+        if len(parts) < 2 or not parts[0].isdigit():
+            continue
+        idx = parts[0]
+        try:
+            cur = d.h.send(f"control LIST item {idx} get")
+            have, low = 0, 0
+            for kv in cur.split():
+                if kv.startswith("value="):
+                    have = int(kv.split("=")[1] or 0)
+                elif kv.startswith("min="):
+                    low = int(kv.split("=")[1] or 0)
+            target = max(low, have - 1)
+            if target != have and d.h.send(f"control LIST item {idx} set {target}").startswith(
+                "OK"
+            ):
+                ordered += 1
+        except (HarnessError, OSError):
+            break
+    close_buysell(d, commit=ordered > 0)
+    after = int(d.h.gs("vehicles").get("player_vehicles", "0") or 0)
+    d.say(f"  [craft] ordered {ordered}; vehicles {before}->{after}")
+    return after - before
+
+
 def hire_staff(d: Driver, want: int = 6, role: str = "BUTTON_SOLDIERS",
                counter: str = "soldiers") -> int:
     """Recruit soldiers to replace losses. Returns the change in soldier count.
