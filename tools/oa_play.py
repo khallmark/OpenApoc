@@ -1676,6 +1676,27 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         if stalls and stalls % 12 == 0:
             d.say(f"  [battle] no progress for a while: {b}")
 
+        # A mission the engine already considers won, stuck on a hostile the squad cannot reach,
+        # will otherwise burn the entire time budget: observed at 13 of 15 alive against a single
+        # remaining foe, unchanged for minutes while the campaign clock stood still. Leaving is
+        # not a forfeit here -- Battle::exitBattle force-completes the building's researchUnlock
+        # on playerWon alone (battle.cpp:3511); only the loot is gated on not having retreated
+        # (battle.cpp:2817), and the research is the part the campaign actually needs.
+        if last_player_won and stalls >= 24:
+            d.say(f"  [battle] already won with {foes_alive} unreachable foe(s); leaving to bank it")
+            d.h.key("Escape")
+            time.sleep(0.8)
+            if d.click_id("BUTTON_EXIT_BATTLE", d.status()):
+                for _ in range(6):
+                    stt = d.status()
+                    if stt.stage not in ("BattleView", "InGameOptions", "MessageBox"):
+                        break
+                    if not d.dismiss_modal(stt):
+                        d.h.key("Return")
+                    time.sleep(0.6)
+                return "resolved"
+            d.h.key("Escape")
+
         # Retreat rather than be annihilated. "No mission is important enough to lose good men
         # on" -- and losing a whole squad is the biggest single economic hit in the game, which
         # is what drove this campaign into a losing spiral: four agents sent against twenty-three
