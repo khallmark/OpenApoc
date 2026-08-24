@@ -315,6 +315,40 @@ def bring_to_front() -> None:
         pass
 
 
+def reap_stale_game(port: int) -> int:
+    """Kill any leftover game already using this port. Returns how many were killed.
+
+    A hung instance does not release its harness port, and the next launch then fails with
+    "harness did not come up" against a process that is still very much alive -- just not
+    answering. That produced a restart loop the runner could not break out of: the campaign log
+    showed a game "dying" and restarting every few seconds while a four-minute-old zombie sat on
+    the port the whole time. SIGTERM is not enough for a process wedged in that state, hence the
+    escalation to SIGKILL.
+    """
+    killed = 0
+    try:
+        found = subprocess.run(
+            ["pgrep", "-f", f"Harness.Port={port}"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception:
+        return 0
+    for pid in [p for p in found.stdout.split() if p.strip().isdigit()]:
+        for sig in ("-TERM", "-KILL"):
+            try:
+                subprocess.run(["kill", sig, pid], capture_output=True, timeout=5)
+            except Exception:
+                break
+            time.sleep(1.0)
+            still = subprocess.run(["kill", "-0", pid], capture_output=True, timeout=5)
+            if still.returncode != 0:
+                break
+        killed += 1
+    if killed:
+        time.sleep(1.5)
+    return killed
+
+
 class GameProcess:
     """Owns a game instance so a run needs no human to start or stop anything."""
 
@@ -331,6 +365,10 @@ class GameProcess:
 
     def start(self, wait_s: float = 90.0) -> None:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        # Clear any wedged instance still holding this port before trying to bind it.
+        stale = reap_stale_game(self.port)
+        if stale:
+            print(f"[boot] reaped {stale} stale game process(es) on port {self.port}", flush=True)
         argv = [
             str(self.binary),
             f"--Framework.Data={self.repo / 'data'}",
@@ -383,7 +421,14 @@ class GameProcess:
         try:
             self.proc.wait(timeout=20)
         except Exception:
+            # A wedged instance ignores the harness QUIT and keeps its port, so escalate rather
+            # than leave something behind for the next launch to collide with.
             self.proc.kill()
+            try:
+                self.proc.wait(timeout=10)
+            except Exception:
+                pass
+            reap_stale_game(self.port)
         try:
             self.logf.close()
         except Exception:
