@@ -1138,7 +1138,15 @@ def assign_research(d: Driver) -> bool:
 
     # Staff the labs before assigning work: a project in an empty lab never advances a single
     # man-hour, which is how "research assigned" was true and meaningless at the same time.
-    staff_labs(d)
+    #
+    # But do it only when staffing is actually short. Every second spent on this screen is a
+    # second CityView is not the current stage, and research-completion score is credited *only*
+    # from CityView's event handler (cityview.cpp:4506) while the framework delivers each event
+    # to the top stage alone (framework.cpp:608). An event that fires while the driver is in here
+    # is lost for good -- and researchCompleted is the one score bucket that can never go
+    # negative, so every one of those is pure forfeited score.
+    if _lab_skill_total(d) < 800:
+        staff_labs(d)
 
     # Fill every lab, verifying against the engine after each attempt.
     #
