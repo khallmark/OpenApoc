@@ -3122,6 +3122,41 @@ def hire_engineers(d: Driver, want: int = 6) -> int:
     return hire_staff(d, want, "BUTTON_ENGINRS", "agents_player")
 
 
+def template_weapon_in_stock(d: Driver) -> bool:
+    """Is the stored loadout's weapon actually in stores?
+
+    processTemplate strips an agent and re-equips the template's EXACT types, so applying it when
+    the weapon is missing takes working guns off people and hands back nothing. Observed doing
+    precisely that: "applied to 14 agents; armed 7->6", with the template naming a Megapol Laser
+    Sniper Gun and stores holding none -- only Lawpistols, M4000s and a plasma gun. The template
+    was captured from the starting squad, whose rifles cannot always be re-bought.
+    """
+    types = []
+    for part in d.h.gs("templates").get("detail", "").split("|"):
+        if not part.startswith("1:"):
+            continue
+        for kv in part.split(":", 1)[1].split(","):
+            if kv.startswith("types="):
+                types = [t for t in kv[6:].split("+") if t and t != "-"]
+    if not types:
+        return False
+    stock = {}
+    for part in d.h.gs("loot").get("detail", "-").split("|"):
+        bits = part.split(":")
+        if len(bits) < 2:
+            continue
+        try:
+            stock[bits[0]] = int(bits[1].split("=", 1)[1])
+        except (ValueError, IndexError):
+            continue
+    guns = [t for t in types if any(m in t.upper()
+                                    for m in ("GUN", "RIFLE", "PISTOL", "LAUNCHER", "CANNON"))
+            and "CLIP" not in t.upper() and "AMMO" not in t.upper()]
+    if not guns:
+        return True
+    return any(stock.get(g, 0) > 0 for g in guns)
+
+
 def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
     """Arm unequipped soldiers from base stores. Returns the change in armed count.
 
