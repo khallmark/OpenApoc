@@ -76,9 +76,11 @@ CREW_COOLDOWN_S = 60.0
 # alien-building chain and one that stops after its first two topics.
 RESEARCH_COOLDOWN_S = 90
 BASE_COOLDOWN_S = 120.0
-# How often to go and clear an infiltrated building. Frequent: crews grow and spread hourly, and
-# the relation they cost is what terminates funding.
-INFIL_COOLDOWN_S = 90.0
+# How often to go and clear a building aliens were reported entering. Promptly: a crew grows and
+# spreads every hour, and once an organisation's infiltrationValue reaches 200 it is taken over
+# outright (organisation.cpp:84-92). The window to act is right after the drop, before the company
+# is theirs.
+INFIL_COOLDOWN_S = 45.0
 # Below this, with funding cut and nobody armed, a campaign cannot recover: no income, and not
 # enough left to buy a single weapon.
 BANKRUPT_FLOOR = 5000
@@ -468,7 +470,7 @@ class Victory:
         if armed_now >= MIN_SQUAD and time.time() - self.last_infil_raid > INFIL_COOLDOWN_S:
             self.last_infil_raid = time.time()
             outcome = raid_infiltrated_building(self.d)
-            if outcome != "nothing-infiltrated":
+            if outcome != "nothing-reported":
                 self.say(f"infiltration raid: {outcome}")
                 self.progress["infil_raids"] = self.progress.get("infil_raids", 0) + 1
                 self.flush()

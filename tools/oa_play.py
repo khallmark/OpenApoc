@@ -513,6 +513,10 @@ class Driver:
         self.checks: dict = {}
         self.responses: dict[str, int] = {}
         self.unknown_stages: dict[str, int] = {}
+        # Buildings an alert has named as holding aliens, oldest first. This is the driver's only
+        # knowledge of where infiltration is -- there is no list to consult, the same as for a
+        # player, who watches the UFOs and goes where the game says they landed.
+        self.alerted_buildings: list[str] = []
         self.act_counts: dict[str, int] = {}
         self.act_reset_at = time.time()
 
@@ -661,6 +665,25 @@ class Driver:
                 picked += 1
                 time.sleep(0.12)
         return picked
+
+    def note_alert(self, st: Status) -> None:
+        """Remember a building an alert has just named.
+
+        This is the honest substitute for a list of infiltrated buildings: the game tells the
+        player where aliens were seen going in, and that report -- and nothing else -- is what
+        the driver acts on afterwards.
+        """
+        detail = st.detail or ""
+        if "alert_building=" not in detail:
+            return
+        name = detail.split("alert_building=", 1)[1].split()[0]
+        for sep in ("_crew=", "crew="):
+            if sep in name:
+                name = name.split(sep)[0]
+        name = name.rstrip("_")
+        if name and name not in ("none", "-") and name not in self.alerted_buildings:
+            self.alerted_buildings.append(name)
+            self.say(f"  [alert] aliens reported in {name}; noted for a sweep")
 
     def respond_to_event(self, st: Status) -> bool:
         """Engage with an interrupting screen. Returns True if we acted on it."""
@@ -1235,9 +1258,21 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
     st = d.status()
     if st.stage != "CityView":
         return f"not-in-city ({st.stage})"
-    info = d.h.gs("centre_on_infiltrated")
-    if info.get("centred") != "1":
-        return "nothing-infiltrated"
+    # Act on what the game has TOLD us, not on a list of every infiltrated building. A player
+    # gets no such list: they watch the UFOs, see the alert naming a building, and go there. The
+    # driver remembers those alerts (Driver.alerted_buildings, filled from AlertScreen's own
+    # report) and revisits them, which is the same information a human would be working from.
+    target = None
+    while d.alerted_buildings:
+        name = d.alerted_buildings[0]
+        probe = d.h.gs(f"centre_on_building {name}")
+        if probe.get("centred") == "1" and int(probe.get("crew", "0") or 0) > 0:
+            target, info = name, probe
+            break
+        # Either it is gone or the aliens have moved on; stop tracking it.
+        d.alerted_buildings.pop(0)
+    if not target:
+        return "nothing-reported"
     at = info.get("at", "")
     try:
         bx, by = (int(v) for v in at.split(",")[:2])

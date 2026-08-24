@@ -2326,6 +2326,57 @@ void CityView::registerCityViewIntrospection()
 			                  gameState->getPlayer()->balance >= bestPrice ? 1 : 0,
 			                  gameState->player_bases.size(), (int)screen.x, (int)screen.y);
 		    }
+		    if (gameState && q.substr(0, 18) == "centre_on_building")
+		    {
+			    // Frame one NAMED building. This exists so a driver can act on what the game has
+			    // already told it -- an alert naming the building aliens were seen entering --
+			    // rather than consulting a global list of every infiltrated building, which is
+			    // knowledge no player has. A human watches the UFOs and infers; the honest
+			    // equivalent is to remember the alerts and come back to those addresses.
+			    if (!gameState->current_city)
+			    {
+				    return UString("centred=0");
+			    }
+			    UString wanted = q.length() > 19 ? query.substr(19) : UString("");
+			    while (!wanted.empty() && wanted[0] == ' ')
+			    {
+				    wanted = wanted.substr(1);
+			    }
+			    if (wanted.empty())
+			    {
+				    return UString("centred=0 reason=no-building-named");
+			    }
+			    for (const auto &ref : gameState->current_city->buildings)
+			    {
+				    const auto bld = ref.getSp();
+				    if (!bld)
+				    {
+					    continue;
+				    }
+				    // Match the state id OR the display name. An alert names the building the way
+				    // a player reads it ("Parallax Tower"), with spaces already replaced for the
+				    // wire, and that is the only handle a driver honestly has.
+				    UString shown = bld->name;
+				    std::replace(shown.begin(), shown.end(), ' ', '_');
+				    if (ref.id != wanted && shown != wanted)
+				    {
+					    continue;
+				    }
+				    int crew = 0;
+				    for (const auto &c : bld->current_crew)
+				    {
+					    crew += c.second;
+				    }
+				    const auto &bb = bld->bounds;
+				    const Vec3<float> mid{(bb.p0.x + bb.p1.x) / 2.0f, (bb.p0.y + bb.p1.y) / 2.0f,
+				                          2.0f};
+				    view->setScreenCenterTile(mid);
+				    const auto screen = view->tileToOffsetScreenCoords<float>(mid);
+				    return format("centred=1 building={0} crew={1} at={2},{3},0", ref.id, crew,
+				                  (int)screen.x, (int)screen.y);
+			    }
+			    return UString("centred=0 reason=no-such-building");
+		    }
 		    if (gameState && q == "centre_on_infiltrated")
 		    {
 			    // Frame the human-owned building holding the most aliens. This is the mechanic
