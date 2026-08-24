@@ -79,8 +79,11 @@ BANKRUPT_FLOOR = 5000
 # projectile that hits a building costs relation with its owner, so intercepts still go out two
 # craft at a time. Large fleet, small sortie.
 AIR_PATROL = 8
-# Soldiers are lost permanently. Below this many fit soldiers there is no squad left to send.
-MIN_SOLDIERS = 10
+# Soldiers are lost permanently, and the guide is emphatic that under-hiring is the more common
+# mistake: "It's better to hire too many troops than to have too few ... It's best to assume
+# you'll have 10 guys healing and another few deceased." Ten fit soldiers was a squad with no
+# depth -- one bad mission and base defences were being fought by scientists.
+MIN_SOLDIERS = 18
 # Fewer than this and an incident is not worth answering: the squad dies and the score hit from
 # losing it dwarfs the hit from declining.
 MIN_SQUAD = 6
