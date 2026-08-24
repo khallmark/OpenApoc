@@ -725,6 +725,55 @@ def click_list_row(d: Driver, list_id: str, row: int, st: Status, item_h: int = 
     return True
 
 
+def _lab_skill_total(d: Driver) -> int:
+    """Sum of skill across every lab -- the only thing that makes research advance."""
+    total = 0
+    for part in d.h.gs("research").get("labs_detail", "").split("|"):
+        for kv in part.split(":"):
+            if kv.startswith("skill="):
+                total += int(kv.split("=")[1] or 0)
+    return total
+
+
+def staff_labs(d: Driver) -> int:
+    """Put scientists into the labs. Returns the gain in total lab skill.
+
+    Assigning a project is not enough, and this is the defect that quietly invalidated every
+    research claim made so far: Lab::update returns immediately when getTotalSkill() is zero
+    (research.cpp:445-449), and skill comes from agents in lab->assigned_agents. With an empty
+    lab a project sits at 0 man-hours for ever while the screen cheerfully shows it as current.
+    Measured before this existed: eight game-days in, RESEARCH_DIMENSION_GATES was still 0/5000.
+
+    Selecting a row in LIST_UNASSIGNED assigns that scientist to the lab being viewed, capped by
+    the facility's capacity (researchscreen.cpp:120-147). The list re-populates after each
+    assignment, so index 0 always names the next unassigned scientist.
+    """
+    before = _lab_skill_total(d)
+    if d.status().stage != "ResearchScreen":
+        return 0
+    for list_id in ("LIST_LARGE_LABS", "LIST_SMALL_LABS"):
+        for slot in range(6):
+            if d.status().stage != "ResearchScreen":
+                break
+            try:
+                if not d.h.send(f"control {list_id} set {slot}").startswith("OK"):
+                    break
+            except (HarnessError, OSError):
+                break
+            time.sleep(0.25)
+            # Fill this lab until it refuses (full) or there is nobody left to assign.
+            for _ in range(12):
+                try:
+                    if not d.h.send("control LIST_UNASSIGNED set 0").startswith("OK"):
+                        break
+                except (HarnessError, OSError):
+                    break
+                time.sleep(0.18)
+    after = _lab_skill_total(d)
+    d.say(f"  [staff] total lab skill {before} -> {after}")
+    return after - before
+
+
 def assign_research(d: Driver) -> bool:
     """CityView -> base -> research, start a project in every idle lab."""
     before = d.h.gs("research")
@@ -746,6 +795,10 @@ def assign_research(d: Driver) -> bool:
     except TimeoutError:
         d.say(f"[research] research screen not reached (at {d.status().stage})"); return False
     d.shot("researchscreen")
+
+    # Staff the labs before assigning work: a project in an empty lab never advances a single
+    # man-hour, which is how "research assigned" was true and meaningless at the same time.
+    staff_labs(d)
 
     # Fill every lab, verifying against the engine after each attempt.
     #

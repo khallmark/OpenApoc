@@ -131,9 +131,17 @@ UString describeResearch(GameState &state)
 		const char *kind = l.second->type == ResearchTopic::Type::BioChem     ? "biochem"
 		                   : l.second->type == ResearchTopic::Type::Physics   ? "physics"
 		                                                                      : "engineering";
+		// Staffing and progress, not just "is something assigned". Lab::update returns
+		// immediately when getTotalSkill() is zero (research.cpp:445-449), so a lab with a
+		// project and no scientists in it looks busy and advances nothing, for ever.
+		const int skill = l.second->getTotalSkill();
+		const auto &proj = l.second->current_project;
 		labDetail += (labDetail.empty() ? "" : "|") +
-		             format("{0}:{1}:{2}:{3}", l.first, kind, built ? "built" : "unbuilt",
-		                    l.second->current_project ? l.second->current_project.id : "idle");
+		             format("{0}:{1}:{2}:staff={3}:skill={4}:{5}", l.first, kind,
+		                    built ? "built" : "unbuilt", l.second->assigned_agents.size(), skill,
+		                    proj ? format("{0}({1}/{2})", proj.id, proj->man_hours_progress,
+		                                  proj->man_hours)
+		                         : UString("idle"));
 	}
 	// Topics that are unlocked, unfinished and not already running somewhere. Dependency
 	// satisfaction is evaluated against the first player base, which is where the labs are.
