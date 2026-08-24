@@ -1986,13 +1986,15 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
             # than re-issuing one order and waiting.
             time.sleep(0.4)
             d.h.click_xy(max(0, min(st.w - 1, fx + 24)), max(0, min(st.h - 1, fy + 16)))
+            if stalls > 12 and rounds % 3 == 0:
+                d.h.key("PageUp" if (rounds // 3) % 2 == 0 else "PageDown")
         else:
             # Nothing anywhere in view; sweep the map, and change floor now and then since
             # hostiles hole up on other levels.
             tx = int(st.w * (0.3 + 0.2 * (rounds % 3)))
             ty = int(st.h * (0.3 + 0.15 * (rounds % 3)))
             d.h.click_xy(tx, ty)
-            if rounds % 5 == 4:
+            if rounds % 5 == 4 or stalls > 8:
                 # SDL names these without a space; "Page Down" is rejected outright, and the
                 # resulting HarnessError propagated out of win_battle and was recorded as
                 # "lost connection", abandoning a mission that was going fine.
@@ -2028,7 +2030,16 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         # staffed to unbuilt with skill 0 between one research check and the next, the engine
         # then crashed twice on the dangling base, and the defeat video played. A losing base
         # defence fought to the end is still better than a conceded one.
-        may_leave = mission_type != "base_defense"
+        # ...but "never" was too absolute, and it deadlocked a campaign: two survivors against one
+        # alien they could not reach, every exit blocked, spinning out a forty-minute budget
+        # having already decided the battle was over. Losing a base only ends the game when it is
+        # the LAST base (base.cpp:150-159), so once a second base exists, conceding one is a
+        # setback rather than a defeat -- and far better than burning the clock.
+        try:
+            bases_now = int(b.get("bases", "1") or 1)
+        except ValueError:
+            bases_now = 1
+        may_leave = mission_type != "base_defense" or bases_now > 1
 
         try:
             alive_now = int(mine_alive or 0)

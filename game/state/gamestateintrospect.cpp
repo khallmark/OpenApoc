@@ -423,9 +423,10 @@ UString describeBattle(GameState &state)
 			break;
 	}
 	return format("player_won={0} ", battle.playerWon ? 1 : 0) + format("in_battle=1 mode={0} units={1} mine={2} mine_alive={3} mine_retreated={4} "
-	              "foes={5} foes_alive={6} hazards={7} mission_type={8}",
+	              "foes={5} foes_alive={6} hazards={7} mission_type={8} bases={9}",
 	              battle.mode == Battle::Mode::RealTime ? "rt" : "tb", battle.units.size(), mine,
-	              mineAlive, retreated, hostiles, hostilesAlive, battle.hazards.size(), missionType);
+	              mineAlive, retreated, hostiles, hostilesAlive, battle.hazards.size(),
+	              missionType, state.player_bases.size());
 }
 
 UString describeStage(GameState &state)

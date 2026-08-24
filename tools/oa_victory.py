@@ -280,7 +280,7 @@ class Victory:
         except (HarnessError, OSError):
             pass
         try:
-            outcome = win_battle(self.d, budget_s=2400)
+            outcome = win_battle(self.d, budget_s=900)
         except (HarnessError, OSError) as exc:
             outcome = f"lost connection: {exc}"
         if outcome == "resolved":
