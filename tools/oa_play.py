@@ -664,6 +664,23 @@ class Driver:
 
     def respond_to_event(self, st: Status) -> bool:
         """Engage with an interrupting screen. Returns True if we acted on it."""
+        if st.stage == "MessageBox":
+            # A MessageBox is not always an acknowledgement. YesNoCancel boxes -- RecruitScreen's
+            # "Confirm Orders" among them (recruitscreen.cpp:482-484) -- carry no BUTTON_OK and do
+            # not answer to Return, so a key-only responder sat on one forever: 110 strandings in
+            # a single run, the campaign clock stopped the whole time. Press an actual button
+            # first and only fall back to keys.
+            for cid in ("BUTTON_OK", "BUTTON_YES", "BUTTON_NO", "BUTTON_CANCEL"):
+                try:
+                    if not self.h.send(f"control {cid}").startswith("OK"):
+                        continue
+                except (HarnessError, OSError):
+                    continue
+                time.sleep(0.35)
+                if self.h.status().stage != st.stage:
+                    self.say(f"  [event] MessageBox -> {cid}")
+                    return True
+
         keys = KEY_RESPONSES.get(st.stage)
         if keys:
             for k in keys:
