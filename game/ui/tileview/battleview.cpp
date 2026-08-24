@@ -1593,7 +1593,14 @@ void BattleView::registerBattleViewIntrospection()
 				    {
 					    out += ";";
 				    }
-				    out += format("{0},{1},0", (int)screen.x, (int)screen.y);
+				    // Third field is the unit's tile z, not a constant. It used to be a
+				    // hardcoded 0 -- a leftover slot from the vehicle-crash query format -- which
+				    // meant a driver could see WHERE a hostile was drawn but not which floor it
+				    // stood on. Orders only reach the displayed level, so without this there is
+				    // no way to align the view to the specific unit being fired at, and a single
+				    // survivor one floor up stalls the whole battle.
+				    out += format("{0},{1},{2}", (int)screen.x, (int)screen.y,
+				                  (int)unit->position.z);
 			    }
 			    return format("count={0} at={1}", count, out.empty() ? UString("-") : out);
 		    }

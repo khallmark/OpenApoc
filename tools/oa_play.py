@@ -1898,6 +1898,57 @@ def leave_battle(d: Driver, tries: int = 8) -> bool:
     return d.status().stage not in ("BattleView", "InGameOptions", "BattlePreStart")
 
 
+def settle(d: Driver) -> None:
+    """One round-trip so a held modifier is actually in effect before the click lands.
+
+    BattleView recomputes selectionState in update() -- updateSelectionMode is called from the
+    frame loop, not from the key edge (battleview.cpp:2052) -- so a click dispatched in the same
+    event drain as its KEYDOWN can still be handled under the PREVIOUS selection state. A
+    Shift+click meant as a fire order then resolves as an ordinary move, silently, which is the
+    difference between shooting an alien and walking at it.
+    """
+    try:
+        d.h.status()
+    except (HarnessError, OSError):
+        pass
+    time.sleep(0.12)
+
+
+def show_floor(d: Driver, z: int) -> None:
+    """Display floor z. BUTTON_LAYER_1..9 jump straight there (battleview.cpp:808-834).
+
+    Stepping PageUp/PageDown works but takes one press per level and gives no way to land on a
+    specific floor reliably; the layer buttons are a direct set.
+    """
+    if z < 0:
+        return
+    try:
+        d.h.send(f"control BUTTON_LAYER_{z + 1} click")
+    except (HarnessError, OSError):
+        pass
+    time.sleep(0.2)
+
+
+def fire_at(d: Driver, x: int, y: int, z: int, w: int, h: int) -> None:
+    """Order the selected units to fire on the unit at this screen position and floor.
+
+    Holding Shift both enters FireAny and sets forced=true on the order
+    (battleview.cpp:2098-2101, 4144-4148), so a hostile with no clean line of fire is still
+    engaged rather than merely approached. The view must be on the target's own floor first: a
+    click's z-hint comes from the displayed level (battleview.cpp:3204-3206), so with the camera
+    on the wrong floor the click never resolves to that unit and the shot is silently skipped.
+    """
+    show_floor(d, z)
+    d.h.send("keydown Left Shift")
+    try:
+        settle(d)
+        d.h.click_xy(max(0, min(w - 1, x)), max(0, min(h - 1, y)))
+        time.sleep(0.15)
+    finally:
+        d.h.send("keyup Left Shift")
+    time.sleep(0.2)
+
+
 def battle_layout(d: Driver) -> dict:
     """Tile positions of both sides plus the current view level.
 
@@ -1954,10 +2005,8 @@ def match_enemy_floor(d: Driver, layout: dict) -> int:
     have = layout.get("view_z", 0)
     if have == want:
         return want
-    step = "PageUp" if want > have else "PageDown"
-    for _ in range(min(abs(want - have), 6)):
-        d.h.key(step)
-        time.sleep(0.12)
+    # Jump straight to the floor rather than stepping a level per press.
+    show_floor(d, want)
     if mine:
         my_z = sorted(z for _, _, z in mine)[len(mine) // 2]
         d.say(f"  [battle] hostiles on floor {want}, squad on {my_z}; view -> {want}")
@@ -2050,6 +2099,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         if friends and (len(friends) != selected_count or rounds % 8 == 0):
             d.h.send("keydown Left Ctrl")
             try:
+                settle(d)
                 for fx, fy, _ in friends[:6]:
                     d.h.click_xy(fx, fy)
                     time.sleep(0.06)
@@ -2087,14 +2137,8 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
             # battle sat at "one foe alive" until the budget ran out. Real-time auto-fire only
             # engages what a unit can already see, which is exactly what a stalled battle does
             # not have.
-            tx_, ty_, _ = foes[rounds % len(foes)]
-            d.h.send("keydown Left Shift")
-            try:
-                d.h.click_xy(max(0, min(st.w - 1, tx_)), max(0, min(st.h - 1, ty_)))
-                time.sleep(0.15)
-            finally:
-                d.h.send("keyup Left Shift")
-            time.sleep(0.2)
+            tx_, ty_, tz_ = foes[rounds % len(foes)]
+            fire_at(d, tx_, ty_, tz_, st.w, st.h)
 
             fx, fy, _ = foes[rounds % len(foes)]
             # Aim a short way off the hostile's own tile: that tile is occupied, and a left
