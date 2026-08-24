@@ -320,6 +320,31 @@ UString introspectGameState(GameState &state, const UString &query)
 	{
 		return describeOrgs(state);
 	}
+	// Per-wreck detail. ufos_crashed counts vehicle->crashed alone, while centre_on_crash also
+	// demands a live tileObject in the current city -- so a wreck can be counted and still be
+	// unfindable, which is exactly how recovery failed silently with wrecks on the map.
+	if (q == "crashes")
+	{
+		const auto aliens = state.getAliens();
+		UString out;
+		int n = 0;
+		for (const auto &v : state.vehicles)
+		{
+			const auto &vehicle = v.second;
+			if (!vehicle || !vehicle->owner || vehicle->owner.id != aliens.id || !vehicle->crashed)
+			{
+				continue;
+			}
+			n++;
+			out += (out.empty() ? "" : "|") +
+			       format("{0}:tile={1},here={2},falling={3},sliding={4},pos={5},{6},{7}", v.first,
+			              vehicle->tileObject ? 1 : 0,
+			              vehicle->city == state.current_city ? 1 : 0, vehicle->falling ? 1 : 0,
+			              vehicle->sliding ? 1 : 0, (int)vehicle->getPosition().x,
+			              (int)vehicle->getPosition().y, (int)vehicle->getPosition().z);
+		}
+		return format("crashes={0} detail={1}", n, out.empty() ? UString("-") : out);
+	}
 	if (q == "vehicles")
 	{
 		return describeVehicles(state);

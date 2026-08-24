@@ -2180,6 +2180,55 @@ void CityView::registerCityViewIntrospection()
 		    // Our own base building. Craft parked in its hangar have no tileObject, so
 		    // centre_on_own cannot find them at campaign start -- but crewing a transport means
 		    // clicking the building itself, which is always on the map.
+		    // Which craft the city view currently has selected, and whether any of them can
+		    // actually recover a wreck. handleClickedVehicle scans
+		    // cityViewSelectedOwnedVehicles for a Soldier and silently issues no mission when it
+		    // finds none (cityview.cpp:1069-1090), so a driver that has crewed a transport but
+		    // left an interceptor selected gets no error and no recovery -- just nothing.
+		    if (gameState && q == "selected")
+		    {
+			    size_t count = 0, withSoldier = 0;
+			    for (const auto &v : gameState->current_city->cityViewSelectedOwnedVehicles)
+			    {
+				    if (!v || v->owner != gameState->getPlayer())
+				    {
+					    continue;
+				    }
+				    count++;
+				    for (const auto &a : v->currentAgents)
+				    {
+					    if (a->type->role == AgentType::Role::Soldier)
+					    {
+						    withSoldier++;
+						    break;
+					    }
+				    }
+			    }
+			    // Also report what the first selected craft is currently doing: a refused
+			    // recovery is indistinguishable from a successful one otherwise, since neither
+			    // produces a message.
+			    UString mission = "none";
+			    for (auto &v : gameState->current_city->cityViewSelectedOwnedVehicles)
+			    {
+				    if (v && v->owner == gameState->getPlayer() && !v->missions.empty())
+				    {
+					    mission = v->missions.front().getName();
+					    break;
+				    }
+			    }
+			    std::replace(mission.begin(), mission.end(), ' ', '_');
+			    UString ids;
+			    for (auto &v : gameState->current_city->cityViewSelectedOwnedVehicles)
+			    {
+				    if (v && v->owner == gameState->getPlayer())
+				    {
+					    ids += (ids.empty() ? "" : "|") +
+					           format("{0}:{1}", v->name, v->currentAgents.size());
+				    }
+			    }
+			    return format("selected={0} with_soldier={1} mission={2} ids={3}", count,
+			                  withSoldier, mission, ids.empty() ? UString("-") : ids);
+		    }
 		    if (gameState && q == "centre_on_base")
 		    {
 			    const auto base = gameState->current_base;

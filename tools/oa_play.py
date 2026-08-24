@@ -182,6 +182,11 @@ class Harness:
                              "visible": f[5] == "1"}
         return out
 
+    def display_size(self) -> tuple:
+        """Viewport size in UI space, so off-screen click targets can be rejected."""
+        st = self.status()
+        return (st.w or 1280, st.h or 720)
+
     def screen_craft(self, query: str) -> list[tuple[int, int, bool]]:
         """Parse "count=N at=x,y,crashed;..." from the view-space craft queries."""
         d = self.gs(query)
@@ -1031,18 +1036,53 @@ def crew_transport(d: Driver) -> int:
     return crewed
 
 
+def select_crewed_craft(d: Driver) -> bool:
+    """Make the city view's selection a craft that carries a Soldier.
+
+    handleClickedVehicle decides whether to issue a recovery mission by scanning
+    cityViewSelectedOwnedVehicles for a Soldier (cityview.cpp:1069-1090). With an interceptor
+    selected it issues nothing at all -- no mission, no message, no error -- which is exactly what
+    a crewed transport plus three uncollected wrecks looked like.
+
+    OWNED_VEHICLE_LIST is a horizontal ListBox (tab2.form: 431x24 at 105,44) whose items are
+    runtime-built vehicle icons with no ids, so the craft is found by clicking across it and
+    asking the engine what ended up selected.
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return False
+    if int(d.h.gs("selected").get("with_soldier", "0") or 0) > 0:
+        return True
+    if not d.click_id("BUTTON_TAB_2", st):
+        return False
+    time.sleep(0.4)
+    lst = d.controls(d.status()).get("OWNED_VEHICLE_LIST")
+    if lst is None or lst.w <= 0:
+        return False
+    y = lst.y + lst.h // 2
+    for x in range(lst.x + 6, lst.x + lst.w, 12):
+        d.h.click_xy(x, y)
+        time.sleep(0.12)
+        if int(d.h.gs("selected").get("with_soldier", "0") or 0) > 0:
+            d.say(f"  [select] crewed craft selected at x={x}")
+            return True
+    return False
+
+
 def recover_crash_sites(d: Driver) -> int:
     """Send a troop-carrying craft to a downed UFO to recover it.
 
-    Two things the first attempt got wrong, both of which made this silently do nothing while
-    reporting success:
+    Recovering a wreck is the only source of alien artifacts, so the entire research tree -- and
+    therefore victory -- is downstream of this working. Three separate things had to be right,
+    and each one failed silently on its own:
 
     * The order is a plain left-click on the wreck with a craft selected, handled in
       CityView::handleMouseDown -- not BUTTON_GOTO_LOCATION, which sets a map destination.
-    * VehicleMission::recoverVehicle is only issued if the craft has a Soldier aboard
-      (cityview.cpp:1069-1090). For an alien-owned wreck `foundSoldier` starts false, so an
-      empty interceptor is refused outright. Interceptors shoot UFOs down; a transport with
-      troops has to go and collect them.
+    * VehicleMission::recoverVehicle is only issued when a *selected* craft carries a Soldier
+      (cityview.cpp:1069-1090). Selecting the wing by clicking each icon does not work: each
+      click replaces the selection, so only the last, usually empty, craft stayed selected.
+    * The wreck has to be on screen. Reading ufos_screen before centring yields coordinates for
+      a wreck that may be well outside the viewport, and clicking there hits nothing at all.
 
     Returns 1 only when the craft actually picked up a mission, so a refusal is visible instead
     of being counted as a success.
@@ -1050,43 +1090,45 @@ def recover_crash_sites(d: Driver) -> int:
     st = d.status()
     if st.stage != "CityView":
         return 0
-    crashed = [(x, y) for (x, y, down) in d.h.screen_craft("ufos_screen") if down]
-    if not crashed:
-        if d.h.gs("centre_on_crash").get("centred") != "1":
-            return 0
-        time.sleep(0.5)
-        crashed = [(x, y) for (x, y, down) in d.h.screen_craft("ufos_screen") if down]
-    if not crashed:
+    # Selection first: it is pure UI and does not move the camera, so centring stays valid.
+    if not select_crewed_craft(d):
+        d.say("  [recover] no crewed craft could be selected")
         return 0
-
-    if not d.click_id("BUTTON_TAB_2", st):
-        return 0
-    time.sleep(0.4)
+    # Arm the order before clicking. A plain left-click on a vehicle only runs orderSelect; it is
+    # CitySelectionState::AttackVehicle that routes the next click into CityView::orderAttack,
+    # which is where the crashed-vehicle branch and recoverVehicle actually live
+    # (cityview.cpp:331-400, 1047-1090). Without this the click just selected the wreck and the
+    # recovery silently never happened. Interception already worked because it arms the same way.
     st = d.status()
-    lst = d.controls(st).get("OWNED_VEHICLE_LIST")
-    if lst is None or lst.w <= 0:
+    if not d.click_id("BUTTON_VEHICLE_ATTACK", st):
+        d.say("  [recover] could not arm the attack order")
         return 0
+    time.sleep(0.3)
+    if d.h.gs("centre_on_crash").get("centred") != "1":
+        return 0
+    time.sleep(0.5)
 
-    before = d.h.gs("turbo")
-    # Select the whole wing: only a craft carrying a soldier will accept the recovery, and we
-    # cannot tell from here which one that is.
-    ICON_W = 36
-    for slot in range(5):
-        x = lst.x + 16 + slot * ICON_W
-        if x >= lst.x + lst.w:
-            break
-        d.h.click_xy(x, lst.y + lst.h // 2)
-        time.sleep(0.12)
+    w, h = d.h.display_size()
+    crashed = [
+        (x, y)
+        for (x, y, down) in d.h.screen_craft("ufos_screen")
+        if down and 0 <= x < w and 0 <= y < h
+    ]
+    if not crashed:
+        d.say("  [recover] wreck not on screen after centring")
+        return 0
+    # Nearest to centre: that is the one centre_on_crash just framed.
+    cx, cy = min(crashed, key=lambda p: (p[0] - w // 2) ** 2 + (p[1] - h // 2) ** 2)
 
-    cx, cy = crashed[0]
     d.h.click_xy(cx, cy)
-    time.sleep(0.6)
-    after = d.h.gs("turbo")
-    if after.get("attack_missions") != before.get("attack_missions"):
-        d.say(f"  [recover] craft dispatched to wreck at {cx},{cy}")
+    time.sleep(0.8)
+    sel = d.h.gs("selected")
+    mission = sel.get("mission", "none")
+    if "ecover" in mission or "oto" in mission:
+        d.say(f"  [recover] craft dispatched to wreck at {cx},{cy} (mission={mission})")
         return 1
+    d.say(f"  [recover] refused at {cx},{cy} ({sel})")
     return 0
-
 
 def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float = 7.0) -> dict:
     new_game(d, difficulty)
