@@ -832,6 +832,12 @@ class Victory:
                     self.fight(st.stage)
                     continue
                 if st.stage == "AlertScreen":
+                    # Record the building BEFORE doing anything else with the alert. This branch
+                    # handles AlertScreen itself and never reaches respond_to_event, so the
+                    # note_alert hook there never fired once -- the driver's only honest source of
+                    # "where are the aliens" was silently dead, and no infiltration raid ever had
+                    # an address to go to.
+                    self.d.note_alert(st)
                     # EXTERMINATE is refused outright when no craft can take the squad -- with a
                     # MessageBox, after which the alert is still up. Retrying it on the next pass
                     # produced an endless dispatch/refuse loop that froze the clock for as long
