@@ -672,6 +672,23 @@ class Victory:
                     self.game.stop()
                 except Exception:
                     pass
+                # A checkpoint that kills the game on every resume is not worth four attempts.
+                # Retire it after the second failure and let the next attempt begin a fresh
+                # campaign: a lost run costs hours, but looping on an unloadable save costs the
+                # whole session and produces nothing at all.
+                if attempt >= 1 and self.checkpoint.exists():
+                    stamp = time.strftime("%Y%m%d-%H%M%S")
+                    try:
+                        self.checkpoint.rename(self.out / f"unloadable-{stamp}.save")
+                        self.say("checkpoint keeps killing the game on load; retiring it and "
+                                 "starting a fresh campaign")
+                        self.progress = {"battles": 0, "wins": 0, "ufos_down": 0,
+                                         "recoveries": 0, "restarts": 0,
+                                         "research_complete": 0}
+                        self.flush()
+                        self.second_base = False
+                    except OSError as rexc:
+                        self.say(f"could not retire checkpoint: {rexc}")
                 time.sleep(5.0)
         else:
             self.say("could not start the game at all")
