@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import os
+import shutil
 import subprocess
 
 from oa_forms import FormLibrary
@@ -330,6 +331,31 @@ def bring_to_front() -> None:
         pass
 
 
+def _disable_window_restore() -> None:
+    """Stop macOS trying to restore this app's windows on launch.
+
+    The window-restore machinery is what actually wedged the game: the launch stack bottomed out
+    in AEProcessAppleEvent underneath Cocoa_ShowWindow, which is AppKit handling the
+    open-application Apple Event and rebuilding saved window state. A hard crash leaves that
+    state inconsistent, and every launch afterwards hung there at 0% CPU with the harness port
+    never opening. An automated run has no windows worth restoring, so turn the whole mechanism
+    off and clear anything already on disk rather than relying on the SDL-side workaround alone.
+    """
+    for key, val in (("ApplePersistenceIgnoreState", "YES"),
+                     ("NSQuitAlwaysKeepsWindows", "NO")):
+        try:
+            subprocess.run(["defaults", "write", "org.openapoc.OpenApoc", key, "-bool", val],
+                           capture_output=True, timeout=10)
+        except Exception:
+            pass
+    saved = Path.home() / "Library/Saved Application State/org.openapoc.OpenApoc.savedState"
+    try:
+        if saved.exists():
+            shutil.rmtree(saved, ignore_errors=True)
+    except Exception:
+        pass
+
+
 def reap_stale_game(port: int) -> int:
     """Kill any leftover game already using this port. Returns how many were killed.
 
@@ -421,6 +447,7 @@ class GameProcess:
         # does not cost the visible camera an onlooker needs.
         env = dict(os.environ)
         env.setdefault("SDL_VIDEO_SYNC_WINDOW_OPERATIONS", "0")
+        _disable_window_restore()
         self.proc = subprocess.Popen(
             argv, cwd=str(self.repo), stdout=self.logf, stderr=subprocess.STDOUT,
             start_new_session=True, env=env,
