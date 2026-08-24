@@ -22,6 +22,7 @@
 #include "game/state/city/agentmission.h"
 #include "game/state/city/base.h"
 #include "game/state/city/building.h"
+#include "game/state/shared/doodad.h"
 #include "game/state/city/city.h"
 #include "game/state/city/facility.h"
 #include "game/state/city/research.h"
@@ -2262,6 +2263,29 @@ void CityView::registerCityViewIntrospection()
 		    // battle_map is recovered unmanned and force-completes the same alien-craft research
 		    // for free (cityview.cpp UfoRecoveryBegin). With soldiers scarce, these are the only
 		    // wrecks worth going to.
+		    // Dimension gates. Crossing to the alien city is the gate on the entire endgame, and
+		    // it is ordered by right-clicking a portal doodad with a shifter-equipped craft
+		    // selected (cityview.cpp Doodad handling -> VehicleMission::gotoPortal). The portals
+		    // live in City::portals as doodads, so their screen positions are not otherwise
+		    // discoverable by a driver.
+		    if (gameState && q == "centre_on_portal")
+		    {
+			    if (!gameState->current_city || gameState->current_city->portals.empty())
+			    {
+				    return UString("centred=0");
+			    }
+			    const auto &portal = gameState->current_city->portals.front();
+			    if (!portal)
+			    {
+				    return UString("centred=0");
+			    }
+			    view->setScreenCenterTile(portal->getPosition());
+			    const auto screen = view->tileToOffsetScreenCoords<float>(portal->getPosition());
+			    return format("centred=1 portals={0} at={1},{2},0 tile={3},{4},{5}",
+			                  gameState->current_city->portals.size(), (int)screen.x,
+			                  (int)screen.y, (int)portal->getPosition().x,
+			                  (int)portal->getPosition().y, (int)portal->getPosition().z);
+		    }
 		    if (gameState && q == "centre_on_free_crash")
 		    {
 			    const auto aliens = gameState->getAliens();

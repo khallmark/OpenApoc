@@ -923,6 +923,63 @@ def pick_topic_row(d: Driver) -> int:
     return usable[0][0] if usable else -1
 
 
+def goto_portal(d: Driver) -> bool:
+    """Send a dimension-shifter-equipped craft through a portal into the alien city.
+
+    Crossing is the gate on the entire endgame: the ten alien buildings, and the one carrying
+    victory, exist only in CITYMAP_ALIEN. VehicleMission::GotoPortal checks
+    Vehicle::hasDimensionShifter() on arrival -- without one the craft is stranded or crashes
+    outright -- so this refuses to send a craft that cannot make the trip rather than throwing
+    one away.
+
+    The order is a right-click on a portal doodad with the craft selected; portals live in
+    City::portals and have no UI handle, hence centre_on_portal.
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return False
+
+    shifters = []
+    for part in d.h.gs("interceptors").get("detail", "").split("|"):
+        bits = part.split(":")
+        if len(bits) < 3 or not bits[0].isdigit():
+            continue
+        if "shifter=1" in bits[-1]:
+            shifters.append(int(bits[0]))
+    if not shifters:
+        d.say("  [portal] no craft carries a dimension shifter; cannot cross")
+        return False
+
+    if not d.click_id("BUTTON_TAB_2", st):
+        return False
+    time.sleep(0.35)
+    lst = d.controls(d.status()).get("OWNED_VEHICLE_LIST")
+    if lst is None or lst.w <= 0:
+        return False
+    d.h.click_xy(lst.x + 16 + shifters[0] * 36, lst.y + lst.h // 2)
+    time.sleep(0.3)
+
+    info = d.h.gs("centre_on_portal")
+    if info.get("centred") != "1":
+        d.say("  [portal] no portal found in this city")
+        return False
+    time.sleep(0.5)
+    px, py = (int(v) for v in info["at"].split(",")[:2])
+    d.h.ok(f"click {px} {py} right")
+
+    mission = "none"
+    for _ in range(6):
+        time.sleep(0.8)
+        mission = d.h.gs("selected").get("mission", "none")
+        if "ortal" in mission:
+            d.say(f"  [portal] craft ordered through the gate ({mission})")
+            return True
+        if "TakeOff" not in mission and mission != "none":
+            break
+    d.say(f"  [portal] order not accepted (mission={mission})")
+    return False
+
+
 def build_facility(d: Driver, want: str = "FACILITYTYPE_ADVANCED_WORKSHOP") -> bool:
     """Construct a base facility. Returns True when one is actually placed.
 

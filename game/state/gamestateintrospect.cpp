@@ -704,9 +704,13 @@ UString introspectGameState(GameState &state, const UString &query)
 					crew++;
 				}
 			}
+			// hasDimensionShifter is the sole gate on crossing into the alien city
+			// (vehiclemission.cpp GotoPortal: without it the craft is stranded or crashes on
+			// arrival), so the driver has to be able to tell which craft can make the trip.
 			out += (out.empty() ? "" : "|") +
-			       format("{0}:{1}:flying={2},armed={3},crew={4}", idx, safeName, flying ? 1 : 0,
-			              armed ? 1 : 0, crew);
+			       format("{0}:{1}:flying={2},armed={3},crew={4},shifter={5}", idx, safeName,
+			              flying ? 1 : 0, armed ? 1 : 0, crew,
+			              veh->hasDimensionShifter() ? 1 : 0);
 			idx++;
 		}
 		return format("craft={0} interceptors={1} detail={2}", idx, usable,
