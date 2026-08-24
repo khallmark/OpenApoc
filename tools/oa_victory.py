@@ -31,6 +31,7 @@ from oa_play import (
     Harness,
     HarnessError,
     assign_research,
+    build_facility,
     buy_equipment,
     hire_scientists,
     hire_soldiers,
@@ -81,6 +82,8 @@ class Victory:
         self.last_research = 0.0
         self.last_hire = 0.0
         self.stuck_since = 0.0
+        self.last_build = 0.0
+        self.built_workshop = False
         self.last_checkpoint = 0.0
         self.best_crashed = 0
 
@@ -233,6 +236,21 @@ class Victory:
                 assign_research(self.d)
             self.progress["research_complete"] = done
             self.flush()
+
+        # The Large workshop is the gate on MANUFACTURE_DIMENSION_SHIFTER, which is the gate on
+        # reaching the alien dimension at all. It only appears once RESEARCH_ADVANCED_WORKSHOP
+        # lands, so keep checking.
+        if not self.built_workshop and time.time() - self.last_build > 90.0:
+            self.last_build = time.time()
+            fac = self.d.h.gs("facilities")
+            if "FACILITYTYPE_ADVANCED_WORKSHOP" in fac.get("offer", ""):
+                if "FACILITYTYPE_ADVANCED_WORKSHOP" in fac.get("base", ""):
+                    self.built_workshop = True
+                    self.say("advanced workshop already present")
+                elif build_facility(self.d, "FACILITYTYPE_ADVANCED_WORKSHOP"):
+                    self.built_workshop = True
+                    self.record("advanced_workshop_built")
+                    self.say("=== advanced workshop under construction ===")
 
         # Replace losses, and arm them if the armoury can.
         fit = int(self.d.h.gs("agents").get("soldiers_fit", "0") or 0)
