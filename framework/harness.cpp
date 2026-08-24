@@ -383,6 +383,12 @@ bool parseHarnessCommand(const UString &line, HarnessCommand &out)
 	{
 		out.type = HarnessCommand::Type::Action;
 		out.text = to_lower(verb);
+		// CONTROLS takes an optional control id, to enumerate that control's children by
+		// position -- the only way to address runtime list rows, which have no names.
+		for (size_t i = 1; i < parts.size(); i++)
+		{
+			out.args.push_back(parts[i]);
+		}
 		return true;
 	}
 	if (verb == "CONTROL")

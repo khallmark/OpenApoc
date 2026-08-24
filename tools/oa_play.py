@@ -306,6 +306,10 @@ class GameProcess:
             "--Framework.AudioBackends=null",
             # Fixed RNG seed: GameState::startGame() otherwise reseeds from wall-clock.
             "--OpenApoc.NewFeature.SeedRng=0",
+            # Agent equipment templates: an ordinary in-game affordance (keys 1-6,
+            # Ctrl to save), and the only way to arm a squad without pixel-accurate
+            # drag-and-drop onto the paper doll.
+            "--OpenApoc.NewFeature.EnableAgentTemplates=1",
             # Belt and braces alongside the engine-side guard: a modal error dialog blocks the
             # main loop forever when there is no human to dismiss it.
             "--Logger.dialogLevel=0",
@@ -1065,6 +1069,292 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
 
     d.say("[battle] budget exhausted without a decision")
     return "timeout"
+
+
+def open_buysell(d: Driver) -> bool:
+    """CityView -> base -> the buy/sell screen."""
+    st = d.status()
+    if st.stage != "CityView":
+        return False
+    d.click_id("BUTTON_TAB_1", st)
+    time.sleep(0.35)
+    if not d.click_id("BUTTON_SHOW_BASE", d.status()):
+        return False
+    try:
+        d.wait_for("BaseScreen", 30)
+    except TimeoutError:
+        return False
+    d.click_id("BUTTON_BASE_BUYSELL", d.status())
+    time.sleep(1.2)
+    return d.status().stage == "BuyAndSellScreen"
+
+
+def close_buysell(d: Driver, commit: bool) -> bool:
+    """Commit or abandon the pending transaction and get back to the city."""
+    if commit:
+        d.click_id("BUTTON_OK", d.status())
+    else:
+        d.h.key("Escape")
+    time.sleep(1.0)
+    for _ in range(8):
+        st = d.status()
+        if st.stage == "CityView":
+            return True
+        if st.stage == "MessageBox":
+            d.h.key("Return")
+        elif st.stage in ("BuyAndSellScreen", "BaseScreen"):
+            d.click_id("BUTTON_OK", st)
+        else:
+            d.h.key("Escape")
+        time.sleep(0.6)
+    return d.status().stage == "CityView"
+
+
+def buy_category(d: Driver, category: str, qty: int, rows: int, sub: str = "") -> int:
+    """Set a quantity on the first `rows` lines of a buy/sell category. Returns lines changed.
+
+    The purchase rows are the case the named-action layer could not reach on its own: they are
+    runtime-built controls with no ids, and the quantity is an unnamed ScrollBar inside each row
+    (transactioncontrol.cpp:702). Addressing them by position -- CONTROL LIST item <N> set <q> --
+    keeps this driving the real UI rather than writing into GameState behind it.
+    """
+    if not d.click_id(category, d.status()):
+        return 0
+    time.sleep(0.8)
+    if sub:
+        d.click_id(sub, d.status())
+        time.sleep(0.8)
+    changed = 0
+    for i in range(rows):
+        try:
+            if d.h.send(f"control LIST item {i} set {qty}").startswith("OK"):
+                changed += 1
+        except (HarnessError, OSError):
+            break
+    return changed
+
+
+def hire_soldiers(d: Driver, want: int = 6) -> int:
+    """Recruit soldiers to replace losses. Returns the change in soldier count.
+
+    Soldiers are lost permanently and nothing was replacing them, so the campaign walked itself
+    down to an empty roster while still reporting wins.
+
+    RecruitScreen is the purpose-built screen for this (BaseScreen -> BUTTON_BASE_HIREFIRESTAFF).
+    A candidate is moved from the hire pool to the payroll by a plain MouseClick on its row --
+    not a drag, not a listbox selection (recruitscreen.cpp:80-130). Those rows are generated at
+    runtime with no ids, which is exactly what CONTROL <list> item <N> click exists for. LIST2 is
+    the hire pool, LIST1 the current staff (recruitscreen.form:153,179).
+
+    Nothing is charged until BUTTON_OK raises a Confirm Orders box and BUTTON_YES is pressed;
+    the screen refuses and reports if funds or living quarters would be exceeded
+    (recruitscreen.cpp:431-490, 571-673).
+    """
+    before = int(d.h.gs("agents").get("soldiers", "0") or 0)
+    funds_before = int(d.h.gs("funds").get("balance", "0") or 0)
+
+    st = d.status()
+    if st.stage != "CityView":
+        return 0
+    d.click_id("BUTTON_TAB_1", st)
+    time.sleep(0.35)
+    if not d.click_id("BUTTON_SHOW_BASE", d.status()):
+        return 0
+    try:
+        d.wait_for("BaseScreen", 30)
+    except TimeoutError:
+        return 0
+    d.click_id("BUTTON_BASE_HIREFIRESTAFF", d.status())
+    time.sleep(1.2)
+    if d.status().stage != "RecruitScreen":
+        d.say(f"  [hire] expected RecruitScreen, got {d.status().stage}")
+        d.h.key("Escape")
+        return 0
+
+    d.click_id("BUTTON_SOLDIERS", d.status())  # role filter
+    time.sleep(0.7)
+
+    hired = 0
+    for _ in range(want):
+        # Always click row 0: a hired candidate leaves LIST2 immediately, so the next one takes
+        # its place. Walking the index instead would skip every other candidate.
+        try:
+            if not d.h.send("control LIST2 item 0 click").startswith("OK"):
+                break
+        except (HarnessError, OSError):
+            break
+        hired += 1
+        time.sleep(0.25)
+
+    if hired:
+        d.click_id("BUTTON_OK", d.status())
+        time.sleep(1.0)
+        for _ in range(4):
+            st = d.status()
+            if st.stage != "MessageBox":
+                break
+            # Confirm Orders is a Yes/No/Cancel box; press the button rather than guessing a key.
+            if not d.click_id("BUTTON_YES", st):
+                d.h.key("Return")
+            time.sleep(1.0)
+    else:
+        d.h.key("Escape")
+
+    for _ in range(8):
+        st = d.status()
+        if st.stage == "CityView":
+            break
+        if st.stage == "MessageBox":
+            d.click_id("BUTTON_OK", st) or d.h.key("Return")
+        elif st.stage in ("RecruitScreen", "BaseScreen"):
+            d.click_id("BUTTON_OK", st)
+        else:
+            d.h.key("Escape")
+        time.sleep(0.6)
+
+    after = int(d.h.gs("agents").get("soldiers", "0") or 0)
+    funds_after = int(d.h.gs("funds").get("balance", "0") or 0)
+    d.say(f"  [hire] clicked {hired} candidates; soldiers {before}->{after}; "
+          f"funds {funds_before}->{funds_after}")
+    return after - before
+
+
+def equip_squad(d: Driver, agents: int = 16) -> int:
+    """Arm unequipped soldiers from base stores. Returns the change in armed count.
+
+    New recruits arrive carrying nothing -- after hiring, soldiers went 10 to 15 while armed
+    stayed at 10 -- and an unarmed soldier is a casualty waiting to happen.
+
+    Items reach an agent by being dragged onto a paper doll whose item rects are computed at
+    runtime and appear nowhere in the .form file. The engine's own way round that is agent
+    equipment templates (AEquipScreen::processTemplate, aequipscreen.cpp:1567): Ctrl+<n> stores
+    the shown agent's loadout, a bare <n> strips every selected agent and re-equips them from
+    base stores to match.
+
+    Two traps, both learned the hard way:
+      * AGENT_SELECT_BOX is a ListBox, which selects on MouseDown. Control::click() raises
+        MouseClick, which it ignores, so clicking a row selected nobody and the template applied
+        to nothing at all.
+      * Applying an *empty* template strips agents instead of arming them. Capturing one from a
+        row that happened to be a scientist took armed from 10 down to 4. So the captured
+        template is now checked before it is used, and arming is abandoned the moment it starts
+        going backwards.
+    """
+    before = int(d.h.gs("agents").get("armed", "0") or 0)
+    st = d.status()
+    if st.stage != "CityView":
+        return 0
+    d.click_id("BUTTON_TAB_1", st)
+    time.sleep(0.35)
+    if not d.click_id("BUTTON_SHOW_BASE", d.status()):
+        return 0
+    try:
+        d.wait_for("BaseScreen", 30)
+    except TimeoutError:
+        return 0
+    d.click_id("BUTTON_BASE_EQUIPAGENT", d.status())
+    time.sleep(1.4)
+    if d.status().stage != "AEquipScreen":
+        d.say(f"  [equip] expected AEquipScreen, got {d.status().stage}")
+        d.h.key("Escape")
+        return 0
+
+    def capture(row: int) -> int:
+        """Store row's loadout in slot 1; return how many weapons it holds."""
+        try:
+            if not d.h.send(f"control AGENT_SELECT_BOX set {row}").startswith("OK"):
+                return -1
+        except (HarnessError, OSError):
+            return -1
+        time.sleep(0.3)
+        d.h.ok("keydown Left Ctrl")
+        time.sleep(0.1)
+        d.h.key("1")
+        time.sleep(0.1)
+        d.h.ok("keyup Left Ctrl")
+        time.sleep(0.35)
+        detail = d.h.gs("templates").get("detail", "")
+        for part in detail.split("|"):
+            if part.startswith("1:"):
+                for kv in part.split(":", 1)[1].split(","):
+                    if kv.startswith("weapons="):
+                        return int(kv.split("=")[1] or 0)
+        return 0
+
+    source = -1
+    for row in range(agents):
+        got = capture(row)
+        if got < 0:
+            break
+        if got > 0:
+            source = row
+            d.say(f"  [equip] captured a {got}-weapon loadout from row {row}")
+            break
+    if source < 0:
+        d.say("  [equip] no armed agent to copy a loadout from; leaving everyone as they are")
+        for _ in range(6):
+            st = d.status()
+            if st.stage == "CityView":
+                break
+            if st.stage in ("AEquipScreen", "BaseScreen"):
+                d.click_id("BUTTON_OK", st)
+            elif not d.dismiss_modal(st):
+                d.h.key("Escape")
+            time.sleep(0.5)
+        return 0
+
+    applied, best = 0, before
+    for i in range(agents):
+        if i == source:
+            continue
+        try:
+            if not d.h.send(f"control AGENT_SELECT_BOX set {i}").startswith("OK"):
+                break
+        except (HarnessError, OSError):
+            break
+        time.sleep(0.2)
+        d.h.key("1")
+        applied += 1
+        time.sleep(0.3)
+        now = int(d.h.gs("agents").get("armed", "0") or 0)
+        if now < best:
+            # Stores ran dry: further applications now strip people rather than arm them.
+            d.say(f"  [equip] stopping at row {i}: armed fell {best}->{now}")
+            break
+        best = max(best, now)
+
+    for _ in range(6):
+        st = d.status()
+        if st.stage == "CityView":
+            break
+        if st.stage in ("AEquipScreen", "BaseScreen"):
+            d.click_id("BUTTON_OK", st)
+        elif not d.dismiss_modal(st):
+            d.h.key("Escape")
+        time.sleep(0.5)
+
+    after = int(d.h.gs("agents").get("armed", "0") or 0)
+    d.say(f"  [equip] applied to {applied} agents; armed {before}->{after}")
+    return after - before
+
+
+def buy_equipment(d: Driver, rows: int = 10, qty: int = 6) -> bool:
+    """Stock the armoury so replacement soldiers have something to carry.
+
+    On the buy/sell screen BUTTON_AGENTS means agent *equipment*, not personnel -- the role
+    buttons are explicitly hidden there and belong to RecruitScreen
+    (buyandsellscreen.cpp:36-60). Recruits arrive empty-handed and the veterans are carrying
+    every weapon the base owns, so applying an equipment template to a new soldier equips
+    nothing until the armoury actually has spares.
+    """
+    funds_before = int(d.h.gs("funds").get("balance", "0") or 0)
+    if not open_buysell(d):
+        return False
+    changed = buy_category(d, "BUTTON_AGENTS", qty, rows)
+    close_buysell(d, commit=changed > 0)
+    funds_after = int(d.h.gs("funds").get("balance", "0") or 0)
+    d.say(f"  [buy] {changed} lines of agent equipment, funds {funds_before}->{funds_after}")
+    return funds_after != funds_before
 
 
 def crew_transport(d: Driver) -> int:

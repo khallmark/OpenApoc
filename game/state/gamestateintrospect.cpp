@@ -421,6 +421,61 @@ UString introspectGameState(GameState &state, const UString &query)
 	// Per-wreck detail. ufos_crashed counts vehicle->crashed alone, while centre_on_crash also
 	// demands a live tileObject in the current city -- so a wreck can be counted and still be
 	// unfindable, which is exactly how recovery failed silently with wrecks on the map.
+	// What the armoury actually holds. Applying an equipment template re-equips an agent from
+	// base stores, so "the template did nothing" and "the stores are empty" look identical from
+	// outside -- and buying is not instantaneous, purchases arrive as cargo.
+	// Equipment template slots. Applying a template strips the agent first and re-equips from
+	// stores, so applying an *empty* one disarms everybody -- which is exactly what happened
+	// when the template was captured from a row that turned out not to be an armed soldier
+	// (armed went 10 -> 4). The driver has to be able to check the template took before it
+	// applies it down the roster.
+	if (q == "templates")
+	{
+		UString out;
+		for (size_t i = 0; i < state.agentEquipmentTemplates.size(); i++)
+		{
+			const auto &t = state.agentEquipmentTemplates[i];
+			size_t weapons = 0;
+			for (const auto &e : t.equipment)
+			{
+				if (e.type && e.type->type == AEquipmentType::Type::Weapon)
+				{
+					weapons++;
+				}
+			}
+			out += (out.empty() ? "" : "|") +
+			       format("{0}:items={1},weapons={2}", i, t.equipment.size(), weapons);
+		}
+		return format("templates={0} detail={1}", state.agentEquipmentTemplates.size(),
+		              out.empty() ? UString("-") : out);
+	}
+	if (q == "stores")
+	{
+		size_t kinds = 0, total = 0;
+		UString top;
+		for (const auto &b : state.player_bases)
+		{
+			if (!b.second)
+			{
+				continue;
+			}
+			for (const auto &e : b.second->inventoryAgentEquipment)
+			{
+				if (e.second == 0)
+				{
+					continue;
+				}
+				kinds++;
+				total += e.second;
+				if (kinds <= 8)
+				{
+					top += (top.empty() ? "" : "|") + format("{0}x{1}", e.first, e.second);
+				}
+			}
+		}
+		return format("agent_equipment_kinds={0} agent_equipment_total={1} top={2}", kinds, total,
+		              top.empty() ? UString("-") : top);
+	}
 	if (q == "crashes")
 	{
 		const auto aliens = state.getAliens();

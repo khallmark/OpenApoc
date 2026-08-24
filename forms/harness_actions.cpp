@@ -158,6 +158,56 @@ bool parseIntValue(const UString &value, int &out)
 	return true;
 }
 
+// The gap the named-action layer leaves is runtime widgets with no ids: purchase rows, lab
+// entries, agent rows. They are real controls in the tree, they simply were never given a Name,
+// so the only handle on them is their position in their parent. These two helpers turn that
+// position into an address, which keeps the driver operating the actual UI rather than reaching
+// past it into GameState.
+
+// Nth child of a control, skipping nothing -- index is the raw child order the engine built.
+sp<Control> itemAt(const sp<Control> &parent, int index)
+{
+	if (!parent || index < 0 || index >= static_cast<int>(parent->Controls.size()))
+	{
+		return nullptr;
+	}
+	return parent->Controls[static_cast<size_t>(index)];
+}
+
+// First descendant that "set" knows how to drive. A purchase row is a bare Control whose
+// quantity is an unnamed ScrollBar child (transactioncontrol.cpp:702), so setting the row means
+// setting that scrollbar.
+sp<Control> firstSettableDescendant(const sp<Control> &root, int depth = 0)
+{
+	if (!root || depth > 8)
+	{
+		return nullptr;
+	}
+	for (auto &child : root->Controls)
+	{
+		if (!child)
+		{
+			continue;
+		}
+		if (dynamic_cast<ScrollBar *>(child.get()) || dynamic_cast<CheckBox *>(child.get()) ||
+		    dynamic_cast<TextEdit *>(child.get()))
+		{
+			return child;
+		}
+	}
+	for (auto &child : root->Controls)
+	{
+		if (auto found = firstSettableDescendant(child, depth + 1))
+		{
+			return found;
+		}
+	}
+	return nullptr;
+}
+
+UString applyToControl(const sp<Control> &control, const UString &label, const UString &op,
+                       const UString &value);
+
 UString applyControl(const UString &id, const UString &op, const UString &value)
 {
 	auto control = findNamedControl(id);
@@ -165,6 +215,12 @@ UString applyControl(const UString &id, const UString &op, const UString &value)
 	{
 		return format("ERR unknown control \"{0}\"", id);
 	}
+	return applyToControl(control, id, op, value);
+}
+
+UString applyToControl(const sp<Control> &control, const UString &id, const UString &op,
+                       const UString &value)
+{
 	if (op == "click" || op.empty())
 	{
 		if (!control->click())
@@ -237,6 +293,13 @@ UString applyControl(const UString &id, const UString &op, const UString &value)
 			}
 			return format("OK {0} selected {1}", id, index);
 		}
+		// Rows in a runtime-built list are plain Controls whose editable part is an unnamed
+		// child -- the purchase quantity is a ScrollBar inside the row. Reach it rather than
+		// refusing.
+		if (auto inner = firstSettableDescendant(control))
+		{
+			return applyToControl(inner, format("{0}/inner", id), "set", value);
+		}
 		return format("ERR control \"{0}\" ({1}) does not support set", id,
 		              controlTypeName(control.get()));
 	}
@@ -248,11 +311,38 @@ UString handleFormAction(const UString &verb, const std::vector<UString> &args)
 	const auto action = to_lower(verb);
 	if (action == "help")
 	{
-		return "OK verbs=help,controls,control,click,set,toggle "
-		       "usage=CONTROL <id> [click|toggle|set <value>]";
+		return "OK verbs=help,controls,control,click,set,toggle,item "
+		       "usage=CONTROL <id> [click|toggle|set <value>|item <N> [op] [value]] "
+		       "CONTROLS [<id>] lists children of <id> by position";
 	}
 	if (action == "controls")
 	{
+		// With an id, enumerate that control's immediate children by position, including the
+		// unnamed ones. A driver cannot address what it cannot see, and the rows that matter --
+		// purchase lines, lab entries -- have no names to list.
+		if (!args.empty())
+		{
+			auto parent = findNamedControl(args[0]);
+			if (!parent)
+			{
+				return format("ERR unknown control \"{0}\"", args[0]);
+			}
+			UString reply = format("OK parent={0} items={1}", args[0], parent->Controls.size());
+			for (size_t i = 0; i < parent->Controls.size(); i++)
+			{
+				const auto &child = parent->Controls[i];
+				if (!child)
+				{
+					continue;
+				}
+				const auto inner = firstSettableDescendant(child);
+				reply += format(" {0}:{1}:{2}:visible={3}:settable={4}", i,
+				                child->Name.empty() ? UString("-") : child->Name,
+				                controlTypeName(child.get()), child->isVisible() ? 1 : 0,
+				                inner ? controlTypeName(inner.get()) : UString("-"));
+			}
+			return reply;
+		}
 		std::vector<UString> names;
 		for (auto &form : liveForms())
 		{
@@ -310,6 +400,42 @@ UString handleFormAction(const UString &verb, const std::vector<UString> &args)
 		if (args.size() >= 2)
 		{
 			op = to_lower(args[1]);
+		}
+		// CONTROL <id> item <N> [op] [value] -- address a list row by position. This is what
+		// makes nameless runtime widgets reachable without pixel arithmetic.
+		if (op == "item")
+		{
+			if (args.size() < 3)
+			{
+				return "ERR CONTROL <id> item needs an index";
+			}
+			auto parent = findNamedControl(args[0]);
+			if (!parent)
+			{
+				return format("ERR unknown control \"{0}\"", args[0]);
+			}
+			int index = 0;
+			if (!parseIntValue(args[2], index))
+			{
+				return format("ERR item index \"{0}\" is not a number", args[2]);
+			}
+			auto item = itemAt(parent, index);
+			if (!item)
+			{
+				return format("ERR {0} has no item {1} (items={2})", args[0], index,
+				              static_cast<int>(parent->Controls.size()));
+			}
+			UString itemOp = args.size() >= 4 ? to_lower(args[3]) : UString("click");
+			UString itemValue;
+			for (size_t i = 4; i < args.size(); i++)
+			{
+				if (i > 4)
+				{
+					itemValue += " ";
+				}
+				itemValue += args[i];
+			}
+			return applyToControl(item, format("{0}[{1}]", args[0], index), itemOp, itemValue);
 		}
 		if (op == "set")
 		{
