@@ -843,16 +843,23 @@ def intercept_ufos(d: Driver) -> int:
         return 0
     time.sleep(0.3)
 
-    # Bring a UFO into view and click it as the target of the armed attack order.
-    ufos = d.h.screen_craft("ufos_screen")
-    live = [(x, y) for (x, y, crashed) in ufos if not crashed]
-    if not live:
-        if d.h.gs("centre_on_ufo").get("centred") != "1":
-            d.say("  [intercept] no UFO on the city map")
-            d.h.key("Escape")
-            return 0
-        time.sleep(0.5)
-        live = [(x, y) for (x, y, crashed) in d.h.screen_craft("ufos_screen") if not crashed]
+    # Bring a UFO into view and click it as the target of the armed attack order. Always centre
+    # first: reading ufos_screen straight off gives coordinates for craft anywhere in the city,
+    # including well outside the viewport, and the driver spent whole minutes re-issuing an
+    # attack order at a screen corner where the click hit nothing.
+    if d.h.gs("centre_on_ufo").get("centred") != "1":
+        d.say("  [intercept] no UFO on the city map")
+        d.h.key("Escape")
+        return 0
+    time.sleep(0.5)
+    w, h = d.h.display_size()
+    live = [
+        (x, y)
+        for (x, y, crashed) in d.h.screen_craft("ufos_screen")
+        if not crashed and 0 <= x < w and 0 <= y < h
+    ]
+    if live:
+        live = [min(live, key=lambda p: (p[0] - w // 2) ** 2 + (p[1] - h // 2) ** 2)]
     if not live:
         d.say("  [intercept] UFO centred but not resolvable on screen")
         d.h.key("Escape")
@@ -1080,6 +1087,46 @@ def select_crewed_craft(d: Driver) -> bool:
             d.say(f"  [select] crewed craft selected at x={x}")
             return True
     return False
+
+
+def clear_attack_orders(d: Driver) -> int:
+    """Recall craft still holding an attack order, so the clock can run at turbo again.
+
+    GameState::canTurbo() returns false while *any* vehicle holds an AttackVehicle or
+    AttackBuilding mission -- our own craft included -- and crashed hostiles explicitly do not
+    count. So a wing left circling after the UFO it was chasing went down pins the game at normal
+    speed forever. At speed 4 a single game-day costs about ten real hours, which makes a
+    months-long campaign impossible; at turbo it costs seconds. This is the difference between a
+    campaign that can finish and one that cannot.
+
+    Recalling to base is also what a player would do: it rearms and refuels the craft.
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return 0
+    if not d.click_id("BUTTON_TAB_2", st):
+        return 0
+    time.sleep(0.3)
+    lst = d.controls(d.status()).get("OWNED_VEHICLE_LIST")
+    if lst is None or lst.w <= 0:
+        return 0
+    y = lst.y + lst.h // 2
+    recalled, seen = 0, set()
+    for x in range(lst.x + 6, lst.x + lst.w, 12):
+        d.h.click_xy(x, y)
+        time.sleep(0.1)
+        sel = d.h.gs("selected")
+        ids, mission = sel.get("ids", "-"), sel.get("mission", "none")
+        if ids in seen:
+            continue
+        seen.add(ids)
+        if mission.startswith("AttackVehicle") or mission.startswith("AttackBuilding"):
+            if d.click_id("BUTTON_GOTO_BASE", d.status()):
+                recalled += 1
+                time.sleep(0.2)
+    if recalled:
+        d.say(f"  [recall] {recalled} craft sent home to clear stale attack orders")
+    return recalled
 
 
 def recover_crash_sites(d: Driver) -> int:

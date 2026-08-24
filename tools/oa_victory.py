@@ -32,6 +32,7 @@ from oa_play import (
     HarnessError,
     assign_research,
     crew_transport,
+    clear_attack_orders,
     intercept_ufos,
     new_game,
     recover_crash_sites,
@@ -43,6 +44,10 @@ MAX_RESTARTS = 40
 # One recovery order per wreck is enough; re-issuing every second only fights the craft's own
 # pathing and floods the log.
 RECOVER_COOLDOWN_S = 90.0
+# Re-issuing an attack order every pass only re-arms a craft that is already flying at the
+# target, and it starves the game of the frames it needs to actually resolve the fight.
+INTERCEPT_COOLDOWN_S = 25.0
+CREW_COOLDOWN_S = 60.0
 CHECKPOINT_EVERY_S = 300.0
 
 
@@ -59,6 +64,8 @@ class Victory:
         self.d: Driver | None = None
         self.restarts = 0
         self.last_recover = 0.0
+        self.last_intercept = 0.0
+        self.last_crew = 0.0
         self.last_checkpoint = 0.0
         self.best_crashed = 0
 
@@ -172,22 +179,36 @@ class Victory:
             self.best_crashed = crashed
             self.say(f"UFO down (total wrecks {crashed})")
 
-        if crewed == 0:
+        if crewed == 0 and time.time() - self.last_crew > CREW_COOLDOWN_S:
             # Without a Soldier aboard a craft, recoverVehicle is refused outright and the whole
-            # artifact chain stalls, so this is worth re-doing whenever it lapses.
+            # artifact chain stalls, so this is worth re-doing whenever it lapses. It only works
+            # while the craft is parked in the same building as the agents, so after a mission it
+            # will fail until the craft gets home -- which is why this must not short-circuit the
+            # rest of the turn. Returning here early stopped the clock entirely and the runner
+            # sat retrying a drop that could never succeed.
+            self.last_crew = time.time()
             if crew_transport(self.d) == 0:
-                self.say("could not crew a craft this pass")
-            return
+                self.say("could not crew a craft yet (craft probably still out)")
 
-        if crashed > 0 and time.time() - self.last_recover > RECOVER_COOLDOWN_S:
+        if crewed > 0 and crashed > 0 and time.time() - self.last_recover > RECOVER_COOLDOWN_S:
             self.last_recover = time.time()
             if recover_crash_sites(self.d):
                 self.progress["recoveries"] += 1
                 self.flush()
 
         if in_city > 0:
-            intercept_ufos(self.d)
+            if time.time() - self.last_intercept > INTERCEPT_COOLDOWN_S:
+                self.last_intercept = time.time()
+                intercept_ufos(self.d)
+            # canTurbo() is false while hostiles are up, so ask for the fastest speed that is
+            # actually granted. Without this the clock sat still for minutes at a time.
+            self.d.h.key("4")
         else:
+            # No live UFO left in the city, so anything still holding an attack order is just
+            # pinning canTurbo() false and freezing the clock.
+            t = self.d.h.gs("turbo")
+            if int(t.get("attack_missions", "0") or 0) > 0:
+                clear_attack_orders(self.d)
             self.d.h.key("5")  # turbo; canTurbo() downgrades it by itself when combat is live
 
     def victorious(self) -> bool:
