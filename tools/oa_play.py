@@ -898,7 +898,21 @@ def return_to_city(d: Driver, tries: int = 12) -> bool:
         if stage == "CityView":
             return True
         if stage == "MessageBox":
-            d.h.key("Return")
+            # Not every box is an acknowledgement. RecruitScreen's "Confirm Orders" is a
+            # YesNoCancel box (recruitscreen.cpp:482-484) with no BUTTON_OK at all, so pressing
+            # Return here left it standing and the driver bounced between the two screens -- 76
+            # strandings on RecruitScreen in one run, ten minutes at a stretch with the campaign
+            # clock stopped. When unwinding, decline rather than confirm: this path only runs
+            # because something already went wrong, and abandoning a half-built order is the safe
+            # side of that.
+            for cid in ("BUTTON_OK", "BUTTON_NO", "BUTTON_CANCEL"):
+                try:
+                    if d.h.send(f"control {cid}").startswith("OK"):
+                        break
+                except (HarnessError, OSError):
+                    continue
+            else:
+                d.h.key("Return")
         else:
             for cid in ("BUTTON_QUIT", "BUTTON_OK"):
                 try:
@@ -2394,12 +2408,21 @@ def hire_staff(d: Driver, want: int = 6, role: str = "BUTTON_SOLDIERS",
     if hired:
         d.click_id("BUTTON_OK", d.status())
         time.sleep(1.0)
-        for _ in range(4):
+        for _ in range(6):
             st = d.status()
             if st.stage != "MessageBox":
                 break
-            # Confirm Orders is a Yes/No/Cancel box; press the button rather than guessing a key.
-            if not d.click_id("BUTTON_YES", st):
+            # Two different boxes can appear here: "Confirm Orders" is YesNoCancel
+            # (recruitscreen.cpp:482-484) and wants YES, while "Funds exceeded" and
+            # "Accomodation exceeded" are Ok-only (recruitscreen.cpp:629,652) and want OK.
+            # Guessing with Return satisfied neither reliably.
+            for cid in ("BUTTON_YES", "BUTTON_OK"):
+                try:
+                    if d.h.send(f"control {cid}").startswith("OK"):
+                        break
+                except (HarnessError, OSError):
+                    continue
+            else:
                 d.h.key("Return")
             time.sleep(1.0)
     else:
