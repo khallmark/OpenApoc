@@ -2,6 +2,7 @@
 
 #include "framework/stage.h"
 #include "library/sp.h"
+#include "library/strings.h"
 #include "library/vec.h"
 #include <chrono>
 
@@ -21,6 +22,7 @@ class VideoScreen : public Stage
 	Vec2<int> frame_size;
 	std::chrono::high_resolution_clock::time_point last_frame_time;
 
+	UString videoPath;
 	sp<Video> video;
 	sp<FrameImage> current_frame;
 
@@ -35,6 +37,7 @@ class VideoScreen : public Stage
 	void update() override;
 	void render() override;
 	bool isTransition() override;
+	UString harnessDetail() const override;
 };
 
 }; // namespace OpenApoc

@@ -227,12 +227,14 @@ UString applyControl(const UString &id, const UString &op, const UString &value)
 				return format("ERR set {0} needs an item index 0..{1}", id,
 				              static_cast<int>(list->Controls.size()) - 1);
 			}
-			auto item = list->Controls[static_cast<size_t>(index)];
-			if (item && item->click())
+			// Neither Control::click() nor setSelected() actually selects a list item: the
+			// first raises MouseClick, which ListBox ignores for selection, and the second
+			// raises nothing at all. Both would report success while the screen behind the list
+			// never changed.
+			if (!list->selectItemByIndex(static_cast<size_t>(index)))
 			{
-				return format("OK {0} clicked item {1}", id, index);
+				return format("ERR set {0} could not select item {1}", id, index);
 			}
-			list->setSelected(item);
 			return format("OK {0} selected {1}", id, index);
 		}
 		return format("ERR control \"{0}\" ({1}) does not support set", id,

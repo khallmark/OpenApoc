@@ -16,7 +16,7 @@ namespace OpenApoc
 {
 
 VideoScreen::VideoScreen(const UString &videoPath, sp<Stage> nextScreen)
-    : Stage(), nextScreen(nextScreen)
+    : videoPath(videoPath), Stage(), nextScreen(nextScreen)
 {
 	if (videoPath != "")
 	{
@@ -114,5 +114,7 @@ void VideoScreen::render()
 }
 
 bool VideoScreen::isTransition() { return false; }
+
+UString VideoScreen::harnessDetail() const { return videoPath; }
 
 }; // namespace OpenApoc

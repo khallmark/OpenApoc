@@ -194,9 +194,9 @@ class Campaign:
                 self.say(f"progress: {self.progress}")
             except HarnessError as exc:
                 self.say(f"harness error: {exc}")
-                # A live process answering ERR is still the same session. Relaunching
-                # it is how 'gs time' on a binary without that query looped forever.
                 if self.alive():
+                    # A live process answering ERR is still the same session. Relaunching
+                    # it is how 'gs time' on a binary without that query looped forever.
                     text = str(exc).lower()
                     if "unknown query" in text or "not installed" in text:
                         self.say("binary does not speak this harness protocol; stopping")

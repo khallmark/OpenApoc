@@ -5,10 +5,10 @@ Launch the game with:
   --Framework.Harness.Enable=1 --Framework.Harness.Port=17321 --Game.SkipIntro=1
   --Config.Save=0 --Config.Read=0 --OpenApoc.NewFeature.SeedRng=0
 
-The driver never guesses pixel coordinates for named widgets: it sends `CONTROL <id>` on the
-harness. Screens are identified by the stage class name that STATUS reports, so modal popups --
-which are their own Stage in this engine -- are detected and dismissed automatically instead of
-deadlocking the run. Pixel `CLICK` is used only for nameless widgets (map tiles, list rows).
+The driver never guesses pixel coordinates: it resolves control ids out of the shipped .form
+definitions (tools/oa_forms.py) against the live display size reported by STATUS. Screens are
+identified by the stage class name that STATUS reports, so modal popups -- which are their own
+Stage in this engine -- are detected and dismissed automatically instead of deadlocking the run.
 """
 
 from __future__ import annotations
@@ -114,6 +114,8 @@ WORKING_STAGES = {
 # How many times to try a screen's engaging action before deciding the game is
 # refusing it and settling for acknowledgement.
 ACT_ATTEMPT_LIMIT = 4
+# How long to stop trying a refused action before giving it another go.
+ACT_COOLDOWN_S = 180.0
 
 
 class HarnessError(RuntimeError):
@@ -126,6 +128,10 @@ class Status:
     w: int
     h: int
     raw: str
+    # Extra stage identification from Stage::harnessDetail(). Victory and defeat are both a
+    # VideoScreen and differ only by which video plays, so the stage name alone cannot tell a
+    # won campaign from a lost one.
+    detail: str = "-"
 
 
 class Harness:
@@ -155,11 +161,36 @@ class Harness:
     def status(self) -> Status:
         raw = self.ok("status")
         parts = dict(p.split("=", 1) for p in raw.split() if "=" in p)
-        return Status(parts.get("stage", "?"), int(parts.get("w", 0)), int(parts.get("h", 0)), raw)
+        return Status(parts.get("stage", "?"), int(parts.get("w", 0)), int(parts.get("h", 0)), raw,
+                      parts.get("detail", "-"))
 
     def gs(self, query: str) -> dict[str, str]:
         raw = self.ok(f"gs {query}")
         return dict(p.split("=", 1) for p in raw.split() if "=" in p)
+
+    def ui(self, filt: str = "") -> dict:
+        """Live control rects from the running game, keyed by control id.
+
+        Replaces computing layout from the .form XML: with a resizable viewport and a UI scale
+        factor, the engine's own resolved positions are the only trustworthy source. Coordinates
+        come back in UI space, which is the same space CLICK takes.
+        """
+        raw = self.ok(f"ui {filt}".strip())
+        d = dict(p.split("=", 1) for p in raw.split() if "=" in p)
+        out = {}
+        if d.get("at", "-") == "-":
+            return out
+        for rec in d["at"].split(";"):
+            f = rec.split(",")
+            if len(f) == 6:
+                out[f[0]] = {"x": int(f[1]), "y": int(f[2]), "w": int(f[3]), "h": int(f[4]),
+                             "visible": f[5] == "1"}
+        return out
+
+    def display_size(self) -> tuple:
+        """Viewport size in UI space, so off-screen click targets can be rejected."""
+        st = self.status()
+        return (st.w or 1280, st.h or 720)
 
     def screen_craft(self, query: str) -> list[tuple[int, int, bool]]:
         """Parse "count=N at=x,y,crashed;..." from the view-space craft queries."""
@@ -177,6 +208,13 @@ class Harness:
         self.ok(f"click {x} {y}")
 
     def control(self, cid: str, op: str = "click", value: str | None = None) -> str:
+        """Drive a named widget directly, with no pixel arithmetic at all.
+
+        Everything that has an id in data/forms/*.form can be reached this way, which matters
+        most for the runtime-populated listboxes: their rows are generated controls with no ids
+        and, in several screens, laid out horizontally, so addressing them geometrically was
+        guesswork that silently hit the wrong row.
+        """
         if op == "set":
             return self.ok(f"control {cid} set {value}")
         if op == "toggle":
@@ -187,8 +225,7 @@ class Harness:
         return self.ok("controls")
 
     def action(self, verb: str, *args: str) -> str:
-        line = "action " + " ".join((verb,) + args)
-        return self.ok(line)
+        return self.ok("action " + " ".join((verb,) + args))
 
     def key(self, name: str) -> None:
         self.ok(f"key {name}")
@@ -332,6 +369,7 @@ class Driver:
         self.responses: dict[str, int] = {}
         self.unknown_stages: dict[str, int] = {}
         self.act_counts: dict[str, int] = {}
+        self.act_reset_at = time.time()
 
     def say(self, msg: str) -> None:
         self.events.append(msg)
@@ -354,9 +392,28 @@ class Driver:
             return {}
 
     def click_id(self, cid: str, st: Status | None = None) -> bool:
+        """Click a control by id, using the game's own resolved geometry when it can.
+
+        The .form resolver stays as a fallback for anything the live dump cannot see, but the
+        live query is authoritative -- it survives a viewport resize and UI scaling, which the
+        static layout computation does not.
+        """
+        # Ask the engine to invoke the widget by name. Control::click() raises the same
+        # ButtonClick a real press does, so this is not a shortcut around the UI -- it just skips
+        # the pixel arithmetic, which was the single largest source of silent no-ops in this
+        # driver. The resolved-rect click stays as a fallback for anything the action handler
+        # cannot see.
         try:
             self.h.control(cid)
             return True
+        except HarnessError:
+            pass
+        try:
+            live = self.h.ui(cid)
+            c = live.get(cid)
+            if c and c["w"] > 0 and c["visible"]:
+                self.h.click_xy(c["x"] + c["w"] // 2, c["y"] + c["h"] // 2)
+                return True
         except HarnessError:
             pass
         st = st or self.status()
@@ -364,9 +421,14 @@ class Driver:
         c = ctrls.get(cid)
         if c is None or c.w <= 0 or c.h <= 0:
             return False
-        x, y = c.centre
-        self.h.click_xy(x, y)
+        self.h.click_xy(*c.centre)
         return True
+
+    def live_rect(self, cid: str) -> dict | None:
+        try:
+            return self.h.ui(cid).get(cid)
+        except HarnessError:
+            return None
 
     def shot(self, tag: str) -> None:
         if not self.shots:
@@ -482,13 +544,21 @@ class Driver:
         # raid with no eligible squad returns BuildingScreen -> MessageBox -> BuildingScreen
         # forever. Changing stage is therefore not proof of progress; stop offering the action
         # once it has clearly stopped working and just acknowledge instead.
+        # A refusal is usually temporary -- BUTTON_EXTERMINATE is declined when no agents are
+        # free because they are already out on a mission, not because dispatch is broken. Making
+        # the cap permanent meant one busy afternoon disabled X-COM's response to alien incidents
+        # for the rest of the campaign; score collapsed and funding went to zero.
+        now = time.time()
+        if now - self.act_reset_at > ACT_COOLDOWN_S and self.act_counts:
+            self.act_counts.clear()
+            self.act_reset_at = now
         kinds = ("act", "ack")
         if self.act_counts.get(st.stage, 0) >= ACT_ATTEMPT_LIMIT:
             kinds = ("ack",)
             if self.act_counts.get(st.stage) == ACT_ATTEMPT_LIMIT:
                 self.act_counts[st.stage] += 1
-                self.say(f"  [event] {st.stage}: action refused {ACT_ATTEMPT_LIMIT}x, "
-                         f"acknowledging from now on")
+                self.say(f"  [event] {st.stage}: refused {ACT_ATTEMPT_LIMIT}x, backing off for "
+                         f"{ACT_COOLDOWN_S:.0f}s")
         elif policy.get("select"):
             selected = self.select_assignment_rows(st)
 
@@ -617,6 +687,7 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
             if int(turbo.get("hostiles", "0")) > 0 and time.time() - last_intercept > 8:
                 last_intercept = time.time()
                 d.checks["intercepts"] = d.checks.get("intercepts", 0) + intercept_ufos(d)
+                d.checks["recoveries"] = d.checks.get("recoveries", 0) + recover_crash_sites(d)
 
         time.sleep(1.0)
         now = int(d.h.gs("time")["ticks"])
@@ -672,40 +743,80 @@ def assign_research(d: Driver) -> bool:
         d.say(f"[research] research screen not reached (at {d.status().stage})"); return False
     d.shot("researchscreen")
 
+    # Fill every lab, verifying against the engine after each attempt.
+    #
+    # Both lab lists are *horizontal* (researchscreen.form:147-160) and their items are
+    # runtime-generated controls with no ids, so geometric clicking only ever reached the first
+    # lab in each list -- that is exactly the "two of five busy" that would not move. The named
+    # action CONTROL <list> set <index> addresses items by position instead, and raises the same
+    # ListBoxChangeSelected the screen listens on (researchscreen.cpp:44,53).
+    #
+    # ResearchSelect only offers topics whose type matches the lab (researchselect.cpp:230), so
+    # there is no single global topic ordering to walk: each lab is tried against successive
+    # rows until labs_busy actually rises.
+    # "labs" counts every Lab in the game state, including ones whose facility is still being
+    # built; only "assignable" ones can be given a project, and one of those is an engineering
+    # Workshop that takes manufacturing rather than research. Chasing labs_busy up to labs was
+    # chasing a number that can never be reached.
+    total_labs = int(before.get("assignable", "0") or 0)
+    busy = int(before.get("labs_busy", "0") or 0)
     started = 0
+
     for list_id in ("LIST_LARGE_LABS", "LIST_SMALL_LABS"):
-        for row in range(3):
+        for slot in range(6):
+            if total_labs and busy >= total_labs:
+                break
             st = d.status()
             if st.stage != "ResearchScreen":
                 break
-            if not click_list_row(d, list_id, row, st):
-                continue
-            time.sleep(0.4)
-            st = d.status()
-            d.click_id("BUTTON_RESEARCH_NEWPROJECT", st); time.sleep(0.6)
-            st = d.status()
-            if st.stage != "ResearchSelect":
-                continue
-            d.shot(f"researchselect_{list_id}_{row}")
-            if click_list_row(d, "LIST", 0, st, item_h=20):
-                time.sleep(0.4)
-            st = d.status()
-            d.click_id("BUTTON_OK", st); time.sleep(0.8)
-            started += 1
+            try:
+                d.h.control(list_id, "set", str(slot))
+            except HarnessError:
+                break  # ran off the end of this list
+            time.sleep(0.3)
 
-    # Unwind back to the city.
-    for _ in range(6):
+            for topic_row in range(8):
+                st = d.status()
+                if st.stage != "ResearchScreen":
+                    break
+                if not d.click_id("BUTTON_RESEARCH_NEWPROJECT", st):
+                    break
+                time.sleep(0.45)
+                if d.status().stage != "ResearchSelect":
+                    break
+                try:
+                    d.h.control("LIST", "set", str(topic_row))
+                except HarnessError:
+                    d.click_id("BUTTON_OK", d.status())
+                    time.sleep(0.4)
+                    break
+                time.sleep(0.25)
+                d.click_id("BUTTON_OK", d.status())
+                time.sleep(0.5)
+                now = int(d.h.gs("research").get("labs_busy", "0") or 0)
+                if now > busy:
+                    busy = now
+                    started += 1
+                    break
+
+    # Unwind back to the city. Leaving the game parked on the research screen strands the
+    # campaign loop, which only knows how to play from CityView.
+    for _ in range(8):
         st = d.status()
         if st.stage == "CityView":
             break
         if st.stage in ("ResearchSelect", "ResearchScreen", "BaseScreen"):
-            d.click_id("BUTTON_OK", st); time.sleep(0.6)
+            d.click_id("BUTTON_OK", st)
+            time.sleep(0.5)
         elif not d.dismiss_modal(st):
-            d.h.key("Escape"); time.sleep(0.5)
+            d.h.key("Escape")
+            time.sleep(0.4)
 
     after = d.h.gs("research")
-    d.say(f"[research] after:  {after}  (attempted {started} assignments)")
-    return after.get("labs_busy", "0") != before.get("labs_busy", "0")
+    d.say(f"[research] after:  {after}  (started {started})")
+    return int(after.get("assignable_busy", "0") or 0) > int(
+        before.get("assignable_busy", "0") or 0
+    )
 
 
 def visit_economy(d: Driver) -> bool:
@@ -783,9 +894,17 @@ def intercept_ufos(d: Driver) -> int:
     if lst is None or lst.w <= 0:
         d.say("  [intercept] vehicle list not resolvable")
         return 0
-    # Horizontal strip of craft icons; take the first slot.
-    d.h.click_xy(lst.x + 16, lst.y + lst.h // 2)
-    time.sleep(0.3)
+    # Horizontal strip of craft icons. Send the whole wing, not one craft: a lone interceptor
+    # loses to escorted UFOs, and a campaign that trades its fleet away without a single kill
+    # has no artifacts to research and no score to keep its funding.
+    ICON_W = 36
+    for slot in range(4):
+        x = lst.x + 16 + slot * ICON_W
+        if x >= lst.x + lst.w:
+            break
+        d.h.click_xy(x, lst.y + lst.h // 2)
+        time.sleep(0.15)
+    time.sleep(0.2)
 
     st = d.status()
     if not d.click_id("BUTTON_VEHICLE_ATTACK", st):
@@ -793,16 +912,23 @@ def intercept_ufos(d: Driver) -> int:
         return 0
     time.sleep(0.3)
 
-    # Bring a UFO into view and click it as the target of the armed attack order.
-    ufos = d.h.screen_craft("ufos_screen")
-    live = [(x, y) for (x, y, crashed) in ufos if not crashed]
-    if not live:
-        if d.h.gs("centre_on_ufo").get("centred") != "1":
-            d.say("  [intercept] no UFO on the city map")
-            d.h.key("Escape")
-            return 0
-        time.sleep(0.5)
-        live = [(x, y) for (x, y, crashed) in d.h.screen_craft("ufos_screen") if not crashed]
+    # Bring a UFO into view and click it as the target of the armed attack order. Always centre
+    # first: reading ufos_screen straight off gives coordinates for craft anywhere in the city,
+    # including well outside the viewport, and the driver spent whole minutes re-issuing an
+    # attack order at a screen corner where the click hit nothing.
+    if d.h.gs("centre_on_ufo").get("centred") != "1":
+        d.say("  [intercept] no UFO on the city map")
+        d.h.key("Escape")
+        return 0
+    time.sleep(0.5)
+    w, h = d.h.display_size()
+    live = [
+        (x, y)
+        for (x, y, crashed) in d.h.screen_craft("ufos_screen")
+        if not crashed and 0 <= x < w and 0 <= y < h
+    ]
+    if live:
+        live = [min(live, key=lambda p: (p[0] - w // 2) ** 2 + (p[1] - h // 2) ** 2)]
     if not live:
         d.say("  [intercept] UFO centred but not resolvable on screen")
         d.h.key("Escape")
@@ -830,6 +956,11 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
     entered = False
     last_foes = None
     stalls = 0
+    rounds = 0
+    # Remembered from the last in-battle sample: the debriefing stage has no battle to query,
+    # current_battle having already been torn down by then.
+    last_player_won = False
+    last_mine_alive = "?"
 
     while time.time() - t0 < budget_s:
         st = d.status()
@@ -841,10 +972,15 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         if st.stage == "BattlePreStart":
             d.click_id("BUTTON_OK", st); time.sleep(1.0); continue
         if st.stage == "BattleDebriefing":
-            d.shot("battle_won")
+            # Ask the engine who won rather than assuming. Battle::checkMissionEnd sets playerWon;
+            # a debriefing appears either way, so treating its arrival as a win counted a total
+            # squad wipe -- every soldier dead -- as "resolved (wins 2)".
+            outcome = "resolved" if last_player_won else "lost"
+            d.shot("battle_" + outcome)
             d.click_id("BUTTON_OK", st)
-            d.say(f"[battle] debriefing after {time.time()-t0:.0f}s")
-            return "resolved"
+            d.say(f"[battle] debriefing after {time.time()-t0:.0f}s: {outcome}"
+                  f" (survivors {last_mine_alive})")
+            return outcome
         if st.stage in ("CityView", "MainMenu", "VideoScreen"):
             d.say(f"[battle] back at {st.stage}")
             return "returned"
@@ -864,22 +1000,58 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
             time.sleep(0.5)
             d.say(f"[battle] {b}")
 
-        # Select a squad, then advance it toward a visible enemy.
-        d.h.key("1")
-        time.sleep(0.2)
+        # Select the squad, then advance it. BattleView binds no number keys at all -- SDLK_1 is
+        # simply not handled -- so the old d.h.key("1") did nothing whatsoever and the squad
+        # never moved. Units are selected by clicking them, and Ctrl+click is what *adds* to the
+        # selection rather than replacing it (battleview.cpp:3855-3865, capped at 6 by
+        # orderSelect).
+        friends = d.h.screen_craft("friends_screen")
+        if friends:
+            d.h.send("keydown Left Ctrl")
+            try:
+                for fx, fy, _ in friends[:6]:
+                    d.h.click_xy(fx, fy)
+                    time.sleep(0.08)
+            finally:
+                d.h.send("keyup Left Ctrl")
+            time.sleep(0.15)
+
         foes = d.h.screen_craft("enemies_screen")
+        # enemies_screen only reports hostiles already on screen. Walking the camera only when
+        # *nothing* is visible is not enough: one alien that is framed but unreachable keeps the
+        # squad grinding against it while the rest of the map goes unexplored, which is the same
+        # stall in a new costume. So also walk on once progress dries up.
+        if not foes or stalls > 4:
+            info = d.h.gs("centre_on_enemy")
+            if info.get("centred") == "1":
+                time.sleep(0.4)
+                found = d.h.screen_craft("enemies_screen")
+                if found:
+                    foes = found
+
         if foes:
-            fx, fy, _ = foes[0]
-            # Left-click near the enemy: orderMove. Auto-fire engages once LOS is gained.
-            d.h.click_xy(fx, fy)
+            fx, fy, _ = foes[rounds % len(foes)]
+            # Aim a short way off the hostile's own tile: that tile is occupied, and a left
+            # click on an occupied tile selects rather than moves (battleview.cpp:3778-3790).
+            fx += (40, -40, 0, 0)[rounds % 4]
+            fy += (0, 0, 28, -28)[rounds % 4]
+            d.h.click_xy(max(0, min(st.w - 1, fx)), max(0, min(st.h - 1, fy)))
         else:
-            # Nothing in sight yet; push toward the middle of the map to find contact.
-            d.h.click_xy(st.w // 2, int(st.h * 0.40))
+            # Nothing anywhere in view; sweep the map, and change floor now and then since
+            # hostiles hole up on other levels.
+            tx = int(st.w * (0.3 + 0.2 * (rounds % 3)))
+            ty = int(st.h * (0.3 + 0.15 * (rounds % 3)))
+            d.h.click_xy(tx, ty)
+            if rounds % 5 == 4:
+                d.h.key("Page Up" if (rounds // 5) % 2 == 0 else "Page Down")
+        rounds += 1
         time.sleep(2.5)
 
         b = d.h.gs("battle")
         foes_alive = b.get("foes_alive")
         mine_alive = b.get("mine_alive")
+        last_player_won = b.get("player_won") == "1"
+        last_mine_alive = mine_alive
         if mine_alive == "0":
             d.say(f"[battle] squad wiped out: {b}")
         if foes_alive == last_foes:
@@ -894,6 +1066,236 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
     d.say("[battle] budget exhausted without a decision")
     return "timeout"
 
+
+def crew_transport(d: Driver) -> int:
+    """Put soldiers aboard a craft so it can recover downed UFOs.
+
+    VehicleMission::recoverVehicle is refused unless the craft carries a Soldier
+    (cityview.cpp:1069-1090), so an all-interceptor fleet shoots UFOs down and collects none of
+    them -- no artifacts, no alien research, no route to victory. Observed directly: three wrecks
+    on the map with crewed=0 and every recovery refused.
+
+    Two engine details decide how this has to be driven:
+
+    * The assignment widget exists only on the three screens that embed city/agentassignment.form.
+      Left-clicking our own base opens BaseScreen, which has no widget; *right*-clicking the same
+      building opens BuildingScreen, which does (cityview.cpp:282-306).
+    * The drop list is not built on MouseDown. It is built on the first MouseMove that travels
+      more than `insensibility` (5px) from the press, copying whatever is selected in the source
+      list (agentassignment.cpp:749-768). Press-then-release without a real move in between drops
+      an empty list and silently transfers nobody, so the drag is issued as a stepped path.
+
+    The transfer itself also requires the craft to be parked in the same building as the agent
+    (agentassignment.cpp:527-536), which is why this is done at the base.
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return 0
+    at = d.h.gs("centre_on_base")
+    if at.get("centred") != "1":
+        return 0
+    bx, by = (int(v) for v in at["at"].split(",")[:2])
+    d.h.ok(f"click {bx} {by} right")
+    time.sleep(1.2)
+
+    st = d.status()
+    if st.stage != "BuildingScreen":
+        d.say(f"  [crew] expected BuildingScreen, got {st.stage}")
+        d.h.key("Escape")
+        return 0
+    box = d.controls(st).get("AGENT_ASSIGNMENT")
+    if box is None or box.w <= 0:
+        d.h.key("Escape")
+        return 0
+
+    ROW_H, FIRST_ROW, AGENT_DX, VEHICLE_DX = 26, 63, 103, 383
+    before = int(d.h.gs("vehicles").get("crewed", "0") or 0)
+    crewed = before
+
+    # Select the squad once, then try each craft row: the right column starts with the building
+    # itself, so the first row that accepts a squad is not known ahead of time.
+    # Select the squad exactly once. MultilistBox toggles: clicking a row that is already
+    # selected removes it again, so re-selecting before every craft-row attempt was switching
+    # the squad back off and dragging an empty list on all attempts after the first.
+    picked = 0
+    for r in range(6):
+        y = box.y + FIRST_ROW + r * ROW_H
+        if y >= box.y + box.h - 8:
+            break
+        d.h.click_xy(box.x + AGENT_DX, y)
+        picked += 1
+        time.sleep(0.1)
+    if not picked:
+        d.h.key("Escape")
+        return 0
+
+    for row in range(6):
+
+        sy = box.y + FIRST_ROW
+        dy = box.y + FIRST_ROW + row * ROW_H
+        if dy >= box.y + box.h - 8:
+            break
+        d.h.ok(f"down {box.x + AGENT_DX} {sy}")
+        time.sleep(0.15)
+        for step in range(1, 7):  # stepped path so the >5px move actually fires
+            mx = box.x + AGENT_DX + (VEHICLE_DX - AGENT_DX) * step // 6
+            my = sy + (dy - sy) * step // 6
+            d.h.ok(f"move {mx} {my}")
+            time.sleep(0.08)
+        d.h.ok(f"up {box.x + VEHICLE_DX} {dy}")
+        time.sleep(0.6)
+
+        crewed = int(d.h.gs("vehicles").get("crewed", "0") or 0)
+        if crewed > before:
+            d.say(f"  [crew] squad boarded a craft on row {row}")
+            break
+
+    # Leave by the screen's own quit button. dismiss_modal would pick this stage's "act" control,
+    # which on a BuildingScreen is BUTTON_RAID -- an assault on our own base.
+    for _ in range(6):
+        st = d.status()
+        if st.stage == "CityView":
+            break
+        if not d.click_id("BUTTON_QUIT", st):
+            d.h.key("Escape")
+        time.sleep(0.4)
+    d.say(f"  [crew] crewed craft {before} -> {crewed}")
+    return crewed
+
+
+def select_crewed_craft(d: Driver) -> bool:
+    """Make the city view's selection a craft that carries a Soldier.
+
+    handleClickedVehicle decides whether to issue a recovery mission by scanning
+    cityViewSelectedOwnedVehicles for a Soldier (cityview.cpp:1069-1090). With an interceptor
+    selected it issues nothing at all -- no mission, no message, no error -- which is exactly what
+    a crewed transport plus three uncollected wrecks looked like.
+
+    OWNED_VEHICLE_LIST is a horizontal ListBox (tab2.form: 431x24 at 105,44) whose items are
+    runtime-built vehicle icons with no ids, so the craft is found by clicking across it and
+    asking the engine what ended up selected.
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return False
+    if int(d.h.gs("selected").get("with_soldier", "0") or 0) > 0:
+        return True
+    if not d.click_id("BUTTON_TAB_2", st):
+        return False
+    time.sleep(0.4)
+    lst = d.controls(d.status()).get("OWNED_VEHICLE_LIST")
+    if lst is None or lst.w <= 0:
+        return False
+    y = lst.y + lst.h // 2
+    for x in range(lst.x + 6, lst.x + lst.w, 12):
+        d.h.click_xy(x, y)
+        time.sleep(0.12)
+        if int(d.h.gs("selected").get("with_soldier", "0") or 0) > 0:
+            d.say(f"  [select] crewed craft selected at x={x}")
+            return True
+    return False
+
+
+def clear_attack_orders(d: Driver) -> int:
+    """Recall craft still holding an attack order, so the clock can run at turbo again.
+
+    GameState::canTurbo() returns false while *any* vehicle holds an AttackVehicle or
+    AttackBuilding mission -- our own craft included -- and crashed hostiles explicitly do not
+    count. So a wing left circling after the UFO it was chasing went down pins the game at normal
+    speed forever. At speed 4 a single game-day costs about ten real hours, which makes a
+    months-long campaign impossible; at turbo it costs seconds. This is the difference between a
+    campaign that can finish and one that cannot.
+
+    Recalling to base is also what a player would do: it rearms and refuels the craft.
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return 0
+    if not d.click_id("BUTTON_TAB_2", st):
+        return 0
+    time.sleep(0.3)
+    lst = d.controls(d.status()).get("OWNED_VEHICLE_LIST")
+    if lst is None or lst.w <= 0:
+        return 0
+    y = lst.y + lst.h // 2
+    recalled, seen = 0, set()
+    for x in range(lst.x + 6, lst.x + lst.w, 12):
+        d.h.click_xy(x, y)
+        time.sleep(0.1)
+        sel = d.h.gs("selected")
+        ids, mission = sel.get("ids", "-"), sel.get("mission", "none")
+        if ids in seen:
+            continue
+        seen.add(ids)
+        if mission.startswith("AttackVehicle") or mission.startswith("AttackBuilding"):
+            if d.click_id("BUTTON_GOTO_BASE", d.status()):
+                recalled += 1
+                time.sleep(0.2)
+    if recalled:
+        d.say(f"  [recall] {recalled} craft sent home to clear stale attack orders")
+    return recalled
+
+
+def recover_crash_sites(d: Driver) -> int:
+    """Send a troop-carrying craft to a downed UFO to recover it.
+
+    Recovering a wreck is the only source of alien artifacts, so the entire research tree -- and
+    therefore victory -- is downstream of this working. Three separate things had to be right,
+    and each one failed silently on its own:
+
+    * The order is a plain left-click on the wreck with a craft selected, handled in
+      CityView::handleMouseDown -- not BUTTON_GOTO_LOCATION, which sets a map destination.
+    * VehicleMission::recoverVehicle is only issued when a *selected* craft carries a Soldier
+      (cityview.cpp:1069-1090). Selecting the wing by clicking each icon does not work: each
+      click replaces the selection, so only the last, usually empty, craft stayed selected.
+    * The wreck has to be on screen. Reading ufos_screen before centring yields coordinates for
+      a wreck that may be well outside the viewport, and clicking there hits nothing at all.
+
+    Returns 1 only when the craft actually picked up a mission, so a refusal is visible instead
+    of being counted as a success.
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return 0
+    # Selection first: it is pure UI and does not move the camera, so centring stays valid.
+    if not select_crewed_craft(d):
+        d.say("  [recover] no crewed craft could be selected")
+        return 0
+    # Arm the order before clicking. A plain left-click on a vehicle only runs orderSelect; it is
+    # CitySelectionState::AttackVehicle that routes the next click into CityView::orderAttack,
+    # which is where the crashed-vehicle branch and recoverVehicle actually live
+    # (cityview.cpp:331-400, 1047-1090). Without this the click just selected the wreck and the
+    # recovery silently never happened. Interception already worked because it arms the same way.
+    st = d.status()
+    if not d.click_id("BUTTON_VEHICLE_ATTACK", st):
+        d.say("  [recover] could not arm the attack order")
+        return 0
+    time.sleep(0.3)
+    if d.h.gs("centre_on_crash").get("centred") != "1":
+        return 0
+    time.sleep(0.5)
+
+    w, h = d.h.display_size()
+    crashed = [
+        (x, y)
+        for (x, y, down) in d.h.screen_craft("ufos_screen")
+        if down and 0 <= x < w and 0 <= y < h
+    ]
+    if not crashed:
+        d.say("  [recover] wreck not on screen after centring")
+        return 0
+    # Nearest to centre: that is the one centre_on_crash just framed.
+    cx, cy = min(crashed, key=lambda p: (p[0] - w // 2) ** 2 + (p[1] - h // 2) ** 2)
+
+    d.h.click_xy(cx, cy)
+    time.sleep(0.8)
+    sel = d.h.gs("selected")
+    mission = sel.get("mission", "none")
+    if "ecover" in mission or "oto" in mission:
+        d.say(f"  [recover] craft dispatched to wreck at {cx},{cy} (mission={mission})")
+        return 1
+    d.say(f"  [recover] refused at {cx},{cy} ({sel})")
+    return 0
 
 def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float = 7.0) -> dict:
     new_game(d, difficulty)

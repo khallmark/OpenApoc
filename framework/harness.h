@@ -29,6 +29,7 @@ class Framework;
 //   CONTROL <id> [click|toggle|set <value>]
 //   ACTION <verb> [args...]
 //   HELP
+//   UI [filter]
 //   QUIT
 //
 // Replies are one line: "OK ..." or "ERR ...".
@@ -50,6 +51,13 @@ using HarnessActionFunction =
 void setHarnessActionHandler(HarnessActionFunction function);
 HarnessActionFunction getHarnessActionHandler();
 
+// UI is answered by the forms layer, which framework also cannot name (OpenApoc_Forms links
+// OpenApoc_Framework, never the reverse). Kept separate from the GameState hook because the two
+// have different owners and lifetimes: this one is installed once at startup and never chained.
+using HarnessUIFunction = std::function<UString(const UString &filter)>;
+void setHarnessUIHandler(HarnessUIFunction function);
+HarnessUIFunction getHarnessUIHandler();
+
 struct HarnessCommand
 {
 	enum class Type
@@ -65,9 +73,10 @@ struct HarnessCommand
 		Text,
 		Screenshot,
 		Status,
-		Resize,
 		Query,
 		Save,
+		Resize,
+		UiDump,
 		Action,
 		Quit,
 		Unknown

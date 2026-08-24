@@ -3,6 +3,10 @@
 #include "game/state/battle/battle.h"
 #include "game/state/battle/battleunit.h"
 #include "game/state/city/base.h"
+#include "game/state/city/facility.h"
+#include "game/state/rules/aequipmenttype.h"
+#include "game/state/shared/aequipment.h"
+#include <set>
 #include "game/state/city/city.h"
 #include "game/state/city/research.h"
 #include "game/state/city/vehicle.h"
@@ -10,6 +14,7 @@
 #include "game/state/rules/city/vehicletype.h"
 #include "game/state/gamestate.h"
 #include "game/state/gametime.h"
+#include "game/state/rules/agenttype.h"
 #include "game/state/shared/agent.h"
 #include "game/state/shared/organisation.h"
 #include "library/strings_format.h"
@@ -81,7 +86,76 @@ UString describeResearch(GameState &state)
 			busyLabs++;
 		}
 	}
-	return format("topics={0} complete={1} labs={2} labs_busy={3}", total, complete, labs, busyLabs);
+		// Per-lab detail, and how many topics could be started right now. Research throughput is the
+	// gate on everything after the early game -- dimension travel, the alien-building chain, the
+	// victory raid -- and "labs_busy=1 of 5" is invisible in a bare completion count. This is the
+	// campaign's progress meter: without it there is no way to tell a campaign that is advancing
+	// from one that is quietly spinning.
+	// Only labs backed by a *built* facility at a player base can be given a project at all:
+	// ResearchScreen lists facilities with buildTime == 0 (researchscreen.cpp:72-88), not the
+	// global research.labs map. Counting the global map made "labs_busy=2 of 5" look like a
+	// stuck driver when two of those five had no built facility behind them and a third was a
+	// Workshop, which takes manufacturing, not research. Report what is actually assignable.
+	std::set<UString> builtLabs;
+	for (const auto &b : state.player_bases)
+	{
+		if (!b.second)
+		{
+			continue;
+		}
+		for (const auto &f : b.second->facilities)
+		{
+			if (f && f->lab && f->buildTime == 0)
+			{
+				builtLabs.insert(f->lab.id);
+			}
+		}
+	}
+	size_t assignable = 0, assignableBusy = 0;
+	UString labDetail;
+	for (const auto &l : state.research.labs)
+	{
+		if (!l.second)
+		{
+			continue;
+		}
+		const bool built = builtLabs.count(l.first) > 0;
+		if (built)
+		{
+			assignable++;
+			if (l.second->current_project)
+			{
+				assignableBusy++;
+			}
+		}
+		const char *kind = l.second->type == ResearchTopic::Type::BioChem     ? "biochem"
+		                   : l.second->type == ResearchTopic::Type::Physics   ? "physics"
+		                                                                      : "engineering";
+		labDetail += (labDetail.empty() ? "" : "|") +
+		             format("{0}:{1}:{2}:{3}", l.first, kind, built ? "built" : "unbuilt",
+		                    l.second->current_project ? l.second->current_project.id : "idle");
+	}
+	// Topics that are unlocked, unfinished and not already running somewhere. Dependency
+	// satisfaction is evaluated against the first player base, which is where the labs are.
+	size_t startable = 0;
+	if (!state.player_bases.empty())
+	{
+		const StateRef<Base> base{&state, state.player_bases.begin()->first};
+		for (const auto &t : state.research.topics)
+		{
+			if (!t.second || t.second->isComplete() || t.second->current_lab ||
+			    !t.second->dependencies.satisfied(base))
+			{
+				continue;
+			}
+			startable++;
+		}
+	}
+	return format("topics={0} complete={1} labs={2} labs_busy={3} assignable={4} "
+	              "assignable_busy={5} startable={6} labs_detail={7}",
+	              total, complete, labs, busyLabs, assignable, assignableBusy, startable,
+	              labDetail.empty() ? UString("-") : labDetail);
+
 }
 
 UString describeOrgs(GameState &state)
@@ -146,9 +220,28 @@ UString describeVehicles(GameState &state)
 			}
 		}
 	}
-	return format("player_vehicles={0} ufos={1} ufos_in_city={2} ufos_crashed={3} "
-	              "next_invasion={4}",
-	              mine, ufos, ufosHere, crashed, state.nextInvasion);
+	// Recovering a wreck needs a Soldier aboard (cityview.cpp:1069-1090), so "do we have a
+	// crewed craft" decides whether the whole artifact/research chain can start at all.
+	size_t crewed = 0;
+	for (const auto &v : state.vehicles)
+	{
+		const auto &vehicle = v.second;
+		if (!vehicle || !vehicle->owner || vehicle->owner.id != player.id)
+		{
+			continue;
+		}
+		for (const auto &a : vehicle->currentAgents)
+		{
+			if (a && a->type && a->type->role == AgentType::Role::Soldier)
+			{
+				crewed++;
+				break;
+			}
+		}
+	}
+	return format("player_vehicles={0} crewed={1} ufos={2} ufos_in_city={3} ufos_crashed={4} "
+	              "next_invasion={5}",
+	              mine, crewed, ufos, ufosHere, crashed, state.nextInvasion);
 }
 
 // Turbo (city Speed5) is silently downgraded to Speed1 whenever canTurbo() is false, which is the
@@ -199,15 +292,38 @@ UString describeTurbo(GameState &state)
 UString describeAgents(GameState &state)
 {
 	const auto player = state.getPlayer();
-	size_t mine = 0;
+	size_t mine = 0, soldiers = 0, soldiersFit = 0, armed = 0;
 	for (const auto &a : state.agents)
 	{
-		if (a.second && a.second->owner && a.second->owner.id == player.id)
+		const auto &agent = a.second;
+		if (!agent || !agent->owner || agent->owner.id != player.id)
 		{
-			mine++;
+			continue;
+		}
+		mine++;
+		if (!agent->type || agent->type->role != AgentType::Role::Soldier)
+		{
+			continue;
+		}
+		soldiers++;
+		// Soldiers are lost permanently, and a campaign that cannot replace them runs out of
+		// people to send. A wounded soldier still exists but cannot be dispatched, so "how many
+		// can actually go on a mission" is the number that matters.
+		if (!agent->isDead() && agent->modified_stats.health > 0)
+		{
+			soldiersFit++;
+		}
+		for (const auto &e : agent->equipment)
+		{
+			if (e && e->type && e->type->type == AEquipmentType::Type::Weapon)
+			{
+				armed++;
+				break;
+			}
 		}
 	}
-	return format("agents_total={0} agents_player={1}", state.agents.size(), mine);
+	return format("agents_total={0} agents_player={1} soldiers={2} soldiers_fit={3} armed={4}",
+	              state.agents.size(), mine, soldiers, soldiersFit, armed);
 }
 
 
@@ -249,7 +365,9 @@ UString describeBattle(GameState &state)
 			}
 		}
 	}
-	return format("in_battle=1 mode={0} units={1} mine={2} mine_alive={3} mine_retreated={4} "
+	// playerWon is the engine's own verdict (Battle::checkMissionEnd). Inferring a win from
+	// "a debriefing appeared" counted a total squad wipe as a victory.
+	return format("player_won={0} ", battle.playerWon ? 1 : 0) + format("in_battle=1 mode={0} units={1} mine={2} mine_alive={3} mine_retreated={4} "
 	              "foes={5} foes_alive={6} hazards={7}",
 	              battle.mode == Battle::Mode::RealTime ? "rt" : "tb", battle.units.size(), mine,
 	              mineAlive, retreated, hostiles, hostilesAlive, battle.hazards.size());
@@ -299,6 +417,31 @@ UString introspectGameState(GameState &state, const UString &query)
 	if (q == "orgs")
 	{
 		return describeOrgs(state);
+	}
+	// Per-wreck detail. ufos_crashed counts vehicle->crashed alone, while centre_on_crash also
+	// demands a live tileObject in the current city -- so a wreck can be counted and still be
+	// unfindable, which is exactly how recovery failed silently with wrecks on the map.
+	if (q == "crashes")
+	{
+		const auto aliens = state.getAliens();
+		UString out;
+		int n = 0;
+		for (const auto &v : state.vehicles)
+		{
+			const auto &vehicle = v.second;
+			if (!vehicle || !vehicle->owner || vehicle->owner.id != aliens.id || !vehicle->crashed)
+			{
+				continue;
+			}
+			n++;
+			out += (out.empty() ? "" : "|") +
+			       format("{0}:tile={1},here={2},falling={3},sliding={4},pos={5},{6},{7}", v.first,
+			              vehicle->tileObject ? 1 : 0,
+			              vehicle->city == state.current_city ? 1 : 0, vehicle->falling ? 1 : 0,
+			              vehicle->sliding ? 1 : 0, (int)vehicle->getPosition().x,
+			              (int)vehicle->getPosition().y, (int)vehicle->getPosition().z);
+		}
+		return format("crashes={0} detail={1}", n, out.empty() ? UString("-") : out);
 	}
 	if (q == "vehicles")
 	{

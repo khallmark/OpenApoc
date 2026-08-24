@@ -148,6 +148,7 @@ void sendAll(HarnessSocket fd, const UString &text)
 
 HarnessQueryFunction harnessQueryHandler;
 HarnessActionFunction harnessActionHandler;
+HarnessUIFunction harnessUIHandler;
 
 } // namespace
 
@@ -164,6 +165,10 @@ void setHarnessActionHandler(HarnessActionFunction function)
 }
 
 HarnessActionFunction getHarnessActionHandler() { return harnessActionHandler; }
+
+void setHarnessUIHandler(HarnessUIFunction function) { harnessUIHandler = std::move(function); }
+
+HarnessUIFunction getHarnessUIHandler() { return harnessUIHandler; }
 
 bool parseHarnessCommand(const UString &line, HarnessCommand &out)
 {
@@ -252,6 +257,12 @@ bool parseHarnessCommand(const UString &line, HarnessCommand &out)
 			out.error = "GS needs a query";
 			return false;
 		}
+		return true;
+	}
+	if (verb == "UI")
+	{
+		out.type = HarnessCommand::Type::UiDump;
+		out.text = restAfter(0);
 		return true;
 	}
 	if (verb == "SAVE")
@@ -367,6 +378,7 @@ bool parseHarnessCommand(const UString &line, HarnessCommand &out)
 		out.type = HarnessCommand::Type::Scroll;
 		return true;
 	}
+
 	if (verb == "CONTROLS" || verb == "HELP")
 	{
 		out.type = HarnessCommand::Type::Action;
@@ -713,14 +725,11 @@ UString Harness::execute(const HarnessCommand &cmd, Framework &fw)
 		{
 			const auto stage = fw.stageGetCurrent();
 			const auto size = fw.displayGetSize();
-			return format("OK stage={0} w={1} h={2} mouse={3},{4} port={5}",
-			              demangleStage(stage.get()), size.x, size.y, lastX, lastY, listenPort);
-		}
-		case HarnessCommand::Type::Resize:
-		{
-			fw.displaySetSize({cmd.x, cmd.y});
-			const auto size = fw.displayGetSize();
-			return format("OK resized w={0} h={1}", size.x, size.y);
+			auto detail = stage ? stage->harnessDetail() : UString("");
+			std::replace(detail.begin(), detail.end(), ' ', '_');
+			return format("OK stage={0} w={1} h={2} mouse={3},{4} port={5} detail={6}",
+			              demangleStage(stage.get()), size.x, size.y, lastX, lastY, listenPort,
+			              detail.empty() ? UString("-") : detail);
 		}
 		case HarnessCommand::Type::Query:
 		{
@@ -753,6 +762,27 @@ UString Harness::execute(const HarnessCommand &cmd, Framework &fw)
 			}
 			std::replace(reply.begin(), reply.end(), '\n', ' ');
 			return format("OK {0}", reply);
+		}
+		case HarnessCommand::Type::UiDump:
+		{
+			const auto handler = getHarnessUIHandler();
+			if (!handler)
+			{
+				return "ERR no ui handler installed";
+			}
+			UString reply = handler(cmd.text);
+			if (reply.empty())
+			{
+				return "OK count=0";
+			}
+			std::replace(reply.begin(), reply.end(), '\n', ' ');
+			return format("OK {0}", reply);
+		}
+		case HarnessCommand::Type::Resize:
+		{
+			fw.displaySetSize({cmd.x, cmd.y});
+			const auto size = fw.displayGetSize();
+			return format("OK resized w={0} h={1}", size.x, size.y);
 		}
 		case HarnessCommand::Type::Action:
 		{
