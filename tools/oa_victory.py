@@ -33,6 +33,7 @@ from oa_play import (
     assign_research,
     build_facility,
     buy_equipment,
+    equip_squad,
     hire_scientists,
     hire_soldiers,
     crew_transport,
@@ -84,6 +85,7 @@ class Victory:
         self.stuck_since = 0.0
         self.last_build = 0.0
         self.built_workshop = False
+        self.last_equip = 0.0
         self.last_checkpoint = 0.0
         self.best_crashed = 0
 
@@ -130,6 +132,10 @@ class Victory:
             self.say(f"fresh campaign, difficulty {self.difficulty}")
             new_game(self.d, self.difficulty)
             assign_research(self.d)
+            # Stock the armoury immediately. Unarmed personnel are not neutral -- they are
+            # casualties: the campaign was lost when a base defence pitted 21 mostly-unarmed
+            # agents against 11 aliens and every one of them died, taking the base with it.
+            buy_equipment(self.d, rows=14, qty=12)
             crew_transport(self.d)
             self.save("campaign start")
 
@@ -252,8 +258,19 @@ class Victory:
                     self.record("advanced_workshop_built")
                     self.say("=== advanced workshop under construction ===")
 
+        # Arm whoever is unarmed. This is not housekeeping: an unarmed agent in a base defence
+        # is a free kill, and losing the base loses the campaign outright.
+        ag = self.d.h.gs("agents")
+        armed = int(ag.get("armed", "0") or 0)
+        soldiers = int(ag.get("soldiers", "0") or 0)
+        if armed < soldiers and time.time() - self.last_equip > 150.0:
+            self.last_equip = time.time()
+            self.say(f"{armed} armed of {soldiers} soldiers - equipping")
+            if equip_squad(self.d, agents=20) <= 0:
+                buy_equipment(self.d, rows=14, qty=12)
+
         # Replace losses, and arm them if the armoury can.
-        fit = int(self.d.h.gs("agents").get("soldiers_fit", "0") or 0)
+        fit = int(ag.get("soldiers_fit", "0") or 0)
         if fit < MIN_SOLDIERS and time.time() - self.last_hire > 180.0:
             self.last_hire = time.time()
             self.say(f"only {fit} fit soldiers - recruiting")
