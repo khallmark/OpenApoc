@@ -251,7 +251,16 @@ class Harness:
         return self.ok("action " + " ".join((verb,) + args))
 
     def key(self, name: str) -> None:
-        self.ok(f"key {name}")
+        """Press a key. A rejected key name is logged, never fatal.
+
+        An unknown key used to raise straight out of the battle driver and be recorded as
+        "lost connection", abandoning a mission that was otherwise going fine -- a typo in a key
+        name should not cost a squad.
+        """
+        try:
+            self.ok(f"key {name}")
+        except HarnessError as exc:
+            print(f"[harness] key {name!r} rejected: {exc}", flush=True)
 
     def screenshot(self, path: str) -> None:
         self.ok(f"screenshot {path}")
@@ -1536,7 +1545,10 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
             ty = int(st.h * (0.3 + 0.15 * (rounds % 3)))
             d.h.click_xy(tx, ty)
             if rounds % 5 == 4:
-                d.h.key("Page Up" if (rounds // 5) % 2 == 0 else "Page Down")
+                # SDL names these without a space; "Page Down" is rejected outright, and the
+                # resulting HarnessError propagated out of win_battle and was recorded as
+                # "lost connection", abandoning a mission that was going fine.
+                d.h.key("PageUp" if (rounds // 5) % 2 == 0 else "PageDown")
         rounds += 1
         time.sleep(2.5)
 
