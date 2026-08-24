@@ -3528,6 +3528,12 @@ def stock_best_guns(d: Driver, qty: int = 20) -> int:
         price = attrs.get("price", 0)
         if not price or price * 4 > funds:
             continue
+        # Rank firearms only. A Megapol Stun Grapple reports damage 90 and wins on raw numbers,
+        # but it is a melee stunner -- the guide wants those carried as a SECOND item to take
+        # aliens alive, not as the thing a soldier defends the base with. Buying them as the
+        # primary weapon armed the squad with truncheons.
+        if any(m in bits[0].upper() for m in ("GRAPPLE", "STUN", "MEDI", "SCANNER", "SHIELD")):
+            continue
         if best is None or attrs.get("damage", 0) > best[0]:
             best = (attrs.get("damage", 0), bits[0].replace("_", " "), price)
     if not best:
