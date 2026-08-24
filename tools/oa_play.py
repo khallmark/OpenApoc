@@ -822,6 +822,31 @@ def click_list_row(d: Driver, list_id: str, row: int, st: Status, item_h: int = 
     return True
 
 
+def return_to_city(d: Driver, tries: int = 12) -> bool:
+    """Pop screens until CityView is current again. Returns True if it got there.
+
+    The stage stack is deeper than any one helper assumes. Exiting the research screen popped to
+    a BuildingScreen left over from an earlier navigation, which the research unwind did not know
+    about, so the driver bounced between the two for an hour with the game clock frozen -- no
+    ticks, no UFOs, no missions, nothing. Whatever the stack holds, try the conventional exits in
+    order and keep going until the city is back.
+
+    Getting home matters beyond not being stuck: research-completion score is credited only from
+    CityView's event handler and the framework delivers each event to the current stage alone, so
+    time spent anywhere else is score quietly forfeited.
+    """
+    for _ in range(tries):
+        st = d.status()
+        if st.stage == "CityView":
+            return True
+        if st.stage == "MessageBox":
+            d.h.key("Return")
+        elif not (d.click_id("BUTTON_QUIT", st) or d.click_id("BUTTON_OK", st)):
+            d.h.key("Escape")
+        time.sleep(0.5)
+    return d.status().stage == "CityView"
+
+
 def _lab_skill_total(d: Driver) -> int:
     """Sum of skill across every lab -- the only thing that makes research advance."""
     total = 0
@@ -1213,18 +1238,9 @@ def assign_research(d: Driver) -> bool:
                     started += 1
                     break
 
-    # Unwind back to the city. Leaving the game parked on the research screen strands the
-    # campaign loop, which only knows how to play from CityView.
-    for _ in range(8):
-        st = d.status()
-        if st.stage == "CityView":
-            break
-        if st.stage in ("ResearchSelect", "ResearchScreen", "BaseScreen"):
-            d.click_id("BUTTON_OK", st)
-            time.sleep(0.5)
-        elif not d.dismiss_modal(st):
-            d.h.key("Escape")
-            time.sleep(0.4)
+    # Unwind back to the city. Leaving the game parked anywhere else strands the campaign loop,
+    # which only knows how to play from CityView -- and stops the clock entirely.
+    return_to_city(d)
 
     after = d.h.gs("research")
     d.say(f"[research] after:  {after}  (started {started})")

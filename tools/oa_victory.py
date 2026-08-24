@@ -32,6 +32,7 @@ from oa_play import (
     HarnessError,
     assign_research,
     build_facility,
+    return_to_city,
     buy_equipment,
     buy_vehicles,
     stock_for_template,
@@ -518,9 +519,10 @@ class Victory:
                         self.stuck_since = time.time()
                     elif time.time() - self.stuck_since > 6.0:
                         self.say(f"stranded on {st.stage}; backing out to the city")
-                        if not self.d.click_id("BUTTON_QUIT", st):
-                            if not self.d.click_id("BUTTON_OK", st):
-                                self.d.h.key("Escape")
+                        # Pop the whole stack rather than one screen: the stack can be several
+                        # deep (ResearchScreen over a leftover BuildingScreen), and clearing one
+                        # layer per attempt just bounced between them with the clock stopped.
+                        return_to_city(self.d)
                         self.stuck_since = time.time()
                     time.sleep(0.4)
                 else:
