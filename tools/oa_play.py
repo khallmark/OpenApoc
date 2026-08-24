@@ -789,7 +789,7 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
 
         turbo = d.h.gs("turbo")
         if turbo.get("can_turbo") == "1":
-            d.h.key("4")  # not 5: turbo permanently freezes this build's clock
+            d.h.key("5")  # turbo: ~1681x faster, and canTurbo() gates it by itself
         else:
             blocked_s += 1.0
             d.h.key("4")

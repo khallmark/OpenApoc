@@ -462,19 +462,26 @@ class Victory:
             if time.time() - self.last_intercept > INTERCEPT_COOLDOWN_S:
                 self.last_intercept = time.time()
                 intercept_ufos(self.d)
-            # NEVER request Speed5. Turbo freezes this build permanently: measured on a clean game,
-            # speed 4 runs at ~1900 ticks/s, pressing 5 drops it to 0, and pressing 4 again does not
-            # recover -- the clock stays dead until the process is restarted. That is the cause of
-            # every "frozen clock" stall this session, since the driver asked for turbo whenever no
-            # UFO was in the city. Speed 4 is the fastest safe setting.
-            self.d.h.key("4")
+            # Turbo, whenever the engine will grant it. GameState::updateTurbo advances
+            # TURBO_TICKS -- five game-minutes -- per frame, against six ticks per frame at
+            # Speed4. Measured with modals actively cleared: 1,627 ticks/s at Speed4 versus
+            # 2,735,162 at Speed5, a 1681x difference, or a game-day in about four seconds
+            # instead of two hours. Reaching the alien dimension needs game-months of research,
+            # so this is the difference between victory being reachable and arithmetically
+            # impossible.
+            #
+            # An earlier reading of this said turbo froze the clock permanently. That was wrong:
+            # the clock stops on any stage that is not CityView, and an undismissed AlertScreen
+            # had appeared during the measurement. Turbo only pays while the city is actually the
+            # current stage, which is the same reason loitering on sub-screens is expensive.
+            self.d.h.key("5" if self.d.h.gs("turbo").get("can_turbo") == "1" else "4")
         else:
             # No live UFO left in the city, so anything still holding an attack order is just
             # pinning canTurbo() false and freezing the clock.
             t = self.d.h.gs("turbo")
             if int(t.get("attack_missions", "0") or 0) > 0:
                 clear_attack_orders(self.d)
-            self.d.h.key("4")  # Speed4 is the ceiling; see the note above on turbo freezing
+            self.d.h.key("5")  # nothing hostile left; turbo is safe and ~1681x faster
 
     def victorious(self) -> bool:
         try:
