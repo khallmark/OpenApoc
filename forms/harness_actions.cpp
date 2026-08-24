@@ -13,6 +13,7 @@
 #include "framework/harness.h"
 #include "library/strings.h"
 #include "library/strings_format.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <set>
@@ -205,6 +206,38 @@ sp<Control> firstSettableDescendant(const sp<Control> &root, int depth = 0)
 	return nullptr;
 }
 
+// First label text anywhere under a control. Runtime list rows carry their identity only as a
+// child Label -- a purchase row's item name, a lab's facility name -- so without this a driver
+// can address rows by position but has no idea which row is which, and ends up buying whatever
+// happens to be in slot 3.
+UString firstLabelText(const sp<Control> &root, int depth = 0)
+{
+	if (!root || depth > 8)
+	{
+		return "";
+	}
+	for (auto &child : root->Controls)
+	{
+		if (auto *lbl = dynamic_cast<Label *>(child.get()))
+		{
+			const auto t = lbl->getText();
+			if (!t.empty())
+			{
+				return t;
+			}
+		}
+	}
+	for (auto &child : root->Controls)
+	{
+		const auto found = firstLabelText(child, depth + 1);
+		if (!found.empty())
+		{
+			return found;
+		}
+	}
+	return "";
+}
+
 UString applyToControl(const sp<Control> &control, const UString &label, const UString &op,
                        const UString &value);
 
@@ -261,6 +294,12 @@ UString applyToControl(const sp<Control> &control, const UString &id, const UStr
 		if (auto *list = dynamic_cast<ListBox *>(control.get()))
 		{
 			return format("OK {0} items={1}", id, static_cast<int>(list->Controls.size()));
+		}
+		if (auto *lbl = dynamic_cast<Label *>(control.get()))
+		{
+			auto t = lbl->getText();
+			std::replace(t.begin(), t.end(), ' ', '_');
+			return format("OK {0} text={1}", id, t.empty() ? UString("-") : t);
 		}
 		if (auto inner = firstSettableDescendant(control))
 		{
@@ -362,10 +401,13 @@ UString handleFormAction(const UString &verb, const std::vector<UString> &args)
 					continue;
 				}
 				const auto inner = firstSettableDescendant(child);
-				reply += format(" {0}:{1}:{2}:visible={3}:settable={4}", i,
+				auto text = firstLabelText(child);
+				std::replace(text.begin(), text.end(), ' ', '_');
+				reply += format(" {0}:{1}:{2}:visible={3}:settable={4}:text={5}", i,
 				                child->Name.empty() ? UString("-") : child->Name,
 				                controlTypeName(child.get()), child->isVisible() ? 1 : 0,
-				                inner ? controlTypeName(inner.get()) : UString("-"));
+				                inner ? controlTypeName(inner.get()) : UString("-"),
+				                text.empty() ? UString("-") : text);
 			}
 			return reply;
 		}

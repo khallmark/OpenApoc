@@ -1645,6 +1645,84 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
     return after - before
 
 
+def _norm(text: str) -> str:
+    """Squash an id or a display name to a comparable key."""
+    t = text.upper().replace("AEQUIPMENTTYPE_", "").replace("_", "").replace(" ", "")
+    return "".join(ch for ch in t if ch.isalnum())
+
+
+def buy_named(d: Driver, wanted: list, qty: int = 8, category: str = "BUTTON_AGENTS") -> int:
+    """Buy specific items by name. Returns the number of lines ordered.
+
+    Purchase rows carry their identity only as a child Label, so until the harness could read
+    that text the driver could address a row by position but had no idea what was in it -- it
+    bought whatever sat in slot 3. Buying the wrong things is not harmless here: applying an
+    equipment template re-equips the template's *exact* item types, so stocking plausible weapons
+    instead of the named ones arms nobody.
+    """
+    if not open_buysell(d):
+        return 0
+    if not d.click_id(category, d.status()):
+        close_buysell(d, commit=False)
+        return 0
+    time.sleep(0.8)
+    keys = {_norm(w) for w in wanted}
+    ordered = 0
+    try:
+        listing = d.h.send("controls LIST").split()
+    except (HarnessError, OSError):
+        close_buysell(d, commit=False)
+        return 0
+    for entry in listing[2:]:
+        parts = entry.split(":")
+        if len(parts) < 2 or not parts[0].isdigit():
+            continue
+        label = parts[-1][5:] if parts[-1].startswith("text=") else ""
+        if _norm(label) not in keys:
+            continue
+        idx = parts[0]
+        try:
+            cur = d.h.send(f"control LIST item {idx} get")
+            have, low = 0, 0
+            for kv in cur.split():
+                if kv.startswith("value="):
+                    have = int(kv.split("=")[1] or 0)
+                elif kv.startswith("min="):
+                    low = int(kv.split("=")[1] or 0)
+            target = max(low, have - qty)
+            if target != have and d.h.send(f"control LIST item {idx} set {target}").startswith("OK"):
+                ordered += 1
+        except (HarnessError, OSError):
+            break
+    funds_before = int(d.h.gs("funds").get("balance", "0") or 0)
+    close_buysell(d, commit=ordered > 0)
+    funds_after = int(d.h.gs("funds").get("balance", "0") or 0)
+    d.say(f"  [buy] ordered {ordered} of {len(keys)} wanted lines, funds {funds_before}->{funds_after}")
+    return ordered
+
+
+def stock_for_template(d: Driver, qty: int = 8) -> int:
+    """Buy exactly the items the stored equipment template names.
+
+    processTemplate strips an agent and re-equips the template's exact types, so this is the only
+    way the template can actually arm anybody. The captured loadout turned out to be Megapol
+    armour plus a Megapol Laser Sniper Gun -- none of which the earlier scattergun buying
+    happened to stock.
+    """
+    types = []
+    for part in d.h.gs("templates").get("detail", "").split("|"):
+        if not part.startswith("1:"):
+            continue
+        for kv in part.split(":", 1)[1].split(","):
+            if kv.startswith("types="):
+                types = [t for t in kv[6:].split("+") if t and t != "-"]
+    if not types:
+        d.say("  [buy] no template to stock for")
+        return 0
+    d.say(f"  [buy] stocking {len(set(types))} item types the loadout needs")
+    return buy_named(d, sorted(set(types)), qty=qty)
+
+
 def buy_equipment(d: Driver, rows: int = 10, qty: int = 6) -> bool:
     """Stock the armoury so replacement soldiers have something to carry.
 

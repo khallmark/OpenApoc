@@ -454,8 +454,21 @@ UString introspectGameState(GameState &state, const UString &query)
 					weapons++;
 				}
 			}
+			// The item ids matter, not just the counts: applying a template re-equips those
+			// exact types from stores, so the driver has to be able to buy the very things the
+			// template names. Without this it buys plausible weapons, applies the template, and
+			// arms nobody.
+			UString names;
+			for (const auto &e : t.equipment)
+			{
+				if (e.type)
+				{
+					names += (names.empty() ? "" : "+") + e.type.id;
+				}
+			}
 			out += (out.empty() ? "" : "|") +
-			       format("{0}:items={1},weapons={2}", i, t.equipment.size(), weapons);
+			       format("{0}:items={1},weapons={2},types={3}", i, t.equipment.size(), weapons,
+			              names.empty() ? UString("-") : names);
 		}
 		return format("templates={0} detail={1}", state.agentEquipmentTemplates.size(),
 		              out.empty() ? UString("-") : out);
