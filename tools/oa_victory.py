@@ -66,6 +66,7 @@ class Victory:
         self.last_recover = 0.0
         self.last_intercept = 0.0
         self.last_crew = 0.0
+        self.alert_refusals = 0
         self.last_checkpoint = 0.0
         self.best_crashed = 0
 
@@ -216,14 +217,22 @@ class Victory:
             st = self.d.status()
         except OSError:
             return False
-        if st.stage == "VideoScreen":
-            try:
-                lost = self.d.h.gs("stage").get("defeated") == "1"
-            except HarnessError:
-                lost = False
-            self.progress["ended"] = "defeat" if lost else "victory"
+        if st.stage != "VideoScreen":
+            return False
+        # Both endings are a VideoScreen: AliensDefeated plays wingame2.smk, XComDefeated plays
+        # lose1.smk (cityview.cpp:4686-4699), and the intro is a VideoScreen too. Treating any
+        # VideoScreen as a win reported victory on day 8 of a campaign with one recovery and no
+        # alien research at all, right after a base defence. Only the winning video counts.
+        detail = (st.detail or "-").lower()
+        if "wingame" in detail:
+            self.progress["ended"] = "victory"
             self.flush()
-            self.say("VICTORY - aliens defeated" if not lost else "campaign lost")
+            self.say(f"VICTORY - aliens defeated ({st.detail})")
+            return True
+        if "lose" in detail:
+            self.progress["ended"] = "defeat"
+            self.flush()
+            self.say(f"campaign lost ({st.detail})")
             return True
         return False
 
@@ -241,14 +250,38 @@ class Victory:
                 st = self.d.status()
                 if st.stage == "VideoScreen" and self.victorious():
                     return 0 if self.progress.get("ended") == "victory" else 1
+                if st.stage == "VideoScreen":
+                    # Some other cutscene (the intro, most likely). Skip it and carry on.
+                    self.d.h.key("Escape")
+                    time.sleep(0.5)
+                    continue
                 if st.stage in BATTLE_STAGES:
                     self.fight(st.stage)
                     continue
                 if st.stage == "AlertScreen":
+                    # EXTERMINATE is refused outright when no craft can take the squad -- with a
+                    # MessageBox, after which the alert is still up. Retrying it on the next pass
+                    # produced an endless dispatch/refuse loop that froze the clock for as long
+                    # as the alert stood. Try once, then get out of the way and let the city run;
+                    # the incident will come back around when a craft is free.
                     n = self.d.select_assignment_rows(st)
                     self.d.click_id("BUTTON_EXTERMINATE", st)
-                    self.say(f"squad dispatched to incident ({n} rows)")
-                    time.sleep(1.0)
+                    time.sleep(1.2)
+                    cur = self.d.status()
+                    for _ in range(4):
+                        if cur.stage != "MessageBox":
+                            break
+                        self.d.h.key("Return")
+                        time.sleep(0.4)
+                        cur = self.d.status()
+                    if cur.stage == "AlertScreen":
+                        if not self.d.click_id("BUTTON_QUIT", cur):
+                            self.d.h.key("Escape")
+                        self.alert_refusals += 1
+                        self.say(f"incident dispatch refused ({self.alert_refusals}); dismissed")
+                    else:
+                        self.say(f"squad dispatched to incident ({n} rows)")
+                    time.sleep(0.5)
                     continue
                 if st.stage == "CityView":
                     self.city_turn()

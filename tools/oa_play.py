@@ -128,6 +128,10 @@ class Status:
     w: int
     h: int
     raw: str
+    # Extra stage identification from Stage::harnessDetail(). Victory and defeat are both a
+    # VideoScreen and differ only by which video plays, so the stage name alone cannot tell a
+    # won campaign from a lost one.
+    detail: str = "-"
 
 
 class Harness:
@@ -157,7 +161,8 @@ class Harness:
     def status(self) -> Status:
         raw = self.ok("status")
         parts = dict(p.split("=", 1) for p in raw.split() if "=" in p)
-        return Status(parts.get("stage", "?"), int(parts.get("w", 0)), int(parts.get("h", 0)), raw)
+        return Status(parts.get("stage", "?"), int(parts.get("w", 0)), int(parts.get("h", 0)), raw,
+                      parts.get("detail", "-"))
 
     def gs(self, query: str) -> dict[str, str]:
         raw = self.ok(f"gs {query}")

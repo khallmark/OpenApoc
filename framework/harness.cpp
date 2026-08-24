@@ -680,8 +680,11 @@ UString Harness::execute(const HarnessCommand &cmd, Framework &fw)
 		{
 			const auto stage = fw.stageGetCurrent();
 			const auto size = fw.displayGetSize();
-			return format("OK stage={0} w={1} h={2} mouse={3},{4} port={5}",
-			              demangleStage(stage.get()), size.x, size.y, lastX, lastY, listenPort);
+			auto detail = stage ? stage->harnessDetail() : UString("");
+			std::replace(detail.begin(), detail.end(), ' ', '_');
+			return format("OK stage={0} w={1} h={2} mouse={3},{4} port={5} detail={6}",
+			              demangleStage(stage.get()), size.x, size.y, lastX, lastY, listenPort,
+			              detail.empty() ? UString("-") : detail);
 		}
 		case HarnessCommand::Type::Query:
 		{
