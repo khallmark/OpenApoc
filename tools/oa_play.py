@@ -1308,16 +1308,43 @@ def intercept_ufos(d: Driver) -> int:
     if lst is None or lst.w <= 0:
         d.say("  [intercept] vehicle list not resolvable")
         return 0
-    # Horizontal strip of craft icons. Send the whole wing, not one craft: a lone interceptor
-    # loses to escorted UFOs, and a campaign that trades its fleet away without a single kill
-    # has no artifacts to research and no score to keep its funding.
+    # Horizontal strip of craft icons. Send the whole wing, not one craft: each plain click
+    # *replaces* the selection, so the previous loop left exactly one interceptor engaged however
+    # many were sitting on the pad. Ctrl makes selection additive (cityview.cpp:340 ->
+    # orderSelect additive).
+    #
+    # The score maths rewards this directly. A UFO killed scores; a UFO that loiters and leaves
+    # costs; and city_damage from UFO weapons is the largest single drain on the live board
+    # (-356, against +150 for kills). More guns on target means shorter engagements and less of
+    # both.
+    # Only send craft that can actually fight: flying and armed. A Stormdog is a *road* vehicle
+    # and a Hovercar with no gun is a passenger, and ordering either after an airborne UFO is not
+    # interception -- it is a vehicle driving around while the UFO keeps bombing the city, which
+    # is the largest score drain on the board. gs interceptors reports the flying/armed flags in
+    # the same order the icons appear in OWNED_VEHICLE_LIST.
     ICON_W = 36
-    for slot in range(4):
-        x = lst.x + 16 + slot * ICON_W
-        if x >= lst.x + lst.w:
-            break
-        d.h.click_xy(x, lst.y + lst.h // 2)
-        time.sleep(0.15)
+    fighters = []
+    for part in d.h.gs("interceptors").get("detail", "").split("|"):
+        bits = part.split(":")
+        if len(bits) < 3 or not bits[0].isdigit():
+            continue
+        if "flying=1" in bits[-1] and "armed=1" in bits[-1]:
+            fighters.append(int(bits[0]))
+    if not fighters:
+        d.say("  [intercept] no armed flying craft available; not sending anyone")
+        d.h.key("Escape")
+        return 0
+
+    d.h.send("keydown Left Ctrl")
+    try:
+        for slot in fighters[:4]:
+            x = lst.x + 16 + slot * ICON_W
+            if x >= lst.x + lst.w:
+                break
+            d.h.click_xy(x, lst.y + lst.h // 2)
+            time.sleep(0.1)
+    finally:
+        d.h.send("keyup Left Ctrl")
     time.sleep(0.2)
 
     st = d.status()
@@ -1500,9 +1527,15 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         # labs and the base garrison. Leaving with eight alive is worth far more than any crash
         # site. Two triggers: a quarter of the squad already down, or being outnumbered three to
         # one with any loss at all.
+        # Retreat is a last resort, not a reflex. Pulling out at the first casualty meant the
+        # campaign withdrew from essentially every mission: no wins, no recovered wrecks, no
+        # research unlocks, and none of the tactical score a completed mission pays. Aliens have
+        # to actually be killed for any of this to progress. Bail only when the squad is genuinely
+        # collapsing -- down to a third of its strength and still badly outnumbered -- rather than
+        # whenever it starts taking losses.
         outnumbered = foes_n >= alive * 3
-        bleeding = alive <= max(1, int(started_with * 0.75))
-        if started_with and alive and (bleeding or (outnumbered and alive < started_with)):
+        collapsing = alive <= max(1, started_with // 3)
+        if started_with and alive and collapsing and outnumbered:
             d.say(f"  [battle] retreating: {alive} left of {started_with} against {foes_n}")
             d.h.key("Escape")
             time.sleep(0.8)

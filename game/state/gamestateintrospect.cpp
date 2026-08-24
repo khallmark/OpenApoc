@@ -5,6 +5,8 @@
 #include "game/state/city/base.h"
 #include "game/state/city/building.h"
 #include "game/state/rules/battle/battlemap.h"
+#include "game/state/rules/city/vequipmenttype.h"
+#include "game/state/city/vequipment.h"
 #include "game/state/city/facility.h"
 #include "game/state/rules/city/facilitytype.h"
 #include "game/state/rules/aequipmenttype.h"
@@ -654,6 +656,50 @@ UString introspectGameState(GameState &state, const UString &query)
 	// If that organisation is the government, weeklyPlayerUpdate latches fundingTerminated and
 	// income is gone permanently, which is how a campaign died at score -1312, nowhere near the
 	// -2400 score cutoff.
+	// Which of our craft can actually engage a UFO: flying, alive, and carrying a weapon. Sending
+	// a Stormdog -- a road vehicle -- after an airborne UFO is not interception, it is a craft
+	// wandering the streets while the UFO bombs the city. Reported in list order so the driver
+	// can pick the right icons out of OWNED_VEHICLE_LIST.
+	if (q == "interceptors")
+	{
+		const auto player = state.getPlayer();
+		UString out;
+		size_t idx = 0, usable = 0;
+		for (const auto &v : state.vehicles)
+		{
+			const auto &veh = v.second;
+			if (!veh || !veh->owner || veh->owner.id != player.id || veh->isDead())
+			{
+				continue;
+			}
+			const bool flying = veh->type && veh->type->type == VehicleType::Type::Flying;
+			bool armed = false;
+			for (const auto &e : veh->equipment)
+			{
+				if (e && e->type && e->type->type == EquipmentSlotType::VehicleWeapon)
+				{
+					armed = true;
+					break;
+				}
+			}
+			if (flying && armed)
+			{
+				usable++;
+			}
+			// Craft names contain spaces ("Valkyrie Interceptor 1") and the reply parser splits
+			// fields on whitespace, so an unescaped name silently truncates the record and every
+			// flag after it is lost -- which read as "no armed flying craft available" while
+			// three were sitting on the pad.
+			UString safeName = veh->name;
+			std::replace(safeName.begin(), safeName.end(), ' ', '_');
+			out += (out.empty() ? "" : "|") +
+			       format("{0}:{1}:flying={2},armed={3}", idx, safeName, flying ? 1 : 0,
+			              armed ? 1 : 0);
+			idx++;
+		}
+		return format("craft={0} interceptors={1} detail={2}", idx, usable,
+		              out.empty() ? UString("-") : out);
+	}
 	if (q == "infiltrated")
 	{
 		const auto player = state.getPlayer();
