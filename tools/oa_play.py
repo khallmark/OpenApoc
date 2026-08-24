@@ -1975,6 +1975,24 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
                     foes = found
 
         if foes:
+            # Shoot first, and shoot at the unit itself. Holding Shift puts BattleView into
+            # FireAny (battleview.cpp:2098-2100) and a click then resolves to orderFire on the
+            # unit under the cursor rather than a move (battleview.cpp:4140-4151). Without this
+            # the driver only ever WALKED: a left click on an occupied tile cannot become a move
+            # order at all, so a hostile the squad could not path to -- one floor up, on a roof,
+            # sealed behind scenery, or simply flying -- was never actually shot at, and the
+            # battle sat at "one foe alive" until the budget ran out. Real-time auto-fire only
+            # engages what a unit can already see, which is exactly what a stalled battle does
+            # not have.
+            tx_, ty_, _ = foes[rounds % len(foes)]
+            d.h.send("keydown Left Shift")
+            try:
+                d.h.click_xy(max(0, min(st.w - 1, tx_)), max(0, min(st.h - 1, ty_)))
+                time.sleep(0.15)
+            finally:
+                d.h.send("keyup Left Shift")
+            time.sleep(0.2)
+
             fx, fy, _ = foes[rounds % len(foes)]
             # Aim a short way off the hostile's own tile: that tile is occupied, and a left
             # click on an occupied tile selects rather than moves (battleview.cpp:3778-3790).
