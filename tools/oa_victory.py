@@ -109,6 +109,7 @@ class Victory:
         self.last_base_try = 0.0
         self.last_defer_log = 0.0
         self.caps_checked = False
+        self.last_solvency_check = 0.0
         self.last_deferred_why = ""
         self.second_base = False
         self.best_crashed = 0
@@ -553,33 +554,42 @@ class Victory:
                 clear_attack_orders(self.d)
             self.d.h.key("5")  # nothing hostile left; turbo is safe and ~1681x faster
 
+    def bankrupt(self) -> bool:
+        """True when the campaign is finished even though the engine has not said so.
+
+        XComDefeated fires only when the LAST base is lost (base.cpp:150-159), so a run whose
+        funding has been cut and whose treasury is empty simply limps: no income, nothing to buy
+        weapons with, and a squad that cannot be armed. Seen at day 26 -- funding terminated, $249,
+        every facility gone, score -6147 -- with the runner unable to call it either way.
+
+        This lives outside victorious() deliberately: that method is only consulted once the stage
+        is already a VideoScreen, which is exactly the case this condition never reaches.
+        """
+        if time.time() - self.last_solvency_check < 60.0:
+            return False
+        self.last_solvency_check = time.time()
+        try:
+            f = self.d.h.gs("funds")
+            a = self.d.h.gs("agents")
+        except (HarnessError, OSError):
+            return False
+        if f.get("funding_terminated") != "1":
+            return False
+        if int(f.get("balance", "0") or 0) >= BANKRUPT_FLOOR:
+            return False
+        if int(a.get("armed", "0") or 0) > 0:
+            return False
+        self.progress["ended"] = "bankrupt"
+        self.flush()
+        self.say(f"campaign bankrupt - funding cut, ${f.get('balance')} left, nobody armed, "
+                 f"score {f.get('score_total')}; recording defeat")
+        return True
+
     def victorious(self) -> bool:
         try:
             st = self.d.status()
         except OSError:
             return False
-        # A campaign can be finished without the engine ever saying so. XComDefeated fires only
-        # when the last base is lost (base.cpp:150-159), so a run whose funding has been cut and
-        # whose treasury is empty just limps: no income, nothing to buy weapons with, five
-        # unarmed soldiers, and no way back. Observed exactly that at day 22 -- funding
-        # terminated, $949, armed=0 -- with the runner unable to call it either way. Recognise it
-        # and record an honest bankruptcy rather than playing out a run that cannot be won.
-        if st.stage == "CityView":
-            try:
-                f = self.d.h.gs("funds")
-                a = self.d.h.gs("agents")
-            except (HarnessError, OSError):
-                return False
-            if (f.get("funding_terminated") == "1"
-                    and int(f.get("balance", "0") or 0) < BANKRUPT_FLOOR
-                    and int(a.get("armed", "0") or 0) == 0):
-                self.progress["ended"] = "bankrupt"
-                self.flush()
-                self.say(f"campaign bankrupt - funding cut, ${f.get('balance')} left, "
-                         f"no armed soldiers; recording defeat")
-                return True
-            return False
-
         if st.stage != "VideoScreen":
             return False
         # Both endings are a VideoScreen: AliensDefeated plays wingame2.smk, XComDefeated plays
@@ -613,6 +623,8 @@ class Victory:
                 st = self.d.status()
                 if st.stage == "VideoScreen" and self.victorious():
                     return 0 if self.progress.get("ended") == "victory" else 1
+                if self.bankrupt():
+                    return 1
                 if st.stage == "VideoScreen":
                     # Some other cutscene (the intro, most likely). Skip it and carry on.
                     self.d.h.key("Escape")
