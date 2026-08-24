@@ -241,8 +241,18 @@ agent from day one; it is cheap and immediately available. "Under no circumstanc
 be sent into combat without armour." Marsec body armour (grants flight) is worth switching to
 later.
 
-**Security Stations**: build up to three per base, adjacent to the Access Lift, forming a choke
-point. Beyond three never activate. They auto-fire in real time.
+**Security Stations do not work in OpenApoc — ignore that advice.** The guides make much of them,
+but checking this codebase: `FacilityType` (game/state/rules/city/facilitytype.h) has no weapon,
+turret or defence field at all, and grepping "security" across base.cpp / facility.cpp finds
+nothing. `FACILITYTYPE_SECURITY_STATION` exists as a buildable tile and is otherwise inert here.
+
+**You also cannot position your defenders.** `Battle::initialUnitSpawn()` picks each defending
+unit's starting tile with `pickRandom` over the map's spawn blocks, and `BaseDefenseScreen` just
+calls `beginBattle()` with the base roster — there is no pre-placement screen, so no chokepoint
+plan is drivable. `fillMap()` also notes base defences "never prevent entrance or exit from any
+vector", so the single-breach-corridor idea does not apply.
+
+Which leaves *arming people* as the one base-defence lever that actually exists here.
 
 **Squad**: cap around six combat agents. Standard early loadout is a weapon plus two spare clips,
 two AP grenades, two stun grenades, and a medi-kit. Early weapons: Megapol Lawpistol or Marsec
@@ -257,6 +267,14 @@ every mission to the death is what produces a losing spiral.
 
 **Money** comes from raiding as much as from UFOs. The Cult of Sirius is permanently hostile by
 design, so raiding them costs no diplomacy. Sell researched alien tech.
+
+**Watch for a research naming trap.** `RESEARCH_BIO-TRANSPORT_MODULE` (BioChem) is the craft
+module for carrying live specimens. `RESEARCH_BIO-TRANSPORT` (Quantum Physics, order 20110) is a
+*different* topic that unlocks the Biotrans inter-dimensional craft. A driver matching on the
+substring "BIO-TRANSPORT" will target the wrong one.
+
+`FACILITYTYPE_ALIEN_CONTAINMENT` has no dependency in this data — it is buildable from turn one,
+with no research chain to start first.
 
 **Reaching the alien dimension** is a chain, not one unlock: research Dimension Gates, then shoot
 down *and recover* a UFO Type 3 Transporter, which is what opens the alien-craft research leading
