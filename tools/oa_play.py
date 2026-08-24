@@ -3116,13 +3116,25 @@ def buy_named(d: Driver, wanted: list, qty: int = 8, category: str = "BUTTON_AGE
     except (HarnessError, OSError):
         close_buysell(d, commit=False)
         return 0
+    seen: list[str] = []
+    matched: set[str] = set()
     for entry in listing[2:]:
         parts = entry.split(":")
         if len(parts) < 2 or not parts[0].isdigit():
             continue
-        label = parts[-1][5:] if parts[-1].startswith("text=") else ""
-        if _norm(label) not in keys:
+        # "text=" is not reliably the last field, and a label containing a colon splits across
+        # several. Find the marker and take everything after it.
+        label = ""
+        for i, part in enumerate(parts):
+            if part.startswith("text="):
+                label = ":".join([part[5:]] + parts[i + 1:])
+                break
+        if label:
+            seen.append(label)
+        key = _norm(label)
+        if key not in keys:
             continue
+        matched.add(key)
         idx = parts[0]
         try:
             cur = d.h.send(f"control LIST item {idx} get")
@@ -3141,6 +3153,13 @@ def buy_named(d: Driver, wanted: list, qty: int = 8, category: str = "BUTTON_AGE
     close_buysell(d, commit=ordered > 0)
     funds_after = int(d.h.gs("funds").get("balance", "0") or 0)
     d.say(f"  [buy] ordered {ordered} of {len(keys)} wanted lines, funds {funds_before}->{funds_after}")
+    missing = keys - matched
+    if missing:
+        # Name what could not be found and what the screen was actually offering. "ordered 1 of
+        # 11" said the buying failed but never why, and the answer -- an armoury with weapons=0
+        # while every recruit went unarmed -- was worth knowing the first time it happened.
+        d.say(f"  [buy] no row for {len(missing)} wanted item(s): {sorted(missing)[:4]}")
+        d.say(f"  [buy] screen listed {len(seen)} row(s), e.g. {seen[:4]}")
     return ordered
 
 
