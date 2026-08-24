@@ -134,6 +134,21 @@ class Victory:
             f.write(line + "\n")
 
     def save(self, why: str) -> None:
+        # Only ever checkpoint from the city. "after mission N" fired while the debriefing was
+        # still up, so the save captured a battle mid-teardown -- resuming it loaded a degenerate
+        # battle (ten units, all flagged retreated, zero hostiles) and the game died on the spot,
+        # twice in a row, each death overwriting nothing but costing a restart. A stale but
+        # loadable checkpoint beats a fresh poisoned one, so skip rather than overwrite, and let
+        # the periodic save take it as soon as the city is back.
+        try:
+            stage = self.d.status().stage
+        except (HarnessError, OSError) as exc:
+            self.say(f"checkpoint FAILED ({why}): {exc}")
+            return
+        if stage != "CityView":
+            self.say(f"checkpoint deferred ({why}): stage is {stage}, not CityView")
+            self.last_checkpoint = 0.0
+            return
         try:
             self.d.h.ok(f"save {self.checkpoint}")
             self.last_checkpoint = time.time()
