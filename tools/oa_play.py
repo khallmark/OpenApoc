@@ -957,6 +957,10 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
     last_foes = None
     stalls = 0
     rounds = 0
+    # Remembered from the last in-battle sample: the debriefing stage has no battle to query,
+    # current_battle having already been torn down by then.
+    last_player_won = False
+    last_mine_alive = "?"
 
     while time.time() - t0 < budget_s:
         st = d.status()
@@ -968,10 +972,15 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         if st.stage == "BattlePreStart":
             d.click_id("BUTTON_OK", st); time.sleep(1.0); continue
         if st.stage == "BattleDebriefing":
-            d.shot("battle_won")
+            # Ask the engine who won rather than assuming. Battle::checkMissionEnd sets playerWon;
+            # a debriefing appears either way, so treating its arrival as a win counted a total
+            # squad wipe -- every soldier dead -- as "resolved (wins 2)".
+            outcome = "resolved" if last_player_won else "lost"
+            d.shot("battle_" + outcome)
             d.click_id("BUTTON_OK", st)
-            d.say(f"[battle] debriefing after {time.time()-t0:.0f}s")
-            return "resolved"
+            d.say(f"[battle] debriefing after {time.time()-t0:.0f}s: {outcome}"
+                  f" (survivors {last_mine_alive})")
+            return outcome
         if st.stage in ("CityView", "MainMenu", "VideoScreen"):
             d.say(f"[battle] back at {st.stage}")
             return "returned"
@@ -1037,6 +1046,8 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         b = d.h.gs("battle")
         foes_alive = b.get("foes_alive")
         mine_alive = b.get("mine_alive")
+        last_player_won = b.get("player_won") == "1"
+        last_mine_alive = mine_alive
         if mine_alive == "0":
             d.say(f"[battle] squad wiped out: {b}")
         if foes_alive == last_foes:

@@ -4,6 +4,8 @@
 #include "game/state/battle/battleunit.h"
 #include "game/state/city/base.h"
 #include "game/state/city/facility.h"
+#include "game/state/rules/aequipmenttype.h"
+#include "game/state/shared/aequipment.h"
 #include <set>
 #include "game/state/city/city.h"
 #include "game/state/city/research.h"
@@ -290,15 +292,38 @@ UString describeTurbo(GameState &state)
 UString describeAgents(GameState &state)
 {
 	const auto player = state.getPlayer();
-	size_t mine = 0;
+	size_t mine = 0, soldiers = 0, soldiersFit = 0, armed = 0;
 	for (const auto &a : state.agents)
 	{
-		if (a.second && a.second->owner && a.second->owner.id == player.id)
+		const auto &agent = a.second;
+		if (!agent || !agent->owner || agent->owner.id != player.id)
 		{
-			mine++;
+			continue;
+		}
+		mine++;
+		if (!agent->type || agent->type->role != AgentType::Role::Soldier)
+		{
+			continue;
+		}
+		soldiers++;
+		// Soldiers are lost permanently, and a campaign that cannot replace them runs out of
+		// people to send. A wounded soldier still exists but cannot be dispatched, so "how many
+		// can actually go on a mission" is the number that matters.
+		if (!agent->isDead() && agent->modified_stats.health > 0)
+		{
+			soldiersFit++;
+		}
+		for (const auto &e : agent->equipment)
+		{
+			if (e && e->type && e->type->type == AEquipmentType::Type::Weapon)
+			{
+				armed++;
+				break;
+			}
 		}
 	}
-	return format("agents_total={0} agents_player={1}", state.agents.size(), mine);
+	return format("agents_total={0} agents_player={1} soldiers={2} soldiers_fit={3} armed={4}",
+	              state.agents.size(), mine, soldiers, soldiersFit, armed);
 }
 
 
@@ -340,7 +365,9 @@ UString describeBattle(GameState &state)
 			}
 		}
 	}
-	return format("in_battle=1 mode={0} units={1} mine={2} mine_alive={3} mine_retreated={4} "
+	// playerWon is the engine's own verdict (Battle::checkMissionEnd). Inferring a win from
+	// "a debriefing appeared" counted a total squad wipe as a victory.
+	return format("player_won={0} ", battle.playerWon ? 1 : 0) + format("in_battle=1 mode={0} units={1} mine={2} mine_alive={3} mine_retreated={4} "
 	              "foes={5} foes_alive={6} hazards={7}",
 	              battle.mode == Battle::Mode::RealTime ? "rt" : "tb", battle.units.size(), mine,
 	              mineAlive, retreated, hostiles, hostilesAlive, battle.hazards.size());
