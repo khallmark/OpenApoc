@@ -2608,9 +2608,19 @@ def buy_interceptor(d: Driver, want: int = 2) -> int:
         d.say(f"  [craft] cheapest armed flier is ${cheapest[0]}, only ${funds} on hand")
         return 0
     best_guns = affordable[0][2]
-    picks = [n for _, n, guns in affordable if guns == best_guns][:2]
-    d.say(f"  [craft] buying armed fliers with {best_guns} weapon slot(s): {', '.join(picks)}")
-    return buy_named(d, picks, qty=want, category="BUTTON_VEHICLES")
+    tier = [o for o in affordable if o[2] == best_guns]
+    price = tier[0][0]
+    # Buy only as many as the money actually covers. Asking for two Hawk Air Warriors at $101,000
+    # each against $152,947 bought nothing at all: the order exceeded the balance and was refused
+    # whole, so the driver announced a purchase every four minutes and the fleet never grew.
+    spare = max(0, funds - 40000)
+    qty = max(1, min(want, spare // price if price else 1))
+    picks = [n for _, n, _ in tier][:2]
+    d.say(f"  [craft] buying {qty} x {best_guns}-weapon flier "
+          f"(${price} each, ${funds} on hand): {', '.join(picks)}")
+    got = buy_named(d, picks, qty=qty, category="BUTTON_VEHICLES")
+    d.say(f"  [craft] {got} purchase line(s) ordered")
+    return got
 
 
 def buy_vehicles(d: Driver, want: int = 2) -> int:
