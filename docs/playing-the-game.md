@@ -195,6 +195,18 @@ same order `BaseScreen` builds its list — position in that list is position on
 inside `GRAPHIC_BASE_VIEW`. Corridor layout and occupancy are not exposed, so try tiles and treat
 a MessageBox as a rejection.
 
+## Crashes
+
+macOS crash reports from this game are worth reading, not ignoring. A run of 23 of them all had
+the same signature -- SIGSEGV at address 0x8 in `GameState::initState()` on a thread-pool worker
+under `BootUp::update()` -- and that is the save-loading path. `initState` dereferenced several
+references a loaded save may not have resolved, so a slightly incomplete object graph killed the
+process instead of failing visibly. That is fixed; if the signature reappears, look for a new
+unguarded reference on the same path.
+
+Note that macOS does not write a report for SIGKILL, so a report means a genuine fault. The
+driver already sends `QUIT` and waits before killing anything, so a clean shutdown produces none.
+
 ## Running a campaign
 
 ```bash
