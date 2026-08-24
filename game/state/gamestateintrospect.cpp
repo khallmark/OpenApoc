@@ -484,6 +484,34 @@ UString introspectGameState(GameState &state, const UString &query)
 	// victory runs through particular topics -- RESEARCH_ADVANCED_WORKSHOP to unlock the large
 	// workshop, then RESEARCH_ALIEN_BUILDING_0..9 -- and picking row 0 gets whatever happens to
 	// be first.
+	// Everything the engine knows about one topic, by id. The XML in data/common_patch is only a
+	// patch over data extracted from the player's original game, so questions like "does
+	// MANUFACTURE_DIMENSION_SHIFTER actually have prerequisites in the merged data" cannot be
+	// answered by reading the repo -- only by asking the running game.
+	if (q.size() > 6 && q.substr(0, 6) == "topic ")
+	{
+		const auto id = query.substr(6);
+		const auto it = state.research.topics.find(id);
+		if (it == state.research.topics.end() || !it->second)
+		{
+			return format("found=0 id={0}", id);
+		}
+		const auto &t = it->second;
+		const char *kind = t->type == ResearchTopic::Type::BioChem     ? "biochem"
+		                   : t->type == ResearchTopic::Type::Physics   ? "physics"
+		                                                              : "engineering";
+		bool satisfied = false;
+		if (!state.player_bases.empty())
+		{
+			const StateRef<Base> base{&state, state.player_bases.begin()->first};
+			satisfied = t->dependencies.satisfied(base);
+		}
+		return format("found=1 id={0} type={1} complete={2} hidden={3} started={4} "
+		              "large={5} deps_satisfied={6} man_hours={7}/{8} cost={9}",
+		              id, kind, t->isComplete() ? 1 : 0, t->hidden ? 1 : 0, t->started ? 1 : 0,
+		              t->required_lab_size == ResearchTopic::LabSize::Large ? 1 : 0,
+		              satisfied ? 1 : 0, t->man_hours_progress, t->man_hours, t->cost);
+	}
 	if (q == "research_options")
 	{
 		if (!state.current_base)
@@ -636,8 +664,35 @@ UString introspectGameState(GameState &state, const UString &query)
 				}
 			}
 		}
-		return format("agent_equipment_kinds={0} agent_equipment_total={1} weapons={2} top={3}",
-		              kinds, total, weapons, top.empty() ? UString("-") : top);
+		// Vehicle equipment too: MANUFACTURE_DIMENSION_SHIFTER's output lands in
+		// inventoryVehicleEquipment, and that item is the only player-obtainable way into the
+		// alien dimension -- so "did the workshop actually produce one" needs to be answerable.
+		UString vehTop;
+		size_t vehKinds = 0, vehTotal = 0;
+		for (const auto &b : state.player_bases)
+		{
+			if (!b.second)
+			{
+				continue;
+			}
+			for (const auto &e : b.second->inventoryVehicleEquipment)
+			{
+				if (e.second == 0)
+				{
+					continue;
+				}
+				vehKinds++;
+				vehTotal += e.second;
+				if (vehKinds <= 8)
+				{
+					vehTop += (vehTop.empty() ? "" : "|") + format("{0}x{1}", e.first, e.second);
+				}
+			}
+		}
+		return format("agent_equipment_kinds={0} agent_equipment_total={1} weapons={2} "
+		              "vehicle_kinds={3} vehicle_total={4} vehicle_top={5} top={6}",
+		              kinds, total, weapons, vehKinds, vehTotal,
+		              vehTop.empty() ? UString("-") : vehTop, top.empty() ? UString("-") : top);
 	}
 	if (q == "crashes")
 	{

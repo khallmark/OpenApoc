@@ -964,6 +964,112 @@ def build_facility(d: Driver, want: str = "FACILITYTYPE_ADVANCED_WORKSHOP") -> b
     return False
 
 
+def manufacture(d: Driver, want: str = "MANUFACTURE_DIMENSION_SHIFTER", qty: int = 1) -> bool:
+    """Start a manufacturing project in a workshop. Returns True when it actually takes.
+
+    VEQUIPMENTTYPE_DIMENSION_SHIFTER is the only player-obtainable way into the alien dimension,
+    so this is the gate the whole endgame sits behind. It is an Engineering project needing a
+    *Large* workshop -- the starting base has only a small one, which is why
+    FACILITYTYPE_ADVANCED_WORKSHOP has to be researched and built first.
+
+    Manufacturing reuses the research screen and ResearchSelect, but Lab::setResearch branches on
+    lab type: an Engineering lab is charged the project cost immediately. required_lab_size is
+    *not* used to filter the offered list, so a Large-only project appears in a small workshop's
+    list too and is refused with a message box when picked -- gs research_options flags that as
+    big=1, and pick_topic_row already skips those.
+    """
+    before = d.h.gs("stores").get("vehicle_top", "-")
+    st = d.status()
+    if st.stage != "CityView":
+        return False
+    d.click_id("BUTTON_TAB_1", st)
+    time.sleep(0.35)
+    if not d.click_id("BUTTON_SHOW_BASE", d.status()):
+        return False
+    try:
+        d.wait_for("BaseScreen", 30)
+    except TimeoutError:
+        return False
+    d.click_id("BUTTON_BASE_RES_AND_MANUF", d.status())
+    try:
+        d.wait_for("ResearchScreen", 30)
+    except TimeoutError:
+        return False
+
+    started = False
+    for list_id in ("LIST_LARGE_LABS", "LIST_SMALL_LABS"):
+        for slot in range(6):
+            if d.status().stage != "ResearchScreen":
+                break
+            try:
+                if not d.h.send(f"control {list_id} set {slot}").startswith("OK"):
+                    break
+            except HarnessError:
+                break
+            time.sleep(0.3)
+            opts = d.h.gs("research_options")
+            if "engineering" not in opts.get("lab", "").lower() and "MANUFACTURE" not in opts.get(
+                "detail", ""
+            ):
+                continue
+            row = -1
+            for part in opts.get("detail", "").split("|"):
+                idx, _, rest = part.partition("=")
+                fields = rest.split(",")
+                if fields and fields[0] == want and not fields[1].endswith("1"):
+                    if len(fields) > 2 and fields[2].endswith("1"):
+                        d.say(f"  [manufacture] {want} needs a larger lab than this one")
+                        continue
+                    row = int(idx)
+                    break
+            if row < 0:
+                continue
+
+            if not d.click_id("BUTTON_RESEARCH_NEWPROJECT", d.status()):
+                continue
+            time.sleep(0.45)
+            if d.status().stage != "ResearchSelect":
+                continue
+            try:
+                d.h.control("LIST", "set", str(row))
+            except HarnessError:
+                pass
+            time.sleep(0.3)
+            d.click_id("BUTTON_OK", d.status())
+            time.sleep(0.6)
+            if d.status().stage == "MessageBox":
+                d.say(f"  [manufacture] refused: {d.h.send('controls')[:120]}")
+                d.h.key("Return")
+                time.sleep(0.5)
+                continue
+            # Quantity only becomes meaningful once a project is committed.
+            try:
+                d.h.control("MANUFACTURE_QUANTITY_SLIDER", "set", str(qty))
+            except HarnessError:
+                pass
+            time.sleep(0.4)
+            d.say(f"  [manufacture] started {want} x{qty}")
+            started = True
+            break
+        if started:
+            break
+
+    for _ in range(8):
+        st = d.status()
+        if st.stage == "CityView":
+            break
+        if st.stage in ("ResearchSelect", "ResearchScreen", "BaseScreen"):
+            d.click_id("BUTTON_OK", st)
+        elif not d.dismiss_modal(st):
+            d.h.key("Escape")
+        time.sleep(0.5)
+
+    after = d.h.gs("stores").get("vehicle_top", "-")
+    if not started:
+        d.say(f"  [manufacture] could not start {want} (needs a Large workshop?)")
+    return started
+
+
 def staff_labs(d: Driver) -> int:
     """Put scientists into the labs. Returns the gain in total lab skill.
 

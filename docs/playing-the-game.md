@@ -55,7 +55,20 @@ The chain, strictly in order:
 2. Build it. `MANUFACTURE_DIMENSION_SHIFTER` requires `required_lab_size Large`; the starting
    base has only a small workshop.
 3. Manufacture `VEQUIPMENTTYPE_DIMENSION_SHIFTER` — 50,000 man-hours, $14,000 per unit, charged
-   per unit. It has **no research prerequisite**: the patch data deletes its only dependency.
+   per unit, and it needs a **Large** workshop.
+
+   **Do not trust the XML here.** `data/common_patch/gamestate/research.xml` carries an
+   `op="delete"` on this project's research dependency, which reads as "no prerequisite" — and a
+   strategy pass concluded exactly that. Asking the running engine says otherwise:
+   `gs topic MANUFACTURE_DIMENSION_SHIFTER` reports `deps_satisfied=0` on a fresh game. The
+   common_patch files are a *patch over data extracted from the player's own copy of the original
+   game*, so the merged truth is not readable from this repo at all. Use `gs topic <ID>`.
+
+   Its dependency, `RESEARCH_DIMENSION_SHIFTER`, is `hidden=1` and 190,000 man-hours. Hidden
+   topics are permanently excluded from the manual research list
+   (researchselect.cpp:234), so it can never be researched by hand — it has to be force-completed
+   by an event, the same way the `RESEARCH_UNLOCK_*` topics are. Reaching the shifter therefore
+   depends on whatever in-game event unlocks it, not on queueing research.
 4. Fit it to a craft. `Vehicle::hasDimensionShifter()` is the sole gate on crossing.
 5. Order that craft into a Dimension Gate → `VehicleMission::gotoPortal`. Without a shifter the
    craft is stranded or crashes on arrival.
@@ -309,6 +322,23 @@ the actual transition into BattleView does not happen -- see the status note at 
 in Skirmish's own battlemap generation (a threadpool exception was directly observed on one map),
 separate from the main campaign's battle path, which is unaffected and has been fighting real
 missions all session.
+
+## Ask the engine, not the XML
+
+`gs topic <ID>` reports what the running game actually believes about a research or manufacture
+topic: type, complete, hidden, started, whether it needs a Large lab, whether its dependencies are
+satisfied *right now*, man-hours progress and cost. Verified readings on a fresh Novice start:
+
+| topic | reachable now? |
+| --- | --- |
+| `RESEARCH_ALIEN_BUILDING_0` | yes — `deps_satisfied=1`, 38,000 hours |
+| `RESEARCH_DIMENSION_GATES` | yes — `deps_satisfied=1`, 5,000 hours |
+| `RESEARCH_ADVANCED_WORKSHOP` | **no** — `deps_satisfied=0`, despite being a plain Physics topic |
+| `MANUFACTURE_DIMENSION_SHIFTER` | **no** — `deps_satisfied=0`, needs a Large lab |
+| `RESEARCH_DIMENSION_SHIFTER` | **never manually** — `hidden=1`, 190,000 hours |
+
+This is the tool to reach for before planning any research route. Reading the repo's XML produced
+a confidently wrong plan; one query would have caught it.
 
 ## Running a campaign
 
