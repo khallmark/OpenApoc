@@ -2742,7 +2742,10 @@ def sell_named(d: Driver, wanted: list, qty: int = 4,
             if part.startswith("text="):
                 label = ":".join([part[5:]] + parts[i + 1:])
                 break
-        if _norm(label) not in keys:
+        # Owned craft are listed by instance name -- "Stormdog_1", not "Stormdog" -- so an exact
+        # match found nothing and the ground fleet was never sold. Match on prefix for selling.
+        key = _norm(label)
+        if not any(key == k or key.startswith(k) for k in keys):
             continue
         idx = parts[0]
         try:
