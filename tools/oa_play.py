@@ -2914,9 +2914,9 @@ def hire_staff(d: Driver, want: int = 6, role: str = "BUTTON_SOLDIERS",
     RecruitScreen is the purpose-built screen for this (BaseScreen -> BUTTON_BASE_HIREFIRESTAFF).
     A candidate is moved from the hire pool to the payroll by a plain MouseClick on its row --
     not a drag, not a listbox selection (recruitscreen.cpp:80-130). Those rows are generated at
-    runtime with no ids, which is exactly what CONTROL <list> item <N> click exists for. LIST1 is
-    the candidate pool and LIST2 the people already employed: the handler moves a row to the
-    opposite list, so LIST1 hires and LIST2 fires.
+    runtime with no ids, which is exactly what CONTROL <list> item <N> click exists for. LIST2 is
+    the applicant pool and LIST1 the staff already at this base (recruitscreen.cpp:248-260: the
+    left index is the current base, the right is a fixed 8, which is the unemployed pool).
 
     Nothing is charged until BUTTON_OK raises a Confirm Orders box and BUTTON_YES is pressed;
     the screen refuses and reports if funds or living quarters would be exceeded
@@ -2961,13 +2961,16 @@ def hire_staff(d: Driver, want: int = 6, role: str = "BUTTON_SOLDIERS",
         # Always click row 0: a hired candidate leaves LIST2 immediately, so the next one takes
         # its place. Walking the index instead would skip every other candidate.
         try:
-            # LIST1 is the candidate pool, LIST2 the people already employed. The click handler
-            # moves a row from whichever list holds it to the other (recruitscreen.cpp:92-104), so
-            # clicking LIST2 does not hire anybody -- it takes someone OFF the payroll. This code
-            # had them the wrong way round and had been quietly firing staff while reporting
-            # "clicked 9": soldiers 7->7, funds unchanged, and a campaign that could never build
-            # the depth it needed.
-            if not d.h.send("control LIST1 item 0 click").startswith("OK"):
+            # LIST2 is the candidate pool and LIST1 the staff already at this base. Settled from
+            # the engine rather than by guessing at the names: getLeftIndex() returns the index of
+            # the CURRENT BASE (recruitscreen.cpp:248-260) and rightIndex is a fixed 8, so
+            # agentLists[0..7] are the bases' payrolls and agentLists[8] is the unemployed pool.
+            # LIST1 therefore shows people already hired here -- clicking one of those fires them
+            # -- while LIST2 shows applicants, and clicking one takes it on.
+            reply = d.h.send("control LIST2 item 0 click")
+            if not reply.startswith("OK"):
+                if hired == 0:
+                    d.say(f"  [hire] LIST2 item 0 refused: {reply[:120]}")
                 break
         except (HarnessError, OSError):
             break
