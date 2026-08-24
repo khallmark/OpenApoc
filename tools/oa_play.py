@@ -735,6 +735,46 @@ def _lab_skill_total(d: Driver) -> int:
     return total
 
 
+# The route to victory runs through particular research, in order: the advanced workshop unlocks
+# the Large lab that MANUFACTURE_DIMENSION_SHIFTER requires, the shifter is what lets a craft
+# cross into the alien dimension, and each RESEARCH_ALIEN_BUILDING_i opens the raid that unlocks
+# the next. Picking whatever topic happens to sit in row 0 will eventually stumble into these,
+# but not before burning game-months on brainsucker launchers.
+PRIORITY_RESEARCH = ["RESEARCH_ADVANCED_WORKSHOP"] + [
+    f"RESEARCH_ALIEN_BUILDING_{i}" for i in range(10)
+]
+
+
+def pick_topic_row(d: Driver) -> int:
+    """Row index in ResearchSelect's LIST for the most valuable topic this lab can take.
+
+    gs research_options mirrors ResearchSelect's own filtering and ordering
+    (researchselect.cpp:222-240), so the index it reports is the index to select.
+    """
+    detail = d.h.gs("research_options").get("detail", "")
+    if not detail or detail == "-":
+        return -1
+    rows = []
+    for part in detail.split("|"):
+        try:
+            idx, rest = part.split("=", 1)
+            fields = rest.split(",")
+            topic = fields[0]
+            done = fields[1].endswith("1")
+            big = fields[2].endswith("1")
+        except (ValueError, IndexError):
+            continue
+        rows.append((int(idx), topic, done, big))
+    # A "too large" topic in a small lab is offered but refused with a message box, so skip it.
+    usable = [r for r in rows if not r[2] and not r[3]]
+    for want in PRIORITY_RESEARCH:
+        for idx, topic, _, _ in usable:
+            if topic == want:
+                d.say(f"  [research] targeting {topic} (row {idx})")
+                return idx
+    return usable[0][0] if usable else -1
+
+
 def staff_labs(d: Driver) -> int:
     """Put scientists into the labs. Returns the gain in total lab skill.
 
@@ -832,7 +872,9 @@ def assign_research(d: Driver) -> bool:
                 break  # ran off the end of this list
             time.sleep(0.3)
 
-            for topic_row in range(8):
+            wanted = pick_topic_row(d)
+            for attempt in range(8):
+                topic_row = wanted if attempt == 0 and wanted >= 0 else attempt
                 st = d.status()
                 if st.stage != "ResearchScreen":
                     break

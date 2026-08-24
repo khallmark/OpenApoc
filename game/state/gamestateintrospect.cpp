@@ -7,6 +7,7 @@
 #include "game/state/city/facility.h"
 #include "game/state/rules/aequipmenttype.h"
 #include "game/state/shared/aequipment.h"
+#include <map>
 #include <set>
 #include "game/state/city/city.h"
 #include "game/state/city/research.h"
@@ -463,6 +464,58 @@ UString introspectGameState(GameState &state, const UString &query)
 	// the unlock for the next. The last one carries victory=true, and beating it is the only
 	// thing in the game that fires AliensDefeated (battle.cpp:3506-3592). A driver needs to know
 	// which link of that chain it is standing on.
+	// The topics ResearchSelect would offer for the lab currently being viewed, in the same
+	// order and with the same filtering (researchselect.cpp:222-240), so the driver can pick a
+	// specific project by name instead of guessing a row. That matters because the route to
+	// victory runs through particular topics -- RESEARCH_ADVANCED_WORKSHOP to unlock the large
+	// workshop, then RESEARCH_ALIEN_BUILDING_0..9 -- and picking row 0 gets whatever happens to
+	// be first.
+	if (q == "research_options")
+	{
+		if (!state.current_base)
+		{
+			return UString("options=0 detail=-");
+		}
+		const auto facility = state.current_base->selectedLab.lock();
+		if (!facility || !facility->lab)
+		{
+			return UString("options=0 lab=none detail=-");
+		}
+		const auto lab = facility->lab;
+		const StateRef<Base> base{&state, state.player_bases.begin()->first};
+		// topic_list holds bare shared_ptrs; ids live in the topics map, so index back by pointer.
+		std::map<const ResearchTopic *, UString> ids;
+		for (const auto &kv : state.research.topics)
+		{
+			if (kv.second)
+			{
+				ids[kv.second.get()] = kv.first;
+			}
+		}
+		UString out;
+		size_t idx = 0;
+		for (const auto &t : state.research.topic_list)
+		{
+			if (!t || t->type != lab->type)
+			{
+				continue;
+			}
+			if ((!t->dependencies.satisfied(base) && !t->started) || t->hidden)
+			{
+				continue;
+			}
+			const bool tooLarge = t->required_lab_size == ResearchTopic::LabSize::Large &&
+			                      lab->size == ResearchTopic::LabSize::Small;
+			const auto found = ids.find(t.get());
+			out += (out.empty() ? "" : "|") +
+			       format("{0}={1},done={2},big={3}", idx,
+			              found == ids.end() ? UString("?") : found->second,
+			              t->isComplete() ? 1 : 0, tooLarge ? 1 : 0);
+			idx++;
+		}
+		return format("options={0} lab={1} detail={2}", idx, lab.id,
+		              out.empty() ? UString("-") : out);
+	}
 	if (q == "alien_buildings")
 	{
 		const auto it = state.cities.find("CITYMAP_ALIEN");
