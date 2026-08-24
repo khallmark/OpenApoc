@@ -1825,12 +1825,19 @@ def intercept_ufos(d: Driver) -> int:
         else:
             crewed_fighters.append(int(bits[0]))
     if not fighters:
-        if not crewed_fighters:
-            d.say("  [intercept] no armed flying craft available; not sending anyone")
-            d.h.key("Escape")
-            return 0
-        d.say("  [intercept] only the crewed transport can fly; sending it reluctantly")
-        fighters = crewed_fighters
+        # Do not send the troop transport to dogfight. It carries the squad that wins ground
+        # missions, and losing it costs the craft, the agents aboard, and the ability to reach the
+        # next crash site -- for one UFO that would have cost far less to ignore. Measured over a
+        # run: craft_lost reached -440 while incursions, the penalty for letting UFOs alone, stood
+        # at -311. Losing craft was costing more than the thing it was meant to prevent.
+        d.say("  [intercept] no armed fighter free; leaving the transport out of it")
+        d.h.key("Escape")
+        return 0
+    if len(fighters) < 2 and crewed_fighters:
+        # A lone fighter loses. Nothing else is airworthy, so let this one go rather than trade it.
+        d.say("  [intercept] only one fighter airborne; holding it back rather than trading it")
+        d.h.key("Escape")
+        return 0
 
     d.h.send("keydown Left Ctrl")
     try:
@@ -2594,12 +2601,19 @@ def buy_interceptor(d: Driver, want: int = 2) -> int:
     if not options:
         d.say("  [craft] no armed flying craft offered for sale")
         return 0
-    # Best gun platform affordable, NOT the cheapest. Buying cheapest-first bought Hoverbikes --
-    # $5000, one weapon -- and they were shot down almost immediately: interceptors went 4 to 0
-    # inside ten minutes while craft_lost fell another 100. A craft that dies on contact costs
-    # twice, in score and in the replacement, and leaves the city undefended anyway. Rank by
-    # firepower and take the cheapest of the best tier that can be afforded.
-    options.sort(key=lambda o: (-o[2], o[0]))
+    # Guns per pound, not guns outright, and never a one-gun bike. Two rules were tried and both
+    # were wrong. Cheapest-first bought $5000 Hoverbikes that died on contact -- interceptors went
+    # four to zero in ten minutes. Best-platform-first then sank $101,000 of a $152,947 balance
+    # into a single Hawk Air Warrior, which is three guns in one place that the next UFO can take
+    # out in one engagement, leaving nothing and no money to replace it.
+    #
+    # A Phoenix Hovercar is two guns for $12,607; a Hawk is three for $101,000. Eight Phoenixes
+    # cost less than one Hawk and can be in eight places. Rank by cost per weapon and refuse the
+    # single-slot craft entirely, which is what actually kept dying.
+    real = [o for o in options if o[2] >= 2]
+    if real:
+        options = real
+    options.sort(key=lambda o: (o[0] / max(1, o[2]), o[0]))
     # Leave enough behind to keep paying wages and stocking weapons; a fleet with no armoury
     # loses the ground war instead of the air one.
     affordable = [o for o in options if o[0] and o[0] <= funds - 40000]
@@ -2608,7 +2622,7 @@ def buy_interceptor(d: Driver, want: int = 2) -> int:
         d.say(f"  [craft] cheapest armed flier is ${cheapest[0]}, only ${funds} on hand")
         return 0
     best_guns = affordable[0][2]
-    tier = [o for o in affordable if o[2] == best_guns]
+    tier = [o for o in affordable if o[2] == best_guns and o[0] == affordable[0][0]] or [affordable[0]]
     price = tier[0][0]
     # Buy only as many as the money actually covers. Asking for two Hawk Air Warriors at $101,000
     # each against $152,947 bought nothing at all: the order exceeded the balance and was refused
