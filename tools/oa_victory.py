@@ -243,6 +243,10 @@ class Victory:
             sold = sell_ground_fleet(self.d)
             self.say(f"sold {sold} ground vehicle line(s) to fund the air fleet")
             stock_for_template(self.d, qty=self.armoury_size())
+            # The template covers armour and grenades, which stay on sale. It cannot cover the
+            # weapon once the starting rifle leaves the market, and that is what left recruits
+            # unarmed, so buy guns by capability alongside it.
+            stock_best_guns(self.d, qty=self.armoury_size())
             crew_transport(self.d)
             # Capture the squad loadout now, while the starting ten are all home and armed.
             # It persists in GameState, so every later recruit can be equipped from it.
@@ -543,8 +547,10 @@ class Victory:
                     stock_best_guns(self.d, qty=self.armoury_size())
             elif equip_squad(self.d, agents=24) <= 0:
                 # Stores ran dry rather than the mechanism failing: the market only restocks so
-                # much per week, so keep re-ordering the loadout's own item types.
+                # much per week, so keep re-ordering -- the loadout's own items for armour, and
+                # the best gun on sale for the part the loadout can no longer supply.
                 stock_for_template(self.d, qty=self.armoury_size())
+                stock_best_guns(self.d, qty=self.armoury_size())
 
         # Replace losses, and arm them if the armoury can.
         fit = int(ag.get("soldiers_fit", "0") or 0)
