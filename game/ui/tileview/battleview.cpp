@@ -1560,9 +1560,9 @@ void BattleView::registerBattleViewIntrospection()
 					                   unit->canFly() ? 1 : 0);
 				    }
 			    }
-			    return format("foes={0} mine={1} foe_at={2} mine_at={3}", foeCount,
+			    return format("foes={0} mine={1} view_z={4} foe_at={2} mine_at={3}", foeCount,
 			                  mineCount, foes.empty() ? UString("-") : foes,
-			                  mine.empty() ? UString("-") : mine);
+			                  mine.empty() ? UString("-") : mine, view->getZLevel());
 		    }
 		    if (gameState && gameState->current_battle &&
 		        (q == "enemies_screen" || q == "friends_screen"))

@@ -1867,6 +1867,72 @@ def leave_battle(d: Driver, tries: int = 8) -> bool:
     return d.status().stage not in ("BattleView", "InGameOptions", "BattlePreStart")
 
 
+def battle_layout(d: Driver) -> dict:
+    """Tile positions of both sides plus the current view level.
+
+    Screen coordinates alone cannot explain a stalled battle: a hostile two floors up is drawn in
+    plain sight and still cannot be walked to, and a click resolves to a tile on whatever level
+    the view is showing (battleview.cpp:3279-3290 sets that level). Observed exactly that -- two
+    survivors at z=0 while hostiles sat at z=1 and z=2 -- with the squad walking the ground floor
+    for the rest of the battle.
+    """
+    try:
+        info = d.h.gs("battle_positions")
+    except (HarnessError, OSError):
+        return {}
+
+    def parse(field: str) -> list[tuple[int, int, int]]:
+        raw = info.get(field, "-")
+        out = []
+        if not raw or raw == "-":
+            return out
+        for part in raw.split(";"):
+            head = part.split(":")[0]
+            bits = head.split(",")
+            if len(bits) >= 3:
+                try:
+                    out.append((int(bits[0]), int(bits[1]), int(bits[2])))
+                except ValueError:
+                    continue
+        return out
+
+    try:
+        view_z = int(info.get("view_z", "0") or 0)
+    except ValueError:
+        view_z = 0
+    return {"foes": parse("foe_at"), "mine": parse("mine_at"), "view_z": view_z}
+
+
+def match_enemy_floor(d: Driver, layout: dict) -> int:
+    """Bring the view to the floor most hostiles are on. Returns the level moved to, or -1.
+
+    Movement orders can only target the level being displayed, so a squad can never be sent
+    upstairs while the camera sits on the ground floor. PageUp/PageDown step the level by one
+    (battleview.cpp:3279-3290), so step deliberately rather than pressing them on a timer.
+    """
+    foes = layout.get("foes") or []
+    if not foes:
+        return -1
+    mine = layout.get("mine") or []
+    # Aim for the floor carrying the most hostiles; ties go to the lowest, which is usually the
+    # one the squad can actually reach by stairs.
+    counts: dict[int, int] = {}
+    for _, _, z in foes:
+        counts[z] = counts.get(z, 0) + 1
+    want = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
+    have = layout.get("view_z", 0)
+    if have == want:
+        return want
+    step = "PageUp" if want > have else "PageDown"
+    for _ in range(min(abs(want - have), 6)):
+        d.h.key(step)
+        time.sleep(0.12)
+    if mine:
+        my_z = sorted(z for _, _, z in mine)[len(mine) // 2]
+        d.say(f"  [battle] hostiles on floor {want}, squad on {my_z}; view -> {want}")
+    return want
+
+
 def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
     """Fight a tactical mission to a win, without cheats.
 
@@ -1960,6 +2026,12 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
                 d.h.send("keyup Left Ctrl")
             selected_count = len(friends)
             time.sleep(0.12)
+
+        # Put the camera on the hostiles' floor first: orders only reach the displayed level.
+        if rounds % 3 == 0:
+            layout = battle_layout(d)
+            if layout:
+                match_enemy_floor(d, layout)
 
         foes = d.h.screen_craft("enemies_screen")
         # enemies_screen only reports hostiles already on screen. Walking the camera only when
