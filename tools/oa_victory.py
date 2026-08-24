@@ -31,6 +31,8 @@ from oa_play import (
     Harness,
     HarnessError,
     assign_research,
+    buy_equipment,
+    hire_soldiers,
     crew_transport,
     clear_attack_orders,
     intercept_ufos,
@@ -48,6 +50,12 @@ RECOVER_COOLDOWN_S = 90.0
 # target, and it starves the game of the frames it needs to actually resolve the fight.
 INTERCEPT_COOLDOWN_S = 25.0
 CREW_COOLDOWN_S = 60.0
+# Topics finish and labs fall idle; an idle lab is research that is not happening. Re-checking
+# costs a few seconds of game time and is the difference between a campaign that advances up the
+# alien-building chain and one that stops after its first two topics.
+RESEARCH_COOLDOWN_S = 120.0
+# Soldiers are lost permanently. Below this many fit soldiers there is no squad left to send.
+MIN_SOLDIERS = 10
 CHECKPOINT_EVERY_S = 300.0
 
 
@@ -67,6 +75,8 @@ class Victory:
         self.last_intercept = 0.0
         self.last_crew = 0.0
         self.alert_refusals = 0
+        self.last_research = 0.0
+        self.last_hire = 0.0
         self.last_checkpoint = 0.0
         self.best_crashed = 0
 
@@ -196,6 +206,26 @@ class Victory:
             if recover_crash_sites(self.d):
                 self.progress["recoveries"] += 1
                 self.flush()
+
+        # Keep every lab busy and staffed. assign_research staffs first, then fills idle labs.
+        if time.time() - self.last_research > RESEARCH_COOLDOWN_S:
+            self.last_research = time.time()
+            r = self.d.h.gs("research")
+            idle = int(r.get("assignable", "0") or 0) - int(r.get("assignable_busy", "0") or 0)
+            done = int(r.get("complete", "0") or 0)
+            if idle > 0:
+                self.say(f"{idle} lab(s) idle, {done} topics complete - reassigning")
+                assign_research(self.d)
+            self.progress["research_complete"] = done
+            self.flush()
+
+        # Replace losses, and arm them if the armoury can.
+        fit = int(self.d.h.gs("agents").get("soldiers_fit", "0") or 0)
+        if fit < MIN_SOLDIERS and time.time() - self.last_hire > 180.0:
+            self.last_hire = time.time()
+            self.say(f"only {fit} fit soldiers - recruiting")
+            hire_soldiers(self.d, want=MIN_SOLDIERS - fit + 2)
+            buy_equipment(self.d, rows=8, qty=8)
 
         if in_city > 0:
             if time.time() - self.last_intercept > INTERCEPT_COOLDOWN_S:

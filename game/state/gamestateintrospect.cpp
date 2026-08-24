@@ -3,6 +3,7 @@
 #include "game/state/battle/battle.h"
 #include "game/state/battle/battleunit.h"
 #include "game/state/city/base.h"
+#include "game/state/city/building.h"
 #include "game/state/city/facility.h"
 #include "game/state/rules/aequipmenttype.h"
 #include "game/state/shared/aequipment.h"
@@ -455,6 +456,45 @@ UString introspectGameState(GameState &state, const UString &query)
 			       format("{0}:items={1},weapons={2}", i, t.equipment.size(), weapons);
 		}
 		return format("templates={0} detail={1}", state.agentEquipmentTemplates.size(),
+		              out.empty() ? UString("-") : out);
+	}
+	// The alien-dimension buildings, which are the whole endgame. Each one is gated on its own
+	// accessTopic being researched (buildingscreen.cpp:112-122); winning its raid force-completes
+	// the unlock for the next. The last one carries victory=true, and beating it is the only
+	// thing in the game that fires AliensDefeated (battle.cpp:3506-3592). A driver needs to know
+	// which link of that chain it is standing on.
+	if (q == "alien_buildings")
+	{
+		const auto it = state.cities.find("CITYMAP_ALIEN");
+		if (it == state.cities.end() || !it->second)
+		{
+			return UString("alien_buildings=0 detail=-");
+		}
+		const auto aliens = state.getAliens();
+		size_t n = 0, raidable = 0;
+		UString out;
+		// City::buildings is a vector of StateRef<Building>, not a map.
+		for (const auto &ref : it->second->buildings)
+		{
+			const auto bld = ref.getSp();
+			if (!bld)
+			{
+				continue;
+			}
+			n++;
+			const bool mine = bld->owner && bld->owner.id == aliens.id;
+			const bool open = bld->accessTopic && bld->accessTopic->isComplete();
+			if (mine && open)
+			{
+				raidable++;
+			}
+			out += (out.empty() ? "" : "|") +
+			       format("{0}:topic={1},open={2},alien={3},victory={4}", ref.id,
+			              bld->accessTopic ? bld->accessTopic.id : UString("-"), open ? 1 : 0,
+			              mine ? 1 : 0, bld->victory ? 1 : 0);
+		}
+		return format("alien_buildings={0} raidable={1} current_city={2} detail={3}", n, raidable,
+		              state.current_city ? state.current_city.id : UString("none"),
 		              out.empty() ? UString("-") : out);
 	}
 	if (q == "stores")
