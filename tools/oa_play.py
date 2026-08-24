@@ -962,6 +962,63 @@ def pick_topic_row(d: Driver) -> int:
     return usable[0][0] if usable else -1
 
 
+def pick_topic_rows(d: Driver) -> list[tuple[int, str]]:
+    """Every startable topic for this lab, best first: priority list, then the game's own order.
+
+    The retry loop used to fall back to raw list indices (attempt 1 -> row 1, attempt 2 -> row 2),
+    which selects whatever happens to sit at that position -- including already-researched or
+    too-large topics. Offering a real ordered candidate list keeps every attempt a considered one.
+    """
+    detail = d.h.gs("research_options").get("detail", "")
+    if not detail or detail == "-":
+        return []
+    rows = []
+    for part in detail.split("|"):
+        try:
+            idx, rest = part.split("=", 1)
+            fields = rest.split(",")
+            topic = fields[0]
+            done = fields[1].endswith("1")
+            big = fields[2].endswith("1")
+        except (ValueError, IndexError):
+            continue
+        if not done and not big:
+            rows.append((int(idx), topic))
+    ranked = []
+    for want in PRIORITY_RESEARCH:
+        for idx, topic in rows:
+            if topic == want and (idx, topic) not in ranked:
+                ranked.append((idx, topic))
+    # Then everything else in the game's own <order> sequence, which is what ResearchSelect shows.
+    for row in rows:
+        if row not in ranked:
+            ranked.append(row)
+    return ranked
+
+
+def current_project(d: Driver) -> str:
+    """The selected lab's project on ResearchScreen, or "" when it is idle.
+
+    researchscreen.cpp:486-497 sets TEXT_CURRENT_PROJECT to the topic name, or "No Project" when
+    the lab has none. Reading it is the only way to tell a busy lab from an idle one before
+    pressing New Project -- and pressing New Project on a busy lab silently discards its progress.
+    """
+    try:
+        reply = d.h.send("control TEXT_CURRENT_PROJECT get")
+    except (HarnessError, OSError):
+        return ""
+    if not reply.startswith("OK"):
+        return ""
+    text = reply[2:].strip()
+    for prefix in ("value=", "text="):
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+    text = text.strip()
+    if text.lower().replace("_", " ") in ("", "-", "no project"):
+        return ""
+    return text
+
+
 def raid_alien_building(d: Driver) -> str:
     """Raid the next alien building. Returns the battle outcome, or why it could not start.
 
@@ -1383,11 +1440,22 @@ def assign_research(d: Driver) -> bool:
             # since the attempt budget was per-lab rather than global, an exhausted biochem lab
             # could starve a physics lab that had seven live topics waiting -- which is exactly
             # what "3 labs idle, startable=28, started 0" was.
-            wanted = pick_topic_row(d)
-            if wanted < 0:
+            # Never press New Project on a lab that already has one. ResearchScreen simply
+            # replaces the project, throwing away every man-hour already spent: observed live
+            # discarding RESEARCH_ALIEN_PROPULSION_SYSTEM at 23262 of 25000 man-hours and
+            # restarting the lab on a fresh topic at zero. And because labs_busy does not rise
+            # when a busy lab is overwritten, the success check never fired and the loop did it
+            # again, up to eight times per visit -- so the campaign could research for hours and
+            # finish almost nothing.
+            busy_with = current_project(d)
+            if busy_with:
+                d.say(f"  [research] lab {list_id}[{slot}] already on {busy_with}; leaving it")
                 continue
-            for attempt in range(8):
-                topic_row = wanted if attempt == 0 else attempt
+
+            candidates = pick_topic_rows(d)
+            if not candidates:
+                continue
+            for attempt, (topic_row, topic_name) in enumerate(candidates[:8]):
                 st = d.status()
                 if st.stage != "ResearchScreen":
                     break
@@ -1409,6 +1477,7 @@ def assign_research(d: Driver) -> bool:
                 if now > busy:
                     busy = now
                     started += 1
+                    d.say(f"  [research] started {topic_name} in {list_id}[{slot}]")
                     break
 
     # Unwind back to the city. Leaving the game parked anywhere else strands the campaign loop,
