@@ -409,9 +409,21 @@ class GameProcess:
             "--Framework.TargetFPS=1000",
         ] + PAUSE_NOTIFICATION_FLAGS + self.extra
         self.logf = open(self.log_path, "w")
+        # SDL3 makes window operations synchronous by default: Cocoa_SyncWindow pumps the Cocoa
+        # event queue until the window server acknowledges the state change. On this machine that
+        # acknowledgement stopped arriving after the engine died hard twice in a row, and every
+        # subsequent launch wedged for good inside SDL_CreateWindow -> Cocoa_ShowWindow ->
+        # Cocoa_SyncWindow at 0% CPU, bottoming out in AEProcessAppleEvent. The game never opened
+        # its harness port, so the runner reported "harness did not come up" against a process
+        # that was very much alive. Turning the synchronous behaviour off lets window creation
+        # return and the game reach its main loop -- verified: MainMenu answering in 15s, against
+        # six consecutive launches that never answered at all. The window is still shown, so this
+        # does not cost the visible camera an onlooker needs.
+        env = dict(os.environ)
+        env.setdefault("SDL_VIDEO_SYNC_WINDOW_OPERATIONS", "0")
         self.proc = subprocess.Popen(
             argv, cwd=str(self.repo), stdout=self.logf, stderr=subprocess.STDOUT,
-            start_new_session=True,
+            start_new_session=True, env=env,
         )
         h = Harness(port=self.port)
         deadline = time.time() + wait_s
