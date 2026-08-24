@@ -1491,8 +1491,18 @@ void BattleView::registerBattleViewIntrospection()
 			    for (const auto &u : gameState->current_battle->units)
 			    {
 				    const auto &unit = u.second;
+				    // Same fog-of-war and bystander rules as enemies_screen: this must not walk
+				    // the camera to a hostile nobody has spotted, nor frame a civilian as if it
+				    // were a target.
+				    const bool hostile =
+				        unit && unit->owner &&
+				        unit->owner->isRelatedTo(player) == Organisation::Relation::Hostile;
+				    const bool spotted =
+				        unit && gameState->current_battle->visibleUnits[player].find(
+				                    {&*gameState, unit->id}) !=
+				                    gameState->current_battle->visibleUnits[player].end();
 				    if (!unit || !unit->owner || !unit->tileObject || !unit->isConscious() ||
-				        unit->owner.id == player.id)
+				        unit->owner.id == player.id || !hostile || !spotted)
 				    {
 					    continue;
 				    }
@@ -1574,6 +1584,7 @@ void BattleView::registerBattleViewIntrospection()
 			    int count = 0;
 			    int unarmed = 0;
 			    int bystanders = 0;
+			    int unseen = 0;
 			    for (const auto &u : gameState->current_battle->units)
 			    {
 				    const auto &unit = u.second;
@@ -1599,6 +1610,20 @@ void BattleView::registerBattleViewIntrospection()
 				    {
 					    bystanders++;
 					    continue;
+				    }
+				    // Fog of war. Battle::visibleUnits is what each organisation can actually
+				    // see, and reporting hostiles the squad has not spotted would hand a driver
+				    // knowledge no player has -- it could walk straight to an alien nobody has
+				    // laid eyes on. Report only what we can see, and count the rest so the
+				    // difference is visible rather than silent.
+				    if (wantFoes)
+				    {
+					    const auto &seen = gameState->current_battle->visibleUnits[player];
+					    if (seen.find({&*gameState, unit->id}) == seen.end())
+					    {
+						    unseen++;
+						    continue;
+					    }
 				    }
 				    const auto screen = view->tileToOffsetScreenCoords<float>(unit->position);
 				    if (screen.x < 0 || screen.y < 0 || screen.x >= size.x || screen.y >= size.y)
@@ -1639,8 +1664,8 @@ void BattleView::registerBattleViewIntrospection()
 				    out += format("{0},{1},{2}", (int)screen.x, (int)screen.y,
 				                  (int)unit->position.z);
 			    }
-			    return format("count={0} unarmed={2} bystanders={3} at={1}", count,
-			                  out.empty() ? UString("-") : out, unarmed, bystanders);
+			    return format("count={0} unarmed={2} bystanders={3} unseen={4} at={1}", count,
+			                  out.empty() ? UString("-") : out, unarmed, bystanders, unseen);
 		    }
 		    return stateHandler ? stateHandler(query) : UString("");
 	    });

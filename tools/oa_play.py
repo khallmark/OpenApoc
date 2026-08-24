@@ -2569,19 +2569,25 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         # for either of the branches above will otherwise sit there until the whole budget is
         # gone. One such stall cost 22 minutes of wall-clock and an entire campaign hour, with
         # the squad standing around a single alien it could not path to. Leave honestly.
-        if may_leave and stalls >= 40:
-            d.say(f"  [battle] deadlocked for {stalls} rounds ({alive_now} vs {foes_now}); leaving")
-            if leave_battle(d):
-                return "withdrew"
-            stalls = 0  # could not leave -- reset so we try again rather than spinning here
+        # A stalemate is not a reason to leave either -- it just means the last hostiles have not
+        # been found yet, and with fog of war that is expected. The battle budget ends a genuine
+        # deadlock on its own, which costs time rather than handing the map back.
+        if stalls and stalls % 40 == 0:
+            d.say(f"  [battle] stalemate at {stalls} rounds ({alive_now} vs {foes_now}); "
+                  f"still searching")
 
         outnumbered = foes_n >= alive * 3
         collapsing = alive <= max(1, started_with // 3)
-        if may_leave and started_with and alive and collapsing and outnumbered:
-            d.say(f"  [battle] retreating: {alive} left of {started_with} against {foes_n}")
-            if leave_battle(d):
-                return "withdrew"
-            d.say("  [battle] could not leave; fighting on")
+        # No retreating. Two reasons, and the second is the engine's rather than a preference.
+        # Withdrawing hands the aliens straight back: survivors of a building mission go back into
+        # that building (battle.cpp:2900-2910) and survivors of a UFO recovery seed a NEARBY
+        # building instead (battle.cpp:2955-2963), which is how a retreat spreads infiltration to
+        # a neighbourhood that had none. The driver was withdrawing from roughly half its missions
+        # and then losing its funding to the infiltration it had just scattered. A mission fought
+        # to the end and lost is cheaper than one abandoned.
+        if started_with and alive and collapsing and outnumbered:
+            d.say(f"  [battle] outnumbered {foes_n} to {alive} and staying: leaving would put "
+                  f"these aliens back on the map")
 
     d.say("[battle] budget exhausted without a decision")
     return "timeout"
