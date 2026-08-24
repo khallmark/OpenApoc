@@ -132,6 +132,23 @@ class Victory:
         if resume:
             self.say("resumed from checkpoint")
             self.d.wait_for(("CityView",), 240)
+            # STATUS reporting CityView only means the stage transitioned, not that resuming a
+            # save has finished settling: three restarts in a row died with "connection reset by
+            # peer" the moment the very first post-resume action fired, which is the same shape
+            # as the initState segfault fixed earlier this session -- work still running after
+            # the stage that depends on it having fully landed. Confirm the GS pipeline itself is
+            # actually answering before acting on anything.
+            settled = False
+            for _ in range(20):
+                try:
+                    self.d.h.gs("time")
+                    settled = True
+                    break
+                except (HarnessError, OSError):
+                    time.sleep(1.0)
+            if not settled:
+                self.say("resumed but GS queries never came up; treating as unhealthy")
+                raise RuntimeError("resume did not settle")
         else:
             self.say(f"fresh campaign, difficulty {self.difficulty}")
             new_game(self.d, self.difficulty)
