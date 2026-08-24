@@ -554,6 +554,43 @@ class Victory:
                 clear_attack_orders(self.d)
             self.d.h.key("5")  # nothing hostile left; turbo is safe and ~1681x faster
 
+    def next_campaign(self, why: str) -> bool:
+        """Retire the finished run and begin a new one. False if there is no time left to bother.
+
+        A defeat used to end the whole unattended session, which is the wrong shape for a run
+        whose purpose is to reach a victory: the value of forty-eight hours is that it can absorb
+        several complete campaigns, each one starting with everything learned from the last. The
+        campaign that just ended is archived intact by _load() on the next start, so nothing is
+        lost by moving on.
+        """
+        self.say(f"campaign over ({why}); starting the next one")
+        try:
+            self.game.stop()
+        except Exception:
+            pass
+        time.sleep(3.0)
+        # _load() archives a run whose "ended" is set and clears the checkpoint, so the next
+        # start() sees no checkpoint and begins a fresh campaign.
+        try:
+            if self.checkpoint.exists():
+                stamp = time.strftime("%Y%m%d-%H%M%S")
+                self.checkpoint.rename(self.out / f"campaign-{self.progress.get('ended', why)}"
+                                                  f"-{stamp}.save")
+        except OSError as exc:
+            self.say(f"could not archive checkpoint: {exc}")
+        self.progress = {"battles": 0, "wins": 0, "ufos_down": 0, "recoveries": 0,
+                         "restarts": 0, "research_complete": 0}
+        self.flush()
+        self.caps_checked = False
+        self.second_base = False
+        self.last_solvency_check = time.time()
+        try:
+            self.start()
+        except Exception as exc:
+            self.say(f"could not start the next campaign: {exc}")
+            return False
+        return True
+
     def bankrupt(self) -> bool:
         """True when the campaign is finished even though the engine has not said so.
 
@@ -622,9 +659,15 @@ class Victory:
             try:
                 st = self.d.status()
                 if st.stage == "VideoScreen" and self.victorious():
-                    return 0 if self.progress.get("ended") == "victory" else 1
+                    if self.progress.get("ended") == "victory":
+                        return 0
+                    if not self.next_campaign("defeat"):
+                        return 1
+                    continue
                 if self.bankrupt():
-                    return 1
+                    if not self.next_campaign("bankruptcy"):
+                        return 1
+                    continue
                 if st.stage == "VideoScreen":
                     # Some other cutscene (the intro, most likely). Skip it and carry on.
                     self.d.h.key("Escape")
