@@ -153,7 +153,12 @@ class Victory:
         self.d.say = lambda m: self.say(m)
         if resume:
             self.say("resumed from checkpoint")
-            self.d.wait_for(("CityView",), 240)
+            # A checkpoint is written wherever the campaign happened to be, including partway
+            # through a tactical mission -- so a resume can legitimately land in BattleView.
+            # Waiting only for CityView stalled the whole runner for the full 240s timeout
+            # against a save that had loaded perfectly well into a battle the main loop is
+            # perfectly capable of fighting. Accept either playable stage.
+            self.d.wait_for(("CityView", "BattleView"), 240)
             # STATUS reporting CityView only means the stage transitioned, not that resuming a
             # save has finished settling: three restarts in a row died with "connection reset by
             # peer" the moment the very first post-resume action fired, which is the same shape
