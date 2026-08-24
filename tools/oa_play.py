@@ -2590,19 +2590,26 @@ def buy_interceptor(d: Driver, want: int = 2) -> int:
                 except ValueError:
                     attrs[k] = 0
         if attrs.get("flying") == 1 and attrs.get("weapons", 0) > 0:
-            options.append((attrs.get("price", 0), name))
+            options.append((attrs.get("price", 0), name, attrs.get("weapons", 0)))
     if not options:
         d.say("  [craft] no armed flying craft offered for sale")
         return 0
-    options.sort()
+    # Best gun platform affordable, NOT the cheapest. Buying cheapest-first bought Hoverbikes --
+    # $5000, one weapon -- and they were shot down almost immediately: interceptors went 4 to 0
+    # inside ten minutes while craft_lost fell another 100. A craft that dies on contact costs
+    # twice, in score and in the replacement, and leaves the city undefended anyway. Rank by
+    # firepower and take the cheapest of the best tier that can be afforded.
+    options.sort(key=lambda o: (-o[2], o[0]))
     # Leave enough behind to keep paying wages and stocking weapons; a fleet with no armoury
     # loses the ground war instead of the air one.
-    affordable = [(p, n) for p, n in options if p and p * 1 <= funds - 40000]
+    affordable = [o for o in options if o[0] and o[0] <= funds - 40000]
     if not affordable:
-        d.say(f"  [craft] cheapest armed flier is ${options[0][0]}, only ${funds} on hand")
+        cheapest = min(options, key=lambda o: o[0])
+        d.say(f"  [craft] cheapest armed flier is ${cheapest[0]}, only ${funds} on hand")
         return 0
-    picks = [n for _, n in affordable[:2]]
-    d.say(f"  [craft] buying armed fliers: {', '.join(picks)} (${affordable[0][0]} each-ish)")
+    best_guns = affordable[0][2]
+    picks = [n for _, n, guns in affordable if guns == best_guns][:2]
+    d.say(f"  [craft] buying armed fliers with {best_guns} weapon slot(s): {', '.join(picks)}")
     return buy_named(d, picks, qty=want, category="BUTTON_VEHICLES")
 
 
