@@ -187,6 +187,24 @@ class Harness:
                              "visible": f[5] == "1"}
         return out
 
+    def ui_list(self, filt: str = "") -> list:
+        """Live rects as an ordered list, keeping same-named controls apart.
+
+        ui() keys by control id, which silently collapses repeated names -- and the controls that
+        most need addressing are exactly the repeated ones: every row of the base facility list
+        is a Graphic called FACILITY_BUILD_TILE.
+        """
+        raw = self.ok(f"ui {filt}".strip())
+        d = dict(p.split("=", 1) for p in raw.split() if "=" in p)
+        out = []
+        if d.get("at", "-") == "-":
+            return out
+        for rec in d["at"].split(";"):
+            f = rec.split(",")
+            if len(f) == 6:
+                out.append((f[0], int(f[1]), int(f[2]), int(f[3]), int(f[4]), f[5] == "1"))
+        return out
+
     def display_size(self) -> tuple:
         """Viewport size in UI space, so off-screen click targets can be rejected."""
         st = self.status()
@@ -433,6 +451,14 @@ class Driver:
             return self.h.ui(cid).get(cid)
         except HarnessError:
             return None
+
+    def live_rects(self, cid: str) -> list:
+        """Every live rect whose control id matches, in the engine's own order."""
+        try:
+            return [(x, y, w, h) for (name, x, y, w, h, vis) in self.h.ui_list(cid)
+                    if name == cid and vis]
+        except HarnessError:
+            return []
 
     def shot(self, tag: str) -> None:
         if not self.shots:
@@ -773,6 +799,103 @@ def pick_topic_row(d: Driver) -> int:
                 d.say(f"  [research] targeting {topic} (row {idx})")
                 return idx
     return usable[0][0] if usable else -1
+
+
+def build_facility(d: Driver, want: str = "FACILITYTYPE_ADVANCED_WORKSHOP") -> bool:
+    """Construct a base facility. Returns True when one is actually placed.
+
+    MANUFACTURE_DIMENSION_SHIFTER needs a Large workshop and the starting base has only a small
+    one, so this is a hard gate on reaching the alien dimension at all.
+
+    Placement cannot be driven by name. BaseScreen keys entirely off raw mouse events against the
+    control under the cursor (basescreen.cpp:259-417): hovering a row in LISTBOX_FACILITIES sets
+    the facility to be dragged, and the build only commits on MouseUp inside the base grid.
+    CONTROL click raises ButtonClick and CONTROL set raises ListBoxChangeSelected, neither of
+    which BaseScreen listens for -- both are dead ends here. So this is a genuine drag.
+
+    Which row is which is invisible from the UI: every row is an identically-named Graphic. The
+    facilities query reports them in the same order BaseScreen builds them, so the wanted type's
+    position in that list is its position on screen.
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return False
+    info = d.h.gs("facilities")
+    offer = info.get("offer", "")
+    if want not in offer:
+        d.say(f"  [build] {want} is not offered yet (research gates it)")
+        return False
+    row = -1
+    for part in offer.split("|"):
+        idx, _, name = part.partition("=")
+        if name == want:
+            row = int(idx)
+            break
+    if row < 0:
+        return False
+    before = info.get("base", "")
+
+    d.click_id("BUTTON_TAB_1", st)
+    time.sleep(0.35)
+    if not d.click_id("BUTTON_SHOW_BASE", d.status()):
+        return False
+    try:
+        st = d.wait_for("BaseScreen", 30)
+    except TimeoutError:
+        return False
+
+    rows = d.live_rects("FACILITY_BUILD_TILE")
+    grid = d.live_rects("GRAPHIC_BASE_VIEW")
+    if row >= len(rows) or not grid:
+        d.say(f"  [build] cannot see row {row} of {len(rows)} / grid {bool(grid)}")
+        d.click_id("BUTTON_OK", d.status())
+        return False
+    rx, ry, rw, rh = rows[row]
+    gx, gy, _, _ = grid[0]
+    src = (rx + rw // 2, ry + rh // 2)
+
+    # The grid is 8x8 tiles of 32px (base.h:42, basegraphics.h:18). Corridor tiles and existing
+    # facilities are not exposed anywhere, so a free spot cannot be computed -- try tiles until
+    # one is accepted, treating a MessageBox as a rejection to dismiss and move on.
+    for tile in range(64):
+        col, rowc = tile % 8, tile // 8
+        dst = (gx + 32 * col + 16, gy + 32 * rowc + 16)
+        d.h.ok(f"move {src[0]} {src[1]}")
+        time.sleep(0.15)
+        d.h.ok(f"down {src[0]} {src[1]}")
+        time.sleep(0.12)
+        d.h.ok(f"move {(src[0] + dst[0]) // 2} {(src[1] + dst[1]) // 2}")
+        time.sleep(0.1)
+        d.h.ok(f"move {dst[0]} {dst[1]}")
+        time.sleep(0.12)
+        d.h.ok(f"up {dst[0]} {dst[1]}")
+        time.sleep(0.5)
+        cur = d.status()
+        if cur.stage == "MessageBox":
+            d.h.key("Return")
+            time.sleep(0.35)
+            continue
+        after = d.h.gs("facilities").get("base", "")
+        if after != before:
+            d.say(f"  [build] placed {want} at tile {col},{rowc}")
+            for _ in range(5):
+                stt = d.status()
+                if stt.stage == "CityView":
+                    break
+                if not d.click_id("BUTTON_OK", stt):
+                    d.h.key("Escape")
+                time.sleep(0.5)
+            return True
+
+    d.say(f"  [build] no free tile accepted {want}")
+    for _ in range(5):
+        stt = d.status()
+        if stt.stage == "CityView":
+            break
+        if not d.click_id("BUTTON_OK", stt):
+            d.h.key("Escape")
+        time.sleep(0.5)
+    return False
 
 
 def staff_labs(d: Driver) -> int:

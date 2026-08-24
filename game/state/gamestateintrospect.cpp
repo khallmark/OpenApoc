@@ -5,6 +5,7 @@
 #include "game/state/city/base.h"
 #include "game/state/city/building.h"
 #include "game/state/city/facility.h"
+#include "game/state/rules/city/facilitytype.h"
 #include "game/state/rules/aequipmenttype.h"
 #include "game/state/shared/aequipment.h"
 #include <map>
@@ -515,6 +516,46 @@ UString introspectGameState(GameState &state, const UString &query)
 		}
 		return format("options={0} lab={1} detail={2}", idx, lab.id,
 		              out.empty() ? UString("-") : out);
+	}
+	// The facility types BaseScreen would offer, in the order it builds its list
+	// (basescreen.cpp:80-93: state.facility_types, filtered by isVisible()). Placement is a
+	// hover-and-drag onto the base grid and every row is an identically-named Graphic, so
+	// position in this list is the only way to know which row is which -- and the driver needs
+	// FACILITYTYPE_ADVANCED_WORKSHOP specifically, since MANUFACTURE_DIMENSION_SHIFTER demands a
+	// Large workshop and the starting base has only a small one.
+	if (q == "facilities")
+	{
+		UString out;
+		size_t idx = 0;
+		for (const auto &f : state.facility_types)
+		{
+			if (!f.second || !f.second->isVisible())
+			{
+				continue;
+			}
+			out += (out.empty() ? "" : "|") + format("{0}={1}", idx, f.first);
+			idx++;
+		}
+		UString built;
+		size_t pending = 0;
+		if (state.current_base)
+		{
+			for (const auto &fac : state.current_base->facilities)
+			{
+				if (!fac || !fac->type)
+				{
+					continue;
+				}
+				if (fac->buildTime > 0)
+				{
+					pending++;
+				}
+				built += (built.empty() ? "" : ",") +
+				         format("{0}:{1}", fac->type.id, fac->buildTime);
+			}
+		}
+		return format("buildable={0} pending={1} offer={2} base={3}", idx, pending,
+		              out.empty() ? UString("-") : out, built.empty() ? UString("-") : built);
 	}
 	if (q == "alien_buildings")
 	{
