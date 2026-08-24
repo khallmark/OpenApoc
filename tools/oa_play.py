@@ -880,6 +880,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
     entered = False
     last_foes = None
     stalls = 0
+    rounds = 0
 
     while time.time() - t0 < budget_s:
         st = d.status()
@@ -914,17 +915,29 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
             time.sleep(0.5)
             d.say(f"[battle] {b}")
 
-        # Select a squad, then advance it toward a visible enemy.
-        d.h.key("1")
+        # Advance the squads. Only ever selecting squad 1 left every other soldier standing
+        # where it deployed, which is what a "no progress" stall at 15 live hostiles actually
+        # was: the engine will shoot for us, but only at what someone can see.
+        squad = f"{(rounds % 6) + 1}"
+        d.h.key(squad)
         time.sleep(0.2)
         foes = d.h.screen_craft("enemies_screen")
         if foes:
-            fx, fy, _ = foes[0]
-            # Left-click near the enemy: orderMove. Auto-fire engages once LOS is gained.
-            d.h.click_xy(fx, fy)
+            # Rotate targets rather than piling every squad onto foes[0], and aim a short way
+            # off the hostile's own tile -- that tile is occupied, so a move ordered onto it can
+            # fail outright and leave the squad standing.
+            fx, fy, _ = foes[rounds % len(foes)]
+            if stalls > 3:
+                fx += (48, -48, 0, 0)[rounds % 4]
+                fy += (0, 0, 32, -32)[rounds % 4]
+            d.h.click_xy(max(0, min(st.w - 1, fx)), max(0, min(st.h - 1, fy)))
         else:
-            # Nothing in sight yet; push toward the middle of the map to find contact.
-            d.h.click_xy(st.w // 2, int(st.h * 0.40))
+            # Nothing in sight yet; sweep toward different parts of the map to find contact
+            # instead of walking into the same spot every time.
+            tx = int(st.w * (0.3 + 0.2 * (rounds % 3)))
+            ty = int(st.h * (0.3 + 0.15 * (rounds % 3)))
+            d.h.click_xy(tx, ty)
+        rounds += 1
         time.sleep(2.5)
 
         b = d.h.gs("battle")
