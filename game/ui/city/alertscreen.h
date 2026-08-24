@@ -21,6 +21,9 @@ class AlertScreen : public Stage
 
   public:
 	AlertScreen(sp<GameState> state, sp<Building> building);
+	// Which building this alert is about, and whether it still holds alien crew, for the test
+	// harness. Investigating a building that has none costs relation with its owner.
+	UString harnessDetail() const override;
 	~AlertScreen() override;
 	// Stage control
 	void begin() override;

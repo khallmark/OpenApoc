@@ -535,6 +535,20 @@ class Victory:
                     # is not refunded or repeated based on what the player does about it. What a
                     # wiped squad costs is far worse -- dead agents also drag the tactical score
                     # negative even on a mission that is won.
+                    # Do not answer an alert whose aliens have already left. Investigating a
+                    # building and finding nothing costs its owner -5 - difficulty relation
+                    # (buildingscreen.cpp:154-166), crews relocate on a timer, and 39 such
+                    # investigations drove the government from +85 to -100 -- Hostile -- which
+                    # latches fundingTerminated permanently. STATUS reports the alert's building
+                    # and its current crew via the stage detail hook.
+                    detail = st.detail or ""
+                    if "crew=0" in detail:
+                        self.say(f"alert building is already empty ({detail}); not investigating")
+                        if not self.d.click_id("BUTTON_QUIT", st):
+                            self.d.h.key("Escape")
+                        time.sleep(0.5)
+                        continue
+
                     fit_now = int(self.d.h.gs("agents").get("soldiers_fit", "0") or 0)
                     if fit_now < MIN_SQUAD:
                         self.say(f"only {fit_now} fit soldiers; not dispatching a token force")
