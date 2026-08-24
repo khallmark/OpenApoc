@@ -1,5 +1,7 @@
 #pragma once
 
+#include "framework/harness.h"
+
 #include "framework/stage.h"
 #include "game/state/stateobject.h"
 #include "library/rect.h"
@@ -66,6 +68,10 @@ class AEquipScreen : public Stage
 
 	// Items currently on the "ground"
 	std::list<std::tuple<Rect<int>, int, sp<AEquipment>>> inventoryItems;
+	// Harness introspection: the inventory rects are computed per frame and carry no control
+	// ids, so a driver cannot arm anybody without asking this screen where the items are.
+	HarnessQueryFunction previousHarnessHandler;
+	void registerAEquipIntrospection();
 	int inventoryPage = 0;
 	void clampInventoryPage();
 

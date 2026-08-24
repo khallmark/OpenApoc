@@ -3157,6 +3157,99 @@ def template_weapon_in_stock(d: Driver) -> bool:
     return any(stock.get(g, 0) > 0 for g in guns)
 
 
+def arm_agents_directly(d: Driver, agents: int = 24) -> int:
+    """Put a weapon in every empty pair of hands, without the template. Returns armed delta.
+
+    The equipment-template mechanism re-equips a template's EXACT types, so it is useless -- worse
+    than useless, it strips people -- once the loadout names a weapon the market no longer sells.
+    A campaign sat at six armed of fifteen soldiers for that reason, with a template demanding a
+    Megapol Laser Sniper Gun and stores holding Lawpistols and M4000s instead.
+
+    AEquipScreen has the same immediate action VEquipScreen does: Shift+click an inventory item
+    and it goes straight onto the selected agent (aequipscreen.cpp:593-598), gated on
+    AdvancedInventoryControls, which defaults on. gs aequip_items reports where those items are,
+    which is the only part a driver could not work out for itself.
+    """
+    before = int(d.h.gs("agents").get("armed", "0") or 0)
+    st = d.status()
+    if st.stage != "CityView":
+        return 0
+    d.click_id("BUTTON_TAB_1", st)
+    time.sleep(0.35)
+    if not d.click_id("BUTTON_SHOW_BASE", d.status()):
+        return 0
+    try:
+        d.wait_for("BaseScreen", 30)
+    except TimeoutError:
+        return 0
+    d.click_id("BUTTON_BASE_EQUIPAGENT", d.status())
+    try:
+        d.wait_for("AEquipScreen", 25)
+    except TimeoutError:
+        return_to_city(d)
+        return 0
+
+    armed_now = 0
+    for row in range(agents):
+        st = d.status()
+        if st.stage != "AEquipScreen":
+            break
+        try:
+            if not d.h.send(f"control AGENT_SELECT_BOX set {row}").startswith("OK"):
+                break
+        except (HarnessError, OSError):
+            break
+        time.sleep(0.3)
+        # The list is rebuilt as the screen renders, so give it a frame before reading.
+        items = {}
+        for _ in range(6):
+            time.sleep(0.25)
+            items = d.h.gs("aequip_items")
+            if items.get("detail", "-") not in ("", "-"):
+                break
+        detail = items.get("detail", "-")
+        if not detail or detail == "-":
+            continue
+        best = None
+        for part in detail.split("|"):
+            bits = part.split(":")
+            if not bits:
+                continue
+            attrs = {}
+            for kv in bits[1:]:
+                if "=" in kv:
+                    k, v = kv.split("=", 1)
+                    attrs[k] = v
+            if attrs.get("weapon") != "1" or attrs.get("research") != "1":
+                continue
+            try:
+                ax, ay = (int(v) for v in attrs.get("at", "0,0").split(","))
+                sw, sh = (int(v) for v in attrs.get("size", "0,0").split(","))
+            except ValueError:
+                continue
+            best = (bits[0], ax + sw // 2, ay + sh // 2)
+            break
+        if not best:
+            continue
+        name, cx, cy = best
+        d.h.send("keydown Left Shift")
+        try:
+            settle(d)
+            d.h.ok(f"down {cx} {cy}")
+            time.sleep(0.15)
+            d.h.ok(f"up {cx} {cy}")
+            time.sleep(0.2)
+        finally:
+            d.h.send("keyup Left Shift")
+        armed_now += 1
+        time.sleep(0.2)
+
+    return_to_city(d)
+    after = int(d.h.gs("agents").get("armed", "0") or 0)
+    d.say(f"  [arm] handed out {armed_now} weapon(s); armed {before}->{after}")
+    return after - before
+
+
 def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
     """Arm unequipped soldiers from base stores. Returns the change in armed count.
 

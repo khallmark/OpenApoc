@@ -151,10 +151,55 @@ AEquipScreen::AEquipScreen(sp<GameState> state, sp<Agent> firstAgent)
 	                                         {327, 246}, {311, 231}, {332, 217}};
 }
 
-AEquipScreen::~AEquipScreen() = default;
+AEquipScreen::~AEquipScreen() { setHarnessQueryHandler(previousHarnessHandler); }
+
+void AEquipScreen::registerAEquipIntrospection()
+{
+	// The inventory rows are a per-frame list of screen rects with no control ids at all, so
+	// without this a driver has no way to arm an agent except the equipment-template mechanism --
+	// and that re-equips the template's EXACT types, which strips people when the named weapon
+	// cannot be re-bought. Shift+click on an inventory item puts it straight on the agent
+	// (aequipscreen.cpp:593-598), so knowing where the items are is the whole problem.
+	previousHarnessHandler = getHarnessQueryHandler();
+	auto previous = previousHarnessHandler;
+	AEquipScreen *screen = this;
+	setHarnessQueryHandler(
+	    [previous, screen](const UString &query) -> UString
+	    {
+		    const auto q = to_lower(query);
+		    if (q == "aequip_items")
+		    {
+			    UString out;
+			    int n = 0;
+			    for (const auto &tuple : screen->inventoryItems)
+			    {
+				    const auto &rect = std::get<0>(tuple);
+				    const auto &item = std::get<2>(tuple);
+				    if (!item || !item->type)
+				    {
+					    continue;
+				    }
+				    UString name = item->type->name;
+				    std::replace(name.begin(), name.end(), ' ', '_');
+				    if (n++ > 0)
+				    {
+					    out += "|";
+				    }
+				    out += format("{0}:at={1},{2}:size={3},{4}:weapon={5}:research={6}", name,
+				                   rect.p0.x, rect.p0.y, rect.p1.x - rect.p0.x,
+				                   rect.p1.y - rect.p0.y,
+				                   item->type->type == AEquipmentType::Type::Weapon ? 1 : 0,
+				                   item->type->research_dependency.satisfied() ? 1 : 0);
+			    }
+			    return format("count={0} detail={1}", n, out.empty() ? UString("-") : out);
+		    }
+		    return previous ? previous(query) : UString("");
+	    });
+}
 
 void AEquipScreen::begin()
 {
+	registerAEquipIntrospection();
 	if (state->current_battle)
 	{
 		formMain->findControlTyped<Graphic>("DOLLAR")->setVisible(false);

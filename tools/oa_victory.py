@@ -46,6 +46,7 @@ from oa_play import (
     buy_equipment,
     buy_vehicles,
     stock_for_template,
+    arm_agents_directly,
     template_weapon_in_stock,
     equip_squad,
     hire_engineers,
@@ -530,11 +531,13 @@ class Victory:
             self.last_equip = time.time()
             self.say(f"{armed} armed of {soldiers} soldiers - equipping")
             if not template_weapon_in_stock(self.d):
-                # Applying a template whose weapon is missing strips people and hands back
-                # nothing -- it was doing exactly that, "applied to 14 agents; armed 7->6". Buy
-                # the loadout first and leave everyone carrying what they already have.
-                self.say("loadout weapon not in stores; buying before equipping")
-                stock_for_template(self.d, qty=self.armoury_size())
+                # The template names a weapon the market no longer sells, so applying it would
+                # strip people and hand back nothing. Hand out whatever IS in the armoury
+                # instead, one agent at a time -- a Lawpistol in every pair of hands beats a
+                # sniper rifle nobody can buy.
+                self.say("loadout weapon not in stores; arming from what the armoury has")
+                if arm_agents_directly(self.d, agents=24) <= 0:
+                    stock_for_template(self.d, qty=self.armoury_size())
             elif equip_squad(self.d, agents=24) <= 0:
                 # Stores ran dry rather than the mechanism failing: the market only restocks so
                 # much per week, so keep re-ordering the loadout's own item types.
