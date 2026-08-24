@@ -225,7 +225,10 @@ One command per line, one line back, `OK ...` or `ERR ...` (see `framework/harne
 | Command | Purpose |
 | ------- | ------- |
 | `STATUS` | current stage class name, display size, mouse position |
-| `CLICK x y [left\|right\|middle]`, `MOVE`, `DOWN`, `UP`, `SCROLL` | mouse input |
+| `CONTROLS` | list named widgets on the currently visible forms |
+| `CONTROL <id> [click\|toggle\|set <value>]` | invoke a form control by id (no pixel math) |
+| `ACTION <verb> [args...]` | same named-action table (`click`, `set`, `toggle`, `controls`, `help`) |
+| `CLICK x y [left\|right\|middle]`, `MOVE`, `DOWN`, `UP`, `SCROLL` | mouse input (for nameless widgets: map tiles, list rows) |
 | `KEY <name>`, `KEYDOWN`, `KEYUP`, `TEXT <s>` | keyboard input; names may contain spaces (`Left Shift`) |
 | `SCREENSHOT <path>` | write a PNG |
 | `RESIZE <w> <h>` | resize the window, to measure a fixed scene at several resolutions |
@@ -258,10 +261,12 @@ screenshots to `--out`. `tools/oa_harness.py` remains available for one-off comm
 
 Two pieces make this work without hard-coded pixel positions:
 
-- `tools/oa_forms.py` parses the shipped `data/forms/**.form` files and resolves any control id
-  to an absolute screen rect, replicating the engine's own layout rules (numeric vs
-  `centre`/`right`/`bottom` anchors, percentage sizes, `<subform src=...>`, and the fact that
-  `forms/form.cpp` applies every `<style>` block in document order).
+- Named harness commands (`CONTROL BUTTON_NEWGAME`, `CONTROLS`) invoke live form widgets
+  through `Control::click()` / setters. The screens still render; the driver does not have to
+  synthesise mouse events for anything that has an id.
+- `tools/oa_forms.py` still resolves shipped `data/forms/**.form` files to screen rects for
+  nameless widgets (map tiles, generated list rows). `oa_play.py` tries `CONTROL <id>` first
+  and falls back to a resolved click.
 - Every popup in this engine is its own `Stage`, so `STATUS` alone identifies the screen. The
   driver maps stage -> response and *acts* on events (dispatching a squad to an alien incident,
   entering a base defence) rather than closing them, and falls back to Return/Escape on any

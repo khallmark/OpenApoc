@@ -57,6 +57,26 @@ static bool test_parse_errors()
 	return true;
 }
 
+static bool test_parse_named_actions()
+{
+	HarnessCommand cmd;
+	TEST_REQUIRE(parseHarnessCommand("CONTROLS", cmd) && cmd.type == HarnessCommand::Type::Action,
+	             "controls");
+	TEST_REQUIRE(cmd.text == "controls", "controls verb");
+	TEST_REQUIRE(parseHarnessCommand("CONTROL BUTTON_NEWGAME", cmd), "control id");
+	TEST_REQUIRE(cmd.type == HarnessCommand::Type::Action && cmd.text == "control", "control verb");
+	TEST_REQUIRE(cmd.args.size() == 1 && cmd.args[0] == "BUTTON_NEWGAME", "control id arg");
+	TEST_REQUIRE(parseHarnessCommand("CONTROL NUM_HUMANS_SLIDER set 8", cmd), "control set");
+	TEST_REQUIRE(cmd.args.size() == 3 && cmd.args[1] == "set" && cmd.args[2] == "8", "set args");
+	TEST_REQUIRE(parseHarnessCommand("ACTION click BUTTON_NEWGAME", cmd), "action click");
+	TEST_REQUIRE(cmd.text == "click" && cmd.args.size() == 1 && cmd.args[0] == "BUTTON_NEWGAME",
+	             "action click args");
+	TEST_REQUIRE(parseHarnessCommand("HELP", cmd) && cmd.text == "help", "help");
+	TEST_REQUIRE(!parseHarnessCommand("CONTROL", cmd), "control needs id");
+	TEST_REQUIRE(!parseHarnessCommand("ACTION", cmd), "action needs verb");
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -69,5 +89,6 @@ int main(int argc, char **argv)
 	    {"parse_key_and_text", test_parse_key_and_text},
 	    {"parse_status_quit_shot", test_parse_status_quit_shot},
 	    {"parse_errors", test_parse_errors},
+	    {"parse_named_actions", test_parse_named_actions},
 	});
 }

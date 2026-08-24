@@ -19,7 +19,8 @@ set (FORMS_SOURCE_FILES
 	textedit.cpp
 	ticker.cpp
 	tristatebox.cpp
-	ui.cpp)
+	ui.cpp
+	harness_actions.cpp)
 source_group(forms\\sources FILES ${LIBRARY_SOURCE_FILES})
 
 set (FORMS_HEADER_FILES
@@ -39,7 +40,8 @@ set (FORMS_HEADER_FILES
 	textedit.h
 	ticker.h
 	tristatebox.h
-	ui.h)
+	ui.h
+	harness_actions.h)
 
 source_group(forms\\headers FILES ${LIBRARY_HEADER_FILES})
 

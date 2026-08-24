@@ -5,10 +5,10 @@ Launch the game with:
   --Framework.Harness.Enable=1 --Framework.Harness.Port=17321 --Game.SkipIntro=1
   --Config.Save=0 --Config.Read=0 --OpenApoc.NewFeature.SeedRng=0
 
-The driver never guesses pixel coordinates: it resolves control ids out of the shipped .form
-definitions (tools/oa_forms.py) against the live display size reported by STATUS. Screens are
-identified by the stage class name that STATUS reports, so modal popups -- which are their own
-Stage in this engine -- are detected and dismissed automatically instead of deadlocking the run.
+The driver never guesses pixel coordinates for named widgets: it sends `CONTROL <id>` on the
+harness. Screens are identified by the stage class name that STATUS reports, so modal popups --
+which are their own Stage in this engine -- are detected and dismissed automatically instead of
+deadlocking the run. Pixel `CLICK` is used only for nameless widgets (map tiles, list rows).
 """
 
 from __future__ import annotations
@@ -176,6 +176,20 @@ class Harness:
     def click_xy(self, x: int, y: int) -> None:
         self.ok(f"click {x} {y}")
 
+    def control(self, cid: str, op: str = "click", value: str | None = None) -> str:
+        if op == "set":
+            return self.ok(f"control {cid} set {value}")
+        if op == "toggle":
+            return self.ok(f"control {cid} toggle")
+        return self.ok(f"control {cid}")
+
+    def controls(self) -> str:
+        return self.ok("controls")
+
+    def action(self, verb: str, *args: str) -> str:
+        line = "action " + " ".join((verb,) + args)
+        return self.ok(line)
+
     def key(self, name: str) -> None:
         self.ok(f"key {name}")
 
@@ -340,6 +354,11 @@ class Driver:
             return {}
 
     def click_id(self, cid: str, st: Status | None = None) -> bool:
+        try:
+            self.h.control(cid)
+            return True
+        except HarnessError:
+            pass
         st = st or self.status()
         ctrls = self.controls(st)
         c = ctrls.get(cid)
@@ -502,15 +521,18 @@ class Driver:
     def dismiss_modal(self, st: Status) -> bool:
         return self.respond_to_event(st)
 
-    def wait_for(self, stage: str, timeout: float = 90.0) -> Status:
+    def wait_for(self, stage: str | tuple[str, ...], timeout: float = 90.0) -> Status:
+        wanted = (stage,) if isinstance(stage, str) else tuple(stage)
         deadline = time.time() + timeout
         while time.time() < deadline:
             st = self.status()
-            if st.stage == stage:
+            if st.stage in wanted:
                 return st
             if not self.dismiss_modal(st):
                 time.sleep(0.4)
-        raise TimeoutError(f"stage {stage!r} not reached in {timeout}s (last={self.status().stage})")
+        raise TimeoutError(
+            f"stage {wanted!r} not reached in {timeout}s (last={self.status().stage})"
+        )
 
 
 # ---------------------------------------------------------------------------
