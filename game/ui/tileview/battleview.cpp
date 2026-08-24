@@ -1294,7 +1294,15 @@ BattleView::BattleView(sp<GameState> gameState)
 	updateLayerButtons();
 }
 
-BattleView::~BattleView() = default;
+BattleView::~BattleView()
+{
+	// Our harness handler captured a raw `this`. Nothing re-registers between the battle ending
+	// and BattleDebriefing being shown, and the handler's own guard (current_battle) stays true
+	// for that whole screen -- Battle::exitBattle clears it later -- so a `gs` query arriving in
+	// that window dereferences a destroyed BattleView. CityView has had this restoration since
+	// the same hazard was found there; BattleView was missed.
+	setHarnessQueryHandler(previousHarnessHandler);
+}
 
 void BattleView::begin()
 {
@@ -1462,15 +1470,17 @@ void BattleView::registerBattleViewIntrospection()
 				    const auto screen = view->tileToOffsetScreenCoords<float>(unit->position);
 				    const bool onScreen = screen.x >= 0 && screen.y >= 0 && screen.x < size.x &&
 				                          screen.y < size.y;
-				    // Prefer one that is not already framed, so repeated calls walk the map
-				    // instead of re-centring on the same alien forever.
-				    if (!best || (!onScreen && best))
+				    // Prefer a hostile that is not already framed, so repeated calls walk the
+				    // map instead of re-centring on the same alien for ever. Take the first
+				    // off-screen one immediately; otherwise keep the first seen as a fallback.
+				    if (!onScreen)
 				    {
 					    best = unit;
-					    if (!onScreen)
-					    {
-						    break;
-					    }
+					    break;
+				    }
+				    if (!best)
+				    {
+					    best = unit;
 				    }
 			    }
 			    if (!best)

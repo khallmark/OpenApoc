@@ -1017,13 +1017,17 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
             time.sleep(0.15)
 
         foes = d.h.screen_craft("enemies_screen")
-        if not foes:
-            # enemies_screen only reports hostiles already on screen, so survivors scattered
-            # across the map are invisible to the driver. Walk the camera to the next one.
+        # enemies_screen only reports hostiles already on screen. Walking the camera only when
+        # *nothing* is visible is not enough: one alien that is framed but unreachable keeps the
+        # squad grinding against it while the rest of the map goes unexplored, which is the same
+        # stall in a new costume. So also walk on once progress dries up.
+        if not foes or stalls > 4:
             info = d.h.gs("centre_on_enemy")
             if info.get("centred") == "1":
                 time.sleep(0.4)
-                foes = d.h.screen_craft("enemies_screen")
+                found = d.h.screen_craft("enemies_screen")
+                if found:
+                    foes = found
 
         if foes:
             fx, fy, _ = foes[rounds % len(foes)]
@@ -1110,17 +1114,22 @@ def crew_transport(d: Driver) -> int:
 
     # Select the squad once, then try each craft row: the right column starts with the building
     # itself, so the first row that accepts a squad is not known ahead of time.
-    for row in range(6):
-        picked = 0
-        for r in range(6):
-            y = box.y + FIRST_ROW + r * ROW_H
-            if y >= box.y + box.h - 8:
-                break
-            d.h.click_xy(box.x + AGENT_DX, y)
-            picked += 1
-            time.sleep(0.1)
-        if not picked:
+    # Select the squad exactly once. MultilistBox toggles: clicking a row that is already
+    # selected removes it again, so re-selecting before every craft-row attempt was switching
+    # the squad back off and dragging an empty list on all attempts after the first.
+    picked = 0
+    for r in range(6):
+        y = box.y + FIRST_ROW + r * ROW_H
+        if y >= box.y + box.h - 8:
             break
+        d.h.click_xy(box.x + AGENT_DX, y)
+        picked += 1
+        time.sleep(0.1)
+    if not picked:
+        d.h.key("Escape")
+        return 0
+
+    for row in range(6):
 
         sy = box.y + FIRST_ROW
         dy = box.y + FIRST_ROW + row * ROW_H
