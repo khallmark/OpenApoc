@@ -1833,9 +1833,13 @@ def intercept_ufos(d: Driver) -> int:
         d.say("  [intercept] no armed fighter free; leaving the transport out of it")
         d.h.key("Escape")
         return 0
-    if len(fighters) < 2 and crewed_fighters:
-        # A lone fighter loses. Nothing else is airworthy, so let this one go rather than trade it.
-        d.say("  [intercept] only one fighter airborne; holding it back rather than trading it")
+    # "Crewed" marks the craft currently carrying the squad, not a craft that cannot fight -- a
+    # Valkyrie Interceptor with agents aboard is still an interceptor. Counting it as a transport
+    # made two airworthy fighters read as one and refused every engagement for a whole game-week.
+    # What matters is whether anything is left if this sortie goes badly, so judge by the total
+    # armed fleet and send the uncrewed ones.
+    if len(fighters) + len(crewed_fighters) < 2:
+        d.say("  [intercept] only one armed flier in the whole fleet; holding it back")
         d.h.key("Escape")
         return 0
 
