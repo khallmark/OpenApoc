@@ -110,6 +110,7 @@ class Victory:
         self.last_checkpoint = 0.0
         self.last_base_try = 0.0
         self.last_vequip = 0.0
+        self.last_vequip_outcome = ""
         self.last_defer_log = 0.0
         self.caps_checked = False
         self.last_solvency_check = 0.0
@@ -545,8 +546,11 @@ class Victory:
         if time.time() - self.last_vequip > 300.0:
             self.last_vequip = time.time()
             outcome = equip_craft(self.d)
-            if outcome not in ("no-air-weapon-in-stores", "no-items-in-stores"):
+            # Log every outcome, including the boring ones: "nothing to fit" and "never got
+            # there" look identical from outside, and suppressing them hid which it was.
+            if outcome != self.last_vequip_outcome or outcome == "fitted":
                 self.say(f"craft weapons: {outcome}")
+                self.last_vequip_outcome = outcome
 
         if in_city > 0:
             if time.time() - self.last_intercept > INTERCEPT_COOLDOWN_S:
