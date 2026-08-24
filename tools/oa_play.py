@@ -2779,6 +2779,61 @@ def sell_ground_fleet(d: Driver) -> int:
     return sell_named(d, list(GROUND_VEHICLES), qty=4, category="BUTTON_VEHICLES")
 
 
+def sell_surplus_loot(d: Driver, keep: int = 1) -> int:
+    """Sell captured gear the guide says is the campaign's real income. Returns lines sold.
+
+    "Disruptors are $2500, boomeroids $900 or so ... I finished researching boomeroids - and poof,
+    unloaded 99 of them to the market. Hawk right there!" Recovered equipment is worth more than
+    the government funding, and it accumulates uselessly in stores otherwise.
+
+    Three rules keep this from being self-harm:
+      * Never sell anything still unresearched, and always keep one specimen. Selling the only
+        corpse or artifact stalls the tech tree on a topic that can never start again.
+      * Never sell what the squad's own equipment template names -- processTemplate re-equips
+        those exact types, so selling them disarms everybody at the next equip.
+      * Keep a working reserve of each kind rather than stripping stores to nothing.
+    """
+    info = d.h.gs("loot")
+    detail = info.get("detail", "-")
+    if not detail or detail == "-":
+        return 0
+
+    template_types = set()
+    for part in d.h.gs("templates").get("detail", "").split("|"):
+        if not part.startswith("1:"):
+            continue
+        for kv in part.split(":", 1)[1].split(","):
+            if kv.startswith("types="):
+                template_types = {_norm(t) for t in kv[6:].split("+") if t and t != "-"}
+
+    surplus = []
+    for part in detail.split("|"):
+        bits = part.split(":")
+        if not bits:
+            continue
+        item = bits[0]
+        attrs = {}
+        for kv in bits[1:]:
+            if "=" in kv:
+                k, v = kv.split("=", 1)
+                attrs[k] = v
+        if attrs.get("researched") != "1":
+            continue                      # unresearched: keep every one, it is a specimen
+        if _norm(item) in template_types:
+            continue                      # the squad wears this
+        try:
+            have = int(attrs.get("have", "0") or 0)
+        except ValueError:
+            continue
+        if have > keep + 2:
+            surplus.append((item, have - keep))
+    if not surplus:
+        return 0
+    names = [i for i, _ in surplus][:8]
+    d.say(f"  [sell] surplus loot: {len(names)} kind(s), e.g. {names[:3]}")
+    return sell_named(d, names, qty=max(q for _, q in surplus), category="BUTTON_AGENTS")
+
+
 def buy_interceptor(d: Driver, want: int = 2) -> int:
     """Buy armed FLYING craft. Returns the number of purchase lines ordered.
 
@@ -3036,6 +3091,18 @@ def hire_scientists(d: Driver, want: int = 6) -> int:
     got = hire_staff(d, want, "BUTTON_BIOSCIS", "agents_player")
     got += hire_staff(d, want, "BUTTON_PHYSCIS", "agents_player")
     return got
+
+
+def hire_engineers(d: Driver, want: int = 6) -> int:
+    """Recruit engineers.
+
+    Nothing was hiring these at all, so the workshop ran on whoever happened to be there. The
+    guide is direct about it -- "For Engineers, make space" -- because engineering is what pays
+    for everything else: "as long as it is worth more than it costs to make, your engineers are
+    turning a profit ... to have engineers sitting around, making money, and not producing
+    anything is only justifiable if items cost more to make than they can be sold for."
+    """
+    return hire_staff(d, want, "BUTTON_ENGINRS", "agents_player")
 
 
 def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:

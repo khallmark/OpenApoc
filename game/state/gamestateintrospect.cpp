@@ -853,6 +853,46 @@ UString introspectGameState(GameState &state, const UString &query)
 		              state.current_city ? state.current_city.id : UString("none"),
 		              out.empty() ? UString("-") : out);
 	}
+	if (q == "loot")
+	{
+		// The whole armoury, with the one fact that decides whether an item can be sold: has its
+		// research been done. AllOutWar's guide is emphatic that captured gear is the campaign's
+		// main income -- disruptors at $2500, boomeroids around $900 -- and equally emphatic that
+		// it must be RESEARCHED first. So report the count and the research state per item, and
+		// let the driver keep one of anything still unresearched rather than selling the only
+		// specimen and stalling its own tech tree.
+		UString out;
+		int n = 0;
+		std::map<UString, std::pair<int, int>> merged;  // id -> (count, researched)
+		for (const auto &b : state.player_bases)
+		{
+			if (!b.second)
+			{
+				continue;
+			}
+			for (const auto &e : b.second->inventoryAgentEquipment)
+			{
+				if (e.second == 0)
+				{
+					continue;
+				}
+				const auto type = StateRef<AEquipmentType>{&state, e.first};
+				const int done = (type && type->research_dependency.satisfied()) ? 1 : 0;
+				auto &slot = merged[e.first];
+				slot.first += e.second;
+				slot.second = done;
+			}
+		}
+		for (const auto &m : merged)
+		{
+			if (n++ > 0)
+			{
+				out += "|";
+			}
+			out += format("{0}:have={1}:researched={2}", m.first, m.second.first, m.second.second);
+		}
+		return format("count={0} detail={1}", n, out.empty() ? UString("-") : out);
+	}
 	if (q == "stores")
 	{
 		size_t kinds = 0, total = 0, weapons = 0;

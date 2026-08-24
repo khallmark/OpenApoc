@@ -34,6 +34,7 @@ from oa_play import (
     assign_research,
     build_second_base,
     sell_ground_fleet,
+    sell_surplus_loot,
     buy_interceptor,
     equip_craft,
     verify_battle_capabilities,
@@ -46,6 +47,7 @@ from oa_play import (
     buy_vehicles,
     stock_for_template,
     equip_squad,
+    hire_engineers,
     hire_scientists,
     hire_soldiers,
     crew_transport,
@@ -88,7 +90,7 @@ MIN_SOLDIERS = 18
 # losing it dwarfs the hit from declining.
 MIN_SQUAD = 6
 # Below this much total lab skill the research chain is crawling and worth spending money on.
-MIN_LAB_SKILL = 700
+MIN_LAB_SKILL = 1100
 CHECKPOINT_EVERY_S = 300.0
 
 
@@ -120,6 +122,7 @@ class Victory:
         self.last_checkpoint = 0.0
         self.last_base_try = 0.0
         self.last_vequip = 0.0
+        self.last_loot_sale = 0.0
         self.last_vequip_outcome = ""
         self.last_defer_log = 0.0
         self.caps_checked = False
@@ -469,6 +472,10 @@ class Victory:
                 self.last_hire = time.time()
                 self.say(f"lab skill down to {skill} - recruiting scientists")
                 hire_scientists(self.d, want=4)
+                # And engineers, which nothing was hiring at all. The workshop is what pays for
+                # the campaign once there is anything worth manufacturing, and the guide says to
+                # make space for them rather than wait.
+                hire_engineers(self.d, want=4)
             # Only make the trip when there is something to assign. A research pass takes tens of
             # seconds -- walking both lab lists, opening ResearchSelect per lab -- and it was
             # firing every 45 seconds regardless, so the driver lived on the research screen with
@@ -562,6 +569,16 @@ class Victory:
             self.say(f"{fliers} armed flier(s) of {mine} craft - buying air cover")
             if not buy_interceptor(self.d, want=2) and mine < 3:
                 buy_vehicles(self.d, want=1)
+        # Turn captured gear into money. The guide treats recovered equipment as the campaign's
+        # real income -- worth more than government funding -- and it otherwise piles up in stores
+        # doing nothing. Keeps one specimen of anything unresearched so the tech tree never
+        # stalls on a sold artifact.
+        if time.time() - self.last_loot_sale > 420.0:
+            self.last_loot_sale = time.time()
+            sold = sell_surplus_loot(self.d, keep=1)
+            if sold:
+                self.say(f"sold {sold} surplus loot line(s)")
+
         # Fit the best gun in stores, whatever the fleet size. A craft flying with its default
         # armament while Lancer 7000s sit in the warehouse is how interceptors kept dying.
         if time.time() - self.last_vequip > 300.0:
