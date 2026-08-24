@@ -94,10 +94,61 @@ VEquipScreen::VEquipScreen(sp<GameState> state)
 	this->setHighlightedSlotType(EquipmentSlotType::VehicleWeapon);
 }
 
-VEquipScreen::~VEquipScreen() = default;
+VEquipScreen::~VEquipScreen() { setHarnessQueryHandler(previousHarnessHandler); }
+
+void VEquipScreen::registerVEquipIntrospection()
+{
+	// The inventory rows are drawn from a per-frame list of screen rects (inventoryItems), with
+	// no control ids of any kind, so the only way a driver can fit a weapon is to ask this screen
+	// where the items are. Without it, better guns simply sat in the warehouse: a campaign flew
+	// craft with their default armament while two Bolter 4000s and two Lancer 7000s went unused,
+	// and lost the craft.
+	previousHarnessHandler = getHarnessQueryHandler();
+	auto previous = previousHarnessHandler;
+	VEquipScreen *screen = this;
+	setHarnessQueryHandler(
+	    [previous, screen](const UString &query) -> UString
+	    {
+		    const auto q = to_lower(query);
+		    if (q == "vequip_items")
+		    {
+			    UString out;
+			    int n = 0;
+			    for (const auto &pair : screen->inventoryItems)
+			    {
+				    const auto &rect = pair.first;
+				    const auto &type = pair.second;
+				    if (!type)
+				    {
+					    continue;
+				    }
+				    UString name = type->name;
+				    std::replace(name.begin(), name.end(), ' ', '_');
+				    if (n++ > 0)
+				    {
+					    out += "|";
+				    }
+				    // Report damage as well as identity: a driver choosing between a Bolter 4000
+				    // and a Lancer 7000 needs to know which one actually hits harder.
+				    out += format("{0}:at={1},{2}:size={3},{4}:weapon={5}:damage={6}:air={7}", name,
+				                   rect.p0.x, rect.p0.y, rect.p1.x - rect.p0.x,
+				                   rect.p1.y - rect.p0.y,
+				                   type->type == EquipmentSlotType::VehicleWeapon ? 1 : 0,
+				                   type->damage,
+				                   type->users.count(VEquipmentType::User::Air) ? 1 : 0);
+			    }
+			    UString veh = screen->selected ? screen->selected->name : UString("-");
+			    std::replace(veh.begin(), veh.end(), ' ', '_');
+			    return format("count={0} vehicle={1} detail={2}", n, veh,
+			                  out.empty() ? UString("-") : out);
+		    }
+		    return previous ? previous(query) : UString("");
+	    });
+}
 
 void VEquipScreen::begin()
 {
+	registerVEquipIntrospection();
 	form->findControlTyped<Label>("TEXT_FUNDS")->setText(state->getPlayerBalance());
 
 	vehicleSelectBox = form->findControlTyped<ListBox>("VEHICLE_SELECT_BOX");

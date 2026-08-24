@@ -34,6 +34,7 @@ from oa_play import (
     assign_research,
     build_second_base,
     buy_interceptor,
+    equip_craft,
     verify_battle_capabilities,
     build_facility,
     return_to_city,
@@ -108,6 +109,7 @@ class Victory:
         self.last_endgame = 0.0
         self.last_checkpoint = 0.0
         self.last_base_try = 0.0
+        self.last_vequip = 0.0
         self.last_defer_log = 0.0
         self.caps_checked = False
         self.last_solvency_check = 0.0
@@ -538,6 +540,13 @@ class Victory:
             self.say(f"{fliers} armed flier(s) of {mine} craft - buying air cover")
             if not buy_interceptor(self.d, want=2) and mine < 3:
                 buy_vehicles(self.d, want=1)
+        # Fit the best gun in stores, whatever the fleet size. A craft flying with its default
+        # armament while Lancer 7000s sit in the warehouse is how interceptors kept dying.
+        if time.time() - self.last_vequip > 300.0:
+            self.last_vequip = time.time()
+            outcome = equip_craft(self.d)
+            if outcome not in ("no-air-weapon-in-stores", "no-items-in-stores"):
+                self.say(f"craft weapons: {outcome}")
 
         if in_city > 0:
             if time.time() - self.last_intercept > INTERCEPT_COOLDOWN_S:

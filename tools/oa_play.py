@@ -2568,6 +2568,93 @@ def buy_category(d: Driver, category: str, qty: int, rows: int, sub: str = "") -
     return changed
 
 
+def equip_craft(d: Driver) -> str:
+    """Fit the hardest-hitting air weapon in stores to a craft. Returns what happened.
+
+    Craft flew with their default armament while better guns sat in the warehouse -- two Bolter
+    4000 lasers and two Lancer 7000s unused while interceptors were being shot down and
+    craft_lost fell past -400. Nothing was equipping them, because the vehicle equip screen draws
+    its inventory as a per-frame list of screen rects with no control ids at all: there was no way
+    to find an item, let alone fit one.
+
+    gs vequip_items reports those rects with each item's damage and whether it is an air weapon.
+    Fitting is then a single Shift+click: VEquipScreen treats Shift+MouseDown on an inventory item
+    as "put this on the vehicle" outright (vequipscreen.cpp:336-357), no drag required, and
+    AdvancedInventoryControls -- which gates it -- defaults on (options.cpp:378).
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return f"not-in-city ({st.stage})"
+    info = d.h.gs("centre_on_base")
+    at = info.get("at", "")
+    if not at or at == "-":
+        return "no-base-framed"
+    try:
+        bx, by = (int(v) for v in at.split(",")[:2])
+    except ValueError:
+        return "bad-base-coords"
+    d.h.ok(f"click {bx} {by} right")
+    time.sleep(0.9)
+    if d.status().stage != "BuildingScreen":
+        return_to_city(d)
+        return f"no-building-screen ({d.status().stage})"
+    if not d.click_id("BUTTON_EQUIPVEHICLE", d.status()):
+        return_to_city(d)
+        return "no-equip-button"
+    try:
+        d.wait_for("VEquipScreen", 20)
+    except TimeoutError:
+        return_to_city(d)
+        return f"vequip-not-reached ({d.status().stage})"
+
+    items = d.h.gs("vequip_items")
+    detail = items.get("detail", "-")
+    if not detail or detail == "-":
+        return_to_city(d)
+        return "no-items-in-stores"
+    best = None
+    for part in detail.split("|"):
+        bits = part.split(":")
+        if not bits:
+            continue
+        name = bits[0]
+        attrs = {}
+        for kv in bits[1:]:
+            if "=" in kv:
+                k, v = kv.split("=", 1)
+                attrs[k] = v
+        if attrs.get("weapon") != "1" or attrs.get("air") != "1":
+            continue
+        try:
+            dmg = int(attrs.get("damage", "0") or 0)
+            ax, ay = (int(v) for v in attrs.get("at", "0,0").split(","))
+            sw, sh = (int(v) for v in attrs.get("size", "0,0").split(","))
+        except ValueError:
+            continue
+        if best is None or dmg > best[0]:
+            best = (dmg, name, ax + sw // 2, ay + sh // 2)
+    if not best:
+        return_to_city(d)
+        return "no-air-weapon-in-stores"
+
+    dmg, name, cx, cy = best
+    d.say(f"  [vequip] fitting {name} (damage {dmg}) to {items.get('vehicle', '?')}")
+    d.h.send("keydown Left Shift")
+    try:
+        settle(d)
+        d.h.ok(f"down {cx} {cy}")
+        time.sleep(0.2)
+        d.h.ok(f"up {cx} {cy}")
+        time.sleep(0.3)
+    finally:
+        d.h.send("keyup Left Shift")
+    time.sleep(0.4)
+    after = d.h.gs("vequip_items")
+    return_to_city(d)
+    d.say(f"  [vequip] stores now list {after.get('count', '?')} item kinds")
+    return "fitted"
+
+
 def buy_interceptor(d: Driver, want: int = 2) -> int:
     """Buy armed FLYING craft. Returns the number of purchase lines ordered.
 
