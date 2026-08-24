@@ -102,6 +102,8 @@ class Victory:
         self.last_endgame = 0.0
         self.last_checkpoint = 0.0
         self.last_base_try = 0.0
+        self.last_defer_log = 0.0
+        self.last_deferred_why = ""
         self.second_base = False
         self.best_crashed = 0
 
@@ -150,8 +152,14 @@ class Victory:
             self.say(f"checkpoint FAILED ({why}): {exc}")
             return
         if stage != "CityView":
-            self.say(f"checkpoint deferred ({why}): stage is {stage}, not CityView")
-            self.last_checkpoint = 0.0
+            # Retry soon, but not on every pass of the loop: zeroing the timer outright made the
+            # periodic save fire again immediately and fill the log with one deferral line per
+            # iteration while the driver sat on a recruit screen.
+            if self.last_deferred_why != why or time.time() - self.last_defer_log > 30.0:
+                self.say(f"checkpoint deferred ({why}): stage is {stage}, not CityView")
+                self.last_defer_log = time.time()
+                self.last_deferred_why = why
+            self.last_checkpoint = time.time() - (CHECKPOINT_EVERY_S - 30.0)
             return
         try:
             self.d.h.ok(f"save {self.checkpoint}")
