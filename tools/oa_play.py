@@ -1167,9 +1167,16 @@ def assign_research(d: Driver) -> bool:
                 break  # ran off the end of this list
             time.sleep(0.3)
 
+            # Skip a lab with nothing it can actually take. A lab whose every offered topic is
+            # already researched used to burn all eight attempts selecting completed rows, and
+            # since the attempt budget was per-lab rather than global, an exhausted biochem lab
+            # could starve a physics lab that had seven live topics waiting -- which is exactly
+            # what "3 labs idle, startable=28, started 0" was.
             wanted = pick_topic_row(d)
+            if wanted < 0:
+                continue
             for attempt in range(8):
-                topic_row = wanted if attempt == 0 and wanted >= 0 else attempt
+                topic_row = wanted if attempt == 0 else attempt
                 st = d.status()
                 if st.stage != "ResearchScreen":
                     break

@@ -154,7 +154,10 @@ UString describeResearch(GameState &state)
 		const StateRef<Base> base{&state, state.player_bases.begin()->first};
 		for (const auto &t : state.research.topics)
 		{
-			if (!t.second || t.second->isComplete() || t.second->current_lab ||
+			// Hidden topics are permanently excluded from the research selection UI
+			// (researchselect.cpp:234), so counting them made startable wildly misleading --
+			// it read 28 while every lab genuinely had nothing left to be offered.
+			if (!t.second || t.second->isComplete() || t.second->current_lab || t.second->hidden ||
 			    !t.second->dependencies.satisfied(base))
 			{
 				continue;
