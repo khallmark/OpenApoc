@@ -466,8 +466,13 @@ class Victory:
         # below -50 cuts funding outright. Two runs died at gov_relation -78 and -80 with 19 and
         # 39 buildings infiltrated while the driver read that number and did nothing. A ground
         # raid costs no relation with the owner, so the only real cost is the squad's time.
+        # A building sweep does not need a full squad -- most reported crews are one to five
+        # aliens, and requiring six armed agents meant the raid never ran at all once the squad
+        # had taken losses: observed at 4 armed of 11 soldiers with eight buildings infiltrated
+        # and the government relation falling. Three is enough to clear a small crew, and letting
+        # the infiltration stand is what actually ends campaigns.
         armed_now = int(self.d.h.gs("agents").get("armed", "0") or 0)
-        if armed_now >= MIN_SQUAD and time.time() - self.last_infil_raid > INFIL_COOLDOWN_S:
+        if armed_now >= 3 and time.time() - self.last_infil_raid > INFIL_COOLDOWN_S:
             self.last_infil_raid = time.time()
             outcome = raid_infiltrated_building(self.d)
             if outcome != "nothing-reported":
@@ -647,7 +652,22 @@ class Victory:
         if in_city > 0:
             if time.time() - self.last_intercept > INTERCEPT_COOLDOWN_S:
                 self.last_intercept = time.time()
-                intercept_ufos(self.d)
+                # Every shot that misses a UFO and hits a building costs 5 relation with its
+                # owner, and 20 if it destroys the tile (scenery.cpp:1158-1186). Most buildings
+                # are the government's, and government relation below -50 terminates funding
+                # outright. Watching that number fall from 100 to 8 in three game-days while
+                # city_damage reached -2603 is the whole argument: once relations are slipping,
+                # an unintercepted UFO costs less than the collateral of engaging it over a
+                # dense city. Let it go and take it at the crash site instead.
+                try:
+                    rel = int(self.d.h.gs("infiltrated").get("gov_relation", "100") or 100)
+                except (HarnessError, OSError):
+                    rel = 100
+                if rel < 25:
+                    self.say(f"government relation {rel}: holding fire over the city rather "
+                             f"than shooting the buildings we are paid to protect")
+                else:
+                    intercept_ufos(self.d)
             # Turbo, whenever the engine will grant it. GameState::updateTurbo advances
             # TURBO_TICKS -- five game-minutes -- per frame, against six ticks per frame at
             # Speed4. Measured with modals actively cleared: 1,627 ticks/s at Speed4 versus
