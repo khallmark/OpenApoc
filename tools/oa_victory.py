@@ -462,8 +462,11 @@ class Victory:
             if time.time() - self.last_intercept > INTERCEPT_COOLDOWN_S:
                 self.last_intercept = time.time()
                 intercept_ufos(self.d)
-            # canTurbo() is false while hostiles are up, so ask for the fastest speed that is
-            # actually granted. Without this the clock sat still for minutes at a time.
+            # NEVER request Speed5. Turbo freezes this build permanently: measured on a clean game,
+            # speed 4 runs at ~1900 ticks/s, pressing 5 drops it to 0, and pressing 4 again does not
+            # recover -- the clock stays dead until the process is restarted. That is the cause of
+            # every "frozen clock" stall this session, since the driver asked for turbo whenever no
+            # UFO was in the city. Speed 4 is the fastest safe setting.
             self.d.h.key("4")
         else:
             # No live UFO left in the city, so anything still holding an attack order is just
@@ -471,7 +474,7 @@ class Victory:
             t = self.d.h.gs("turbo")
             if int(t.get("attack_missions", "0") or 0) > 0:
                 clear_attack_orders(self.d)
-            self.d.h.key("5")  # turbo; canTurbo() downgrades it by itself when combat is live
+            self.d.h.key("4")  # Speed4 is the ceiling; see the note above on turbo freezing
 
     def victorious(self) -> bool:
         try:
