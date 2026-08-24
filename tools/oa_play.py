@@ -296,6 +296,25 @@ PAUSE_NOTIFICATION_FLAGS = [
             "--Notifications.City.VehicleRepaired=0",
 ]
 
+def bring_to_front() -> None:
+    """Raise the game window so a human watching this machine can actually see it.
+
+    A windowed launch is visible by default, but nothing was ever done to keep it that way: a
+    debug session opening several instances on different ports leaves them stacked or scattered,
+    and none of them is guaranteed to be the frontmost window. This is best-effort -- it only
+    does anything on macOS, and a failure here must never abort a run that is otherwise fine.
+    """
+    if sys.platform != "darwin":
+        return
+    try:
+        subprocess.run(
+            ["osascript", "-e", 'tell application "OpenApoc" to activate'],
+            capture_output=True, timeout=5,
+        )
+    except Exception:
+        pass
+
+
 class GameProcess:
     """Owns a game instance so a run needs no human to start or stop anything."""
 
@@ -348,6 +367,7 @@ class GameProcess:
                 raise RuntimeError(f"game exited early (rc={self.proc.returncode}); see {self.log_path}")
             try:
                 h.send("status")
+                bring_to_front()
                 return
             except OSError:
                 time.sleep(0.5)

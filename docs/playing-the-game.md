@@ -284,6 +284,32 @@ Sources: [UFOpaedia Apocalypse](https://www.ufopaedia.org/index.php/X-COM:_Apoca
 [Wikibooks strategy guide](https://en.wikibooks.org/wiki/X-COM:_Apocalypse),
 [StrategyWiki](https://strategywiki.org/wiki/X-COM:_Apocalypse).
 
+## Skirmish mode (for isolated battle testing)
+
+`tools/oa_skirmish.py` drives Skirmish for fast, isolated combat testing instead of running a
+full campaign just to reach one battle. Reaching Skirmish needs a game already running --
+InGameOptions -> BUTTON_SKIRMISH -- there is no cold-boot entry from MainMenu.
+
+**A map row is not chosen by ListBox selection.** MapSelector never listens for
+ListBoxChangeSelected at all; each row is an inert Control holding a Label plus a small nested
+GraphicButton, and only clicking that button calls `Skirmish::setLocation`. This needed the
+named-action layer to address a grandchild, not just a child --
+`CONTROL LISTBOX_MAPS item <row> item 1 click` -- so `CONTROL <id> item <N>` now supports any
+number of chained hops, not just one.
+
+**Whether SelectForces even appears depends on location type.** A Base row always customizes. A
+UFO row skips SelectForces entirely and goes straight to AEquipScreen for boarding loadout. An
+alien Building row uses its own preset crew and skips SelectForces too, *unless*
+`CUSTOMISE_FORCES` is checked before clicking Skirmish's own `BUTTON_OK` -- check it regardless
+of which location type is picked.
+
+**Skirmish battles do not currently start.** Setup is fully reliable up through AEquipScreen, but
+the actual transition into BattleView does not happen -- see the status note at the top of
+`tools/oa_skirmish.py` for what was actually verified. This looks like a genuine pre-existing bug
+in Skirmish's own battlemap generation (a threadpool exception was directly observed on one map),
+separate from the main campaign's battle path, which is unaffected and has been fighting real
+missions all session.
+
 ## Running a campaign
 
 ```bash

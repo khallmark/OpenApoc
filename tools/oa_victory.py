@@ -156,28 +156,36 @@ class Victory:
             return False
 
     def restart(self) -> bool:
+        # A single failed attempt used to end the whole unattended run: restart() returned False,
+        # run() took that as final and exited -- even when the checkpoint itself loads fine in
+        # isolation, which was confirmed directly after this happened. The actual cause was
+        # transient (port contention, a slow-to-die previous process), not a broken save. A run
+        # that ends because of that is not a real result and should not be the last word --
+        # retrying a few times before giving up produces a genuine conclusion far more often than
+        # bailing on the first hiccup.
         if self.restarts >= MAX_RESTARTS:
             self.say(f"too many restarts ({self.restarts}); stopping")
             return False
-        self.restarts += 1
-        self.progress["restarts"] = self.progress.get("restarts", 0) + 1
-        self.flush()
-        self.say(f"game died - restarting from checkpoint (#{self.restarts})")
-        try:
-            if self.game:
-                self.game.stop()
-        except Exception:
-            pass
         if not self.checkpoint.exists():
             self.say("no checkpoint to resume from")
             return False
-        time.sleep(3.0)
-        try:
-            self.start()
-            return True
-        except Exception as exc:
-            self.say(f"restart failed: {exc}")
-            return False
+        for attempt in range(1, 4):
+            self.restarts += 1
+            self.progress["restarts"] = self.progress.get("restarts", 0) + 1
+            self.flush()
+            self.say(f"game died - restarting from checkpoint (#{self.restarts}, attempt {attempt}/3)")
+            try:
+                if self.game:
+                    self.game.stop()
+            except Exception:
+                pass
+            time.sleep(3.0 * attempt)
+            try:
+                self.start()
+                return True
+            except Exception as exc:
+                self.say(f"restart attempt {attempt} failed: {exc}")
+        return False
 
     # -- play -------------------------------------------------------------
     def fight(self, stage: str) -> None:
