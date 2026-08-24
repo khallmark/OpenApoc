@@ -59,7 +59,7 @@ CREW_COOLDOWN_S = 60.0
 # Topics finish and labs fall idle; an idle lab is research that is not happening. Re-checking
 # costs a few seconds of game time and is the difference between a campaign that advances up the
 # alien-building chain and one that stops after its first two topics.
-RESEARCH_COOLDOWN_S = 45.0
+RESEARCH_COOLDOWN_S = 90.0
 # Soldiers are lost permanently. Below this many fit soldiers there is no squad left to send.
 MIN_SOLDIERS = 10
 # Fewer than this and an incident is not worth answering: the squad dies and the score hit from
@@ -334,9 +334,19 @@ class Victory:
                 self.last_hire = time.time()
                 self.say(f"lab skill down to {skill} - recruiting scientists")
                 hire_scientists(self.d, want=4)
-            if idle > 0 or skill < MIN_LAB_SKILL:
-                self.say(f"{idle} lab(s) idle, skill {skill}, {done} topics complete - reassigning")
+            # Only make the trip when there is something to assign. A research pass takes tens of
+            # seconds -- walking both lab lists, opening ResearchSelect per lab -- and it was
+            # firing every 45 seconds regardless, so the driver lived on the research screen with
+            # the clock barely moving: an hour of wall time produced 0 battles, 0 UFOs downed and
+            # 0 recoveries. startable counts topics that could actually be picked right now, so
+            # when it is zero the whole trip is wasted and the game is better off left running.
+            startable = int(r.get("startable", "0") or 0)
+            if (idle > 0 and startable > 0) or skill < MIN_LAB_SKILL:
+                self.say(f"{idle} lab(s) idle, {startable} startable, skill {skill}, "
+                         f"{done} complete - reassigning")
                 assign_research(self.d)
+            elif idle > 0:
+                self.say(f"{idle} lab(s) idle but nothing startable - waiting for unlocks")
             self.progress["research_complete"] = done
             self.flush()
 
