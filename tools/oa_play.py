@@ -927,8 +927,130 @@ def _lab_skill_total(d: Driver) -> int:
 # cross into the alien dimension, and each RESEARCH_ALIEN_BUILDING_i opens the raid that unlocks
 # the next. Picking whatever topic happens to sit in row 0 will eventually stumble into these,
 # but not before burning game-months on brainsucker launchers.
-PRIORITY_RESEARCH = ["RESEARCH_ADVANCED_WORKSHOP"] + [
-    f"RESEARCH_ALIEN_BUILDING_{i}" for i in range(10)
+# Ordered best-first. pick_topic_rows walks this and takes the first startable match, then falls
+# back to the game's own <order> sequence for anything not named here.
+#
+# The old list was ["RESEARCH_ADVANCED_WORKSHOP"] + RESEARCH_ALIEN_BUILDING_0..9 and nothing
+# else, which went wrong in two ways. RESEARCH_ALIEN_BUILDING_0 is the one Alien Building topic
+# with no dependencies at all, so it is offered from day one -- and at 38000 man-hours it would
+# occupy a lab for roughly ninety game-days while eleven-thousand-hour topics that actually
+# unlock weapons and armour sat waiting. Everything outside those eleven ids fell through to
+# whatever happened to sit at row zero, which is what "researching shit out of order" looked
+# like from the outside. Nothing here is a shortcut: this is just the order a player who knows
+# the tech tree would pick topics in.
+#
+# Ordering rules, in priority sequence:
+#   1. Cheap roots that need only a recovered item -- they pay off fastest and unlock the rest.
+#   2. The biology chain, which gates THE_REAL_ALIEN_THREAT and the toxins.
+#   3. The victory chain: alien craft systems -> Advanced Workshop -> the Alien Buildings.
+#   4. Heavy weapons, craft and UFO-type topics, which are useful but never blocking.
+#
+# Verified against data/common_patch/gamestate/research.xml: all 95 ids exist, spelled exactly,
+# none hidden, none Engineering-type (an Engineering lab takes MANUFACTURE_* projects, a
+# different namespace this list cannot address), and no topic precedes one it depends on.
+PRIORITY_RESEARCH = [
+    # -- 1. cheap item-gated roots: fastest payback, and they open the rest of the tree --
+    "RESEARCH_BIO-TRANSPORT_MODULE",
+    "RESEARCH_DISRUPTOR_GUN",
+    "RESEARCH_LIGHT_DISRUPTOR_BEAM",
+    "RESEARCH_BRAINSUCKER_PODS",
+    "RESEARCH_BOOMEROID",
+    "RESEARCH_DIMENSION_MISSILE_LAUNCHER",
+    "RESEARCH_DIMENSION_MISSILE",
+    "RESEARCH_VORTEX_MINE",
+    "RESEARCH_PERSONAL_DISRUPTOR_SHIELD",
+    "RESEARCH_PERSONAL_TELEPORTER",
+    "RESEARCH_PERSONAL_CLOAKING_FIELD",
+    "RESEARCH_BRAINSUCKER_LAUNCHER",
+    "RESEARCH_ENTROPY_LAUNCHER",
+    "RESEARCH_ENTROPY_POD",
+
+    # -- 2. the biology chain, gating THE_REAL_ALIEN_THREAT and the toxins --
+    "RESEARCH_MULTIWORM_EGG_AUTOPSY",
+    "RESEARCH_MULTIWORM_EGG",
+    "RESEARCH_MULTIWORM_AUTOPSY",
+    "RESEARCH_MULTIWORM",
+    "RESEARCH_HYPERWORM_AUTOPSY",
+    "RESEARCH_HYPERWORM",
+    "RESEARCH_CHRYSALIS_AUTOPSY",
+    "RESEARCH_CHRYSALIS",
+    "RESEARCH_THE_ALIEN_GENETIC_STRUCTURE",
+    "RESEARCH_THE_ALIEN_LIFE_CYCLE",
+    "RESEARCH_BIOLOGICAL_WARFARE",
+    "RESEARCH_BRAINSUCKER_AUTOPSY",
+    "RESEARCH_BRAINSUCKER",
+    "RESEARCH_ANTHROPOD_AUTOPSY",
+    "RESEARCH_ANTHROPOD",
+    "RESEARCH_PSIMORPH_AUTOPSY",
+    "RESEARCH_PSIMORPH",
+    "RESEARCH_SPITTER_AUTOPSY",
+    "RESEARCH_SPITTER",
+    "RESEARCH_MEGASPAWN_AUTOPSY",
+    "RESEARCH_MEGASPAWN",
+    "RESEARCH_POPPER_AUTOPSY",
+    "RESEARCH_POPPER",
+    "RESEARCH_SKELETOID_AUTOPSY",
+    "RESEARCH_SKELETOID",
+    "RESEARCH_MICRONOID_AUTOPSY",
+    "RESEARCH_MICRONOID",
+    "RESEARCH_THE_REAL_ALIEN_THREAT",
+    "RESEARCH_QUEENSPAWN_AUTOPSY",
+    "RESEARCH_QUEENSPAWN",
+    "RESEARCH_TOXIN_TYPE_B",
+    "RESEARCH_TOXIN_TYPE_C",
+    "RESEARCH_ALIEN_GAS",
+    "RESEARCH_OVERSPAWN_AUTOPSY",
+    "RESEARCH_OVERSPAWN_AUTOPSY_1",
+
+    # -- 3. the victory chain: craft systems -> Advanced Workshop -> the ten Alien Buildings --
+    "RESEARCH_ADVANCED_BIOCHEMISTRY_LAB",
+    "RESEARCH_ALIEN_BUILDING_0",
+    "RESEARCH_DIMENSION_GATES",
+    "RESEARCH_THE_ALIEN_DIMENSION",
+    "RESEARCH_ALIEN_PROPULSION_SYSTEM",
+    "RESEARCH_ALIEN_CONTROL_SYSTEM",
+    "RESEARCH_ALIEN_ENERGY_SOURCE",
+    "RESEARCH_DIMENSION_PROBE",
+    "RESEARCH_ADVANCED_WORKSHOP",
+    "RESEARCH_ALIEN_BUILDING_1",
+    "RESEARCH_ALIEN_BUILDING_2",
+    "RESEARCH_ALIEN_BUILDING_3",
+    "RESEARCH_ALIEN_BUILDING_5",
+    "RESEARCH_ALIEN_BUILDING_6",
+    "RESEARCH_ALIEN_BUILDING_7",
+    "RESEARCH_ALIEN_BUILDING_8",
+    "RESEARCH_ALIEN_BUILDING_9",
+    "RESEARCH_ALIEN_BUILDING_4",
+
+    # -- 4. heavy weapons, craft and UFO analysis: valuable, never blocking --
+    "RESEARCH_MEDIUM_DISRUPTOR_BEAM",
+    "RESEARCH_HEAVY_DISRUPTOR_BEAM",
+    "RESEARCH_DISRUPTOR_INVERSION_BOMB",
+    "RESEARCH_STASIS_FIELD_BOMB",
+    "RESEARCH_DISRUPTOR_MULTI-BOMB",
+    "RESEARCH_SMALL_DISRUPTION_SHIELD",
+    "RESEARCH_LARGE_DISRUPTION_SHIELD",
+    "RESEARCH_CLOAKING_FIELD",
+    "RESEARCH_TELEPORTER",
+    "RESEARCH_ADVANCED_SECURITY_STATION",
+    "RESEARCH_ADVANCED_QUANTUM_PHYSICS_LAB",
+    "RESEARCH_DISRUPTOR_ARMOR",
+    "RESEARCH_X-COM_ADVANCED_CONTROL_SYSTEM",
+    "RESEARCH_DEVASTATOR_CANNON",
+    "RESEARCH_UFO_TYPE_1",
+    "RESEARCH_UFO_TYPE_2",
+    "RESEARCH_UFO_TYPE_3",
+    "RESEARCH_UFO_TYPE_4",
+    "RESEARCH_UFO_TYPE_5",
+    "RESEARCH_UFO_TYPE_6",
+    "RESEARCH_UFO_TYPE_7",
+    "RESEARCH_UFO_TYPE_8",
+    "RESEARCH_UFO_TYPE_9",
+    "RESEARCH_UFO_TYPE_10",
+    "RESEARCH_BIO-TRANSPORT",
+    "RESEARCH_EXPLORER",
+    "RESEARCH_RETALIATOR",
+    "RESEARCH_ANNIHILATOR",
 ]
 
 
