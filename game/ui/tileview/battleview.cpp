@@ -1572,6 +1572,7 @@ void BattleView::registerBattleViewIntrospection()
 			    const auto size = fw().displayGetSize();
 			    UString out;
 			    int count = 0;
+			    int unarmed = 0;
 			    for (const auto &u : gameState->current_battle->units)
 			    {
 				    const auto &unit = u.second;
@@ -1589,6 +1590,27 @@ void BattleView::registerBattleViewIntrospection()
 				    {
 					    continue;
 				    }
+				    // A base defence fields everyone in the building, scientists and engineers
+				    // included, and they carry nothing. Selecting whoever happened to be on
+				    // screen therefore often selected someone who cannot shoot, and the squad
+				    // stood next to the last alien without killing it. Report whether this unit
+				    // is actually holding a weapon so the driver can pick fighters.
+				    if (!wantFoes)
+				    {
+					    const bool holdsWeapon =
+					        unit->agent &&
+					        ((unit->agent->getFirstItemInSlot(EquipmentSlotType::RightHand) &&
+					          unit->agent->getFirstItemInSlot(EquipmentSlotType::RightHand)
+					              ->getPayloadType()) ||
+					         (unit->agent->getFirstItemInSlot(EquipmentSlotType::LeftHand) &&
+					          unit->agent->getFirstItemInSlot(EquipmentSlotType::LeftHand)
+					              ->getPayloadType()));
+					    if (!holdsWeapon)
+					    {
+						    unarmed++;
+						    continue;
+					    }
+				    }
 				    if (count++ > 0)
 				    {
 					    out += ";";
@@ -1602,7 +1624,8 @@ void BattleView::registerBattleViewIntrospection()
 				    out += format("{0},{1},{2}", (int)screen.x, (int)screen.y,
 				                  (int)unit->position.z);
 			    }
-			    return format("count={0} at={1}", count, out.empty() ? UString("-") : out);
+			    return format("count={0} unarmed={2} at={1}", count,
+			                  out.empty() ? UString("-") : out, unarmed);
 		    }
 		    return stateHandler ? stateHandler(query) : UString("");
 	    });
