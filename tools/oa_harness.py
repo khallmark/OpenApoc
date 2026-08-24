@@ -17,6 +17,10 @@ Commands (see framework/harness.h):
   text STRING
   screenshot PATH
   resize W H
+  controls
+  control ID [click|toggle|set VALUE]
+  action VERB [ARGS...]
+  help
   quit
   wait SECONDS          (client-side)
 """

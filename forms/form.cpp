@@ -2,6 +2,7 @@
 #include "dependencies/pugixml/src/pugixml.hpp"
 #include "framework/data.h"
 #include "framework/framework.h"
+#include "harness_actions.h"
 #include <algorithm>
 
 namespace OpenApoc
@@ -16,7 +17,11 @@ std::vector<Form *> g_liveForms;
 
 const std::vector<Form *> &Form::liveForms() { return g_liveForms; }
 
-Form::Form() : Control() { g_liveForms.push_back(this); }
+Form::Form() : Control()
+{
+	g_liveForms.push_back(this);
+	installFormsHarnessActions();
+}
 
 Form::~Form()
 {
@@ -46,10 +51,21 @@ void Form::readFormStyle(pugi::xml_node *node)
 
 void Form::eventOccured(Event *e) { Control::eventOccured(e); }
 
-void Form::onRender() { Control::onRender(); }
+void Form::onRender()
+{
+	if (auto self = std::dynamic_pointer_cast<Form>(weak_from_this().lock()))
+	{
+		notifyVisibleForm(self);
+	}
+	Control::onRender();
+}
 
 void Form::update()
 {
+	if (auto self = std::dynamic_pointer_cast<Form>(weak_from_this().lock()))
+	{
+		notifyVisibleForm(self);
+	}
 	Control::update();
 	if (!getParent())
 	{

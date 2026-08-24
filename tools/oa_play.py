@@ -207,6 +207,26 @@ class Harness:
     def click_xy(self, x: int, y: int) -> None:
         self.ok(f"click {x} {y}")
 
+    def control(self, cid: str, op: str = "click", value: str | None = None) -> str:
+        """Drive a named widget directly, with no pixel arithmetic at all.
+
+        Everything that has an id in data/forms/*.form can be reached this way, which matters
+        most for the runtime-populated listboxes: their rows are generated controls with no ids
+        and, in several screens, laid out horizontally, so addressing them geometrically was
+        guesswork that silently hit the wrong row.
+        """
+        if op == "set":
+            return self.ok(f"control {cid} set {value}")
+        if op == "toggle":
+            return self.ok(f"control {cid} toggle")
+        return self.ok(f"control {cid}")
+
+    def controls(self) -> str:
+        return self.ok("controls")
+
+    def action(self, verb: str, *args: str) -> str:
+        return self.ok("action " + " ".join((verb,) + args))
+
     def key(self, name: str) -> None:
         self.ok(f"key {name}")
 
@@ -378,6 +398,16 @@ class Driver:
         live query is authoritative -- it survives a viewport resize and UI scaling, which the
         static layout computation does not.
         """
+        # Ask the engine to invoke the widget by name. Control::click() raises the same
+        # ButtonClick a real press does, so this is not a shortcut around the UI -- it just skips
+        # the pixel arithmetic, which was the single largest source of silent no-ops in this
+        # driver. The resolved-rect click stays as a fallback for anything the action handler
+        # cannot see.
+        try:
+            self.h.control(cid)
+            return True
+        except HarnessError:
+            pass
         try:
             live = self.h.ui(cid)
             c = live.get(cid)
@@ -713,46 +743,80 @@ def assign_research(d: Driver) -> bool:
         d.say(f"[research] research screen not reached (at {d.status().stage})"); return False
     d.shot("researchscreen")
 
-    # Fill every lab, giving each a DIFFERENT topic. The original walked a fixed row count and
-    # always picked topic row 0, so it kept assigning one project over itself and five labs never
-    # got past two busy. Walk both lab lists, and advance the topic row on every attempt.
-    total_labs = int(before.get("labs", "0") or 0)
-    started, topic_row = 0, 0
+    # Fill every lab, verifying against the engine after each attempt.
+    #
+    # Both lab lists are *horizontal* (researchscreen.form:147-160) and their items are
+    # runtime-generated controls with no ids, so geometric clicking only ever reached the first
+    # lab in each list -- that is exactly the "two of five busy" that would not move. The named
+    # action CONTROL <list> set <index> addresses items by position instead, and raises the same
+    # ListBoxChangeSelected the screen listens on (researchscreen.cpp:44,53).
+    #
+    # ResearchSelect only offers topics whose type matches the lab (researchselect.cpp:230), so
+    # there is no single global topic ordering to walk: each lab is tried against successive
+    # rows until labs_busy actually rises.
+    # "labs" counts every Lab in the game state, including ones whose facility is still being
+    # built; only "assignable" ones can be given a project, and one of those is an engineering
+    # Workshop that takes manufacturing rather than research. Chasing labs_busy up to labs was
+    # chasing a number that can never be reached.
+    total_labs = int(before.get("assignable", "0") or 0)
+    busy = int(before.get("labs_busy", "0") or 0)
+    started = 0
 
     for list_id in ("LIST_LARGE_LABS", "LIST_SMALL_LABS"):
-        for row in range(max(total_labs, 4)):
+        for slot in range(6):
+            if total_labs and busy >= total_labs:
+                break
             st = d.status()
             if st.stage != "ResearchScreen":
                 break
-            if not click_list_row(d, list_id, row, st):
-                break
-            time.sleep(0.35)
-            d.click_id("BUTTON_RESEARCH_NEWPROJECT", d.status())
-            time.sleep(0.6)
-            st = d.status()
-            if st.stage != "ResearchSelect":
-                continue
-            picked = click_list_row(d, "LIST", topic_row, st, item_h=20)
-            topic_row += 1
-            time.sleep(0.35)
-            d.click_id("BUTTON_OK", d.status())
-            time.sleep(0.7)
-            if picked:
-                started += 1
+            try:
+                d.h.control(list_id, "set", str(slot))
+            except HarnessError:
+                break  # ran off the end of this list
+            time.sleep(0.3)
 
-    # Unwind back to the city.
-    for _ in range(6):
+            for topic_row in range(8):
+                st = d.status()
+                if st.stage != "ResearchScreen":
+                    break
+                if not d.click_id("BUTTON_RESEARCH_NEWPROJECT", st):
+                    break
+                time.sleep(0.45)
+                if d.status().stage != "ResearchSelect":
+                    break
+                try:
+                    d.h.control("LIST", "set", str(topic_row))
+                except HarnessError:
+                    d.click_id("BUTTON_OK", d.status())
+                    time.sleep(0.4)
+                    break
+                time.sleep(0.25)
+                d.click_id("BUTTON_OK", d.status())
+                time.sleep(0.5)
+                now = int(d.h.gs("research").get("labs_busy", "0") or 0)
+                if now > busy:
+                    busy = now
+                    started += 1
+                    break
+
+    # Unwind back to the city. Leaving the game parked on the research screen strands the
+    # campaign loop, which only knows how to play from CityView.
+    for _ in range(8):
         st = d.status()
         if st.stage == "CityView":
             break
         if st.stage in ("ResearchSelect", "ResearchScreen", "BaseScreen"):
-            d.click_id("BUTTON_OK", st); time.sleep(0.6)
+            d.click_id("BUTTON_OK", st)
+            time.sleep(0.5)
         elif not d.dismiss_modal(st):
-            d.h.key("Escape"); time.sleep(0.5)
+            d.h.key("Escape")
+            time.sleep(0.4)
 
     after = d.h.gs("research")
-    d.say(f"[research] after:  {after}  (attempted {started} assignments)")
-    return after.get("labs_busy", "0") != before.get("labs_busy", "0")
+    d.say(f"[research] after:  {after}  (started {started})")
+    return int(after.get("assignable_busy", "0") or 0) > int(
+        before.get("assignable_busy", "0") or 0
+    )
 
 
 def visit_economy(d: Driver) -> bool:

@@ -4,6 +4,7 @@
 #include "library/sp.h"
 #include "library/strings.h"
 #include "library/vec.h"
+#include <cstdint>
 #include <functional>
 #include <future>
 
@@ -43,6 +44,7 @@ class Framework
 
 	UString language;
 	UString languageCountry;
+	uint64_t frameNumber = 0;
 
   public:
 	std::unique_ptr<Data> data;
@@ -90,6 +92,8 @@ class Framework
 
 	bool isSlowMode();
 	void setSlowMode(bool SlowEnabled);
+
+	uint64_t getFrameNumber() const { return frameNumber; }
 
 	sp<Stage> stageGetCurrent();
 	sp<Stage> stageGetPrevious();

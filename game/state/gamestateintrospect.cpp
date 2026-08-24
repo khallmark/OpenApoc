@@ -3,6 +3,8 @@
 #include "game/state/battle/battle.h"
 #include "game/state/battle/battleunit.h"
 #include "game/state/city/base.h"
+#include "game/state/city/facility.h"
+#include <set>
 #include "game/state/city/city.h"
 #include "game/state/city/research.h"
 #include "game/state/city/vehicle.h"
@@ -82,7 +84,76 @@ UString describeResearch(GameState &state)
 			busyLabs++;
 		}
 	}
-	return format("topics={0} complete={1} labs={2} labs_busy={3}", total, complete, labs, busyLabs);
+		// Per-lab detail, and how many topics could be started right now. Research throughput is the
+	// gate on everything after the early game -- dimension travel, the alien-building chain, the
+	// victory raid -- and "labs_busy=1 of 5" is invisible in a bare completion count. This is the
+	// campaign's progress meter: without it there is no way to tell a campaign that is advancing
+	// from one that is quietly spinning.
+	// Only labs backed by a *built* facility at a player base can be given a project at all:
+	// ResearchScreen lists facilities with buildTime == 0 (researchscreen.cpp:72-88), not the
+	// global research.labs map. Counting the global map made "labs_busy=2 of 5" look like a
+	// stuck driver when two of those five had no built facility behind them and a third was a
+	// Workshop, which takes manufacturing, not research. Report what is actually assignable.
+	std::set<UString> builtLabs;
+	for (const auto &b : state.player_bases)
+	{
+		if (!b.second)
+		{
+			continue;
+		}
+		for (const auto &f : b.second->facilities)
+		{
+			if (f && f->lab && f->buildTime == 0)
+			{
+				builtLabs.insert(f->lab.id);
+			}
+		}
+	}
+	size_t assignable = 0, assignableBusy = 0;
+	UString labDetail;
+	for (const auto &l : state.research.labs)
+	{
+		if (!l.second)
+		{
+			continue;
+		}
+		const bool built = builtLabs.count(l.first) > 0;
+		if (built)
+		{
+			assignable++;
+			if (l.second->current_project)
+			{
+				assignableBusy++;
+			}
+		}
+		const char *kind = l.second->type == ResearchTopic::Type::BioChem     ? "biochem"
+		                   : l.second->type == ResearchTopic::Type::Physics   ? "physics"
+		                                                                      : "engineering";
+		labDetail += (labDetail.empty() ? "" : "|") +
+		             format("{0}:{1}:{2}:{3}", l.first, kind, built ? "built" : "unbuilt",
+		                    l.second->current_project ? l.second->current_project.id : "idle");
+	}
+	// Topics that are unlocked, unfinished and not already running somewhere. Dependency
+	// satisfaction is evaluated against the first player base, which is where the labs are.
+	size_t startable = 0;
+	if (!state.player_bases.empty())
+	{
+		const StateRef<Base> base{&state, state.player_bases.begin()->first};
+		for (const auto &t : state.research.topics)
+		{
+			if (!t.second || t.second->isComplete() || t.second->current_lab ||
+			    !t.second->dependencies.satisfied(base))
+			{
+				continue;
+			}
+			startable++;
+		}
+	}
+	return format("topics={0} complete={1} labs={2} labs_busy={3} assignable={4} "
+	              "assignable_busy={5} startable={6} labs_detail={7}",
+	              total, complete, labs, busyLabs, assignable, assignableBusy, startable,
+	              labDetail.empty() ? UString("-") : labDetail);
+
 }
 
 UString describeOrgs(GameState &state)

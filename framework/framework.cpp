@@ -387,6 +387,7 @@ void Framework::run(sp<Stage> initialStage)
 		}
 		expected_frame_time += target_frame_duration;
 		frame++;
+		frameNumber++;
 
 		// expected_frame_time only ever advances one frame per iteration, so a single long frame
 		// -- city generation on load, a big save -- leaves it arbitrarily far behind wall-clock

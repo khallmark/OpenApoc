@@ -147,6 +147,7 @@ void sendAll(HarnessSocket fd, const UString &text)
 }
 
 HarnessQueryFunction harnessQueryHandler;
+HarnessActionFunction harnessActionHandler;
 HarnessUIFunction harnessUIHandler;
 
 } // namespace
@@ -157,6 +158,13 @@ void setHarnessQueryHandler(HarnessQueryFunction function)
 }
 
 HarnessQueryFunction getHarnessQueryHandler() { return harnessQueryHandler; }
+
+void setHarnessActionHandler(HarnessActionFunction function)
+{
+	harnessActionHandler = std::move(function);
+}
+
+HarnessActionFunction getHarnessActionHandler() { return harnessActionHandler; }
 
 void setHarnessUIHandler(HarnessUIFunction function) { harnessUIHandler = std::move(function); }
 
@@ -368,6 +376,43 @@ bool parseHarnessCommand(const UString &line, HarnessCommand &out)
 			parseIntToken(parts[4], out.wheelHorizontal);
 		}
 		out.type = HarnessCommand::Type::Scroll;
+		return true;
+	}
+
+	if (verb == "CONTROLS" || verb == "HELP")
+	{
+		out.type = HarnessCommand::Type::Action;
+		out.text = to_lower(verb);
+		return true;
+	}
+	if (verb == "CONTROL")
+	{
+		if (parts.size() < 2)
+		{
+			out.error = "CONTROL needs a control id";
+			return false;
+		}
+		out.type = HarnessCommand::Type::Action;
+		out.text = "control";
+		for (size_t i = 1; i < parts.size(); i++)
+		{
+			out.args.push_back(parts[i]);
+		}
+		return true;
+	}
+	if (verb == "ACTION")
+	{
+		if (parts.size() < 2)
+		{
+			out.error = "ACTION needs a verb";
+			return false;
+		}
+		out.type = HarnessCommand::Type::Action;
+		out.text = to_lower(parts[1]);
+		for (size_t i = 2; i < parts.size(); i++)
+		{
+			out.args.push_back(parts[i]);
+		}
 		return true;
 	}
 
@@ -738,6 +783,21 @@ UString Harness::execute(const HarnessCommand &cmd, Framework &fw)
 			fw.displaySetSize({cmd.x, cmd.y});
 			const auto size = fw.displayGetSize();
 			return format("OK resized w={0} h={1}", size.x, size.y);
+		}
+		case HarnessCommand::Type::Action:
+		{
+			const auto handler = getHarnessActionHandler();
+			if (!handler)
+			{
+				return "ERR no action handler (forms not loaded yet)";
+			}
+			UString reply = handler(cmd.text, cmd.args);
+			if (reply.empty())
+			{
+				return format("ERR unknown action \"{0}\"", cmd.text);
+			}
+			std::replace(reply.begin(), reply.end(), '\n', ' ');
+			return reply;
 		}
 		case HarnessCommand::Type::Quit:
 			fw.stageQueueCommand({StageCmd::Command::QUIT});

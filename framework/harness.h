@@ -25,10 +25,16 @@ class Framework;
 //   STATUS
 //   GS <query>
 //   SAVE <path>
+//   CONTROLS
+//   CONTROL <id> [click|toggle|set <value>]
+//   ACTION <verb> [args...]
+//   HELP
 //   UI [filter]
 //   QUIT
 //
 // Replies are one line: "OK ..." or "ERR ...".
+// CONTROL/ACTION invoke live form widgets by id (no pixel math). CLICK x y remains
+// for nameless widgets (map tiles, list rows). Screens still render as usual.
 
 // GS is answered by the game layer. framework/ sits below game/state/ in the link graph
 // (OpenApoc_GameState links OpenApoc_Framework, never the reverse), so the harness cannot name a
@@ -37,6 +43,13 @@ class Framework;
 using HarnessQueryFunction = std::function<UString(const UString &query)>;
 void setHarnessQueryHandler(HarnessQueryFunction function);
 HarnessQueryFunction getHarnessQueryHandler();
+
+// Named UI / game actions. forms/ installs a handler that walks the currently
+// visible forms. Returns a full "OK ..." / "ERR ..." line, or empty for unknown.
+using HarnessActionFunction =
+    std::function<UString(const UString &verb, const std::vector<UString> &args)>;
+void setHarnessActionHandler(HarnessActionFunction function);
+HarnessActionFunction getHarnessActionHandler();
 
 // UI is answered by the forms layer, which framework also cannot name (OpenApoc_Forms links
 // OpenApoc_Framework, never the reverse). Kept separate from the GameState hook because the two
@@ -64,6 +77,7 @@ struct HarnessCommand
 		Save,
 		Resize,
 		UiDump,
+		Action,
 		Quit,
 		Unknown
 	};
@@ -78,6 +92,7 @@ struct HarnessCommand
 	UString text;
 	UString path;
 	UString error;
+	std::vector<UString> args;
 };
 
 bool parseHarnessCommand(const UString &line, HarnessCommand &out);
