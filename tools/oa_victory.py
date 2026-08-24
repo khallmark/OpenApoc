@@ -92,6 +92,7 @@ class Victory:
         self.built_workshop = False
         self.last_equip = 0.0
         self.last_craft = 0.0
+        self.last_score_warn = 0.0
         self.last_checkpoint = 0.0
         self.best_crashed = 0
 
@@ -261,6 +262,23 @@ class Victory:
             self.save(f"after mission {n}")
 
     def city_turn(self) -> None:
+        # Watch the actual game-over condition. fundingTerminated latches for good the first week
+        # lifetime score drops below -2400, so this is a countdown that has to be tracked, not a
+        # number to notice afterwards.
+        money = self.d.h.gs("funds")
+        margin = int(money.get("margin_to_cutoff", "99999") or 99999)
+        if money.get("funding_terminated") == "1":
+            if not self.progress.get("funding_lost"):
+                self.progress["funding_lost"] = True
+                self.flush()
+                self.say("FUNDING TERMINATED PERMANENTLY - income is 0 for the rest of this "
+                         "campaign; it cannot be recovered")
+        elif margin < 1200 and time.time() - self.last_score_warn > 120.0:
+            self.last_score_warn = time.time()
+            self.say(f"score {money.get('score_total')} - {margin} from permanent funding cutoff "
+                     f"(incidents={money.get('incidents')} damage={money.get('city_damage')} "
+                     f"ufos_downed={money.get('ufos_downed')})")
+
         v = self.d.h.gs("vehicles")
         crashed = int(v.get("ufos_crashed", "0") or 0)
         in_city = int(v.get("ufos_in_city", "0") or 0)
@@ -443,8 +461,14 @@ class Victory:
                     # the incident will come back around when a craft is free.
                     # Do not send a token force. Mission #2 of the losing run put four agents
                     # against twenty-three aliens and lost all four; the guides put a working
-                    # squad at around six. A refused incident costs score, but a wiped squad
-                    # costs the campaign.
+                    # squad at around six.
+                    #
+                    # Correcting an earlier comment here that was simply wrong about the engine:
+                    # declining an incident does NOT cost score. The -30 alienIncidents penalty is
+                    # charged when a building's alien crew is *detected*, before any response, and
+                    # is not refunded or repeated based on what the player does about it. What a
+                    # wiped squad costs is far worse -- dead agents also drag the tactical score
+                    # negative even on a mission that is won.
                     fit_now = int(self.d.h.gs("agents").get("soldiers_fit", "0") or 0)
                     if fit_now < MIN_SQUAD:
                         self.say(f"only {fit_now} fit soldiers; not dispatching a token force")

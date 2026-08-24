@@ -43,8 +43,22 @@ UString describeFunds(GameState &state)
 	{
 		return "balance=? income=? (no player organisation)";
 	}
-	return format("balance={0} income={1} score_total={2} score_week={3}", player->balance,
-	              player->income, state.totalScore.getTotal(), state.weekScore.getTotal());
+	// The actual game-over condition, and it is a one-way latch: weeklyPlayerUpdate sets
+	// fundingTerminated the first week that lifetime totalScore drops below -2400 (or the
+	// government turns Hostile), zeroes income, and nothing anywhere resets it
+	// (gamestate.cpp:1668-1680). So this is a countdown, not a dip to recover from -- a driver
+	// that only watches its bank balance sees nothing wrong until the money has already stopped
+	// for good. margin is how much lifetime score is left before that happens.
+	const int total = state.totalScore.getTotal();
+	return format("balance={0} income={1} score_total={2} score_week={3} funding_terminated={4} "
+	              "margin_to_cutoff={5} tactical={6} research={7} incidents={8} ufos_downed={9} "
+	              "craft_lost={10} incursions={11} city_damage={12}",
+	              player->balance, player->income, total, state.weekScore.getTotal(),
+	              state.fundingTerminated ? 1 : 0, total - (-2400),
+	              state.totalScore.tacticalMissions, state.totalScore.researchCompleted,
+	              state.totalScore.alienIncidents, state.totalScore.craftShotDownUFO,
+	              state.totalScore.craftShotDownXCom, state.totalScore.incursions,
+	              state.totalScore.cityDamage);
 }
 
 UString describeBases(GameState &state)
