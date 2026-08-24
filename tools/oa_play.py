@@ -1654,13 +1654,11 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
             # Stores ran dry: further applications now strip people rather than arm them.
             d.say(f"  [equip] stopping at row {i}: armed fell {best}->{now}")
             break
-        if applied >= 3 and now <= before:
-            # processTemplate re-equips the template's *exact* item types from stores. If the
-            # armoury holds different weapons than the captured loadout names, every application
-            # strips an agent and gives nothing back -- armed went 10 to 4 that way, with 25
-            # weapons sitting in stores the whole time. Three no-ops is enough to know.
-            d.say(f"  [equip] template is not arming anyone ({before}->{now}); stopping")
-            break
+        # Deliberately no "give up after N no-ops" rule here. Applying to an agent who is
+        # already armed strips and re-equips them for a net change of zero, and the roster lists
+        # the armed veterans before the empty-handed recruits -- so an early-out fires on the
+        # veterans and never reaches the people who actually need arming. Only a *fall* in armed
+        # is a reason to stop, since that means stores have run dry.
         best = max(best, now)
 
     for _ in range(6):
@@ -1675,6 +1673,11 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
 
     after = int(d.h.gs("agents").get("armed", "0") or 0)
     d.say(f"  [equip] applied to {applied} agents; armed {before}->{after}")
+    if after == before and applied:
+        # processTemplate bails out unless getMode() == Mode::Base, which needs the agent
+        # physically at a base -- a freshly hired recruit still in transit silently equips
+        # nothing (aequipscreen.cpp:1569, 867-885).
+        d.say("  [equip] nobody gained a weapon; recruits may still be travelling to base")
     return after - before
 
 

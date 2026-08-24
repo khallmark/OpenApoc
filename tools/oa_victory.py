@@ -33,6 +33,7 @@ from oa_play import (
     assign_research,
     build_facility,
     buy_equipment,
+    stock_for_template,
     equip_squad,
     hire_scientists,
     hire_soldiers,
@@ -138,7 +139,7 @@ class Victory:
             # Stock the armoury immediately. Unarmed personnel are not neutral -- they are
             # casualties: the campaign was lost when a base defence pitted 21 mostly-unarmed
             # agents against 11 aliens and every one of them died, taking the base with it.
-            buy_equipment(self.d, rows=14, qty=12)
+            stock_for_template(self.d, qty=12)
             crew_transport(self.d)
             # Capture the squad loadout now, while the starting ten are all home and armed.
             # It persists in GameState, so every later recruit can be equipped from it.
@@ -272,8 +273,10 @@ class Victory:
         if armed < soldiers and time.time() - self.last_equip > 150.0:
             self.last_equip = time.time()
             self.say(f"{armed} armed of {soldiers} soldiers - equipping")
-            if equip_squad(self.d, agents=20) <= 0:
-                buy_equipment(self.d, rows=14, qty=12)
+            if equip_squad(self.d, agents=24) <= 0:
+                # Stores ran dry rather than the mechanism failing: the market only restocks so
+                # much per week, so keep re-ordering the loadout's own item types.
+                stock_for_template(self.d, qty=12)
 
         # Replace losses, and arm them if the armoury can.
         fit = int(ag.get("soldiers_fit", "0") or 0)
