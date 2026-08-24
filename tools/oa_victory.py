@@ -65,6 +65,9 @@ CREW_COOLDOWN_S = 60.0
 # alien-building chain and one that stops after its first two topics.
 RESEARCH_COOLDOWN_S = 90
 BASE_COOLDOWN_S = 120.0
+# Below this, with funding cut and nobody armed, a campaign cannot recover: no income, and not
+# enough left to buy a single weapon.
+BANKRUPT_FLOOR = 5000
 # Soldiers are lost permanently. Below this many fit soldiers there is no squad left to send.
 MIN_SOLDIERS = 10
 # Fewer than this and an incident is not worth answering: the squad dies and the score hit from
@@ -542,6 +545,28 @@ class Victory:
             st = self.d.status()
         except OSError:
             return False
+        # A campaign can be finished without the engine ever saying so. XComDefeated fires only
+        # when the last base is lost (base.cpp:150-159), so a run whose funding has been cut and
+        # whose treasury is empty just limps: no income, nothing to buy weapons with, five
+        # unarmed soldiers, and no way back. Observed exactly that at day 22 -- funding
+        # terminated, $949, armed=0 -- with the runner unable to call it either way. Recognise it
+        # and record an honest bankruptcy rather than playing out a run that cannot be won.
+        if st.stage == "CityView":
+            try:
+                f = self.d.h.gs("funds")
+                a = self.d.h.gs("agents")
+            except (HarnessError, OSError):
+                return False
+            if (f.get("funding_terminated") == "1"
+                    and int(f.get("balance", "0") or 0) < BANKRUPT_FLOOR
+                    and int(a.get("armed", "0") or 0) == 0):
+                self.progress["ended"] = "bankrupt"
+                self.flush()
+                self.say(f"campaign bankrupt - funding cut, ${f.get('balance')} left, "
+                         f"no armed soldiers; recording defeat")
+                return True
+            return False
+
         if st.stage != "VideoScreen":
             return False
         # Both endings are a VideoScreen: AliensDefeated plays wingame2.smk, XComDefeated plays
