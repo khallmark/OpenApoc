@@ -360,6 +360,48 @@ since vehicle types come from the extractor rather than `data/`.
 This is the tool to reach for before planning any research route. Reading the repo's XML produced
 a confidently wrong plan; one query would have caught it.
 
+## What actually ends campaigns: funding
+
+Not score directly, and not battles. `GameState::weeklyPlayerUpdate` latches `fundingTerminated`
+the first week that **either** lifetime `totalScore` drops below **-2400** **or** the government's
+relation to the player turns Hostile (below -50). It zeroes income and **nothing in the codebase
+ever resets it** (gamestate.cpp:1668-1680). Income 0 is not a slump to trade out of; the campaign
+is over from that moment.
+
+Most runs here died by the *relation* route, not the score one — funding terminated at -1312 and
+again at -1783, both well short of -2400. Two causes, both self-inflicted:
+
+- A generic screen responder that mapped `BuildingScreen` to `BUTTON_RAID`, investigating any
+  building it happened to land on.
+- Answering every alien alert. **Investigating a building and finding no aliens costs its owner
+  `-5 - difficulty` relation** (buildingscreen.cpp:154-166), and alien crews *relocate between
+  buildings on a timer*, so a good share of alerts are stale by the time a squad arrives. Thirty-
+  nine answered alerts took the government from +85 to -100.
+
+`AlertScreen` exposes its building and that building's current crew via `Stage::harnessDetail()`,
+so an alert whose building is already empty can be declined. `gs infiltrated` lists buildings that
+genuinely hold crew, plus the live government relation. Watch `gs funds` for
+`funding_terminated`, `margin_to_cutoff`, and the seven score buckets separately — the bleeding
+category is otherwise pure guesswork.
+
+Measured contrast on two runs: answering everything gave `gov_relation -100`, score -1783,
+funding dead. Declining stale alerts gave `gov_relation +98`, score **+296**, funding intact.
+
+## Use the right craft for the job
+
+Three separate failures, one root cause — not checking a craft can do what is being asked:
+
+- Interception selected whatever was in the vehicle list, including `Stormdog` and
+  `Wolfhound APC`, which are **road vehicles** and cannot engage an airborne UFO.
+- Crewing loaded the squad onto a road vehicle, so every recovery was refused with
+  `mission: none` and the research chain stalled completely.
+- Interception then scrambled the *crewed transport* into dogfights, risking the squad and the
+  only airframe that can collect a wreck.
+
+`gs interceptors` reports `flying`, `armed`, `crew` and `shifter` per craft in vehicle-list order.
+Use it before ordering anything. Note also that each plain click on the vehicle list *replaces*
+the selection — Ctrl+click is what adds (cityview.cpp:340).
+
 ## Running a campaign
 
 ```bash
