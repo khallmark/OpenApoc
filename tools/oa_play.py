@@ -1481,7 +1481,15 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
             foes_n = int(foes_alive or 0)
         except ValueError:
             alive, foes_n = 0, 0
-        if started_with and alive and foes_n > alive * 2 and alive <= max(1, started_with // 2):
+        # Pull out early. Waiting until half the squad was dead still cost six soldiers of ten in
+        # a single mission that the driver then recorded as a successful withdrawal -- the roster
+        # went 10 to 4 and never recovered, and soldiers are permanent losses that also strip the
+        # labs and the base garrison. Leaving with eight alive is worth far more than any crash
+        # site. Two triggers: a quarter of the squad already down, or being outnumbered three to
+        # one with any loss at all.
+        outnumbered = foes_n >= alive * 3
+        bleeding = alive <= max(1, int(started_with * 0.75))
+        if started_with and alive and (bleeding or (outnumbered and alive < started_with)):
             d.say(f"  [battle] retreating: {alive} left of {started_with} against {foes_n}")
             d.h.key("Escape")
             time.sleep(0.8)
