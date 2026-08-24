@@ -1845,7 +1845,14 @@ def intercept_ufos(d: Driver) -> int:
 
     d.h.send("keydown Left Ctrl")
     try:
-        for slot in fighters[:4]:
+        # Two craft, not the whole wing. Every projectile that hits a building costs 5 relation
+        # with its owner, and destroying a tile costs 20 -- Scenery::handleCollision charges it
+        # against whoever fired, our own interceptors included (scenery.cpp:1158-1186, 1195). Most
+        # buildings belong to the government, and government relation below -50 terminates funding
+        # outright. That is how relation reached -80 in a campaign with only two BuildingScreen
+        # visits: not infiltration, our own missed shots over a dense city. Sending four craft at
+        # one UFO is four times the stray fire for no more kills.
+        for slot in fighters[:2]:
             x = lst.x + 16 + slot * ICON_W
             if x >= lst.x + lst.w:
                 break

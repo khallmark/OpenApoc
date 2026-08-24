@@ -72,9 +72,10 @@ BASE_COOLDOWN_S = 120.0
 # Below this, with funding cut and nobody armed, a campaign cannot recover: no income, and not
 # enough left to buy a single weapon.
 BANKRUPT_FLOOR = 5000
-# How many armed fliers to keep. Two was not enough to stop infiltration turning the government
-# hostile; the cheap two-gun craft make a patrol affordable.
-AIR_PATROL = 5
+# How many armed fliers to keep in reserve. Not a swarm: every projectile that hits a building
+# costs relation with its owner, so a bigger wing over the city is a faster route to a hostile
+# government, not a safer one. Three covers losses without multiplying stray fire.
+AIR_PATROL = 3
 # Soldiers are lost permanently. Below this many fit soldiers there is no squad left to send.
 MIN_SOLDIERS = 10
 # Fewer than this and an incident is not worth answering: the squad dies and the score hit from
