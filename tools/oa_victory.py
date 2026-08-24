@@ -340,10 +340,21 @@ class Victory:
         # Replace losses, and arm them if the armoury can.
         fit = int(ag.get("soldiers_fit", "0") or 0)
         if fit < MIN_SOLDIERS and time.time() - self.last_hire > 180.0:
-            self.last_hire = time.time()
-            self.say(f"only {fit} fit soldiers - recruiting")
-            hire_soldiers(self.d, want=MIN_SOLDIERS - fit + 2)
-            buy_equipment(self.d, rows=8, qty=8)
+            # Only recruit people we can actually arm. An unarmed agent is not a neutral
+            # addition: in a base defence every person present is dropped into the fight whether
+            # they can shoot or not, and the campaign that was lost went down with 21 mostly
+            # unarmed bodies against 11 aliens. The run that is healthy right now is healthy
+            # precisely because it never diluted its ten armed veterans -- armed 10 of 10.
+            stock = int(self.d.h.gs("stores").get("weapons", "0") or 0)
+            if stock <= 0:
+                self.last_hire = time.time()
+                self.say(f"{fit} fit soldiers but no weapons in stores - buying before hiring")
+                stock_for_template(self.d, qty=12)
+            else:
+                self.last_hire = time.time()
+                want = min(MIN_SOLDIERS - fit + 2, stock)
+                self.say(f"only {fit} fit soldiers, {stock} weapons in stock - recruiting {want}")
+                hire_soldiers(self.d, want=want)
 
         # Follow the action in the city too, so a watching human sees what the driver is doing
         # rather than an empty corner of the map.
