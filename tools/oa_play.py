@@ -1545,6 +1545,33 @@ def intercept_ufos(d: Driver) -> int:
     return 1
 
 
+def leave_battle(d: Driver, tries: int = 8) -> bool:
+    """Escape -> InGameOptions -> BUTTON_EXIT_BATTLE, verified.
+
+    The two exit paths in win_battle both went through click_id, whose resolved-rect fallback
+    reports success for a control that is not on the current screen -- it finds a rect in some
+    .form and clicks empty space. So a failed exit looked like a successful one, the code fell
+    through to another Escape, and the loop carried on fighting a battle it had decided to
+    leave. Ask the engine to press the button by name and confirm we actually left.
+    """
+    for _ in range(tries):
+        st = d.status()
+        if st.stage not in ("BattleView", "InGameOptions", "MessageBox", "BattlePreStart"):
+            return True
+        if st.stage == "MessageBox":
+            d.h.key("Return")
+        elif st.stage == "InGameOptions":
+            try:
+                if not d.h.send("control BUTTON_EXIT_BATTLE").startswith("OK"):
+                    d.h.key("Escape")
+            except (HarnessError, OSError):
+                d.h.key("Escape")
+        else:
+            d.h.key("Escape")
+        time.sleep(0.7)
+    return d.status().stage not in ("BattleView", "InGameOptions", "BattlePreStart")
+
+
 def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
     """Fight a tactical mission to a win, without cheats.
 
@@ -1565,6 +1592,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
     last_player_won = False
     last_mine_alive = "?"
     started_with = 0
+    selected_count = 0
 
     while time.time() - t0 < budget_s:
         st = d.status()
@@ -1612,19 +1640,27 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         # orderSelect).
         # Keep the camera on the squad. Units are moved by clicking their screen positions, so
         # anything off-camera is neither watchable nor clickable.
-        if rounds % 2 == 0:
+        if rounds % 4 == 0:
             d.h.gs("centre_on_friends")
-            time.sleep(0.2)
+            time.sleep(0.15)
         friends = d.h.screen_craft("friends_screen")
-        if friends:
+
+        # Re-select only when the squad has actually changed. Selection persists between orders,
+        # so rebuilding it every round spent roughly seven clicks on re-selecting the same people
+        # for every single move order -- most of the loop went on switching between agents
+        # instead of moving them, which is why a squad could stand around while one alien went
+        # unfound. Re-select when the count changes (someone died, someone came into view) or
+        # occasionally in case the engine dropped it.
+        if friends and (len(friends) != selected_count or rounds % 8 == 0):
             d.h.send("keydown Left Ctrl")
             try:
                 for fx, fy, _ in friends[:6]:
                     d.h.click_xy(fx, fy)
-                    time.sleep(0.08)
+                    time.sleep(0.06)
             finally:
                 d.h.send("keyup Left Ctrl")
-            time.sleep(0.15)
+            selected_count = len(friends)
+            time.sleep(0.12)
 
         foes = d.h.screen_craft("enemies_screen")
         # enemies_screen only reports hostiles already on screen. Walking the camera only when
@@ -1646,6 +1682,11 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
             fx += (40, -40, 0, 0)[rounds % 4]
             fy += (0, 0, 28, -28)[rounds % 4]
             d.h.click_xy(max(0, min(st.w - 1, fx)), max(0, min(st.h - 1, fy)))
+            # A second order to a different offset the same round: with selection no longer
+            # rebuilt every pass there is time for it, and it keeps the squad advancing rather
+            # than re-issuing one order and waiting.
+            time.sleep(0.4)
+            d.h.click_xy(max(0, min(st.w - 1, fx + 24)), max(0, min(st.h - 1, fy + 16)))
         else:
             # Nothing anywhere in view; sweep the map, and change floor now and then since
             # hostiles hole up on other levels.
@@ -1658,7 +1699,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
                 # "lost connection", abandoning a mission that was going fine.
                 d.h.key("PageUp" if (rounds // 5) % 2 == 0 else "PageDown")
         rounds += 1
-        time.sleep(2.5)
+        time.sleep(1.2)
 
         b = d.h.gs("battle")
         foes_alive = b.get("foes_alive")
@@ -1682,20 +1723,23 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         # not a forfeit here -- Battle::exitBattle force-completes the building's researchUnlock
         # on playerWon alone (battle.cpp:3511); only the loot is gated on not having retreated
         # (battle.cpp:2817), and the research is the part the campaign actually needs.
-        if last_player_won and stalls >= 24:
-            d.say(f"  [battle] already won with {foes_alive} unreachable foe(s); leaving to bank it")
-            d.h.key("Escape")
-            time.sleep(0.8)
-            if d.click_id("BUTTON_EXIT_BATTLE", d.status()):
-                for _ in range(6):
-                    stt = d.status()
-                    if stt.stage not in ("BattleView", "InGameOptions", "MessageBox"):
-                        break
-                    if not d.dismiss_modal(stt):
-                        d.h.key("Return")
-                    time.sleep(0.6)
+        try:
+            alive_now = int(mine_alive or 0)
+            foes_now = int(foes_alive or 0)
+        except ValueError:
+            alive_now, foes_now = 0, 0
+        # Only bank a mission that is genuinely won bar a hostile the squad cannot reach: the
+        # squad still standing, at most a couple of foes left, and comfortably outnumbering them.
+        # Observed at 13 of 15 alive against a single foe, unchanged for 22 minutes. Leaving is
+        # not a forfeit there -- exitBattle force-completes the building's researchUnlock on
+        # playerWon alone (battle.cpp:3511); only loot is gated on not having retreated
+        # (battle.cpp:2817), and the research is what the campaign actually needs.
+        if last_player_won and stalls >= 16 and foes_now and foes_now <= 2 \
+                and alive_now >= foes_now * 3:
+            d.say(f"  [battle] won bar {foes_now} unreachable foe(s) with {alive_now} up; banking it")
+            if leave_battle(d):
                 return "resolved"
-            d.h.key("Escape")
+            d.say("  [battle] could not leave; fighting on")
 
         # Retreat rather than be annihilated. "No mission is important enough to lose good men
         # on" -- and losing a whole squad is the biggest single economic hit in the game, which
@@ -1719,23 +1763,23 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         # to actually be killed for any of this to progress. Bail only when the squad is genuinely
         # collapsing -- down to a third of its strength and still badly outnumbered -- rather than
         # whenever it starts taking losses.
+        # Backstop: a battle that has stopped moving for a long stretch and does not qualify
+        # for either of the branches above will otherwise sit there until the whole budget is
+        # gone. One such stall cost 22 minutes of wall-clock and an entire campaign hour, with
+        # the squad standing around a single alien it could not path to. Leave honestly.
+        if stalls >= 40:
+            d.say(f"  [battle] deadlocked for {stalls} rounds ({alive_now} vs {foes_now}); leaving")
+            if leave_battle(d):
+                return "withdrew"
+            stalls = 0  # could not leave -- reset so we try again rather than spinning here
+
         outnumbered = foes_n >= alive * 3
         collapsing = alive <= max(1, started_with // 3)
         if started_with and alive and collapsing and outnumbered:
             d.say(f"  [battle] retreating: {alive} left of {started_with} against {foes_n}")
-            d.h.key("Escape")
-            time.sleep(0.8)
-            if d.click_id("BUTTON_EXIT_BATTLE", d.status()):
-                time.sleep(1.5)
-                for _ in range(5):
-                    stt = d.status()
-                    if stt.stage not in ("BattleView", "InGameOptions", "MessageBox"):
-                        break
-                    if not d.dismiss_modal(stt):
-                        d.h.key("Return")
-                    time.sleep(0.6)
+            if leave_battle(d):
                 return "withdrew"
-            d.h.key("Escape")
+            d.say("  [battle] could not leave; fighting on")
 
     d.say("[battle] budget exhausted without a decision")
     return "timeout"
