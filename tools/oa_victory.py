@@ -33,6 +33,7 @@ from oa_play import (
     HarnessError,
     assign_research,
     build_second_base,
+    buy_interceptor,
     verify_battle_capabilities,
     build_facility,
     return_to_city,
@@ -523,11 +524,20 @@ class Victory:
         # Replace lost craft. Interceptor attrition costs twice: fewer craft means UFOs go
         # unintercepted, and unintercepted UFOs mean aliens infiltrating buildings, which is what
         # actually drives score into the ground.
+        # Count what can actually fight in the air, not just what is parked. Every campaign
+        # starts with road vehicles only, so "four craft" was a comfortable-looking number that
+        # meant no air capability whatsoever: ufos_downed sat at 0 while incursions and city
+        # damage -- the two buckets that actually end these runs -- climbed unopposed.
+        fliers = 0
+        for part in (self.d.h.gs("interceptors").get("detail", "") or "").split("|"):
+            if "flying=1" in part and "armed=1" in part:
+                fliers += 1
         mine = int(v.get("player_vehicles", "0") or 0)
-        if mine < 4 and time.time() - self.last_craft > 240.0:
+        if fliers < 3 and time.time() - self.last_craft > 240.0:
             self.last_craft = time.time()
-            self.say(f"down to {mine} craft - buying replacements")
-            buy_vehicles(self.d, want=2)
+            self.say(f"{fliers} armed flier(s) of {mine} craft - buying air cover")
+            if not buy_interceptor(self.d, want=2) and mine < 3:
+                buy_vehicles(self.d, want=1)
 
         if in_city > 0:
             if time.time() - self.last_intercept > INTERCEPT_COOLDOWN_S:

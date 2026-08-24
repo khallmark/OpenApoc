@@ -2557,6 +2557,55 @@ def buy_category(d: Driver, category: str, qty: int, rows: int, sub: str = "") -
     return changed
 
 
+def buy_interceptor(d: Driver, want: int = 2) -> int:
+    """Buy armed FLYING craft. Returns the number of purchase lines ordered.
+
+    Every campaign starts with road vehicles only -- Stormdog, Wolfhound APC, a road bike, all
+    flying=0 -- so there is no air capability at all until one is bought. buy_vehicles simply took
+    whatever sat at the top of the list, which bought more things that cannot reach a UFO: at day
+    10 of one run, ufos_downed was still 0 while incursions stood at -237 and climbing. UFOs left
+    alone infiltrate buildings and wreck the city, and those two buckets are what actually ends
+    these campaigns -- not lost battles.
+
+    So choose by capability, cheapest first: it must fly, and it must have a weapon slot.
+    """
+    info = d.h.gs("buyable_craft")
+    detail = info.get("detail", "-")
+    if not detail or detail == "-":
+        d.say("  [craft] nothing purchasable reported")
+        return 0
+    funds = int(d.h.gs("funds").get("balance", "0") or 0)
+    options = []
+    for part in detail.split("|"):
+        bits = part.split(":")
+        if not bits:
+            continue
+        name = bits[0].replace("_", " ")
+        attrs = {}
+        for kv in bits[1:]:
+            if "=" in kv:
+                k, v = kv.split("=", 1)
+                try:
+                    attrs[k] = int(v)
+                except ValueError:
+                    attrs[k] = 0
+        if attrs.get("flying") == 1 and attrs.get("weapons", 0) > 0:
+            options.append((attrs.get("price", 0), name))
+    if not options:
+        d.say("  [craft] no armed flying craft offered for sale")
+        return 0
+    options.sort()
+    # Leave enough behind to keep paying wages and stocking weapons; a fleet with no armoury
+    # loses the ground war instead of the air one.
+    affordable = [(p, n) for p, n in options if p and p * 1 <= funds - 40000]
+    if not affordable:
+        d.say(f"  [craft] cheapest armed flier is ${options[0][0]}, only ${funds} on hand")
+        return 0
+    picks = [n for _, n in affordable[:2]]
+    d.say(f"  [craft] buying armed fliers: {', '.join(picks)} (${affordable[0][0]} each-ish)")
+    return buy_named(d, picks, qty=want, category="BUTTON_VEHICLES")
+
+
 def buy_vehicles(d: Driver, want: int = 2) -> int:
     """Replace lost craft. Returns the change in player vehicle count.
 

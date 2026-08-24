@@ -685,6 +685,46 @@ UString introspectGameState(GameState &state, const UString &query)
 	// a Stormdog -- a road vehicle -- after an airborne UFO is not interception, it is a craft
 	// wandering the streets while the UFO bombs the city. Reported in list order so the driver
 	// can pick the right icons out of OWNED_VEHICLE_LIST.
+	if (q == "buyable_craft")
+	{
+		// Which craft can actually be bought, and crucially which of them FLY. Every campaign
+		// starts with road vehicles only -- Stormdog, Wolfhound APC, a road bike -- so a driver
+		// that buys "a vehicle" buys another thing that cannot reach a UFO, and the city is left
+		// undefended while incursions and city damage bleed the score to death. The buy screen
+		// offers exactly the types present in the economy (transactionscreen.cpp:217-220).
+		UString out;
+		int n = 0;
+		for (auto &vt : state.vehicle_types)
+		{
+			const auto econ = state.economy.find(vt.first);
+			if (econ == state.economy.end() || !vt.second)
+			{
+				continue;
+			}
+			if (econ->second.currentStock <= 0)
+			{
+				continue;
+			}
+			int weaponSlots = 0;
+			for (auto &slot : vt.second->equipment_layout_slots)
+			{
+				if (slot.type == EquipmentSlotType::VehicleWeapon)
+				{
+					weaponSlots++;
+				}
+			}
+			UString name = vt.second->name;
+			std::replace(name.begin(), name.end(), ' ', '_');
+			if (n++ > 0)
+			{
+				out += "|";
+			}
+			out += format("{0}:flying={1}:weapons={2}:price={3}:stock={4}", name,
+			               vt.second->type == VehicleType::Type::Flying ? 1 : 0, weaponSlots,
+			               econ->second.currentPrice, econ->second.currentStock);
+		}
+		return format("count={0} detail={1}", n, out.empty() ? UString("-") : out);
+	}
 	if (q == "interceptors")
 	{
 		const auto player = state.getPlayer();
