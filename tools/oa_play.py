@@ -941,20 +941,26 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
 
 
 def recover_crash_sites(d: Driver) -> int:
-    """Send a craft to any downed UFO so its wreck can be recovered.
+    """Send a troop-carrying craft to a downed UFO to recover it.
 
-    This is the gateway to the whole research tree: every alien-tech topic depends on artifacts
-    from a recovered UFO, so a campaign that shoots craft down but never collects them can never
-    progress. Uses the same select-then-order flow as interception, but with GOTO_LOCATION onto
-    the crash tile rather than an attack order.
+    Two things the first attempt got wrong, both of which made this silently do nothing while
+    reporting success:
+
+    * The order is a plain left-click on the wreck with a craft selected, handled in
+      CityView::handleMouseDown -- not BUTTON_GOTO_LOCATION, which sets a map destination.
+    * VehicleMission::recoverVehicle is only issued if the craft has a Soldier aboard
+      (cityview.cpp:1069-1090). For an alien-owned wreck `foundSoldier` starts false, so an
+      empty interceptor is refused outright. Interceptors shoot UFOs down; a transport with
+      troops has to go and collect them.
+
+    Returns 1 only when the craft actually picked up a mission, so a refusal is visible instead
+    of being counted as a success.
     """
     st = d.status()
     if st.stage != "CityView":
         return 0
     crashed = [(x, y) for (x, y, down) in d.h.screen_craft("ufos_screen") if down]
     if not crashed:
-        # Nothing visible; bring a wreck into view. centre_on_ufo deliberately skips crashed
-        # craft, so recovery needs its own query or it can never see its target.
         if d.h.gs("centre_on_crash").get("centred") != "1":
             return 0
         time.sleep(0.5)
@@ -969,18 +975,26 @@ def recover_crash_sites(d: Driver) -> int:
     lst = d.controls(st).get("OWNED_VEHICLE_LIST")
     if lst is None or lst.w <= 0:
         return 0
-    d.h.click_xy(lst.x + 16, lst.y + lst.h // 2)
-    time.sleep(0.3)
-    st = d.status()
-    if not d.click_id("BUTTON_GOTO_LOCATION", st):
-        d.h.key("Escape")
-        return 0
-    time.sleep(0.3)
+
+    before = d.h.gs("turbo")
+    # Select the whole wing: only a craft carrying a soldier will accept the recovery, and we
+    # cannot tell from here which one that is.
+    ICON_W = 36
+    for slot in range(5):
+        x = lst.x + 16 + slot * ICON_W
+        if x >= lst.x + lst.w:
+            break
+        d.h.click_xy(x, lst.y + lst.h // 2)
+        time.sleep(0.12)
+
     cx, cy = crashed[0]
     d.h.click_xy(cx, cy)
-    time.sleep(0.4)
-    d.say(f"  [recover] craft sent to crash site at {cx},{cy}")
-    return 1
+    time.sleep(0.6)
+    after = d.h.gs("turbo")
+    if after.get("attack_missions") != before.get("attack_missions"):
+        d.say(f"  [recover] craft dispatched to wreck at {cx},{cy}")
+        return 1
+    return 0
 
 
 def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float = 7.0) -> dict:
