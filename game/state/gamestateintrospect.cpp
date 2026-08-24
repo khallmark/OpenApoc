@@ -398,10 +398,34 @@ UString describeBattle(GameState &state)
 	}
 	// playerWon is the engine's own verdict (Battle::checkMissionEnd). Inferring a win from
 	// "a debriefing appeared" counted a total squad wipe as a victory.
+	// The mission type decides whether leaving is survivable. Withdrawing from a base defence
+	// forfeits the base itself -- every facility goes "unbuilt", the labs and stores go with it,
+	// and the campaign is over shortly after. A driver that cannot tell a base defence from an
+	// ordinary crash site will eventually retreat from one and lose the game to a rule it never
+	// saw.
+	UString missionType = "unknown";
+	switch (battle.mission_type)
+	{
+		case Battle::MissionType::AlienExtermination:
+			missionType = "extermination";
+			break;
+		case Battle::MissionType::RaidAliens:
+			missionType = "raid_aliens";
+			break;
+		case Battle::MissionType::BaseDefense:
+			missionType = "base_defense";
+			break;
+		case Battle::MissionType::RaidHumans:
+			missionType = "raid_humans";
+			break;
+		case Battle::MissionType::UfoRecovery:
+			missionType = "ufo_recovery";
+			break;
+	}
 	return format("player_won={0} ", battle.playerWon ? 1 : 0) + format("in_battle=1 mode={0} units={1} mine={2} mine_alive={3} mine_retreated={4} "
-	              "foes={5} foes_alive={6} hazards={7}",
+	              "foes={5} foes_alive={6} hazards={7} mission_type={8}",
 	              battle.mode == Battle::Mode::RealTime ? "rt" : "tb", battle.units.size(), mine,
-	              mineAlive, retreated, hostiles, hostilesAlive, battle.hazards.size());
+	              mineAlive, retreated, hostiles, hostilesAlive, battle.hazards.size(), missionType);
 }
 
 UString describeStage(GameState &state)

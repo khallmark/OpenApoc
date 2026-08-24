@@ -1705,6 +1705,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
     last_mine_alive = "?"
     started_with = 0
     selected_count = 0
+    mission_type = "unknown"
 
     while time.time() - t0 < budget_s:
         st = d.status()
@@ -1740,6 +1741,9 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
                 d.say(f"[battle] ABORT: mode is {b.get('mode')}, not real-time")
                 return "wrong-mode"
             started_with = int(b.get("mine_alive", "0") or 0)
+            mission_type = b.get("mission_type", "unknown")
+            if mission_type == "base_defense":
+                d.say("[battle] BASE DEFENCE - no withdrawal; losing the base ends the campaign")
             d.shot("battle_start")
             d.click_id("BUTTON_SPEED3", st)      # fastest real-time battle speed
             time.sleep(0.5)
@@ -1835,6 +1839,14 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         # not a forfeit here -- Battle::exitBattle force-completes the building's researchUnlock
         # on playerWon alone (battle.cpp:3511); only the loot is gated on not having retreated
         # (battle.cpp:2817), and the research is the part the campaign actually needs.
+        # Never leave a base defence voluntarily. Withdrawing forfeits the base itself: every
+        # facility reverts to "unbuilt", the labs, stores and staff go with it, and the campaign
+        # is lost within the hour. Observed exactly that -- five labs went from built and fully
+        # staffed to unbuilt with skill 0 between one research check and the next, the engine
+        # then crashed twice on the dangling base, and the defeat video played. A losing base
+        # defence fought to the end is still better than a conceded one.
+        may_leave = mission_type != "base_defense"
+
         try:
             alive_now = int(mine_alive or 0)
             foes_now = int(foes_alive or 0)
@@ -1846,7 +1858,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         # not a forfeit there -- exitBattle force-completes the building's researchUnlock on
         # playerWon alone (battle.cpp:3511); only loot is gated on not having retreated
         # (battle.cpp:2817), and the research is what the campaign actually needs.
-        if last_player_won and stalls >= 16 and foes_now and foes_now <= 2 \
+        if may_leave and last_player_won and stalls >= 16 and foes_now and foes_now <= 2 \
                 and alive_now >= foes_now * 3:
             d.say(f"  [battle] won bar {foes_now} unreachable foe(s) with {alive_now} up; banking it")
             if leave_battle(d):
@@ -1879,7 +1891,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         # for either of the branches above will otherwise sit there until the whole budget is
         # gone. One such stall cost 22 minutes of wall-clock and an entire campaign hour, with
         # the squad standing around a single alien it could not path to. Leave honestly.
-        if stalls >= 40:
+        if may_leave and stalls >= 40:
             d.say(f"  [battle] deadlocked for {stalls} rounds ({alive_now} vs {foes_now}); leaving")
             if leave_battle(d):
                 return "withdrew"
@@ -1887,7 +1899,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
 
         outnumbered = foes_n >= alive * 3
         collapsing = alive <= max(1, started_with // 3)
-        if started_with and alive and collapsing and outnumbered:
+        if may_leave and started_with and alive and collapsing and outnumbered:
             d.say(f"  [battle] retreating: {alive} left of {started_with} against {foes_n}")
             if leave_battle(d):
                 return "withdrew"
