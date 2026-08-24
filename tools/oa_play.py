@@ -2607,8 +2607,21 @@ def equip_craft(d: Driver) -> str:
         return_to_city(d)
         return f"vequip-not-reached ({d.status().stage})"
 
-    items = d.h.gs("vequip_items")
-    detail = items.get("detail", "-")
+    # The inventory list is cleared and rebuilt inside render() (vequipscreen.cpp:456-458), so it
+    # is empty until a frame has actually drawn -- querying the instant the stage appears reported
+    # an empty warehouse while two Bolter 4000s sat in it. Make sure the weapons tab is the one
+    # showing, then give it frames.
+    try:
+        d.h.send("control BUTTON_SHOW_WEAPONS click")
+    except (HarnessError, OSError):
+        pass
+    items, detail = {}, "-"
+    for _ in range(10):
+        time.sleep(0.4)
+        items = d.h.gs("vequip_items")
+        detail = items.get("detail", "-")
+        if detail and detail != "-":
+            break
     if not detail or detail == "-":
         return_to_city(d)
         return "no-items-in-stores"
