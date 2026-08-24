@@ -1573,6 +1573,7 @@ void BattleView::registerBattleViewIntrospection()
 			    UString out;
 			    int count = 0;
 			    int unarmed = 0;
+			    int bystanders = 0;
 			    for (const auto &u : gameState->current_battle->units)
 			    {
 				    const auto &unit = u.second;
@@ -1583,6 +1584,20 @@ void BattleView::registerBattleViewIntrospection()
 				    const bool mine = unit->owner.id == player.id;
 				    if (wantFoes == mine)
 				    {
+					    continue;
+				    }
+				    // "Not ours" is not the same as "hostile". A building raid is full of
+				    // civilians and the owner's security, and shooting them is ruinous: killing a
+				    // unit whose organisation is NOT hostile to us costs 30 relation with that
+				    // organisation, against 5 for a genuine enemy
+				    // (battleunit.cpp:4802-4813). Most buildings are the government's, and
+				    // government relation below -50 terminates funding outright. Reporting every
+				    // non-player unit as a target had the driver gunning down bystanders at -30
+				    // each and wondering why its funding kept being cut.
+				    if (wantFoes && unit->owner &&
+				        unit->owner->isRelatedTo(player) != Organisation::Relation::Hostile)
+				    {
+					    bystanders++;
 					    continue;
 				    }
 				    const auto screen = view->tileToOffsetScreenCoords<float>(unit->position);
@@ -1624,8 +1639,8 @@ void BattleView::registerBattleViewIntrospection()
 				    out += format("{0},{1},{2}", (int)screen.x, (int)screen.y,
 				                  (int)unit->position.z);
 			    }
-			    return format("count={0} unarmed={2} at={1}", count,
-			                  out.empty() ? UString("-") : out, unarmed);
+			    return format("count={0} unarmed={2} bystanders={3} at={1}", count,
+			                  out.empty() ? UString("-") : out, unarmed, bystanders);
 		    }
 		    return stateHandler ? stateHandler(query) : UString("");
 	    });

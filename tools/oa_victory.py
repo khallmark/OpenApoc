@@ -42,6 +42,7 @@ from oa_play import (
     return_to_city,
     goto_portal,
     raid_alien_building,
+    raid_infiltrated_building,
     manufacture,
     buy_equipment,
     buy_vehicles,
@@ -75,6 +76,9 @@ CREW_COOLDOWN_S = 60.0
 # alien-building chain and one that stops after its first two topics.
 RESEARCH_COOLDOWN_S = 90
 BASE_COOLDOWN_S = 120.0
+# How often to go and clear an infiltrated building. Frequent: crews grow and spread hourly, and
+# the relation they cost is what terminates funding.
+INFIL_COOLDOWN_S = 90.0
 # Below this, with funding cut and nobody armed, a campaign cannot recover: no income, and not
 # enough left to buy a single weapon.
 BANKRUPT_FLOOR = 5000
@@ -126,6 +130,7 @@ class Victory:
         self.last_base_try = 0.0
         self.last_vequip = 0.0
         self.last_loot_sale = 0.0
+        self.last_infil_raid = 0.0
         self.last_vequip_outcome = ""
         self.last_defer_log = 0.0
         self.caps_checked = False
@@ -451,6 +456,21 @@ class Victory:
             self.last_recover = time.time()
             if recover_crash_sites(self.d):
                 self.progress["recoveries"] += 1
+                self.flush()
+
+        # Clear infiltrated buildings. This is the mechanism that has been ending these
+        # campaigns: alien crews raise their owner's infiltrationValue every hour and spread to
+        # neighbours if left alone, most buildings are the government's, and government relation
+        # below -50 cuts funding outright. Two runs died at gov_relation -78 and -80 with 19 and
+        # 39 buildings infiltrated while the driver read that number and did nothing. A ground
+        # raid costs no relation with the owner, so the only real cost is the squad's time.
+        armed_now = int(self.d.h.gs("agents").get("armed", "0") or 0)
+        if armed_now >= MIN_SQUAD and time.time() - self.last_infil_raid > INFIL_COOLDOWN_S:
+            self.last_infil_raid = time.time()
+            outcome = raid_infiltrated_building(self.d)
+            if outcome != "nothing-infiltrated":
+                self.say(f"infiltration raid: {outcome}")
+                self.progress["infil_raids"] = self.progress.get("infil_raids", 0) + 1
                 self.flush()
 
         # A second base is the cheapest insurance in the game. XComDefeated is raised on exactly

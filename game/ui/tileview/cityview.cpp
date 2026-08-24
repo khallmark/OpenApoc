@@ -2326,6 +2326,63 @@ void CityView::registerCityViewIntrospection()
 			                  gameState->getPlayer()->balance >= bestPrice ? 1 : 0,
 			                  gameState->player_bases.size(), (int)screen.x, (int)screen.y);
 		    }
+		    if (gameState && q == "centre_on_infiltrated")
+		    {
+			    // Frame the human-owned building holding the most aliens. This is the mechanic
+			    // that decides whether a campaign keeps its funding: crews in buildings raise
+			    // their owner's infiltrationValue every hour (organisation.cpp:657-673), and
+			    // aliens left alone spread to neighbours (Building::alienMovement). Clearing them
+			    // is a ground raid, and a ground raid costs no relation -- the collateral penalty
+			    // in Scenery::handleCollision is city-map only; battlemappart has no equivalent.
+			    // Alien-owned buildings are excluded: those are the dimension raids, handled by
+			    // centre_on_raidable.
+			    const auto aliens = gameState->getAliens();
+			    if (!gameState->current_city)
+			    {
+				    return UString("centred=0");
+			    }
+			    sp<Building> worst;
+			    UString worstId;
+			    int worstCrew = 0;
+			    for (const auto &ref : gameState->current_city->buildings)
+			    {
+				    const auto bld = ref.getSp();
+				    if (!bld || bld->current_crew.empty())
+				    {
+					    continue;
+				    }
+				    if (bld->owner && bld->owner.id == aliens.id)
+				    {
+					    continue;
+				    }
+				    if (bld->base)
+				    {
+					    continue;  // our own base defends itself
+				    }
+				    int crew = 0;
+				    for (const auto &c : bld->current_crew)
+				    {
+					    crew += c.second;
+				    }
+				    if (crew > worstCrew)
+				    {
+					    worst = bld;
+					    worstId = ref.id;
+					    worstCrew = crew;
+				    }
+			    }
+			    if (!worst)
+			    {
+				    return UString("centred=0");
+			    }
+			    const auto &bb = worst->bounds;
+			    const Vec3<float> mid{(bb.p0.x + bb.p1.x) / 2.0f, (bb.p0.y + bb.p1.y) / 2.0f, 2.0f};
+			    view->setScreenCenterTile(mid);
+			    const auto screen = view->tileToOffsetScreenCoords<float>(mid);
+			    return format("centred=1 building={0} crew={1} owner={2} at={3},{4},0", worstId,
+			                  worstCrew, worst->owner ? worst->owner.id : UString("-"),
+			                  (int)screen.x, (int)screen.y);
+		    }
 		    if (gameState && q == "centre_on_raidable")
 		    {
 			    const auto aliens = gameState->getAliens();

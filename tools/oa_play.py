@@ -1212,6 +1212,77 @@ def current_project(d: Driver) -> str:
     return text
 
 
+def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
+    """Clear aliens out of a human building. Returns the battle outcome, or why it could not run.
+
+    This is the part of the game the driver was not playing at all, and it is the one that decides
+    whether a campaign keeps its funding. Alien crews sitting in a building raise their owner's
+    infiltrationValue every hour (organisation.cpp:657-673), and aliens left alone spread to
+    neighbouring buildings (Building::alienMovement, chance 15 + 3 x count, +20 when the owner is
+    friendly to them). Most buildings belong to the government, and government relation below -50
+    terminates funding outright. Campaigns were dying at gov_relation -78 with 19 and 39 buildings
+    infiltrated while the driver read that number and did nothing about it.
+
+    A ground raid is also free of the collateral penalty that makes air combat so costly: the
+    relation charge in Scenery::handleCollision is city-map only, and battlemappart has no
+    equivalent. Fighting inside the building costs nothing with its owner.
+
+    Worth knowing when reading the result: retreating hands the aliens straight back. On exit,
+    survivors of a building raid go back into that same building (battle.cpp:2900-2910), and
+    survivors of a UFO recovery seed a NEARBY building instead (battle.cpp:2955-2963) -- which is
+    the "escape the map and spread" behaviour, and a reason not to withdraw casually.
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return f"not-in-city ({st.stage})"
+    info = d.h.gs("centre_on_infiltrated")
+    if info.get("centred") != "1":
+        return "nothing-infiltrated"
+    at = info.get("at", "")
+    try:
+        bx, by = (int(v) for v in at.split(",")[:2])
+    except ValueError:
+        return "bad-coords"
+    d.say(f"  [raid] clearing {info.get('building')} ({info.get('crew')} aliens, "
+          f"owner {info.get('owner')})")
+
+    d.h.ok(f"click {bx} {by} right")
+    time.sleep(1.0)
+    if d.status().stage != "BuildingScreen":
+        return_to_city(d)
+        return f"no-building-screen ({d.status().stage})"
+
+    picked = d.select_assignment_rows(d.status())
+    if not picked:
+        return_to_city(d)
+        return "no-agents-selectable"
+    # EXTERMINATE, never RAID. They look interchangeable and are not: BUTTON_RAID is a deliberate
+    # attack on the ORGANISATION and costs 200 relation with the owner outright
+    # (buildingscreen.cpp:223-226), which for a government building is the funding cut in one
+    # click. BUTTON_EXTERMINATE searches for aliens and starts the mission when it finds them, at
+    # no cost -- the only penalty on that path is -5-difficulty for searching a building that
+    # turns out to be empty (buildingscreen.cpp:154-166), which is why this only ever targets a
+    # building the game has just told us holds a crew.
+    d.click_id("BUTTON_EXTERMINATE", d.status())
+    time.sleep(1.5)
+
+    st = d.status()
+    if st.stage == "MessageBox":
+        d.say(f"  [raid] refused: {d.h.send('controls')[:120]}")
+        d.h.key("Return")
+        return_to_city(d)
+        return "refused"
+    if st.stage not in ("BattleBriefing", "BattlePreStart", "BattleView"):
+        return_to_city(d)
+        return f"no-battle ({st.stage})"
+
+    outcome = win_battle(d, budget_s=budget_s)
+    after = d.h.gs("infiltrated")
+    d.say(f"  [raid] {outcome}; {after.get('infiltrated')} building(s) still infiltrated, "
+          f"gov relation {after.get('gov_relation')}")
+    return outcome
+
+
 def raid_alien_building(d: Driver) -> str:
     """Raid the next alien building. Returns the battle outcome, or why it could not start.
 
