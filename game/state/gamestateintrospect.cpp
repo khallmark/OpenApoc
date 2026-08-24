@@ -10,6 +10,7 @@
 #include "game/state/rules/city/vehicletype.h"
 #include "game/state/gamestate.h"
 #include "game/state/gametime.h"
+#include "game/state/rules/agenttype.h"
 #include "game/state/shared/agent.h"
 #include "game/state/shared/organisation.h"
 #include "library/strings_format.h"
@@ -146,9 +147,28 @@ UString describeVehicles(GameState &state)
 			}
 		}
 	}
-	return format("player_vehicles={0} ufos={1} ufos_in_city={2} ufos_crashed={3} "
-	              "next_invasion={4}",
-	              mine, ufos, ufosHere, crashed, state.nextInvasion);
+	// Recovering a wreck needs a Soldier aboard (cityview.cpp:1069-1090), so "do we have a
+	// crewed craft" decides whether the whole artifact/research chain can start at all.
+	size_t crewed = 0;
+	for (const auto &v : state.vehicles)
+	{
+		const auto &vehicle = v.second;
+		if (!vehicle || !vehicle->owner || vehicle->owner.id != player.id)
+		{
+			continue;
+		}
+		for (const auto &a : vehicle->currentAgents)
+		{
+			if (a && a->type && a->type->role == AgentType::Role::Soldier)
+			{
+				crewed++;
+				break;
+			}
+		}
+	}
+	return format("player_vehicles={0} crewed={1} ufos={2} ufos_in_city={3} ufos_crashed={4} "
+	              "next_invasion={5}",
+	              mine, crewed, ufos, ufosHere, crashed, state.nextInvasion);
 }
 
 // Turbo (city Speed5) is silently downgraded to Speed1 whenever canTurbo() is false, which is the

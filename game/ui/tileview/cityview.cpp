@@ -2177,6 +2177,22 @@ void CityView::registerCityViewIntrospection()
 		    // "centre_on_ufo": bring the nearest live UFO into view so a driver can click it.
 		    // Craft off the visible area cannot be targeted at all, which made automated
 		    // interception a no-op whenever the camera sat over the player's base.
+		    // Our own base building. Craft parked in its hangar have no tileObject, so
+		    // centre_on_own cannot find them at campaign start -- but crewing a transport means
+		    // clicking the building itself, which is always on the map.
+		    if (gameState && q == "centre_on_base")
+		    {
+			    const auto base = gameState->current_base;
+			    if (!base || !base->building)
+			    {
+				    return UString("centred=0");
+			    }
+			    const auto &b = base->building->bounds;
+			    const Vec3<float> mid{(b.p0.x + b.p1.x) / 2.0f, (b.p0.y + b.p1.y) / 2.0f, 2.0f};
+			    view->setScreenCenterTile(mid);
+			    const auto screen = view->tileToOffsetScreenCoords<float>(mid);
+			    return format("centred=1 at={0},{1},0", (int)screen.x, (int)screen.y);
+		    }
 		    if (gameState && (q == "centre_on_ufo" || q == "centre_on_own" ||
 		                      q == "centre_on_crash"))
 		    {

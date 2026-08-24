@@ -940,6 +940,97 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
     return "timeout"
 
 
+def crew_transport(d: Driver) -> int:
+    """Put soldiers aboard a craft so it can recover downed UFOs.
+
+    VehicleMission::recoverVehicle is refused unless the craft carries a Soldier
+    (cityview.cpp:1069-1090), so an all-interceptor fleet shoots UFOs down and collects none of
+    them -- no artifacts, no alien research, no route to victory. Observed directly: three wrecks
+    on the map with crewed=0 and every recovery refused.
+
+    Two engine details decide how this has to be driven:
+
+    * The assignment widget exists only on the three screens that embed city/agentassignment.form.
+      Left-clicking our own base opens BaseScreen, which has no widget; *right*-clicking the same
+      building opens BuildingScreen, which does (cityview.cpp:282-306).
+    * The drop list is not built on MouseDown. It is built on the first MouseMove that travels
+      more than `insensibility` (5px) from the press, copying whatever is selected in the source
+      list (agentassignment.cpp:749-768). Press-then-release without a real move in between drops
+      an empty list and silently transfers nobody, so the drag is issued as a stepped path.
+
+    The transfer itself also requires the craft to be parked in the same building as the agent
+    (agentassignment.cpp:527-536), which is why this is done at the base.
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return 0
+    at = d.h.gs("centre_on_base")
+    if at.get("centred") != "1":
+        return 0
+    bx, by = (int(v) for v in at["at"].split(",")[:2])
+    d.h.ok(f"click {bx} {by} right")
+    time.sleep(1.2)
+
+    st = d.status()
+    if st.stage != "BuildingScreen":
+        d.say(f"  [crew] expected BuildingScreen, got {st.stage}")
+        d.h.key("Escape")
+        return 0
+    box = d.controls(st).get("AGENT_ASSIGNMENT")
+    if box is None or box.w <= 0:
+        d.h.key("Escape")
+        return 0
+
+    ROW_H, FIRST_ROW, AGENT_DX, VEHICLE_DX = 26, 63, 103, 383
+    before = int(d.h.gs("vehicles").get("crewed", "0") or 0)
+    crewed = before
+
+    # Select the squad once, then try each craft row: the right column starts with the building
+    # itself, so the first row that accepts a squad is not known ahead of time.
+    for row in range(6):
+        picked = 0
+        for r in range(6):
+            y = box.y + FIRST_ROW + r * ROW_H
+            if y >= box.y + box.h - 8:
+                break
+            d.h.click_xy(box.x + AGENT_DX, y)
+            picked += 1
+            time.sleep(0.1)
+        if not picked:
+            break
+
+        sy = box.y + FIRST_ROW
+        dy = box.y + FIRST_ROW + row * ROW_H
+        if dy >= box.y + box.h - 8:
+            break
+        d.h.ok(f"down {box.x + AGENT_DX} {sy}")
+        time.sleep(0.15)
+        for step in range(1, 7):  # stepped path so the >5px move actually fires
+            mx = box.x + AGENT_DX + (VEHICLE_DX - AGENT_DX) * step // 6
+            my = sy + (dy - sy) * step // 6
+            d.h.ok(f"move {mx} {my}")
+            time.sleep(0.08)
+        d.h.ok(f"up {box.x + VEHICLE_DX} {dy}")
+        time.sleep(0.6)
+
+        crewed = int(d.h.gs("vehicles").get("crewed", "0") or 0)
+        if crewed > before:
+            d.say(f"  [crew] squad boarded a craft on row {row}")
+            break
+
+    # Leave by the screen's own quit button. dismiss_modal would pick this stage's "act" control,
+    # which on a BuildingScreen is BUTTON_RAID -- an assault on our own base.
+    for _ in range(6):
+        st = d.status()
+        if st.stage == "CityView":
+            break
+        if not d.click_id("BUTTON_QUIT", st):
+            d.h.key("Escape")
+        time.sleep(0.4)
+    d.say(f"  [crew] crewed craft {before} -> {crewed}")
+    return crewed
+
+
 def recover_crash_sites(d: Driver) -> int:
     """Send a troop-carrying craft to a downed UFO to recover it.
 
