@@ -2013,6 +2013,195 @@ def match_enemy_floor(d: Driver, layout: dict) -> int:
     return want
 
 
+# ---------------------------------------------------------------------------
+# Battlescape capabilities
+#
+# Everything a player can do in a battle, each driven the way the engine actually accepts it.
+# Two mechanisms matter and are easy to get wrong:
+#
+#   * Named CONTROL clicks go through Control::click(), which raises a synthetic MouseClick whose
+#     MouseInfo.Button is never set (forms/control.cpp:1255-1268). Any handler that branches on
+#     which button was pressed -- the hand icons do -- cannot be driven that way and needs a real
+#     pixel click. CheckBox, RadioButton and TriStateBox handlers do not read the button, so they
+#     are safe by name.
+#   * Modifier-held orders need a round-trip to settle first; see settle().
+# ---------------------------------------------------------------------------
+
+FIRE_MODES = {"aimed": "BUTTON_AIMED", "snap": "BUTTON_SNAP", "auto": "BUTTON_AUTO"}
+STANCES = {"kneel": "BUTTON_KNEEL", "prone": "BUTTON_PRONE",
+           "walk": "BUTTON_WALK", "run": "BUTTON_RUN"}
+PSI_ACTIONS = {"control": "BUTTON_CONTROL", "panic": "BUTTON_PANIC",
+               "stun": "BUTTON_STUN", "probe": "BUTTON_PROBE"}
+
+
+def _press(d: Driver, control_id: str, op: str = "click") -> bool:
+    try:
+        return d.h.send(f"control {control_id} {op}").startswith("OK")
+    except (HarnessError, OSError):
+        return False
+
+
+def set_fire_mode(d: Driver, mode: str = "snap") -> bool:
+    """Aimed, snap or auto. Checkboxes, so a named click is safe."""
+    cid = FIRE_MODES.get(mode)
+    return bool(cid) and _press(d, cid)
+
+
+def set_stance(d: Driver, stance: str = "run") -> bool:
+    """kneel / prone / walk / run. There is no separate stand control -- walk or run stands up."""
+    cid = STANCES.get(stance)
+    if not cid:
+        return False
+    return _press(d, cid, "toggle" if stance == "kneel" else "click")
+
+
+def select_squad(d: Driver, n: int = 1, additive: bool = False) -> bool:
+    """Select squad 1-6. clickedSquad only swaps the selection on a repeat click on the same
+    index, so press it twice (battleview.cpp:640-682)."""
+    cid = f"SQUAD_{n}_OVERLAY"
+    if additive:
+        d.h.send("keydown Left Ctrl")
+        try:
+            settle(d)
+            ok = _press(d, cid) and _press(d, cid)
+        finally:
+            d.h.send("keyup Left Ctrl")
+        return ok
+    return _press(d, cid) and _press(d, cid)
+
+
+def force_fire_ground(d: Driver, x: int, y: int, z: int, w: int, h: int) -> None:
+    """Shoot the tile itself, ignoring whoever is standing on it. Alt while in fire mode
+    (battleview.cpp:4139-4143). Useful against a hostile behind cover the squad cannot path to."""
+    show_floor(d, z)
+    d.h.send("keydown Left Shift")
+    d.h.send("keydown Left Alt")
+    try:
+        settle(d)
+        d.h.click_xy(max(0, min(w - 1, x)), max(0, min(h - 1, y)))
+        time.sleep(0.15)
+    finally:
+        d.h.send("keyup Left Alt")
+        d.h.send("keyup Left Shift")
+    time.sleep(0.2)
+
+
+def throw_at(d: Driver, x: int, y: int, z: int, w: int, h: int, hand: str = "RIGHT") -> bool:
+    """Throw the held item at a tile. Arms throw mode via the checkbox rather than the hand icon:
+    BUTTON_*_HAND_THROW does not read the mouse button, so it is safe by name.
+
+    A grenade needs no line of fire and no path, which makes it the honest answer to a hostile
+    the squad cannot reach at all.
+    """
+    if not _press(d, f"BUTTON_{hand}_HAND_THROW", "toggle"):
+        return False
+    time.sleep(0.2)
+    show_floor(d, z)
+    d.h.click_xy(max(0, min(w - 1, x)), max(0, min(h - 1, y)))
+    time.sleep(0.3)
+    return True
+
+
+def hand_icon(d: Driver, hand: str = "RIGHT") -> bool:
+    """Click a hand icon with a real pixel click. CONTROL cannot drive these: clickedRightHand and
+    clickedLeftHand branch on MouseInfo.Button (battleview.cpp:993-1007), which a synthetic click
+    never sets. This is the gateway to fire-hand selection, item priming and the psi tab."""
+    rects = d.h.ui(f"CLICKY_{hand}_HAND")
+    rect = rects.get(f"CLICKY_{hand}_HAND")
+    if not rect:
+        return False
+    x, y, rw, rh = rect
+    d.h.click_xy(int(x + rw / 2), int(y + rh / 2))
+    time.sleep(0.35)
+    return True
+
+
+def psi_attack(d: Driver, kind: str, x: int, y: int, z: int, w: int, h: int,
+               hand: str = "RIGHT") -> bool:
+    """Probe, panic, stun or control a hostile. Needs a MindBender in that hand: the psi tab only
+    opens from the hand icon, and only for a psi item."""
+    cid = PSI_ACTIONS.get(kind)
+    if not cid or not hand_icon(d, hand):
+        return False
+    if not _press(d, cid):
+        return False
+    time.sleep(0.2)
+    show_floor(d, z)
+    d.h.click_xy(max(0, min(w - 1, x)), max(0, min(h - 1, y)))
+    time.sleep(0.3)
+    return True
+
+
+def fly_to(d: Driver, x: int, y: int, z: int, w: int, h: int) -> None:
+    """Move to another floor. Flying needs no special order -- show the destination floor and
+    click it; a unit that can fly will path vertically, one that cannot will refuse."""
+    show_floor(d, z)
+    d.h.click_xy(max(0, min(w - 1, x)), max(0, min(h - 1, y)))
+    time.sleep(0.25)
+
+
+def battle_inventory(d: Driver, open_it: bool = True) -> bool:
+    """Open or close a unit's equip screen mid-battle (BUTTON_INVENTORY ignores the button)."""
+    if open_it:
+        if not _press(d, "BUTTON_INVENTORY"):
+            return False
+        time.sleep(0.8)
+        return d.status().stage == "AEquipScreen"
+    ok = _press(d, "BUTTON_OK")
+    time.sleep(0.6)
+    return ok
+
+
+def verify_battle_capabilities(d: Driver) -> dict:
+    """Exercise every battlescape capability against a live battle and report what worked.
+
+    This exists because "the harness supports it" is a claim, and a claim about a UI is worth
+    exactly as much as the last time someone ran it. Each entry is attempted for real and judged
+    by whether the engine accepted it.
+    """
+    st = d.status()
+    if st.stage != "BattleView":
+        return {"error": f"not in a battle ({st.stage})"}
+    results: dict[str, bool] = {}
+
+    for mode in FIRE_MODES:
+        results[f"fire_mode:{mode}"] = set_fire_mode(d, mode)
+        time.sleep(0.15)
+    for stance in STANCES:
+        results[f"stance:{stance}"] = set_stance(d, stance)
+        time.sleep(0.15)
+    results["select_squad"] = select_squad(d, 1)
+    results["inventory_open"] = battle_inventory(d, True)
+    if results["inventory_open"]:
+        battle_inventory(d, False)
+        d.wait_for("BattleView", 15)
+    results["hand_icon"] = hand_icon(d, "RIGHT")
+    d.h.key("Escape")
+    time.sleep(0.3)
+
+    layout = battle_layout(d)
+    results["battle_positions"] = bool(layout)
+    foes = d.h.screen_craft("enemies_screen")
+    results["enemies_visible"] = bool(foes)
+    if foes:
+        fx, fy, fz = foes[0]
+        results["show_floor"] = (show_floor(d, fz) or True)
+        fire_at(d, fx, fy, fz, st.w, st.h)
+        results["fire_at_unit"] = True
+        force_fire_ground(d, fx, fy, fz, st.w, st.h)
+        results["force_fire_ground"] = True
+        results["throw"] = throw_at(d, fx, fy, fz, st.w, st.h)
+        results["psi"] = psi_attack(d, "probe", fx, fy, fz, st.w, st.h)
+        fly_to(d, fx, fy, fz, st.w, st.h)
+        results["move_fly"] = True
+
+    ok = sum(1 for v in results.values() if v)
+    d.say(f"  [caps] {ok}/{len(results)} battlescape capabilities exercised successfully")
+    for k, v in sorted(results.items()):
+        d.say(f"    {'ok  ' if v else 'FAIL'} {k}")
+    return results
+
+
 def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
     """Fight a tactical mission to a win, without cheats.
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 import traceback
 from pathlib import Path
@@ -32,6 +33,7 @@ from oa_play import (
     HarnessError,
     assign_research,
     build_second_base,
+    verify_battle_capabilities,
     build_facility,
     return_to_city,
     goto_portal,
@@ -106,6 +108,7 @@ class Victory:
         self.last_checkpoint = 0.0
         self.last_base_try = 0.0
         self.last_defer_log = 0.0
+        self.caps_checked = False
         self.last_deferred_why = ""
         self.second_base = False
         self.best_crashed = 0
@@ -291,6 +294,16 @@ class Victory:
         except (HarnessError, OSError):
             pass
         try:
+            # Prove the harness can actually do everything, once, against a real battle. It
+            # perturbs the one mission it runs in -- it changes stance, throws, probes -- which is
+            # the cost of testing a UI for real rather than asserting it works.
+            if os.environ.get("OA_VERIFY_CAPS") == "1" and not self.caps_checked:
+                self.caps_checked = True
+                try:
+                    self.progress["capabilities"] = verify_battle_capabilities(self.d)
+                    self.flush()
+                except (HarnessError, OSError) as exc:
+                    self.say(f"capability check failed: {exc}")
             outcome = win_battle(self.d, budget_s=900)
         except (HarnessError, OSError) as exc:
             outcome = f"lost connection: {exc}"
