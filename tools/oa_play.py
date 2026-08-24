@@ -923,6 +923,57 @@ def pick_topic_row(d: Driver) -> int:
     return usable[0][0] if usable else -1
 
 
+def raid_alien_building(d: Driver) -> str:
+    """Raid the next alien building. Returns the battle outcome, or why it could not start.
+
+    This is the win condition: Battle::exitBattle fires AliensDefeated only for the alien building
+    carrying victory=true, and each earlier raid force-completes the research that unlocks the
+    next. Only works from inside CITYMAP_ALIEN, and only for a building whose accessTopic is
+    researched -- BuildingScreen refuses with "No Entrance" otherwise
+    (buildingscreen.cpp:112-122), so this checks first rather than clicking hopefully.
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return "not-in-city"
+    where = d.h.gs("alien_buildings")
+    if where.get("current_city") != "CITYMAP_ALIEN":
+        return "not-in-alien-dimension"
+
+    target = d.h.gs("centre_on_raidable")
+    if target.get("centred") != "1":
+        return "nothing-raidable"
+    d.say(f"  [raid] target {target.get('building')} (victory={target.get('victory')})")
+    time.sleep(0.5)
+    bx, by = (int(v) for v in target["at"].split(",")[:2])
+    d.h.ok(f"click {bx} {by} right")
+    time.sleep(1.2)
+
+    st = d.status()
+    if st.stage != "BuildingScreen":
+        d.say(f"  [raid] expected BuildingScreen, got {st.stage}")
+        return_to_city(d)
+        return "no-building-screen"
+
+    picked = d.select_assignment_rows(st)
+    if not picked:
+        return_to_city(d)
+        return "no-agents-selectable"
+    d.click_id("BUTTON_RAID", d.status())
+    time.sleep(1.5)
+
+    st = d.status()
+    if st.stage == "MessageBox":
+        d.say(f"  [raid] refused: {d.h.send('controls')[:120]}")
+        d.h.key("Return")
+        return_to_city(d)
+        return "refused"
+    if st.stage not in ("BattleBriefing", "BattlePreStart", "BattleView"):
+        return_to_city(d)
+        return f"no-battle ({st.stage})"
+
+    return win_battle(d, budget_s=2400)
+
+
 def goto_portal(d: Driver) -> bool:
     """Send a dimension-shifter-equipped craft through a portal into the alien city.
 

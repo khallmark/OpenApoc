@@ -2268,6 +2268,38 @@ void CityView::registerCityViewIntrospection()
 		    // selected (cityview.cpp Doodad handling -> VehicleMission::gotoPortal). The portals
 		    // live in City::portals as doodads, so their screen positions are not otherwise
 		    // discoverable by a driver.
+		    // Frame the next alien building that is actually raidable: alien-owned, and with its
+		    // accessTopic researched, since BuildingScreen refuses the raid otherwise
+		    // (buildingscreen.cpp:112-122). Winning one force-completes the unlock for the next,
+		    // and the last of them ends the game.
+		    if (gameState && q == "centre_on_raidable")
+		    {
+			    const auto aliens = gameState->getAliens();
+			    if (!gameState->current_city)
+			    {
+				    return UString("centred=0");
+			    }
+			    for (const auto &ref : gameState->current_city->buildings)
+			    {
+				    const auto bld = ref.getSp();
+				    if (!bld || !bld->owner || bld->owner.id != aliens.id)
+				    {
+					    continue;
+				    }
+				    if (bld->accessTopic && !bld->accessTopic->isComplete())
+				    {
+					    continue;
+				    }
+				    const auto &bb = bld->bounds;
+				    const Vec3<float> mid{(bb.p0.x + bb.p1.x) / 2.0f, (bb.p0.y + bb.p1.y) / 2.0f,
+				                          2.0f};
+				    view->setScreenCenterTile(mid);
+				    const auto screen = view->tileToOffsetScreenCoords<float>(mid);
+				    return format("centred=1 building={0} victory={1} at={2},{3},0", ref.id,
+				                  bld->victory ? 1 : 0, (int)screen.x, (int)screen.y);
+			    }
+			    return UString("centred=0");
+		    }
 		    if (gameState && q == "centre_on_portal")
 		    {
 			    if (!gameState->current_city || gameState->current_city->portals.empty())
