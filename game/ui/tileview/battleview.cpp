@@ -1521,6 +1521,49 @@ void BattleView::registerBattleViewIntrospection()
 			    return format("centred=1 at={0},{1},0 z={2}", (int)screen.x, (int)screen.y,
 			                  (int)best->position.z);
 		    }
+		    if (gameState && gameState->current_battle && q == "battle_positions")
+		    {
+			    // Diagnostic for the "one unreachable hostile" deadlock. Screen coordinates alone
+			    // cannot explain it -- a unit two floors up is drawn in plain sight and still
+			    // cannot be walked to. Report tile positions, so the z gap between the squad and
+			    // the survivor is visible, along with whether each unit can actually move.
+			    const auto player = gameState->getPlayer();
+			    UString foes, mine;
+			    int foeCount = 0, mineCount = 0;
+			    for (const auto &u : gameState->current_battle->units)
+			    {
+				    const auto &unit = u.second;
+				    if (!unit || !unit->owner || !unit->tileObject || !unit->isConscious())
+				    {
+					    continue;
+				    }
+				    const auto p = unit->position;
+				    const bool isMine = unit->owner.id == player.id;
+				    const auto entry =
+				        format("{0},{1},{2}", (int)p.x, (int)p.y, (int)p.z);
+				    if (isMine)
+				    {
+					    if (mineCount++ > 0)
+					    {
+						    mine += ";";
+					    }
+					    mine += entry;
+				    }
+				    else
+				    {
+					    if (foeCount++ > 0)
+					    {
+						    foes += ";";
+					    }
+					    foes += format("{0}:large={1}:flying={2}", entry,
+					                   unit->isLarge() ? 1 : 0,
+					                   unit->canFly() ? 1 : 0);
+				    }
+			    }
+			    return format("foes={0} mine={1} foe_at={2} mine_at={3}", foeCount,
+			                  mineCount, foes.empty() ? UString("-") : foes,
+			                  mine.empty() ? UString("-") : mine);
+		    }
 		    if (gameState && gameState->current_battle &&
 		        (q == "enemies_screen" || q == "friends_screen"))
 		    {

@@ -2017,6 +2017,15 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         last_foes = foes_alive
         if stalls and stalls % 12 == 0:
             d.say(f"  [battle] no progress for a while: {b}")
+            # Record why it is stuck rather than just that it is. Screen coordinates cannot
+            # explain an unreachable hostile -- a unit two floors up is drawn in plain sight and
+            # still cannot be walked to -- so log tile positions and let the z gap speak.
+            try:
+                pos = d.h.gs("battle_positions")
+                d.say(f"  [battle] positions: foe_at={pos.get('foe_at')} "
+                      f"mine_at={pos.get('mine_at')}")
+            except (HarnessError, OSError):
+                pass
 
         # A mission the engine already considers won, stuck on a hostile the squad cannot reach,
         # will otherwise burn the entire time budget: observed at 13 of 15 alive against a single
