@@ -1009,12 +1009,16 @@ def current_project(d: Driver) -> str:
         return ""
     if not reply.startswith("OK"):
         return ""
-    text = reply[2:].strip()
-    for prefix in ("value=", "text="):
-        if text.startswith(prefix):
-            text = text[len(prefix):]
-    text = text.strip()
-    if text.lower().replace("_", " ") in ("", "-", "no project"):
+    # The reply is "OK <CONTROL_ID> text=<value>", and the value has had its spaces replaced with
+    # underscores so it survives the whitespace-delimited protocol. Taking everything after
+    # "text=" is the only correct read: matching a leading prefix left the control id glued to
+    # the front, so "No_Project" never compared equal to idle and every idle lab was skipped as
+    # though it were busy -- the exact inverse of the bug this function exists to prevent.
+    body = reply[2:].strip()
+    marker = "text="
+    text = body.split(marker, 1)[1].strip() if marker in body else ""
+    text = text.replace("_", " ").strip()
+    if text.lower() in ("", "-", "no project"):
         return ""
     return text
 
