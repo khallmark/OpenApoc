@@ -97,9 +97,23 @@ class Victory:
     def _load(self) -> dict:
         if self.progress_path.exists():
             try:
-                return json.loads(self.progress_path.read_text())
+                prev = json.loads(self.progress_path.read_text())
             except ValueError:
-                pass
+                prev = None
+            if prev:
+                # A campaign that reached victory or defeat is a finished result, not something
+                # to resume into. Keep it -- runs that end in failure are still real outcomes and
+                # are worth preserving rather than overwriting -- and begin a new one beside it.
+                if prev.get("ended"):
+                    stamp = time.strftime("%Y%m%d-%H%M%S")
+                    archive = self.out / f"campaign-{prev['ended']}-{stamp}.json"
+                    archive.write_text(json.dumps(prev, indent=1))
+                    if self.checkpoint.exists():
+                        self.checkpoint.rename(self.out / f"campaign-{prev['ended']}-{stamp}.save")
+                    print(f"[campaign] archived finished run ({prev['ended']}) to {archive.name}",
+                          flush=True)
+                else:
+                    return prev
         return {"battles": 0, "wins": 0, "ufos_down": 0, "recoveries": 0, "restarts": 0}
 
     def flush(self) -> None:
@@ -186,6 +200,26 @@ class Victory:
         if not self.checkpoint.exists():
             self.say("no checkpoint to resume from")
             return False
+        # A checkpoint written by an already-unstable process can load into a game that dies on
+        # the first interaction -- verified directly: hire_scientists runs cleanly on a fresh
+        # game but killed the resumed one three times running. Past a few consecutive failures,
+        # the save itself is the problem, so retire it and start a genuinely new campaign rather
+        # than restart-looping into the same broken state for ever.
+        if self.restarts >= 4 and self.checkpoint.exists():
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            self.checkpoint.rename(self.out / f"unstable-{stamp}.save")
+            self.say("checkpoint keeps producing a game that dies immediately; retiring it "
+                     "and starting a fresh campaign")
+            self.progress = {"battles": 0, "wins": 0, "ufos_down": 0, "recoveries": 0,
+                             "restarts": self.restarts}
+            self.flush()
+            try:
+                self.start()
+                return True
+            except Exception as exc:
+                self.say(f"fresh start failed: {exc}")
+                return False
+
         for attempt in range(1, 4):
             self.restarts += 1
             self.progress["restarts"] = self.progress.get("restarts", 0) + 1
