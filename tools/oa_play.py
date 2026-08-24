@@ -2345,13 +2345,21 @@ def recover_crash_sites(d: Driver) -> int:
     cx, cy = min(crashed, key=lambda p: (p[0] - w // 2) ** 2 + (p[1] - h // 2) ** 2)
 
     d.h.click_xy(cx, cy)
-    time.sleep(0.8)
-    sel = d.h.gs("selected")
-    mission = sel.get("mission", "none")
-    if "ecover" in mission or "oto" in mission:
-        d.say(f"  [recover] craft dispatched to wreck at {cx},{cy} (mission={mission})")
-        return 1
-    d.say(f"  [recover] refused at {cx},{cy} ({sel})")
+
+    # Give the order a moment to land, and do not mistake a craft that is still leaving the pad
+    # for a refusal. A craft ordered while parked reports mission=TakeOff_from_<base> first and
+    # only shows the recovery once airborne, so checking immediately and once read as "refused"
+    # on orders that had actually been accepted.
+    mission = "none"
+    for _ in range(6):
+        time.sleep(0.8)
+        mission = d.h.gs("selected").get("mission", "none")
+        if "ecover" in mission or "oto" in mission:
+            d.say(f"  [recover] craft dispatched to wreck at {cx},{cy} (mission={mission})")
+            return 1
+        if "TakeOff" not in mission and mission != "none":
+            break
+    d.say(f"  [recover] refused at {cx},{cy} (mission={mission})")
     return 0
 
 def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float = 7.0) -> dict:
