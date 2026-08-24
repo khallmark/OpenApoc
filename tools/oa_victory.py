@@ -33,6 +33,9 @@ from oa_play import (
     assign_research,
     build_facility,
     return_to_city,
+    goto_portal,
+    raid_alien_building,
+    manufacture,
     buy_equipment,
     buy_vehicles,
     stock_for_template,
@@ -94,6 +97,7 @@ class Victory:
         self.last_equip = 0.0
         self.last_craft = 0.0
         self.last_score_warn = 0.0
+        self.last_endgame = 0.0
         self.last_checkpoint = 0.0
         self.best_crashed = 0
 
@@ -289,6 +293,47 @@ class Victory:
             self.say(f"score {money.get('score_total')} - {margin} from permanent funding cutoff "
                      f"(incidents={money.get('incidents')} damage={money.get('city_damage')} "
                      f"ufos_downed={money.get('ufos_downed')})")
+
+        # --- the endgame, checked before the routine city work ---------------------------
+        # These are the only actions that actually win: cross into the alien dimension and raid
+        # its buildings in order, the last of which fires AliensDefeated. Everything else --
+        # interception, recovery, research -- exists to make these two possible.
+        if time.time() - self.last_endgame > 60.0:
+            self.last_endgame = time.time()
+            alien = self.d.h.gs("alien_buildings")
+            if alien.get("current_city") == "CITYMAP_ALIEN":
+                if int(alien.get("raidable", "0") or 0) > 0:
+                    outcome = raid_alien_building(self.d)
+                    self.say(f"=== ALIEN BUILDING RAID: {outcome} ===")
+                    if outcome == "resolved":
+                        self.progress["alien_buildings_taken"] = (
+                            self.progress.get("alien_buildings_taken", 0) + 1)
+                        self.record("alien_building_raided")
+                        self.flush()
+                    return
+            else:
+                # In the human city: cross over once a shifter-equipped craft exists and there is
+                # something worth crossing for.
+                has_shifter = "shifter=1" in self.d.h.gs("interceptors").get("detail", "")
+                if has_shifter and int(alien.get("raidable", "0") or 0) > 0:
+                    if goto_portal(self.d):
+                        self.say("=== CROSSING INTO THE ALIEN DIMENSION ===")
+                        self.record("crossed_to_alien_dimension")
+                        return
+                elif not has_shifter and not self.progress.get("shifter_started"):
+                    # Only attempt manufacture once the Large workshop actually exists. The call
+                    # declines cleanly without one, but "cleanly" still means a full trip to the
+                    # research screen -- and that trip, made on a timer regardless of whether
+                    # there was anything to do, is exactly what froze the clock for an hour
+                    # earlier. Check the cheap read-only query first.
+                    have_workshop = "FACILITYTYPE_ADVANCED_WORKSHOP" in self.d.h.gs(
+                        "facilities").get("base", "")
+                    if have_workshop and manufacture(self.d, "MANUFACTURE_DIMENSION_SHIFTER", 1):
+                        self.progress["shifter_started"] = True
+                        self.record("dimension_shifter_started")
+                        self.flush()
+                        self.say("=== MANUFACTURING A DIMENSION SHIFTER ===")
+                        return
 
         v = self.d.h.gs("vehicles")
         crashed = int(v.get("ufos_crashed", "0") or 0)
