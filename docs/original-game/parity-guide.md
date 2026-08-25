@@ -38,8 +38,9 @@ R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/)
 | Item | Verdict | Outcome |
 |---|---|---|
 | **V2** ground-vehicle order defect | **FIXED** | Root cause found in `VehicleMission::setPathTo`: a severed road yields a *non-empty but short* path that fell through both give-up branches — near targets crashed an undamaged vehicle, far targets looped forever. Lock test on the real extracted city. Suite 31/31. |
-| **F1** hazard spread RNG | **BOUND** | `FUN_0001eee8` + `FUN_0007b0d0` decompiled, neighbour offset table recovered. `HAZARD_SPREAD_CHANCE` is **not a percent** — it is `RNG(0..10) + inherited baseline` vs a per-map-part resistance byte. Resistance values not yet decoded, so the constant cannot be deleted yet. |
-| **B5** enzyme | **PARTIAL** | Structural hypothesis **confirmed**: the tile overlay byte carries ≥3 parallel hazard types over one structure with a shared placement engine. Fire is type 2. Type 1 vs 3 (Enzyme vs Gas/Smoke) not recoverable — dispatch variable has zero static xrefs. **Not guessed.** |
+| **F1** hazard spread RNG | **BOUND — ready to implement** | `FUN_0001eee8` (VA `0x1EEE8`, file `0x7998C`) is a **precomputed 10,013-entry lookup table, not an LCG**. `FUN_0007B0D0` (file `0xD5B74`) decompiled: fire spread is `RNG(0..10) + inherited baseline` vs a per-terrain resistance byte from `FUN_0007AA8C`, behind two veto lookups, neighbour direction drawn `RNG(0,4)` from a table at `0x293068`. **`HAZARD_SPREAD_CHANCE` can be deleted on this evidence.** One open question — see below. |
+| **B5** enzyme | **PARTIAL** | Confirmed: a real **4-way jump table** (`FUN_0007B610`) dispatches overlay type 1 / 2 (fire) / 3 to peer stage-advance functions sharing one decode triplet, one encode triplet, and a generalized placement engine (`FUN_0007AE78`) of which fire's is a special case. Not bound: which of type 1/3 is Enzyme (dispatch variable has zero static xrefs), and the armour-damage formula. **Not guessed.** |
+| **K1** cloak | **OPEN LEAD** *(revised from NOT BOUND)* | `agent_general_data` runtime VA `0x2B2E70` recovered, 25 xrefs / 21 functions confirmed reading its `type` field. The strongest candidate shows no `type==0x0A` compare and reads like inventory code, but **20 candidate functions remain unexamined** — not a closed negative. |
 | **K1** cloak | **NOT BOUND** | No reader of the `agent_general_data` type field found. Raised a separate audit item — see below. |
 | **O1** bribe / rift | **NOT BOUND** | The binary's one relation-adjustment primitive `FUN_0005faf0` was walked to its roots; none touch an org funds field. Stays prior-art. |
 | **O2** cargo seize | **PARTIAL** | Org `+8` **confirmed a funds field, not relation**. Event-type → cargo mapping still unbound; there is no path from `Building::updateCargo`'s seize check into any of the four event types. `Cargo::seize` still must not be wired from it. |
@@ -53,6 +54,11 @@ R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/)
 | **C1** umbilical · **C4** Apocalypse attack | **CLOSED** | Confirmed absent from *both* binaries. |
 | **C3** late-campaign bombing | **CLOSED** | No trigger; escalation already explained by the weekly growth and preference tables. |
 | **C2** mushrooms | **RECLASSIFIED** | Objective *mechanic* already works. Residual: ten TACP briefings unextracted. |
+
+**F1's open question, which must survive implementation:** fire's neighbour table yields
+South/West/North/Up **plus one dead `(0,0,0)` outcome** — not a clean 5-direction set. Whether that
+is authored behaviour or an off-by-one in the original binary is **undetermined**. Preserve it
+exactly; do not tidy it into four directions or five. Tidying it would be inventing behaviour.
 
 Two audit items this run produced, both about **existing** claims rather than open rows:
 
