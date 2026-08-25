@@ -2690,7 +2690,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
         # a neighbourhood that had none. The driver was withdrawing from roughly half its missions
         # and then losing its funding to the infiltration it had just scattered. A mission fought
         # to the end and lost is cheaper than one abandoned.
-        if started_with and alive and collapsing and outnumbered:
+        if started_with and alive and collapsing and outnumbered and stalls % 20 == 0:
             d.say(f"  [battle] outnumbered {foes_n} to {alive} and staying: leaving would put "
                   f"these aliens back on the map")
 

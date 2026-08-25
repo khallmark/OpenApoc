@@ -564,7 +564,7 @@ class Victory:
         ag = self.d.h.gs("agents")
         armed = int(ag.get("armed", "0") or 0)
         soldiers = int(ag.get("soldiers", "0") or 0)
-        if armed < soldiers and time.time() - self.last_equip > 150.0:
+        if armed < soldiers and time.time() - self.last_equip > 40.0:
             self.last_equip = time.time()
             self.say(f"{armed} armed of {soldiers} soldiers - equipping")
             if not template_weapon_in_stock(self.d):
