@@ -47,6 +47,9 @@ target_compile_definitions(OpenApoc_Library PUBLIC _USE_MATH_DEFINES)
 
 
 option(ENABLE_BACKTRACE "Enable gathering backtraces on some errors to aid debugging (Requires libunwind on linux, no extra dependencies on windows or macos)" ON)
+if(IOS)
+	set(ENABLE_BACKTRACE OFF CACHE BOOL "libunwind backtrace is host-only" FORCE)
+endif()
 
 if(ENABLE_BACKTRACE)
 	if(WIN32)

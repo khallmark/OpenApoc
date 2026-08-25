@@ -77,6 +77,7 @@ set (GAMESTATE_SOURCE_FILES
 
 	gameevent.cpp
 	gamestate.cpp
+	gamestateintrospect.cpp
 	gamestate_serialize.cpp
 	gamestate_serialize_generated.cpp
 	gametime.cpp
@@ -172,6 +173,7 @@ set (GAMESTATE_HEADER_FILES
 	gameevent.h
 	gameeventtypes.h
 	gamestate.h
+	gamestateintrospect.h
 	gamestate_serialize.h
 	gamestate_serialize_generated.h
 	gametime.h

@@ -2,6 +2,7 @@
 #include "game/state/gamestate.h"
 #include "game/state/shared/aequipment.h"
 #include "game/state/tilemap/tilemap.h"
+#include <algorithm>
 
 namespace OpenApoc
 {
@@ -133,6 +134,47 @@ bool AEquipmentType::isResearched() const
 	return equipmentTopic ? equipmentTopic->isComplete() : research_dependency.satisfied();
 }
 
+void AEquipmentType::clearEconomyHide()
+{
+	// FUN_000ab440 case 1 @ file 0x10DC3C: MOV [itemIndex+0xB3B3B], 0
+	artifactUnhidden = true;
+}
+
+bool AEquipmentType::isEconomyVisible() const
+{
+	if (!artifact || artifactUnhidden)
+	{
+		return isResearched();
+	}
+	for (auto &dependencyTopic : research_dependency.topics)
+	{
+		if (dependencyTopic && dependencyTopic->name == name)
+		{
+			return dependencyTopic->isComplete();
+		}
+	}
+	return false;
+}
+
+bool AEquipmentType::isMarketListed(const GameState &state) const
+{
+	if (!isEconomyVisible())
+	{
+		return false;
+	}
+	auto it = state.economy.find(id);
+	if (it == state.economy.end())
+	{
+		return false;
+	}
+	// Future-week rows stay gated. week==0 is available once hide RAM is clear.
+	if (it->second.weekAvailable > static_cast<int>(state.gameTime.getWeek()))
+	{
+		return false;
+	}
+	return true;
+}
+
 float AEquipmentType::getRoundsPerSecond() const
 {
 	return (float)TICKS_PER_SECOND / (float)fire_delay;
@@ -141,4 +183,17 @@ float AEquipmentType::getRoundsPerSecond() const
 int AEquipmentType::getRangeInTiles() const { return range / (int)VELOCITY_SCALE_BATTLE.x; }
 
 int AEquipmentType::getRangeInMetres() const { return range / 16; }
+
+int AEquipmentType::fireHazardDamage(int powerByte, int resist)
+{
+	// TACP FUN_0007c110 @ VA 0x7C110 / file 0xD6BB4:
+	// factor = (dl+19)/20; delta = factor − (resist×factor)/100 (signed; 0 skips).
+	const int factor = (static_cast<unsigned char>(std::max(0, powerByte)) + 19) / 20;
+	return factor - (resist * factor) / 100;
+}
+
+int AEquipmentType::fireHazardDamage(int powerByte) const
+{
+	return fireHazardDamage(powerByte, hazardResist);
+}
 } // namespace OpenApoc

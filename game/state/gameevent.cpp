@@ -74,6 +74,10 @@ UString GameEvent::message()
 			return tr("X-COM returning from UFO mission.");
 		case GameEventType::BuildingDisabled:
 			return tr("Building has been disabled");
+		case GameEventType::AliensDefeated:
+			return tr("THE ALIENS ARE DEFEATED");
+		case GameEventType::XComDefeated:
+			return tr("X-COM IS DEFEATED");
 		default:
 			break;
 	}
@@ -330,6 +334,27 @@ GameOrganisationEvent::GameOrganisationEvent(GameEventType type,
                                              StateRef<Organisation> organisation)
     : GameEvent(type), organisation(organisation)
 {
+}
+
+UString GameOrganisationEvent::message()
+{
+	if (type == GameEventType::AlienTakeover)
+	{
+		// UFO2P non-4 title 0x14D331, body 0x14D340. No takeover SMK on the ISO.
+		const UString body = tr(
+		    "Our intelligence sources have informed us that the Aliens have taken control of this "
+		    "organization. This means that they will actively assist the Aliens and oppose the "
+		    "work of X-COM. We will be forced to stop all trade relations with them and must be "
+		    "cautious when conducting operations within their buildings. Right and wrong no longer "
+		    "exists for these people, we must do all we can to protect the city from them. This "
+		    "must not be the end. We will fight on.");
+		if (organisation)
+		{
+			return format("{0}: {1}\n\n{2}", tr("ALIEN TAKEOVER"), organisation->name, body);
+		}
+		return format("{0}\n\n{1}", tr("ALIEN TAKEOVER"), body);
+	}
+	return GameEvent::message();
 }
 
 GameAgentEvent::GameAgentEvent(GameEventType type, StateRef<Agent> agent, bool flag)
