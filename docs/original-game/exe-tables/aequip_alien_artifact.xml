@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Reference copy of UFO2P non-4 aequip_alien_artifact_data at 0x1422A8 (87×uint8).
+     Flag ≠ 0 is hidden until same-name type-1 research (FUN_000aac88) or
+     manufacture itemIndex (FUN_000ab440 case 1 @ file 0x10DC3C).
+     TACP AgentEquipmentData.artifact is all-zero — overlay this table. -->
+<aequip_alien_artifact>
+  <ones>19 23 37 41 42 43 45 46 47 48 49 50 51 52 57 58 75 76 77 78 79 80 81 82 83</ones>
+</aequip_alien_artifact>

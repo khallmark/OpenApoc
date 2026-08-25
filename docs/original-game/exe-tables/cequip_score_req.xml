@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Reference copy of UFO2P non-4 cequip_score_req_data at 0x1421C4 (100 B).
+     extract_vehicle_equipment.cpp writes the live scores onto VEquipmentType.
+     Row 4 (32000/28000/24000/20000/16000) has no named item — do not bind. -->
+<cequip_score_req>
+  <entry>
+    <key>VEQUIPMENTTYPE_SMALL_DISRUPTION_SHIELD</key>
+    <value>2000 1750 1500 1250 1000</value>
+  </entry>
+  <entry>
+    <key>VEQUIPMENTTYPE_LARGE_DISRUPTION_SHIELD</key>
+    <value>4000 3500 3000 2500 2000</value>
+  </entry>
+  <entry>
+    <key>VEQUIPMENTTYPE_CLOAKING_FIELD</key>
+    <value>8000 7000 6000 5000 4000</value>
+  </entry>
+  <entry>
+    <key>VEQUIPMENTTYPE_TELEPORTER</key>
+    <value>16000 14000 12000 10000 8000</value>
+  </entry>
+</cequip_score_req>

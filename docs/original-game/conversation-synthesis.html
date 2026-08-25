@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>OpenApoc project conversations — discovery synthesis</title>
+<style>
+:root {
+  --bg: #0f1216;
+  --surface: #171b21;
+  --surface-2: #202630;
+  --text: #f2f5f8;
+  --muted: #b8c1cc;
+  --line: #3b4552;
+  --accent: #8ec8ff;
+  --good: #72d6aa;
+  --warn: #f2cf73;
+  --bad: #ff9a8a;
+  --info: #b7a6ff;
+  --control-line: #718093;
+  --max: 78rem;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+a { color: var(--accent); }
+a:hover { text-decoration-thickness: .15em; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+code {
+  padding: .08rem .28rem;
+  border-radius: .2rem;
+  background: var(--surface-2);
+  font: .9em/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.skip-link {
+  position: fixed;
+  z-index: 20;
+  top: -5rem;
+  left: 1rem;
+  padding: .65rem 1rem;
+  background: var(--accent);
+  color: #08111a;
+  font-weight: 800;
+}
+.skip-link:focus { top: 1rem; }
+.wrap { width: min(calc(100% - 2rem), var(--max)); margin-inline: auto; }
+.hero {
+  padding: 2.5rem 0 2rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.eyebrow {
+  margin: 0 0 .35rem;
+  color: var(--accent);
+  font-size: .82rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+h1, h2, h3 { line-height: 1.18; }
+h1 { max-width: 19ch; margin: 0; font-size: clamp(2rem, 6vw, 3.5rem); }
+h2 { margin: 0 0 1rem; font-size: clamp(1.55rem, 3vw, 2.15rem); }
+h3 { margin: 0 0 .55rem; font-size: 1.15rem; }
+.lede { max-width: 66ch; margin: 1rem 0 0; color: var(--muted); font-size: 1.08rem; }
+.snapshot {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: .75rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.snapshot li {
+  min-height: 6.5rem;
+  padding: .85rem 1rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.snapshot strong { display: block; font-size: 1.65rem; line-height: 1.1; }
+.snapshot span { color: var(--muted); font-size: .86rem; }
+.toc {
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+.toc ul {
+  display: flex;
+  gap: .35rem 1rem;
+  overflow-x: auto;
+  margin: 0;
+  padding: .7rem 0;
+  list-style: none;
+  white-space: nowrap;
+}
+.toc a { color: var(--text); font-size: .9rem; text-decoration: none; }
+.toc a:hover, .toc a:focus { text-decoration: underline; }
+main { padding: 2rem 0 5rem; }
+main { scroll-margin-top: 4rem; }
+main:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+section { scroll-margin-top: 4rem; margin: 0 0 3.5rem; }
+.section-intro { max-width: 72ch; margin: -.4rem 0 1.2rem; color: var(--muted); }
+.callout {
+  max-width: 76ch;
+  padding: 1rem 1.15rem;
+  border-left: .35rem solid var(--warn);
+  background: var(--surface);
+}
+.callout strong { color: var(--warn); }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1rem;
+}
+.card, .finding, .dossier {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.card p:last-child, .finding p:last-child, .dossier p:last-child { margin-bottom: 0; }
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin: 0 0 .65rem;
+}
+.tag {
+  display: inline-block;
+  padding: .18rem .48rem;
+  border: 1px solid currentColor;
+  border-radius: 99rem;
+  color: var(--muted);
+  font-size: .74rem;
+  font-weight: 750;
+  line-height: 1.3;
+}
+.tag.implemented { color: var(--good); }
+.tag.partial, .tag.corrected { color: var(--warn); }
+.tag.open { color: var(--bad); }
+.tag.evidence { color: var(--info); }
+.plain-list { padding-left: 1.25rem; }
+.plain-list li + li { margin-top: .45rem; }
+.compact li + li { margin-top: .22rem; }
+.finding + .finding, .dossier + .dossier { margin-top: 1rem; }
+.finding h3, .dossier h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: .45rem; }
+.offsets { color: var(--muted); font-size: .9rem; }
+.timeline { margin: 0; padding: 0; list-style: none; }
+.timeline li {
+  position: relative;
+  margin-left: .55rem;
+  padding: 0 0 1.25rem 1.35rem;
+  border-left: 2px solid var(--line);
+}
+.timeline li::before {
+  content: "";
+  position: absolute;
+  top: .35rem;
+  left: -.42rem;
+  width: .7rem;
+  height: .7rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.timeline time { color: var(--muted); font-size: .88rem; }
+.timeline p { margin: .25rem 0 0; }
+.correction {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: .8rem;
+  align-items: start;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.correction + .correction { margin-top: .75rem; }
+.correction .old { color: var(--bad); }
+.correction .new { color: var(--good); }
+.arrow { color: var(--muted); font-weight: 800; }
+.search-panel {
+  margin: 0 0 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.search-grid {
+  display: grid;
+  grid-template-columns: minmax(12rem, 2fr) minmax(10rem, 1fr) auto;
+  gap: .75rem;
+  align-items: end;
+}
+label { display: block; margin-bottom: .25rem; font-size: .88rem; font-weight: 750; }
+input, select, button {
+  width: 100%;
+  min-height: 2.7rem;
+  border: 1px solid var(--control-line);
+  border-radius: .2rem;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+input, select { padding: .5rem .65rem; }
+button { padding: .5rem .8rem; cursor: pointer; font-weight: 750; }
+.result-count { margin: .55rem 0 0; color: var(--muted); font-size: .88rem; }
+.source {
+  display: grid;
+  grid-template-columns: minmax(9rem, .75fr) minmax(0, 2fr);
+  gap: .35rem 1rem;
+  margin: .8rem 0 0;
+}
+.source dt { color: var(--muted); }
+.source dd { margin: 0; overflow-wrap: anywhere; }
+.status-index {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr));
+  gap: 1rem;
+}
+.status-index > div { padding: 1rem; border-top: .3rem solid var(--line); background: var(--surface); }
+.status-index .done { border-color: var(--good); }
+.status-index .partial { border-color: var(--warn); }
+.status-index .open { border-color: var(--bad); }
+.note { color: var(--muted); font-size: .9rem; }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+footer {
+  padding: 1.3rem 0 2.5rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: .9rem;
+}
+[hidden] { display: none !important; }
+@media (max-width: 700px) {
+  .toc ul {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    white-space: normal;
+  }
+  .correction { grid-template-columns: 1fr; }
+  .arrow { transform: rotate(90deg); width: max-content; }
+  .search-grid { grid-template-columns: 1fr; }
+  .source { grid-template-columns: 1fr; gap: .05rem; }
+  .source dd + dt { margin-top: .4rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+@media (forced-colors: active) {
+  .tag, .card, .finding, .dossier, .correction { border: 1px solid CanvasText; }
+}
+@media print {
+  :root {
+    --bg: #fff;
+    --surface: #fff;
+    --surface-2: #f4f4f4;
+    --text: #111;
+    --muted: #444;
+    --line: #888;
+    --accent: #174c78;
+    --good: #175b3d;
+    --warn: #674f00;
+    --bad: #7a241a;
+    --info: #49368b;
+  }
+  body { font-size: 10.5pt; }
+  .toc, .search-panel, .skip-link { display: none; }
+  .hero { padding-top: 0; }
+  section { break-before: page; margin-bottom: 1rem; }
+  #summary { break-before: auto; }
+  .finding, .dossier, .correction, .card { break-inside: avoid; }
+  [data-dossier][hidden] { display: block !important; }
+  a { color: inherit; text-decoration: underline; }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to report</a>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">OpenApoc original-game parity</p>
+    <h1>What the project conversations discovered</h1>
+    <p class="lede">
+      A reconciled synthesis of eight completed Cursor conversation records and 264 additional,
+      deduplicated supporting worker
+      runs from 22–23 August 2026. Historical conclusions are retained, but the current repository
+      documentation is treated as authoritative when later evidence corrected an earlier claim.
+    </p>
+    <ul class="snapshot" aria-label="Report snapshot">
+      <li><strong>8</strong><span>completed conversation records</span></li>
+      <li><strong>264</strong><span>additional worker transcripts</span></li>
+      <li><strong>52</strong><span>systems in the current gap matrix</span></li>
+      <li><strong>43</strong><span>currently marked implemented</span></li>
+      <li><strong>9</strong><span>missing prior-art-only rows</span></li>
+      <li><strong>26/26</strong><span>latest recorded CTest result</span></li>
+    </ul>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Report contents">
+  <div class="wrap">
+    <ul>
+      <li><a href="#summary">Summary</a></li>
+      <li><a href="#timeline">Timeline</a></li>
+      <li><a href="#discoveries">Discoveries</a></li>
+      <li><a href="#outcomes">Outcomes</a></li>
+      <li><a href="#corrections">Corrections</a></li>
+      <li><a href="#remaining">Remaining work</a></li>
+      <li><a href="#conversations">Conversations</a></li>
+      <li><a href="#method">Method</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main id="main" class="wrap" tabindex="-1">
+  <section id="summary">
+    <h2>Executive summary</h2>
+    <p class="section-intro">
+      The conversations formed one overlapping research and implementation campaign, not eight
+      independent studies. Together they established a usable macOS build, a reproducible Ghidra
+      lab, a broad CTest harness, and a large evidence-gated parity patch.
+    </p>
+    <div class="callout">
+      <strong>Current truth:</strong> the older headline “39 implemented / 10 missing” is stale.
+      The current gap matrix records <strong>43 implemented systems and 9 missing systems</strong>.
+      A separate nine-item queue tracks partial or unbound behavior inside otherwise implemented
+      rows. “Implemented” therefore does not mean every byte or original consumer is understood.
+    </div>
+    <div class="grid" style="margin-top:1rem">
+      <article class="card">
+        <h3>What was established</h3>
+        <ul class="plain-list compact">
+          <li>ISO non-<code>4</code> UFO2P/TACP binaries are extractor-canonical.</li>
+          <li>Pentium <code>4</code> binaries need per-table rebasing, not a universal slide.</li>
+          <li>Original behavior can be tied to tables, xrefs, listings, tests, and file offsets.</li>
+          <li>The fork now has a repeatable parity workflow and evidence hierarchy.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h3>What was delivered</h3>
+        <ul class="plain-list compact">
+          <li>Research, manufacturing, economy, UFOPaedia, organisation, mission, and battle fixes.</li>
+          <li>New extractor tables and CRC-aware support for both EXE generations.</li>
+          <li>A custom 26-test CTest suite with shared deterministic helpers.</li>
+          <li>Gap matrix, subsystem notes, extractor index, and generated compare report.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h3>What remains uncertain</h3>
+        <ul class="plain-list compact">
+          <li>Cover/potshot AI, several battle timing constants, and multi-tile rules.</li>
+          <li>Mission-pattern runtime consumption and subversion arrival behavior.</li>
+          <li>Vehicle attack-mode dodge, city action music, and diplomacy formulas.</li>
+          <li>The complete UFO mission-tail and <code>+0x168</code> vehicle gate model.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section id="timeline">
+    <h2>Chronology</h2>
+    <p class="section-intro">A deduplicated sequence; several conversations ran concurrently.</p>
+    <ol class="timeline">
+      <li>
+        <time datetime="2026-08-22T21:46:00-05:00">22 Aug, 9:46 PM</time>
+        <p><strong>Local build path proven.</strong> CMake, Qt 6, Boost, submodules, the ISO symlink,
+        and a fresh-run task were aligned; OpenApoc reached the intro using the GL2 fallback.</p>
+      </li>
+      <li>
+        <time datetime="2026-08-22T22:03:00-05:00">22 Aug, 10:03 PM onward</time>
+        <p><strong>Original-game lab created.</strong> The team separated ISO non-<code>4</code>
+        binaries from depot Pentium <code>4</code> builds, rebuilt the LX import path, and began
+        the gap matrix and comparison dossier.</p>
+      </li>
+      <li>
+        <time datetime="2026-08-23T00:21:00-05:00">23 Aug, 12:21 AM</time>
+        <p><strong>Agent harness installed.</strong> Workspace rules, parity skill, ignored-binary
+        guard, test task, and report regeneration made the research loop repeatable.</p>
+      </li>
+      <li>
+        <time datetime="2026-08-23T00:23:00-05:00">23 Aug, 12:23 AM onward</time>
+        <p><strong>Mass CTest campaign.</strong> The hand-rolled suite expanded from 10 registrations
+        to 24, then 25, and finally 26.</p>
+      </li>
+      <li>
+        <time datetime="2026-08-23T00:45:00-05:00">23 Aug, 12:45 AM–4:00 AM</time>
+        <p><strong>Parity implementation wave.</strong> Research, economy, organisations, missions,
+        UFOPaedia, growth, battle equipment, UI, and extractors were changed with lock tests.</p>
+      </li>
+      <li>
+        <time datetime="2026-08-23T04:12:00-05:00">23 Aug, 4:12–4:19 AM</time>
+        <p><strong>Isolated TACP analysis recovered 1,595 functions.</strong>
+        <code>unknown01</code> was identified as fire/hazard item resistance through
+        <code>FUN_0007c110</code>.</p>
+      </li>
+      <li>
+        <time datetime="2026-08-23T04:30:00-05:00">23 Aug, about 4:30–5:00 AM</time>
+        <p><strong>Major corrections landed.</strong> Infiltration became hourly, research
+        combinators were separated, mission-pattern overclaims were removed, and overlay behavior
+        stayed unbound instead of being guessed.</p>
+      </li>
+      <li>
+        <time datetime="2026-08-23T04:50:00-05:00">23 Aug, 4:50 AM</time>
+        <p><strong>The vehicle <code>+0x168</code> threshold was traced.</strong>
+        <code>FUN_000588f8</code> is a city-tick spawn gate and <code>FUN_0004dd14</code> ratchets
+        the threshold, but the complete state model remains unbound.</p>
+      </li>
+      <li>
+        <time datetime="2026-08-23T07:06:00-05:00">23 Aug, by about 7:06 AM</time>
+        <p><strong>Latest recorded validation:</strong> 26/26 CTests, ignored-binary check, and
+        compare-report regeneration/check all passed in the implementation conversations.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section id="discoveries">
+    <h2>Consolidated discoveries</h2>
+    <p class="section-intro">
+      Status separates recovered evidence from implementation. A partial finding can be well
+      evidenced while still lacking enough state or consumers for a safe port.
+    </p>
+
+    <article class="finding" data-search data-status="implemented evidence">
+      <div class="meta"><span class="tag implemented">Implemented</span><span class="tag evidence">High confidence</span></div>
+      <h3>Binary identity and rebasing</h3>
+      <p>
+        ISO non-<code>4</code> UFO2P CRC <code>0x4749ffc1</code> and TACP CRC
+        <code>0xfebbe39e</code> are extractor-canonical. Depot unsuffixed EXEs are the Pentium
+        <code>4</code> pair (<code>0xdbd3b41d</code> and <code>0x3ec9c268</code>). TACP commonly
+        slides <code>-0x2200</code>; UFO2P is often <code>+0xE00</code>, with exceptions such as
+        <code>crew_ufo_downed</code>. The implementation therefore uses per-table mapping.
+      </p>
+    </article>
+
+    <article class="finding" data-search data-status="implemented evidence">
+      <div class="meta"><span class="tag implemented">Implemented</span><span class="tag evidence">Table + listing</span></div>
+      <h3>Research and manufacturing semantics</h3>
+      <p class="offsets">UFO2P <code>research_data 0x13EE80</code>; <code>manufacturing_data 0x13FD34</code>; <code>FUN_000aa7a8</code> file <code>0x10CE4C</code></p>
+      <ul class="plain-list">
+        <li><code>prereqType</code> 0/1 gate vehicle/agent items; type 3 maps 15 living bio slots and dead variants.</li>
+        <li><code>unknown1</code> controls typed-item All/Any with <code>0xFF</code> omitted slots.</li>
+        <li><code>unknown2</code> controls topic All/Any; case 4 is the 29-row no-tech default plus an unbound override.</li>
+        <li>Records 37, 38, and 44 have listing-proven hardcoded topic ranges.</li>
+        <li>Manufacturing has 43 records; type 2 names use the craft-ammo string table, and preserving <code>()</code> fixed duplicate Disruptor Armor IDs.</li>
+        <li><code>leadsTo</code> is not a research-graph edge, and Containment keeps its Quantum Lab gate.</li>
+      </ul>
+    </article>
+
+    <article class="finding" data-search data-status="implemented evidence">
+      <div class="meta"><span class="tag implemented">Implemented</span><span class="tag evidence">Bound consumers</span></div>
+      <h3>Economy and UFOPaedia hide state</h3>
+      <p class="offsets"><code>DAT_00183b3b</code>, <code>DAT_00183b0a</code>; <code>FUN_00014854</code>, <code>FUN_000ab440</code>, <code>FUN_0008c860</code>, <code>FUN_000abf9c</code></p>
+      <p>
+        Agent artifacts and vehicle equipment use separate hide RAM. Manufacturing clears the
+        relevant hide byte; week zero is not a universal shop-hide bit. UFOPaedia catalog and
+        start-visible data are now extracted, and research completion uses group/entry fields to
+        set the catalog start byte. The corrected group string range ends at <code>0x152B56</code>.
+      </p>
+    </article>
+
+    <article class="finding" data-search data-status="implemented partial evidence">
+      <div class="meta"><span class="tag implemented">Implemented core</span><span class="tag partial">Formulas remain</span></div>
+      <h3>Organisations, diplomacy, raids, and infiltration</h3>
+      <p>
+        Directed relationships, seller credit, raid snapshot order, raid loot, guard count,
+        manpower, and vehicle-park purchasing were recovered. The park table contains 40 IDs and
+        is consumed by <code>FUN_000962cc</code>. Hourly infiltration is
+        <code>FUN_0007fcc0</code>: taken-over organisations clamp to 200, odd hours decrement,
+        civilians are skipped, and the divisor is <code>42 - difficulty</code>. Bribe, rift, and
+        cargo-seizure diplomacy formulas remain unbound.
+      </p>
+    </article>
+
+    <article class="finding" data-search data-status="implemented partial evidence">
+      <div class="meta"><span class="tag implemented">Extracted and partly consumed</span><span class="tag partial">Runtime gaps</span></div>
+      <h3>UFO growth, incursions, and mission patterns</h3>
+      <p class="offsets"><code>UFO_growth_rates 0x155010</code>; <code>UFO_mission_data 0x13DDFC</code>; <code>UFO_mission_patterns 0x155164</code></p>
+      <ul class="plain-list">
+        <li>Growth lists, organic-factory gating, invasion delay, and the incursion table are implemented.</li>
+        <li>Incursion follow-slot, spawn coordinates, type-percent constitution multiplication, and scatter clamp are consumed.</li>
+        <li>The 20×10 mission-pattern table is extracted; patch XInclude copies were removed to prevent vector duplication.</li>
+        <li>Pattern IDs 3/1/2/5 describe campaign first appearances in weeks 1/4/5/7, but no original runtime consumer is recovered.</li>
+        <li>Hexa's <code>building_function</code> label is wrong: +0x1B is copied to vehicle <code>+0x171</code> and decremented as a mission-arrival counter by <code>FUN_0003a910</code>. <code>0x1439E0</code> is dimension-gate runtime RAM, and <code>FUN_0005e7f4</code> tests vehicle-volume occupancy. The exact counter transition and full <code>+0x168</code> path remain unbound.</li>
+      </ul>
+    </article>
+
+    <article class="finding" data-search data-status="partial open evidence">
+      <div class="meta"><span class="tag partial">Partially recovered</span><span class="tag open">Not ported</span></div>
+      <h3>Vehicle threshold and spawn gate</h3>
+      <p class="offsets"><code>FUN_000588f8</code> gate instruction at file <code>0x48924</code>; <code>FUN_0004dd14</code> entry at file <code>0x3DD13</code>, ratchet instruction at <code>0x3DFF1</code></p>
+      <p>
+        Vehicle <code>+0x168</code> starts as constitution × type-percent / 100.
+        <code>FUN_000588f8</code> checks it against <code>+0x12e</code>, requires the low word of
+        <code>+0x12c</code> to be zero and the city dimension to be active, then enters
+        <code>FUN_00051348</code>. <code>FUN_0004dd14</code> ratchets the threshold during
+        building-mission routing. The low-word meaning, live <code>+0x12e</code> writers, and
+        <code>+0x16a</code> flag are still unknown, so the full gate must not be wired.
+      </p>
+    </article>
+
+    <article class="finding" data-search data-status="implemented partial evidence">
+      <div class="meta"><span class="tag implemented">Implemented item resistance</span><span class="tag partial">Overlay timing unbound</span></div>
+      <h3>TACP fire chain</h3>
+      <p class="offsets"><code>FUN_0007c110</code> file <code>0xD6BB4</code>; power table <code>0x2E2AF4</code></p>
+      <p>
+        Equipment <code>unknown01</code> is fire/hazard item resistance. The item damage formula
+        uses <code>factor=(power+19)/20</code> and subtracts the resistance percentage. The tile
+        overlay index is its low six bits and <code>FUN_0007b3dc</code> increments the overlay byte.
+        OpenApoc’s hazard <code>age</code>/<code>power</code> are not proven equivalents; placement
+        RNG, cadence, spread, and stage-to-power mapping remain unbound.
+      </p>
+    </article>
+
+    <article class="finding" data-search data-status="implemented evidence">
+      <div class="meta"><span class="tag implemented">Implemented</span><span class="tag evidence">Listing + prior art</span></div>
+      <h3>Battle behavior with usable evidence</h3>
+      <ul class="plain-list">
+        <li>Mind Shield adds 30 psi defence and caps at 200.</li>
+        <li>Tactical retreat probability was corrected; panic run behavior and group teleporter movement were added.</li>
+        <li>Weapon <code>fire_delay</code> uses the recovered ×4 conversion.</li>
+        <li>Vehicle weapon inter-shot delay uses extracted <code>fire_delay ×8</code>; Multi-Bomb row 24 is the extracted fragment selected by <code>split_idx</code>.</li>
+        <li>Damage types, modifiers, equipment, armor, weapons, and payload tables remain extractor-backed.</li>
+      </ul>
+    </article>
+
+    <article class="finding" data-search data-status="open">
+      <div class="meta"><span class="tag open">Prior-art only</span></div>
+      <h3>Battle behavior without sufficient original evidence</h3>
+      <p>
+        Cover-tile selection, potshots, evasive cover, wounded TU/accuracy penalties,
+        medkit-in-cover behavior, enzyme timing, cloak thresholds, and multi-tile path/draw rules
+        lack a recovered table or bound consumer. Their strings or community notes are not enough
+        to justify constants.
+      </p>
+    </article>
+
+    <article class="finding" data-search data-status="implemented evidence">
+      <div class="meta"><span class="tag implemented">Implemented</span><span class="tag evidence">Workflow</span></div>
+      <h3>Development and verification harness</h3>
+      <p>
+        The conversations created the macOS quick start, fresh-run tasks, parity skill, fork rules,
+        binary-ignore guard, report regeneration, deterministic test helpers, and 16 new domain
+        test executables. The latest recorded run was 26/26. A green serialization test still does
+        not establish full round-trip equality because its equality assertion is disabled.
+      </p>
+    </article>
+  </section>
+
+  <section id="outcomes">
+    <h2>Implementation outcomes</h2>
+    <div class="status-index">
+      <div class="done">
+        <h3>43 matrix systems marked implemented</h3>
+        <p>
+          Major groups: research/manufacturing, UFOPaedia, weekly economy and funding,
+          organisations and raids, city missions and portals, invasion/growth extraction, victory
+          and takeover UI, battle extraction, panic/retreat, teleporter movement, fire resistance,
+          Mind Shield, and timing fixes.
+        </p>
+      </div>
+      <div class="partial">
+        <h3>Implemented rows with explicit remainder</h3>
+        <p>
+          Diplomacy formulas, mission-pattern consumption, incursion-tail consumers, fire overlay
+          timing, attack-mode dodge, dead gadget consumers, city action music, and subversion
+          arrival remain investigation targets even when their broader matrix row is implemented.
+        </p>
+      </div>
+      <div class="open">
+        <h3>9 matrix rows still missing</h3>
+        <p>
+          Umbilical collapse; UFO mushrooms; cover/potshots; evasive cover; wounded penalties;
+          wounded medkit behavior; enzyme; cloak; and multi-tile battle path/draw.
+        </p>
+      </div>
+    </div>
+    <div class="grid" style="margin-top:1rem">
+      <article class="card">
+        <h3>Extractor/data outcomes</h3>
+        <ul class="plain-list compact">
+          <li>CRC-aware EXE slides and per-table rebasing.</li>
+          <li>Manufacturing, the 15-entry craft-ammo manufacturer table, mission data/patterns, growth, UFOPaedia start flags, organisation spawn/loot, artifact flags, and equipment score gates.</li>
+          <li>Reference vector tables moved out of patch overlays to avoid append duplication.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h3>Runtime outcomes</h3>
+        <ul class="plain-list compact">
+          <li>Corrected prerequisites, hide/unhide state, settlement, raids, infiltration, growth, portals, and mission defaults.</li>
+          <li>Battle retreat, panic, group teleport, Mind Shield, item fire resistance, and game-end presentation.</li>
+          <li>Speed1 half-rate city timing and 144 internal TPS retained as intentional 36×4.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h3>Documentation outcomes</h3>
+        <ul class="plain-list compact">
+          <li>Current gap matrix and next-implementation queue.</li>
+          <li>Generated extraction compare report and extractor-table index.</li>
+          <li>Subsystem notes for economy, alien dimension, hazards, timing, and local development.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section id="corrections">
+    <h2>Correction ledger</h2>
+    <p class="section-intro">
+      These are not minor wording changes; each one prevents a wrong implementation or stale status
+      from being repeated.
+    </p>
+    <div class="correction" data-search data-status="corrected">
+      <div><strong class="old">Earlier:</strong> <code>FUN_0007fcc0</code> was weekly infiltration or subversion rain.</div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div><strong class="new">Current:</strong> hourly infiltration clamp; divisor is <code>42 - difficulty</code>. Rain/takeover is not proven by this function.</div>
+    </div>
+    <div class="correction" data-search data-status="corrected">
+      <div><strong class="old">Earlier:</strong> role 8 justified <code>tryMicronoidRain → takeOver</code> as original parity.</div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div><strong class="new">Current:</strong> the stand-in was removed. There is no arrival organisation takeover; <code>+0x2BC</code> is the monotonic <code>Base::knownToAliens</code> exposure flag.</div>
+    </div>
+    <div class="correction" data-search data-status="corrected">
+      <div><strong class="old">Earlier:</strong> mission patterns had a decoded original runtime consumer.</div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div><strong class="new">Current:</strong> 20×10 data is extracted, but xrefs are empty; IDs only establish campaign first-appearance weeks.</div>
+    </div>
+    <div class="correction" data-search data-status="corrected">
+      <div><strong class="old">Earlier:</strong> <code>unknown2==4</code> was another Any/All mode, and Containment’s leftover topic might participate.</div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div><strong class="new">Current:</strong> case 4 is the 29-row no-tech default with a separate unbound override; do not remove Containment’s Quantum Lab requirement.</div>
+    </div>
+    <div class="correction" data-search data-status="corrected">
+      <div><strong class="old">Earlier:</strong> <code>unknown01</code> was an unread or generic armor field.</div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div><strong class="new">Current:</strong> it is item fire/hazard resistance in <code>FUN_0007c110</code>; overlay timing remains separate and unbound.</div>
+    </div>
+    <div class="correction" data-search data-status="corrected">
+      <div><strong class="old">Earlier:</strong> <code>+0x168</code> was simply implementable from the threshold formula.</div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div><strong class="new">Current:</strong> spawn gate and ratchet are understood, but missing low-word and live-state semantics still block a safe port.</div>
+    </div>
+    <div class="correction" data-search data-status="corrected">
+      <div><strong class="old">Earlier:</strong> park spawn and UFOPaedia start-visible tables were blocked.</div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div><strong class="new">Current:</strong> both are extracted and consumed. The park table has 40 IDs; UFOPaedia uses catalog and research consumers.</div>
+    </div>
+    <div class="correction" data-search data-status="corrected">
+      <div><strong class="old">Earlier:</strong> manufacturing had 42 rows; the UFOPaedia group range ended at <code>0x152B57</code>.</div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div><strong class="new">Current:</strong> manufacturing has 43 records, and the group range ends at <code>0x152B56</code> to exclude “Staff”.</div>
+    </div>
+    <div class="correction" data-search data-status="corrected">
+      <div><strong class="old">Earlier:</strong> the gap matrix was complete at 39 implemented / 10 missing.</div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div><strong class="new">Current:</strong> 43 implemented / 9 missing. Nine numbered partial/unbound targets remain, so “everything implemented” is still too strong.</div>
+    </div>
+    <div class="correction" data-search data-status="corrected">
+      <div><strong class="old">Earlier:</strong> a blanket 36 TPS conversion was needed.</div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div><strong class="new">Current:</strong> 144 internal TPS is intentionally 36×4; parity must be audited mechanic by mechanic.</div>
+    </div>
+  </section>
+
+  <section id="remaining">
+    <h2>Remaining evidence queue</h2>
+    <p class="section-intro">
+      This is the current nine-item investigation queue, which is broader than the nine matrix rows
+      marked missing. Each item requires a recovered constant, consumer, or state model before code
+      should be added.
+    </p>
+    <ol class="plain-list">
+      <li><strong>Battle cover metric and potshots:</strong> recover a TACP cover-tile consumer before changing <code>getTakeCoverMovement</code>.</li>
+      <li><strong>Enzyme, fire, and cloak timing:</strong> bind placement RNG, cadence, spread, or cloak thresholds; do not map overlay index to OpenApoc age/power.</li>
+      <li><strong>Vehicle attack-mode dodge:</strong> find the engagement consumer for the claimed 100/80/50/10 ladder.</li>
+      <li><strong>City Action music:</strong> recover a bound city-combat trigger rather than relying on catalog strings.</li>
+      <li><strong>Organisation formulas:</strong> bind bribe/rift coefficients and cargo event type before changing diplomacy.</li>
+      <li><strong>Dead gadgets:</strong> find consumers for MultiTracker, VortexAnalyzer, and Disruptor use; Mind Shield is already locked.</li>
+      <li><strong>Mission-pattern runtime:</strong> locate the original consumer of the extracted weekly pattern table.</li>
+      <li><strong>Subversion arrival:</strong> trace building <code>+0x2BC</code> readers; do not infer takeover from role 8 alone.</li>
+      <li><strong>Mission-tail state:</strong> bind the <code>+0x171</code> mission-counter transition and missing <code>+0x12c/+0x12e/+0x16a</code> semantics before porting <code>FUN_000588f8</code>/<code>FUN_0004dd14</code>.</li>
+    </ol>
+    <p class="note">
+      Also explicitly unbound: the research <code>de2b0[topic]</code> override,
+      <code>rebuilding_rate</code> reader, and the numerator used by <code>FUN_00081774</code>.
+    </p>
+  </section>
+
+  <section id="conversations">
+    <h2>Conversation dossiers</h2>
+    <p class="section-intro">
+      Search and filtering are progressive enhancements. With JavaScript disabled, every dossier
+      remains visible and browser Find still works.
+    </p>
+    <form class="search-panel" id="conversation-filter" role="search" hidden>
+      <div class="search-grid">
+        <div>
+          <label for="query">Search dossiers</label>
+          <input id="query" name="query" type="search" autocomplete="off" placeholder="Example: infiltration, TACP, tests">
+        </div>
+        <div>
+          <label for="focus">Focus</label>
+          <select id="focus" name="focus">
+            <option value="">All conversations</option>
+            <option value="setup">Setup and tooling</option>
+            <option value="research">Reverse engineering</option>
+            <option value="implementation">Implementation</option>
+            <option value="testing">Testing</option>
+            <option value="correction">Corrections</option>
+          </select>
+        </div>
+        <div>
+          <button type="reset">Reset</button>
+        </div>
+      </div>
+      <p class="result-count" id="result-count" aria-live="polite">Showing all 8 conversations.</p>
+    </form>
+
+    <article class="dossier" id="conv-3aabe4a6" data-dossier data-focus="setup research implementation testing correction">
+      <div class="meta"><span class="tag evidence">Source 1 of 8</span><span class="tag implemented">Build + parity</span></div>
+      <h3>Local macOS setup to mission extraction</h3>
+      <dl class="source">
+        <dt>Conversation</dt><dd><code>3aabe4a6-c056-4281-9e81-9cbb6ec9e784</code></dd>
+        <dt>Span</dt><dd>22 Aug 9:46 PM – 23 Aug about 8:00 AM</dd>
+        <dt>Core contribution</dt><dd>Proved the local build/run workflow, added tasks and docs, then joined the parity campaign.</dd>
+      </dl>
+      <p>
+        This session established the ISO launch path, warned against using <code>XCOMA/</code> as
+        the CD, documented the app-bundle copy race, decoded and extracted mission preferences,
+        and added <code>4</code>-build slide support. It repeatedly reported 26/26 tests. Its final
+        “all possible work complete” wording is superseded by the current nine-item queue.
+      </p>
+    </article>
+
+    <article class="dossier" id="conv-40dbd8d3" data-dossier data-focus="setup research implementation testing correction">
+      <div class="meta"><span class="tag evidence">Source 2 of 8</span><span class="tag implemented">Research foundation</span></div>
+      <h3>Original-game binary analysis and gap matrix</h3>
+      <dl class="source">
+        <dt>Conversation</dt><dd><code>40dbd8d3-085f-4591-8558-ab5434ac7558</code></dd>
+        <dt>Span</dt><dd>22 Aug 10:03 PM – 23 Aug about 3:37 AM</dd>
+        <dt>Core contribution</dt><dd>Created the sibling lab, binary-generation model, gap matrix, compare report, and early bound findings.</dd>
+      </dl>
+      <p>
+        It recovered Mind Shield, research bio prerequisite mapping, several table offsets, and the
+        distinction between byte recovery and consumer recovery. It correctly left cover/potshot
+        and several tables unbound at that point; later sessions consumed park spawn and UFOPaedia
+        start-visible data.
+      </p>
+    </article>
+
+    <article class="dossier" id="conv-5f8cb086" data-dossier data-focus="setup research implementation testing correction">
+      <div class="meta"><span class="tag evidence">Source 3 of 8</span><span class="tag implemented">Full Ghidra campaign</span></div>
+      <h3>Full Ghidra reverse engineering and broad parity pass</h3>
+      <dl class="source">
+        <dt>Conversation</dt><dd><code>5f8cb086-bcd7-41f9-af7b-a3b985a9e494</code></dd>
+        <dt>Span</dt><dd>22 Aug 10:24 PM – 23 Aug about 5:00 AM</dd>
+        <dt>Core contribution</dt><dd>Built object-aware LE analysis, exported hundreds of functions, and translated many findings into game and extractor changes.</dd>
+      </dl>
+      <p>
+        This was the largest research session: table parity, fixups, organisation and mission
+        consumers, research/UFOPaedia behavior, fire item resistance, UI, portals, economy, and
+        extensive tests. It also documented false starts: contaminated flat imports, a vacuous P4
+        map, an over-broad TPS claim, and premature “all gaps closed” language.
+      </p>
+    </article>
+
+    <article class="dossier" id="conv-25cac5bb" data-dossier data-focus="setup research implementation testing correction">
+      <div class="meta"><span class="tag evidence">Source 4 of 8</span><span class="tag corrected">Infiltration correction</span></div>
+      <h3>Git remotes, missions, and hourly infiltration</h3>
+      <dl class="source">
+        <dt>Conversation</dt><dd><code>25cac5bb-c7bd-4c20-833b-9073737ca8aa</code></dd>
+        <dt>Span</dt><dd>23 Aug 12:09 AM – about 3:40 AM</dd>
+        <dt>Core contribution</dt><dd>Fixed fork remotes, implemented mission-related changes, and deeply traced <code>FUN_0007fcc0</code>.</dd>
+      </dl>
+      <p>
+        Its strongest durable result is that <code>FUN_0007fcc0</code> is hourly infiltration, not
+        weekly processing or micronoid rain. The current docs further settle the divisor as
+        <code>42 - difficulty</code>. The session’s invented
+        <code>tryMicronoidRain → takeOver</code> path has since been removed. Later Ghidra work
+        identified base-record <code>+0x2BC</code> as X-COM base exposure to aliens, separate
+        from organisation takeover.
+      </p>
+    </article>
+
+    <article class="dossier" id="conv-419f3960" data-dossier data-focus="setup research implementation testing correction">
+      <div class="meta"><span class="tag evidence">Source 5 of 8</span><span class="tag implemented">Harness + implementation</span></div>
+      <h3>Agent harness and complete gap-matrix push</h3>
+      <dl class="source">
+        <dt>Conversation</dt><dd><code>419f3960-fed2-4399-8ac1-4e02327095bc</code></dd>
+        <dt>Span</dt><dd>23 Aug 12:21 AM – about 4:53 AM</dd>
+        <dt>Core contribution</dt><dd>Installed the parity workflow and implemented many table-to-consumer paths with lock tests.</dd>
+      </dl>
+      <p>
+        It recovered score gates, hardcoded research checks, organisation guards, artifact hide
+        state, UFOPaedia visibility, invasion delay, and the TACP fire chain. Its early “none left”
+        TACP result was superseded by isolated analysis, and the full fire overlay model remained
+        correctly blocked.
+      </p>
+    </article>
+
+    <article class="dossier" id="conv-8a4aadc4" data-dossier data-focus="research implementation testing correction">
+      <div class="meta"><span class="tag evidence">Source 6 of 8</span><span class="tag implemented">Mass CTest suite</span></div>
+      <h3>Mass custom CTest suite and evidence-gated parity</h3>
+      <dl class="source">
+        <dt>Conversation</dt><dd><code>8a4aadc4-f532-46c1-a9dd-ad9ae4eaf210</code></dd>
+        <dt>Span</dt><dd>23 Aug 12:23 AM – about 7:06 AM</dd>
+        <dt>Core contribution</dt><dd>Expanded the suite to 26 tests and drove a wide parity implementation campaign.</dd>
+      </dl>
+      <p>
+        It found the vector-append overlay bug, clarified research combinators and economy hide
+        RAM, wired UFOPaedia research unlocks, and added many city/battle locks. Its historical
+        final count of 39 implemented / 10 missing is superseded by the current 43/9 matrix.
+      </p>
+    </article>
+
+    <article class="dossier" id="conv-4e68dcf3" data-dossier data-focus="research correction">
+      <div class="meta"><span class="tag evidence">Source 7 of 8</span><span class="tag partial">Focused TACP study</span></div>
+      <h3>TACP leftover hunt</h3>
+      <dl class="source">
+        <dt>Conversation</dt><dd><code>4e68dcf3-b047-4bba-888b-83feb0587668</code></dd>
+        <dt>Span</dt><dd>23 Aug 4:12–4:19 AM</dd>
+        <dt>Core contribution</dt><dd>Reanalyzed TACP in isolation and identified <code>unknown01</code> as fire/hazard item resistance.</dd>
+      </dl>
+      <p>
+        The shared project had only two TACP functions; the isolated project recovered 1,595.
+        This short analysis supplied the decisive inbound chain and formula later implemented in
+        the longer sessions. It intentionally made no OpenApoc game edits.
+      </p>
+    </article>
+
+    <article class="dossier" id="conv-9c11f15a" data-dossier data-focus="research correction">
+      <div class="meta"><span class="tag evidence">Source 8 of 8</span><span class="tag partial">Analysis only</span></div>
+      <h3>UFO2P vehicle <code>+0x168</code> gate recovery</h3>
+      <dl class="source">
+        <dt>Conversation</dt><dd><code>9c11f15a-fc2c-4d8c-9b72-f2f3cc4413bb</code></dd>
+        <dt>Span</dt><dd>23 Aug, about 4:50–4:54 AM</dd>
+        <dt>Core contribution</dt><dd>Recovered the spawn gate, ratchet, caller counts, and remaining unknown vehicle state.</dd>
+      </dl>
+      <p>
+        Correcting the object-file base changed zero apparent callers into one caller for
+        <code>FUN_000588f8</code> and 15 for <code>FUN_0004dd14</code>. The session proved the
+        threshold role but concluded that a complete port would still invent missing semantics.
+        No build or CTest was run because no code was changed.
+      </p>
+    </article>
+  </section>
+
+  <section id="method">
+    <h2>Method and source scope</h2>
+    <div class="grid">
+      <article class="card">
+        <h3>Corpus</h3>
+        <p>
+          Eight completed conversation records plus 264 additional supporting worker transcripts
+          after deduplicating the two worker runs that were also promoted into their own
+          conversation records. The current report-generation conversation is excluded. Worker
+          runs are supporting evidence, not independent confirmation.
+        </p>
+      </article>
+      <article class="card">
+        <h3>Authority rule</h3>
+        <p>
+          When transcripts conflict, current <code>openapoc-gap-matrix.md</code>,
+          <code>next-implementation.md</code>, and <code>extractor-tables.md</code> win. A
+          decompiler claim is not treated as final when later listing or raw-byte evidence corrects it.
+        </p>
+      </article>
+      <article class="card">
+        <h3>Evidence hierarchy</h3>
+        <p>
+          Table → string → xref → decompiler/listing → prior art → OpenApoc TODO. Original-behavior
+          claims should identify binary generation and file offset. Missing strings or xrefs are
+          reported as “not recovered,” not proof that behavior never existed.
+        </p>
+      </article>
+      <article class="card">
+        <h3>Validation boundary</h3>
+        <p>
+          The report records test results stated in the source conversations and compares them
+          with the current test registration count. It does not claim that this report-generation
+          pass reran the full game suite.
+        </p>
+      </article>
+    </div>
+    <p class="note">
+      Generated 23 August 2026 from the local Cursor transcript corpus and the uncommitted working
+      tree. Original binaries, depot content, Ghidra project databases, and private analysis files
+      are not embedded in this report.
+    </p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    OpenApoc conversation synthesis · current repository documentation is authoritative over
+    historical transcript claims.
+  </div>
+</footer>
+
+<script>
+(() => {
+  const form = document.querySelector("#conversation-filter");
+  const query = document.querySelector("#query");
+  const focus = document.querySelector("#focus");
+  const count = document.querySelector("#result-count");
+  const dossiers = [...document.querySelectorAll("[data-dossier]")];
+
+  if (!form || !query || !focus || !count || dossiers.length === 0) return;
+  form.hidden = false;
+
+  const update = () => {
+    const term = query.value.trim().toLocaleLowerCase();
+    const selectedFocus = focus.value;
+    let visible = 0;
+
+    for (const dossier of dossiers) {
+      const matchesText = !term || dossier.textContent.toLocaleLowerCase().includes(term);
+      const focuses = (dossier.dataset.focus || "").split(/\s+/);
+      const matchesFocus = !selectedFocus || focuses.includes(selectedFocus);
+      const show = matchesText && matchesFocus;
+      dossier.hidden = !show;
+      if (show) visible += 1;
+    }
+
+    count.textContent = `Showing ${visible} of ${dossiers.length} conversations.`;
+  };
+
+  form.addEventListener("input", update);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    update();
+  });
+  form.addEventListener("reset", () => requestAnimationFrame(update));
+  window.addEventListener("pageshow", update);
+  update();
+
+  for (const link of document.querySelectorAll(".toc a[href^='#']")) {
+    link.addEventListener("click", (event) => {
+      const target = document.querySelector(link.hash);
+      if (!target) return;
+      event.preventDefault();
+      history.pushState(null, "", link.hash);
+      target.scrollIntoView({
+        behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "start"
+      });
+    });
+  }
+})();
+</script>
+</body>
+</html>
