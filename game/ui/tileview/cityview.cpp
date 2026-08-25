@@ -2401,6 +2401,30 @@ void CityView::registerCityViewIntrospection()
 				    {
 					    continue;
 				    }
+				    // The location must actually be a building. Matching on the word "alien"
+				    // alone picked up "Civilian Car 40 destroyed by Alien Fast Attack Ship" and
+				    // sent the squad to a patch of road, where right-clicking opens nothing.
+				    // Resolving the coordinates to a building is text-independent and says what
+				    // a player clicking that message would actually be looking at.
+				    UString atBuilding;
+				    for (const auto &bref : gameState->current_city->buildings)
+				    {
+					    const auto b = bref.getSp();
+					    if (!b)
+					    {
+						    continue;
+					    }
+					    if (it->location.x >= b->bounds.p0.x && it->location.x < b->bounds.p1.x &&
+					        it->location.y >= b->bounds.p0.y && it->location.y < b->bounds.p1.y)
+					    {
+						    atBuilding = bref.id;
+						    break;
+					    }
+				    }
+				    if (atBuilding.empty())
+				    {
+					    continue;
+				    }
 				    const Vec3<float> at{(float)it->location.x, (float)it->location.y,
 				                         (float)it->location.z};
 				    view->setScreenCenterTile(at);
