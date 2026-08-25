@@ -2175,7 +2175,12 @@ bool Vehicle::withdrawBandEntered(int health, int maxHealth, int crashHealth, in
 		return false;
 	}
 	const int threshold = maxHealth * percent / 100;
-	return health > crashHealth && health < threshold;
+	// INCLUSIVE lower bound. FUN_000588f8 @ 0x5894d does CMP against the floor table then JL to
+	// skip -- it jumps away only when constitution is strictly BELOW the floor, so the block runs
+	// at floor[type] <= constitution < threshold. An earlier version of this used `>` and
+	// asserted "at crash health the craft is already going down" in the test, which was a
+	// paraphrase invented here rather than read from the listing.
+	return health >= crashHealth && health < threshold;
 }
 
 void Vehicle::update(GameState &state, unsigned int ticks)

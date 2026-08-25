@@ -822,8 +822,11 @@ static bool test_ufo_withdraw_band()
 	             "health above the threshold must not withdraw");
 	TEST_REQUIRE(!Vehicle::withdrawBandEntered(30, 100, 10, 30),
 	             "exactly at the threshold is not below it");
-	TEST_REQUIRE(!Vehicle::withdrawBandEntered(10, 100, 10, 30),
-	             "at crash health the craft is already going down, not withdrawing");
+	// The floor is INCLUSIVE: FUN_000588f8 @ 0x5894d jumps away only when constitution is
+	// strictly below it (CMP then JL), so exactly-at-floor is inside the band. This assertion
+	// used to say the opposite, which was a paraphrase rather than a reading of the listing.
+	TEST_REQUIRE(Vehicle::withdrawBandEntered(10, 100, 10, 30),
+	             "exactly at the floor is INSIDE the band (CMP/JL skips only when below it)");
 	TEST_REQUIRE(!Vehicle::withdrawBandEntered(5, 100, 10, 30),
 	             "below crash health is not a withdrawal either");
 	TEST_REQUIRE(!Vehicle::withdrawBandEntered(25, 100, 10, 0),
