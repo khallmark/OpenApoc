@@ -60,8 +60,29 @@ static const unsigned TICKS_TO_BRAINSUCK = TICKS_PER_SECOND * 2;
 // Chance out of 100 to be brainsucked
 static const int BRAINSUCK_CHANCE = 66;
 static const unsigned TICKS_SUPPRESS_SPOTTED_MESSAGES = TICKS_PER_TURN;
-// As per Yataka Shimaoka on forums, cloaking effect returns after 2 seconds of inaction
+// As per Yataka Shimaoka on forums, cloaking effect returns after 2 seconds of inaction.
+//
+// This is forum prior art with NO original-game basis, and that is now a searched-for negative
+// rather than an untested assumption: docs/original-game/findings/K1-cloak.md enumerated all 19
+// functions in TACP.EXE that read agent_general_data's type field and found three that merely
+// recognize type 0x0a (a UI icon picker, an AI scoring case, an AI order-preference check), none
+// of which implements concealment. Decisively, FUN_00066474 -- the per-unit tick dispatcher that
+// hosts Mind Shield's +30/cap 200 and the Disruptor Shield's charge regen -- has no case for
+// 0x0a at either hand slot. There is no tick site in the original that could carry a cloak
+// threshold, so there is no recovered value for this constant to be wrong about. Keep it, but do
+// not present it as recovered, and do not "correct" it toward the binary -- there is nothing
+// there to correct it toward.
 static const unsigned CLOAK_TICKS_REQUIRED_UNIT = TICKS_PER_SECOND * 2;
+// docs/original-game/findings/B3-G1-wounds-gadgets.md "Disruptor Shield", FUN_00057A04
+// (bound-file 0xB24A8): while worn, grants unit+0x256 (capacity) a flat +100.
+static const int DISRUPTOR_SHIELD_CAPACITY_BONUS = 100;
+// Same finding, FUN_0005797C/FUN_00012D3C: the item's own charge field is reset to 100 on a
+// full recharge (bound: battle load only, see Battle::initBattle - not periodic).
+static const int DISRUPTOR_SHIELD_MAX_CHARGE = 100;
+// Same finding, "Follow-up 1(a)": FUN_0006511C/FUN_00066474 regenerate the shield by +1 every
+// 36 vanilla ticks, i.e. once per real-time second - bound to the same 36/sec vanilla clock the
+// fire scheduler (F1) uses.
+static const unsigned TICKS_PER_DISRUPTOR_SHIELD_REGEN = TICKS_PER_SECOND;
 
 class TileObjectBattleUnit;
 class TileObjectShadow;
@@ -139,11 +160,6 @@ enum class MoraleState
 static const std::list<BattleUnitType> BattleUnitTypeList = {
     BattleUnitType::LargeFlyer, BattleUnitType::LargeWalker, BattleUnitType::SmallFlyer,
     BattleUnitType::SmallWalker};
-
-// Get cost of psi attack or upkeep
-static int getPsiCost(PsiStatus status, bool attack = true);
-// Get chance of psi attack going through psi defence
-static int getPsiAttackChance(int psiAttack, int psiDefense, PsiStatus status, bool attack = true);
 
 class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_from_this<BattleUnit>
 {
@@ -238,6 +254,8 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	unsigned int regenTicksAccumulated = 0;
 	// Stun damage acquired
 	int stunDamage = 0;
+	// TACP non-4 flat FUN_0009b780 @ 0x9B780: type 5 adds 0x1e to unit +0x8a, cap 200
+	int mindShieldBonus = 0;
 	// Ticks accumulated towards next enzyme hit
 	unsigned int enzymeDebuffTicksAccumulated = 0;
 	// Enzyme debuff intensity remaining
@@ -261,6 +279,14 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	unsigned int cloakTicksAccumulated = 0;
 	// Ticks until sound is emitted
 	int ticksUntillNextCry = 0;
+	// Disruptor Shield damage-absorption buffer (TACP unit+0x256, "capacity"). 0 when no shield
+	// is worn/effective. See docs/original-game/findings/B3-G1-wounds-gadgets.md.
+	int disruptorShieldCapacity = 0;
+	// Disruptor Shield damage-absorption buffer (TACP unit+0x254, "current"/available charge).
+	int disruptorShieldCurrent = 0;
+	// Ticks accumulated towards the Disruptor Shield's next +1 regen
+	// (TICKS_PER_DISRUPTOR_SHIELD_REGEN)
+	unsigned int disruptorShieldRegenTicksAccumulated = 0;
 
 	// User set modes
 
@@ -413,6 +439,35 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	bool hasLineToPosition(Vec3<float> targetPosition, bool useLOS = false) const;
 
 	// Psi
+	// TACP non-4 flat FUN_0009b780 @ 0x9B780: add 30, cap 200
+	static int applyMindShieldIncrement(int currentBonus);
+
+	// Disruptor Shield
+	struct DisruptorShieldHitResult
+	{
+		// True if the hit is fully absorbed (no damage reaches health).
+		bool absorbed;
+		// Buffer's current value after the hit (0 if the buffer broke).
+		int remainingCurrent;
+	};
+	// docs/original-game/findings/B3-G1-wounds-gadgets.md, "Disruptor Shield": pure decision for
+	// a single hit against the unit-level buffer - see the .cpp definition for the bound
+	// all-or-nothing semantics this locks.
+	static DisruptorShieldHitResult resolveDisruptorShieldHit(int current, int typeModifiedDamage);
+
+	// Get cost of psi attack or upkeep.
+	// Public statics rather than the namespace-scope `static` declarations these used to be: a
+	// `static` free-function declaration in a header has internal linkage in every translation
+	// unit that sees it, so the only definition (in battleunit.cpp) was unreachable from
+	// anywhere else and any caller elsewhere would have failed to link. Class statics both fix
+	// that and give tests/test_psionics.cpp a real seam onto the cost table - the precedent is
+	// TacticalAIVanilla::retreatChancePercent(), extracted for exactly the same reason.
+	static int getPsiCost(PsiStatus status, bool attack = true);
+	// Get chance of psi attack going through psi defence
+	static int getPsiAttackChance(int psiAttack, int psiDefense, PsiStatus status,
+	                              bool attack = true);
+
+	int getEffectivePsiDefence() const;
 	// Get chance of psi attack to succeed
 	int getPsiChanceForEquipment(StateRef<BattleUnit> target, PsiStatus status,
 	                             StateRef<AEquipmentType> item);
@@ -669,8 +724,8 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	// Get unit's gun muzzle location (where shots come from)
 	Vec3<float> getMuzzleLocation() const;
 	// Get unit's eyes (where vision rays come from)
-	// FIXME: This likely won't work properly for large units
-	// Idea here is to LOS from the center of the occupied tile
+	// LOS originates from the centre of the currently occupied tile/block (works for large units:
+	// see the isLarge() branch in the .cpp)
 	Vec3<float> getEyeLocation() const;
 	// Get thrown item's departure location
 	Vec3<float> getThrownItemLocation() const;
@@ -735,6 +790,9 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	void updateTB(GameState &state);
 	// Updates unit's cloak status
 	void updateCloak(GameState &state, unsigned int ticks);
+	// Updates the Disruptor Shield's unit-level capacity/current buffer: grants/clears the
+	// worn-shield capacity bonus and regenerates current at TICKS_PER_DISRUPTOR_SHIELD_REGEN
+	void updateDisruptorShield(GameState &state, unsigned int ticks);
 	// Updates unit bleeding, debuffs and morale states
 	void updateStateAndStats(GameState &state, unsigned int ticks);
 	// Updates unit's morale

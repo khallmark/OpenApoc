@@ -9,6 +9,7 @@
 #include "game/state/stateobject.h"
 #include "library/sp.h"
 #include "library/vec.h"
+#include <functional>
 #include <list>
 #include <map>
 #include <set>
@@ -154,6 +155,11 @@ class Battle : public std::enable_shared_from_this<Battle>
 	StateRefMap<BattleDoor> doors;
 	std::set<sp<BattleExplosion>> explosions;
 	std::set<sp<BattleHazard>> hazards;
+	// TACP FUN_0007b7f8 global fire scheduler state.
+	unsigned fireSchedulerTicksAccumulated = 0;
+	int fireSchedulerRowY = 0;
+	int fireSchedulerRowZ = 0;
+	unsigned fireSchedulerContactCounter = 0;
 
 	up<TileMap> map;
 
@@ -254,6 +260,18 @@ class Battle : public std::enable_shared_from_this<Battle>
 	                         bool playSound, bool expired);
 
 	void update(GameState &state, unsigned int ticks);
+	void updateFireScheduler(GameState &state, unsigned int ticks);
+	void processFireSchedulerIterations(GameState &state, unsigned vanillaTicks);
+	static int fireRowsPerVanillaTick(int mapSizeY, int mapSizeZ);
+	static void advanceFireRowCursor(int mapSizeY, int mapSizeZ, int &rowY, int &rowZ);
+	static bool advanceFireContactCounter(unsigned &counter);
+	static unsigned consumeVanillaFireTicks(unsigned &accumulatedTicks, unsigned ticks);
+	using FireRowCallback = std::function<void(int, int)>;
+	using FireContactCallback = std::function<void()>;
+	static void runFireSchedulerTicks(unsigned vanillaTicks, int mapSizeY, int mapSizeZ, int &rowY,
+	                                  int &rowZ, unsigned &contactCounter,
+	                                  const FireRowCallback &processRow,
+	                                  const FireContactCallback &processContact);
 	void updateTB(GameState &state);
 	void updateRT(GameState &state, unsigned int ticks);
 	void updateTBBegin(GameState &state);

@@ -99,11 +99,21 @@ void TileObject::setPosition(Vec3<float> newPosition)
 	    newPosition.x > map.size.x + 1 || newPosition.y > map.size.y + 1 ||
 	    newPosition.z > map.size.z + 1)
 	{
-		LogWarning("Trying to place object at {0} in map of size {1}", newPosition, map.size);
-		newPosition.x = clamp(newPosition.x, 0.0f, (float)map.size.x + 1);
-		newPosition.y = clamp(newPosition.y, 0.0f, (float)map.size.y + 1);
-		newPosition.z = clamp(newPosition.z, 0.0f, (float)map.size.z + 1);
-		LogWarning("Clamped object to {0}", newPosition);
+		const Vec3<float> clamped{clamp(newPosition.x, 0.0f, (float)map.size.x + 1),
+		                          clamp(newPosition.y, 0.0f, (float)map.size.y + 1),
+		                          clamp(newPosition.z, 0.0f, (float)map.size.z + 1)};
+		// An object resting exactly on the ground routinely lands a rounding sliver below it
+		// (z = -1e-6). Clamping that is correct and uninteresting. Only an excursion of a
+		// meaningful fraction of a tile means something actually placed the object off-map.
+		constexpr float ROUNDING_SLIVER = 0.01f;
+		const auto excursion = glm::abs(newPosition - clamped);
+		if (excursion.x > ROUNDING_SLIVER || excursion.y > ROUNDING_SLIVER ||
+		    excursion.z > ROUNDING_SLIVER)
+		{
+			LogWarning("Trying to place object at {0} in map of size {1}", newPosition, map.size);
+			LogWarning("Clamped object to {0}", clamped);
+		}
+		newPosition = clamped;
 	}
 	this->removeFromMap();
 

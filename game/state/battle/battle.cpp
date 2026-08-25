@@ -131,6 +131,17 @@ void Battle::initBattle(GameState &state, bool first)
 		o.second->genericHitSounds = state.battle_common_sample_list->genericHitSounds;
 		o.second->psiSuccessSounds = state.battle_common_sample_list->psiSuccessSounds;
 		o.second->psiFailSounds = state.battle_common_sample_list->psiFailSounds;
+		// Disruptor Shield full recharge: docs/original-game/findings/B3-G1-wounds-gadgets.md,
+		// "Follow-up 1(a)-continued" - bound as battle load only (both fresh start and resume),
+		// not periodic. Reset the item's own charge here; BattleUnit::updateDisruptorShield
+		// picks up the unit-level capacity/current buffer from it on the next tick.
+		for (auto &item : o.second->agent->equipment)
+		{
+			if (item->type->type == AEquipmentType::Type::DisruptorShield)
+			{
+				item->ammo = DISRUPTOR_SHIELD_MAX_CHARGE;
+			}
+		}
 	}
 	if (forces.empty())
 	{
@@ -461,7 +472,7 @@ void Battle::initialMapPartRemoval(GameState &state)
 
 void Battle::initialMapPartLinkUp()
 {
-	LogWarning("Begun initial map parts link up!");
+	LogInfo("Begun initial map parts link up!");
 	auto &mapref = *map;
 
 	for (auto &s : this->map_parts)
@@ -482,7 +493,7 @@ void Battle::initialMapPartLinkUp()
 			}
 		}
 	}
-	LogWarning("Begun map parts link up cycle!");
+	LogInfo("Begun map parts link up cycle!");
 	bool foundSupport;
 	// Establish support based on existing supported map parts
 	do
@@ -508,12 +519,12 @@ void Battle::initialMapPartLinkUp()
 		if (mp->willCollapse())
 		{
 			auto pos = mp->tileObject->getOwningTile()->position;
-			LogWarning("MP {0} SBT {1} at {2} is UNLINKED", mp->type.id,
-			           (int)mp->type->getVanillaSupportedById(), pos);
+			LogDebug("MP {0} SBT {1} at {2} is UNLINKED before final attach pass", mp->type.id,
+			         (int)mp->type->getVanillaSupportedById(), pos);
 		}
 	}
 
-	LogWarning("Attempting link up of unlinked parts");
+	LogInfo("Attempting link up of unlinked parts");
 	// Try to link to objects of same type first, then to anything
 	for (int iteration = 0; iteration <= 2; iteration++)
 	{
@@ -549,7 +560,7 @@ void Battle::initialMapPartLinkUp()
 	}
 
 	mapref.updateAllBattlescapeInfo();
-	LogWarning("Link up finished!");
+	LogInfo("Link up finished!");
 }
 
 enum class UnitSize
@@ -1621,6 +1632,136 @@ void Battle::updatePathfinding(GameState &, unsigned int ticks)
 	}
 }
 
+int Battle::fireRowsPerVanillaTick(int mapSizeY, int mapSizeZ)
+{
+	if (mapSizeY <= 0 || mapSizeZ <= 0)
+	{
+		return 0;
+	}
+	// TACP FUN_0007aba0/FUN_0007b7f8: complete X rows per tick.
+	return mapSizeY * mapSizeZ / 0x48;
+}
+
+void Battle::advanceFireRowCursor(int mapSizeY, int mapSizeZ, int &rowY, int &rowZ)
+{
+	if (mapSizeY <= 0 || mapSizeZ <= 0)
+	{
+		rowY = 0;
+		rowZ = 0;
+		return;
+	}
+	rowY++;
+	if (rowY >= mapSizeY)
+	{
+		rowY = 0;
+		rowZ++;
+		if (rowZ >= mapSizeZ)
+		{
+			rowZ = 0;
+		}
+	}
+}
+
+bool Battle::advanceFireContactCounter(unsigned &counter)
+{
+	const bool contactPass = counter == 0x24;
+	if (contactPass)
+	{
+		counter = 0;
+	}
+	counter++;
+	return contactPass;
+}
+
+unsigned Battle::consumeVanillaFireTicks(unsigned &accumulatedTicks, unsigned ticks)
+{
+	accumulatedTicks += ticks;
+	const unsigned vanillaTicks = accumulatedTicks / TICKS_MULTIPLIER;
+	accumulatedTicks %= TICKS_MULTIPLIER;
+	return vanillaTicks;
+}
+
+void Battle::runFireSchedulerTicks(unsigned vanillaTicks, int mapSizeY, int mapSizeZ, int &rowY,
+                                   int &rowZ, unsigned &contactCounter,
+                                   const FireRowCallback &processRow,
+                                   const FireContactCallback &processContact)
+{
+	if (rowY < 0 || rowY >= mapSizeY)
+	{
+		rowY = 0;
+	}
+	if (rowZ < 0 || rowZ >= mapSizeZ)
+	{
+		rowZ = 0;
+	}
+	for (unsigned tick = 0; tick < vanillaTicks; tick++)
+	{
+		const int rows = fireRowsPerVanillaTick(mapSizeY, mapSizeZ);
+		for (int row = 0; row < rows; row++)
+		{
+			processRow(rowY, rowZ);
+			advanceFireRowCursor(mapSizeY, mapSizeZ, rowY, rowZ);
+		}
+		if (advanceFireContactCounter(contactCounter))
+		{
+			processContact();
+		}
+	}
+}
+
+void Battle::updateFireScheduler(GameState &state, unsigned int ticks)
+{
+	if (!map || mode != Mode::RealTime)
+	{
+		return;
+	}
+	const unsigned vanillaTicks = consumeVanillaFireTicks(fireSchedulerTicksAccumulated, ticks);
+	processFireSchedulerIterations(state, vanillaTicks);
+}
+
+void Battle::processFireSchedulerIterations(GameState &state, unsigned vanillaTicks)
+{
+	if (!map)
+	{
+		return;
+	}
+	runFireSchedulerTicks(
+	    vanillaTicks, map->size.y, map->size.z, fireSchedulerRowY, fireSchedulerRowZ,
+	    fireSchedulerContactCounter,
+	    [&](int rowY, int rowZ)
+	    {
+		    std::vector<sp<BattleHazard>> deadHazards;
+		    for (auto &hazard : hazards)
+		    {
+			    if (!hazard || BattleHazard::fireOverlayStage(hazard->fireOverlay) < 0 ||
+			        static_cast<int>(hazard->position.y) != rowY ||
+			        static_cast<int>(hazard->position.z) != rowZ)
+			    {
+				    continue;
+			    }
+			    if (hazard->advanceOriginalFireOverlay(state))
+			    {
+				    deadHazards.push_back(hazard);
+			    }
+		    }
+		    for (auto &hazard : deadHazards)
+		    {
+			    hazards.erase(hazard);
+		    }
+	    },
+	    [&]()
+	    {
+		    auto currentHazards = hazards;
+		    for (auto &hazard : currentHazards)
+		    {
+			    if (hazard && BattleHazard::fireOverlayStage(hazard->fireOverlay) >= 0)
+			    {
+				    hazard->applyOriginalFireItemEffect(state);
+			    }
+		    }
+	    });
+}
+
 void Battle::update(GameState &state, unsigned int ticks)
 {
 
@@ -1646,6 +1787,7 @@ void Battle::update(GameState &state, unsigned int ticks)
 			break;
 		}
 	}
+	updateFireScheduler(state, ticks);
 	updateProjectiles(state, ticks);
 	for (auto &o : this->doors)
 	{
@@ -2367,6 +2509,9 @@ void Battle::endTurn(GameState &state)
 	auto it = ++std::find(participants.begin(), participants.end(), currentActiveOrganisation);
 	if (it == participants.end())
 	{
+		// TACP FUN_000b8c50 runs the global fire scheduler for 400 vanilla
+		// iterations when the turn-based organisation cycle wraps.
+		processFireSchedulerIterations(state, 400);
 		currentTurn++;
 		it = participants.begin();
 	}
@@ -2736,7 +2881,7 @@ void Battle::finishBattle(GameState &state)
 		{
 			loot.push_back(e->item);
 		}
-		LogWarning("Implement UFO parts loot");
+		// UFO vehicle parts are loaded later from mission_location_vehicle->loot.
 	}
 	// Player didn't secure the area
 	// - doesn't get loot
@@ -2802,43 +2947,31 @@ void Battle::finishBattle(GameState &state)
 	// Regardless of what happened, retreated aliens go to a nearby building
 	if (!retreatedAliens.empty())
 	{
-		// FIXME: Should find 15 closest buildings that are intact and within 15 tiles
-		// (center to center) and pick one of them
-		LogWarning("Properly find building to house retreated aliens");
 		Vec2<int> battleLocation;
 		StateRef<City> city;
 		if (state.current_battle->mission_type == Battle::MissionType::UfoRecovery)
 		{
 			StateRef<Vehicle> location = state.current_battle->mission_location_vehicle;
 			city = location->city;
-			battleLocation = {location->position.x, location->position.y};
+			battleLocation = {static_cast<int>(location->position.x),
+			                  static_cast<int>(location->position.y)};
 		}
 		else
 		{
 			StateRef<Building> location = state.current_battle->mission_location_building;
 			city = location->city;
-			battleLocation = location->bounds.p0;
+			battleLocation = Building::boundsCenter(location->bounds);
 		}
-		StateRef<Building> closestBuilding;
-		int closestDistance = INT_MAX;
-		for (auto &b : city->buildings)
+		if (city)
 		{
-			int distance = std::abs(b->bounds.p0.x - battleLocation.x) +
-			               std::abs(b->bounds.p0.y - battleLocation.y);
-			if (distance < closestDistance)
+			auto house = Building::pickNearbyIntact(state, *city, battleLocation);
+			if (house)
 			{
-				closestDistance = distance;
-				closestBuilding = b;
+				for (auto &a : retreatedAliens)
+				{
+					house->current_crew[a->agent->type] += 1;
+				}
 			}
-		}
-		if (!closestBuilding)
-		{
-			LogError("WTF? No building in city closer than INT_MAX?");
-			return;
-		}
-		for (auto &a : retreatedAliens)
-		{
-			closestBuilding->current_crew[a->agent->type] += 1;
 		}
 	}
 	// Remove dead player agents and all enemy agents from the game and from vehicles
@@ -3103,8 +3236,9 @@ void Battle::exitBattle(GameState &state)
 	// Bio loot remaining?
 	if (!leftoverBioLoot.empty())
 	{
-		// Bio loot is wasted if can't be loaded on player craft
-		LogWarning("Bio loot remaining");
+		// Bio loot is wasted if it cannot be loaded onto a player craft. An ordinary outcome of
+		// winning with full holds, not a fault.
+		LogInfo("Bio loot remaining");
 	}
 
 	// Cargo loot remaining?
@@ -3391,7 +3525,7 @@ void Battle::exitBattle(GameState &state)
 				auto building = state.current_battle->mission_location_building;
 				for (auto &u : building->researchUnlock)
 				{
-					u->forceComplete();
+					u->forceComplete(&state);
 				}
 				victory = building->victory;
 				building->collapse(state);
@@ -3436,7 +3570,7 @@ void Battle::exitBattle(GameState &state)
 				auto building = state.current_battle->mission_location_building;
 				for (auto &u : building->researchUnlock)
 				{
-					u->forceComplete();
+					u->forceComplete(&state);
 				}
 				victory = building->victory;
 				if (config().getBool("OpenApoc.NewFeature.CollapseRaidedBuilding"))
@@ -3457,7 +3591,7 @@ void Battle::exitBattle(GameState &state)
 			auto vehicle = state.current_battle->mission_location_vehicle;
 			for (auto &u : vehicle->type->researchUnlock)
 			{
-				u->forceComplete();
+				u->forceComplete(&state);
 			}
 			vehicle->die(state, true);
 			break;
@@ -3466,7 +3600,7 @@ void Battle::exitBattle(GameState &state)
 
 	if (victory)
 	{
-		LogError("You won, but we have no screen for that yet LOL!");
+		state.eventFromBattle = GameEventType::AliensDefeated;
 	}
 
 	state.current_battle = nullptr;

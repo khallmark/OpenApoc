@@ -292,6 +292,7 @@ void TileObjectBattleUnit::setPosition(Vec3<float> newPosition)
 		if (!u->atGoal)
 		{
 			pos = u->goalPosition;
+			occupiedTiles.insert(pos);
 			occupiedTiles.insert({pos.x - 1, pos.y, pos.z});
 			occupiedTiles.insert({pos.x, pos.y - 1, pos.z});
 			occupiedTiles.insert({pos.x - 1, pos.y - 1, pos.z});
