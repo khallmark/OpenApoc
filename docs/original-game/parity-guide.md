@@ -40,9 +40,9 @@ R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/)
 | **V2** ground-vehicle order defect | **FIXED** | Root cause found in `VehicleMission::setPathTo`: a severed road yields a *non-empty but short* path that fell through both give-up branches — near targets crashed an undamaged vehicle, far targets looped forever. Lock test on the real extracted city. Suite 31/31. |
 | **F1** hazard spread RNG | **BOUND — ready to implement** | `FUN_0001eee8` (VA `0x1EEE8`, file `0x7998C`) is a **precomputed 10,013-entry lookup table, not an LCG**. `FUN_0007B0D0` (file `0xD5B74`) decompiled: fire spread is `RNG(0..10) + inherited baseline` vs a per-terrain resistance byte from `FUN_0007AA8C`, behind two veto lookups, neighbour direction drawn `RNG(0,4)` from a table at `0x293068`. **`HAZARD_SPREAD_CHANCE` can be deleted on this evidence.** One open question — see below. |
 | **B5** enzyme | **PARTIAL** | Confirmed: a real **4-way jump table** (`FUN_0007B610`) dispatches overlay type 1 / 2 (fire) / 3 to peer stage-advance functions sharing one decode triplet, one encode triplet, and a generalized placement engine (`FUN_0007AE78`) of which fire's is a special case. Not bound: which of type 1/3 is Enzyme (dispatch variable has zero static xrefs), and the armour-damage formula. **Not guessed.** |
-| **G1 · Disruptor Shield (0x08)** | **BOUND — new finding, implementable** | Marked dead in OpenApoc (`useItem` returns false) but **wired in the original**. Full chain traced: item charge pool → unit `+0x254`/`+0x256` capacity/current buffer → consumed as real damage absorption inside `FUN_0005F860`, the general damage-application function (confirmed by caller trace, not inferred) → visual doodad on overflow → 1/tick regen → periodic full recharge. Two numbers still open: exact regen cadence, and damage-type modifier values. |
+| **G1 · Disruptor Shield (0x08)** | **FULLY BOUND — implementing** | Marked dead in OpenApoc (`useItem` returns false) but **wired in the original**. Chain traced to the general damage-application function by caller trace. All four numbers now bound: regen **+1 per 36 vanilla ticks (once per real-time second)**; full recharge **at battle load only, not periodic**; damage-type modifier is **not shield-specific** (existing `damage_type_data` + a table adjacent to `damage_modifier_data`, applied upstream); and absorption is **all-or-nothing** — see the trap below. |
+| **G1 · MultiTracker (0x04)** | **BOUND** *(upgraded from inconclusive)* | Traced one hop past the local cluster to a builder with six live call sites across five functions, invoked in the same init block as the confirmed-live Motion Scanner chain and behind the same feature flag. A real shared subsystem, not dead code. |
 | **G1 · Mind Shield (0x05)** | **RECONFIRMED** | Re-bound at a fresh address; logic unchanged. Resolves the audit item below — the old citation failed because **Ghidra addresses drift between import sessions**, not because the binding was wrong. |
-| **G1 · MultiTracker (0x04)** | **INCONCLUSIVE** | A predicate exists; its caller chain was not traced past a 3-function local cluster. **Flagged for follow-up, explicitly not called dead.** |
 | **G1 · Vortex Analyzer (0x03), Structure Probe (0x02), Alien Detector (0x07)** | **NOT BOUND — clean negatives** | No reader anywhere in a full 20-function survey of general-type consumers. Dead in the original too. |
 | **G1 · Dimension Force Field (0x0b)** | **NOT BOUND** | UI-picker fallback only, no effect consumer. |
 | **B3** wounded penalty | **NOT BOUND — closed** | Five independent methods exhausted, including a cross-check against the pointer table discovered *after* the first pass. Wound-counter struct offset not established. No magnitude, split or body-part specificity invented. |
@@ -60,6 +60,17 @@ R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/)
 | **C1** umbilical · **C4** Apocalypse attack | **CLOSED** | Confirmed absent from *both* binaries. |
 | **C3** late-campaign bombing | **CLOSED** | No trigger; escalation already explained by the weekly growth and preference tables. |
 | **C2** mushrooms | **RECLASSIFIED** | Objective *mechanic* already works. Residual: ten TACP briefings unextracted. |
+
+**A decompiler trap worth generalising.** The Disruptor Shield's overflow behaviour was first
+written up as "partial absorb, remainder passes through" — the natural reading, and **wrong**. It
+is **all-or-nothing**: full absorb if `shield > damage`, otherwise the shield is zeroed *and the
+entire damage passes through unreduced*. The decompiler's C **reorders the zeroing ahead of the
+subtraction that reads it**, which inverts the semantics. Only the raw instruction listing shows
+the real order.
+
+Generalise this: **for anything where ordering carries meaning — absorption, clamping,
+accumulate-then-test — read the listing, not the decompiled C.** This is the second semantic
+inversion caught this run by re-reading raw output (the other was U1(b)'s multiplicand).
 
 **F1's open question, which must survive implementation:** fire's neighbour table yields
 South/West/North/Up **plus one dead `(0,0,0)` outcome** — not a clean 5-direction set. Whether that
