@@ -91,6 +91,19 @@ class BattleHazard : public std::enable_shared_from_this<BattleHazard>
 	// threshold source was never traced, and no finding confirms these map
 	// onto OpenApoc's fire_resist/block fields. Callers must supply
 	// resistance/baseline explicitly; nothing here reads a BattleMapPart.
+	//
+	// These are therefore DELIBERATELY UNCALLED by gameplay today, and the
+	// obvious way to "finish" them is wrong. BattleHazard::grow() sweeps the
+	// full 3x3 in XY plus the Z column, calls expand() up to a dozen times
+	// including diagonals, and stops at the first success;
+	// rollGenericSpreadNeighbour() picks ONE of six orthogonal-only
+	// directions and gives up if that one fails. Substituting it is not a
+	// geometry change, it is a large spread-RATE change -- and the values
+	// that would compensate for it (the per-terrain resistance bytes, the
+	// inherited baseline, the invocation cadence) are precisely the ones
+	// still unbound. Half-wiring these under an unbound rate is exactly the
+	// invention parity-guide.md §0 prohibits; leaving them uncalled but
+	// table-locked is not.
 	static constexpr int FIRE_SPREAD_THRESHOLD_RNG_SPAN = 10;   // FUN_0001eee8(10)
 	static constexpr int FIRE_SPREAD_NEIGHBOUR_RNG_SPAN = 4;    // FUN_0001eee8(4)
 	static constexpr int GENERIC_SPREAD_NEIGHBOUR_RNG_SPAN = 5; // FUN_0001eee8(5)

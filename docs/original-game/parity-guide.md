@@ -41,7 +41,7 @@ R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/)
 | **V2** ground-vehicle order defect | **FIXED** | Root cause found in `VehicleMission::setPathTo`: a severed road yields a *non-empty but short* path that fell through both give-up branches — near targets crashed an undamaged vehicle, far targets looped forever. Lock test on the real extracted city. Suite 31/31. |
 | **F1** hazard spread RNG | **IMPLEMENTED — with the finding corrected twice** | `FUN_0001eee8` (VA `0x1EEE8`, file `0x7998C`) is a **precomputed 10,013-entry lookup table, not an LCG**. `FUN_0007B0D0` (file `0xD5B74`) decompiled: fire spread is `RNG(0..10) + inherited baseline` vs a per-terrain resistance byte from `FUN_0007AA8C`, behind two veto lookups, neighbour direction drawn `RNG(0,4)` from a table at `0x293068`. **`HAZARD_SPREAD_CHANCE` can be deleted on this evidence.** One open question — see below. |
 | **B5** enzyme | **PARTIAL** | Confirmed: a real **4-way jump table** (`FUN_0007B610`) dispatches overlay type 1 / 2 (fire) / 3 to peer stage-advance functions sharing one decode triplet, one encode triplet, and a generalized placement engine (`FUN_0007AE78`) of which fire's is a special case. Not bound: which of type 1/3 is Enzyme (dispatch variable has zero static xrefs), and the armour-damage formula. **Not guessed.** |
-| **G1 · Disruptor Shield (0x08)** | **FIXED — and the premise was wrong** | *Not* a missing feature. `useItem` returning `false` is **correct** — the shield is passive, like `CloakingField`. A shield-absorption path has existed since 2016 (`Agent::getFirstShield`, and the "Hit shield if present" block at `battleunit.cpp:1776`); it was simply **wrong**: it always returned true after any hit (infinite absorption, no overflow), used the item's own `damage_modifier` instead of the general pipeline, and destroyed the item on depletion despite the shield being rechargeable. Chain traced to the general damage-application function by caller trace. All four numbers now bound: regen **+1 per 36 vanilla ticks (once per real-time second)**; full recharge **at battle load only, not periodic**; damage-type modifier is **not shield-specific** (existing `damage_type_data` + a table adjacent to `damage_modifier_data`, applied upstream); and absorption is **all-or-nothing** — see the trap below. |
+| **G1 · Disruptor Shield (0x08)** | **FIXED — and the premise was wrong** | *Not* a missing feature. `useItem` returning `false` is **correct** — the shield is passive, like `CloakingField`. A shield-absorption path has existed since 2016 (`Agent::getFirstShield`, and the "Hit shield if present" block at `battleunit.cpp:1776`); it was simply **wrong**: it always returned true after any hit (infinite absorption, no overflow), used the item's own `damage_modifier` instead of the general pipeline, and destroyed the item on depletion despite the shield being rechargeable. Chain traced to the general damage-application function by caller trace. All four numbers now bound: regen **+1 per 36 vanilla ticks (once per real-time second)**; full recharge **at battle load only, not periodic**; damage-type modifier is **not shield-specific** (existing `damage_type_data` + a table adjacent to `damage_modifier_data`, applied upstream); and absorption is **all-or-nothing** — see the trap below. **Second pass:** only one of the two bound writers of the item's charge field had been implemented. `FUN_0006508C`'s decrement on absorption was in, but `FUN_0006511C` — which regenerates the item's own charge by 1 per dispatcher call, gated `< 100` — was not, so absorption lowered the item charge while regen raised only the unit buffer and the two drifted apart; unequip/re-equip snapped a fully regenerated shield back to its drained value. Also excluded the shield from `AEquipment::updateInner()`'s generic recharge, which was a *second* regen of the same field at one per four seconds, from hardcoded 2016 extractor literals rather than the binary. |
 | **G1 · MultiTracker (0x04)** | **BOUND** *(upgraded from inconclusive)* | Traced one hop past the local cluster to a builder with six live call sites across five functions, invoked in the same init block as the confirmed-live Motion Scanner chain and behind the same feature flag. A real shared subsystem, not dead code. |
 | **G1 · Mind Shield (0x05)** | **RECONFIRMED** | Re-bound at a fresh address; logic unchanged. Resolves the audit item below — the old citation failed because **Ghidra addresses drift between import sessions**, not because the binding was wrong. |
 | **G1 · Vortex Analyzer (0x03), Structure Probe (0x02), Alien Detector (0x07)** | **NOT BOUND — clean negatives** | No reader anywhere in a full 20-function survey of general-type consumers. Dead in the original too. |
@@ -61,7 +61,8 @@ R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/)
 | **C1** umbilical · **C4** Apocalypse attack | **CLOSED** | Confirmed absent from *both* binaries. |
 | **C3** late-campaign bombing | **CLOSED** | No trigger; escalation already explained by the weekly growth and preference tables. |
 | **C2** mushrooms / briefings | **IMPLEMENTED** | Objective *mechanic* already worked. The residual — ten unextracted TACP briefings — is now extracted and shown pre-battle. Offsets read from the binary rather than trusted, both CRC32s matched, and the −0x2200 4-build slide was **measured byte-for-byte**, not assumed. |
-| **U1(a)** mission counter | **IMPLEMENTED — with named deviations** | `advanceMissionCounterOnArrival` wired into `AttackBuilding`'s per-arrival re-entry, with the incursion spawn sites passing the extracted `+0x1B`. Four parity deviations declared rather than hidden — see below. |
+| **U1(a)** mission counter | **IMPLEMENTED — with named deviations** | `advanceMissionCounterOnArrival` wired into `AttackBuilding`'s per-arrival re-entry, with the incursion spawn sites passing the extracted `+0x1B`. Four parity deviations declared rather than hidden — see below. **Second pass:** the original three tests drove `advanceMissionCounterOnArrival()` directly and left the *call site* in `VehicleMission::start()` untested — deleting that one line failed nothing. `ufo_mission_counter_decrements_from_mission_start` now drives the real `start()` on a UFO placed in the extracted `CITYMAP_HUMAN`, and was verified red with the call site removed. |
+| **A2 · A4** test seams | **CLOSED — the first attempt had locked nothing** | Both rows shipped tests that could not fail: A2 asserted local constants against themselves because `getPsiCost()` had internal linkage from a namespace-scope `static` declaration in a header (a latent undefined-reference for any caller, independent of the test), and A4 froze local copies of `cth*damage/time` and of the AOE friendly-fire rule. Four functions promoted to public statics (`BattleUnit::getPsiCost`/`getPsiAttackChance`, `UnitAIVanilla::attackPriority`/`blastDamageContribution`/`aoeIsWorthThrowing`), following `TacticalAIVanilla::retreatChancePercent()`. All three locks verified red by mutation. |
 
 **Two honesty notes carried from the implementations, neither a blocker:**
 
@@ -349,6 +350,22 @@ From [psionics.txt](../../tools/extractors/docs/psionics.txt), applied each half
 **Do not** change any of these numbers to "feel better". They are prior-art, marked as such; the
 test's job is to make a future change deliberate.
 
+**Closed — with a correction to the first attempt.** The first version of `psi_costs_match_prior_art`
+asserted local constants against themselves and could never fail, because `getPsiCost()` was
+declared `static` at namespace scope in `battleunit.h`. That gives internal linkage in every
+translation unit that sees the header while the only definition lives in `battleunit.cpp`, so the
+test could not call it — and neither could anything else, making the declaration a latent
+undefined-reference independent of the test. `getPsiCost()` and its sibling `getPsiAttackChance()`
+are now public statics on `BattleUnit`, following `TacticalAIVanilla::retreatChancePercent()`, and
+the test drives the real cost table across both the attack and upkeep columns. Verified red by
+changing Stun's initial cost from 16 to 17.
+
+One divergence is deliberately locked to the code rather than to `psionics.txt`: Panic upkeep is
+`3` per half-second check (6/sec) where the document implies `2` (4/sec). Control, Stun and Probe
+all match exactly and so do all four initial costs, which makes a transcription slip likelier than
+the document being wrong — but that is an inference, and TACP has not been asked. See
+[findings/A2-psi-panic-upkeep-divergence.md](findings/A2-psi-panic-upkeep-divergence.md).
+
 ### A3 · TU reservation parity
 
 *Gap matrix: "implemented (parity unverified), high."*
@@ -378,6 +395,23 @@ Same shape: implemented from [ai.txt](../../tools/extractors/docs/ai.txt), unver
 2. Assert the higher `CTH × DAMAGE / TIME` weapon is chosen, and that the ordering inverts when
    the factors invert. Ordering is the contract; the absolute score is not.
 3. Assert AOE weapons are rejected when a friendly is inside the blast radius (`ai.txt`, Vanilla AI).
+
+**Closed — with a correction to the first attempt.** Step 1 as literally specified is not reachable:
+`getWeaponDecision()`/`getGrenadeDecision()` are private, and reaching them at all goes through
+`getAttackDecision() -> canAttackUnit() -> hasLineToUnit() -> map.findCollision()`, so a populated
+tile map is mandatory before the priority arithmetic is even evaluated. The first attempt concluded
+from that the arithmetic was untestable and froze local copies of both formulas — which locked
+nothing, since editing `unitaivanilla.cpp` left the test green.
+
+The three primitives that arithmetic is made of are now public statics on `UnitAIVanilla` —
+`attackPriority()`, `blastDamageContribution()` and `aoeIsWorthThrowing()` — called from the same
+two private methods as before, again following `TacticalAIVanilla::retreatChancePercent()`.
+`aoeIsWorthThrowing()` is written as `!(net < 0.0f)` rather than `net >= 0.0f` so a NaN net keeps
+the original's "don't veto" outcome instead of silently flipping it. Verified red by dropping the
+hostile/friendly sign convention.
+
+The decision *plumbing* — candidate enumeration, LOS, movement selection — still needs a tile map
+and is still not covered. What is covered is every number that plumbing compares.
 
 ---
 
