@@ -20,6 +20,8 @@
 namespace OpenApoc
 {
 
+// Four engine hours. Engine ticks are VANILLA_TICKS_PER_SECOND * TICKS_MULTIPLIER.
+// City Speed1 now matches vanilla half-rate, so wall-clock training at Speed1 matches original.
 static const unsigned TICKS_PER_PHYSICAL_TRAINING = 4 * TICKS_PER_HOUR;
 static const unsigned TICKS_PER_PSI_TRAINING = 4 * TICKS_PER_HOUR;
 
@@ -908,18 +910,18 @@ bool Agent::popFinishedMissions(GameState &state)
 				break;
 			}
 		}
-		LogWarning("Agent {0} mission \"{1}\" finished", name, missions.front().getName());
+		LogInfo("Agent {0} mission \"{1}\" finished", name, missions.front().getName());
 		missions.pop_front();
 		popped = true;
 		if (!missions.empty())
 		{
-			LogWarning("Agent {0} mission \"{1}\" starting", name, missions.front().getName());
+			LogInfo("Agent {0} mission \"{1}\" starting", name, missions.front().getName());
 			missions.front().start(state, *this);
 			continue;
 		}
 		else
 		{
-			LogWarning("No next agent mission, going idle");
+			LogInfo("No next agent mission, going idle");
 			break;
 		}
 	}
@@ -1276,7 +1278,7 @@ StateRef<AEquipmentType> Agent::getDominantItemInHands(GameState &state,
 	// - CanFire >> Two-Handed >> Weapon >> Usable Item >> Others
 	int e1Priority =
 	    e1->isFiring()
-	        ? 1440 - e1->weapon_fire_ticks_remaining
+	        ? HAND_WEAPON_FIRE_PRIORITY_BASE - e1->weapon_fire_ticks_remaining
 	        : (e1->canFire(state)
 	               ? 4
 	               : (e1->type->two_handed ? 3
@@ -1288,7 +1290,7 @@ StateRef<AEquipmentType> Agent::getDominantItemInHands(GameState &state,
 	                                              : 0)));
 	int e2Priority =
 	    e2->isFiring()
-	        ? 1440 - e2->weapon_fire_ticks_remaining
+	        ? HAND_WEAPON_FIRE_PRIORITY_BASE - e2->weapon_fire_ticks_remaining
 	        : (e2->canFire(state)
 	               ? 4
 	               : (e2->type->two_handed ? 3

@@ -11,6 +11,8 @@
 #include "game/state/gamestate.h"
 #include "game/state/rules/city/scenerytiletype.h"
 #include "game/state/shared/organisation.h"
+#include <algorithm>
+#include <vector>
 
 // Uncomment to make cargo system output warnings
 #define DEBUG_VERBOSE_CARGO_SYSTEM
@@ -282,7 +284,7 @@ void Building::updateCargo(GameState &state)
 				v->provideService(state, true);
 				spawnedFerry = true;
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
-				LogWarning("Spawned cargo ferry {0} owned by {1} at {2}", v->type.id,
+				LogInfo("Spawned cargo ferry {0} owned by {1} at {2}", v->type.id,
 				           ferryCompany.id, thisRef.id);
 #endif
 				break;
@@ -331,7 +333,7 @@ void Building::updateCargo(GameState &state)
 				v->provideService(state, true);
 				spawnedFerry = true;
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
-				LogWarning("Spawned passenger ferry {0} owned by {1} at {2}", v->type.id,
+				LogInfo("Spawned passenger ferry {0} owned by {1} at {2}", v->type.id,
 				           ferryCompany.id, thisRef.id);
 #endif
 				break;
@@ -369,7 +371,7 @@ void Building::updateCargo(GameState &state)
 		if (c.type == Cargo::Type::Bio)
 		{
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
-			LogWarning("BIOCARGO: {0} needs to deliver {1} to {2}", thisRef.id,
+			LogInfo("BIOCARGO: {0} needs to deliver {1} to {2}", thisRef.id,
 			           c.count * c.space / c.divisor, c.destination.id);
 #endif
 			spaceNeeded[c.destination][sourceOrg][0] += std::max(1, c.count * c.space / c.divisor);
@@ -377,7 +379,7 @@ void Building::updateCargo(GameState &state)
 		else
 		{
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
-			LogWarning("CARGO: {0} needs to deliver {1} to {2}", thisRef.id,
+			LogInfo("CARGO: {0} needs to deliver {1} to {2}", thisRef.id,
 			           c.count * c.space / c.divisor, c.destination.id);
 #endif
 			spaceNeeded[c.destination][sourceOrg][1] += std::max(1, c.count * c.space / c.divisor);
@@ -395,7 +397,7 @@ void Building::updateCargo(GameState &state)
 			continue;
 		}
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
-		LogWarning("AGENT: {0} needs to deliver to {1}", thisRef.id,
+		LogInfo("AGENT: {0} needs to deliver to {1}", thisRef.id,
 		           a->missions.front().targetBuilding.id);
 #endif
 		spaceNeeded[a->missions.front().targetBuilding][a->owner].resize(3);
@@ -618,7 +620,7 @@ void Building::updateCargo(GameState &state)
 					if (reserved)
 					{
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
-						LogWarning(
+						LogInfo(
 						    "Ordered ferry {0} name {1} in {2} type {3} owned by {4} bound for {5}",
 						    DEBUG_CARGO && DEBUG_PASS ? "CA" : (DEBUG_CARGO ? "C" : "A"), v.first,
 						    !v.second->currentBuilding ? "" : v.second->currentBuilding.id,
@@ -883,6 +885,77 @@ void Building::alienGrowth(GameState &state)
 	detected = detected && hasAliens();
 }
 
+Vec2<int> Building::boundsCenter(const Rect<int> &bounds) { return (bounds.p0 + bounds.p1) / 2; }
+
+int Building::manhattanCenterToPoint(const Rect<int> &bounds, Vec2<int> origin)
+{
+	const auto center = boundsCenter(bounds);
+	return std::abs(center.x - origin.x) + std::abs(center.y - origin.y);
+}
+
+std::vector<int> Building::rankNearbyIntact(const std::vector<Rect<int>> &bounds,
+                                            const std::vector<bool> &intact, Vec2<int> origin,
+                                            int maxDistance, int maxCount)
+{
+	std::vector<std::pair<int, int>> scored;
+	const auto n = std::min(bounds.size(), intact.size());
+	for (size_t i = 0; i < n; i++)
+	{
+		if (!intact[i])
+		{
+			continue;
+		}
+		const int distance = manhattanCenterToPoint(bounds[i], origin);
+		if (distance > 0 && distance <= maxDistance)
+		{
+			scored.emplace_back(distance, static_cast<int>(i));
+		}
+	}
+	std::sort(scored.begin(), scored.end());
+	if (maxCount >= 0 && static_cast<int>(scored.size()) > maxCount)
+	{
+		scored.resize(static_cast<size_t>(maxCount));
+	}
+	std::vector<int> ranked;
+	ranked.reserve(scored.size());
+	for (const auto &entry : scored)
+	{
+		ranked.push_back(entry.second);
+	}
+	return ranked;
+}
+
+StateRef<Building> Building::pickNearbyIntact(GameState &state, City &city, Vec2<int> origin)
+{
+	std::vector<StateRef<Building>> refs;
+	std::vector<Rect<int>> bounds;
+	std::vector<bool> intact;
+	refs.reserve(city.buildings.size());
+	bounds.reserve(city.buildings.size());
+	intact.reserve(city.buildings.size());
+	for (auto &building : city.buildings)
+	{
+		if (!building)
+		{
+			continue;
+		}
+		refs.push_back(building);
+		bounds.push_back(building->bounds);
+		intact.push_back(building->isAlive());
+	}
+	const auto ranked = rankNearbyIntact(bounds, intact, origin);
+	if (ranked.empty())
+	{
+		return {};
+	}
+	std::list<StateRef<Building>> candidates;
+	for (int index : ranked)
+	{
+		candidates.push_back(refs[static_cast<size_t>(index)]);
+	}
+	return pickRandom(state.rng, candidates);
+}
+
 void Building::alienMovement(GameState &state)
 {
 	if (!hasAliens())
@@ -890,28 +963,11 @@ void Building::alienMovement(GameState &state)
 		return;
 	}
 	// Run once when crew landed and once every hour after grow
-	// Pick 15 intact buildings within range of 15 tiles (counting from center to center)
-	std::list<StateRef<Building>> neighbours;
-	for (auto &b : city->buildings)
-	{
-		auto distVec = bounds.p0 + bounds.p1 - b->bounds.p0 - b->bounds.p1;
-		distVec /= 2;
-		int distance = std::abs(distVec.x) + std::abs(distVec.y);
-		if (distance > 0 && distance <= 15)
-		{
-			neighbours.emplace_back(b);
-		}
-		if (neighbours.size() >= 15)
-		{
-			break;
-		}
-	}
-	if (neighbours.empty())
+	auto bld = pickNearbyIntact(state, *city, boundsCenter(bounds));
+	if (!bld)
 	{
 		return;
 	}
-	// Pick one random of them
-	auto bld = pickRandom(state.rng, neighbours);
 	// For every alien calculate move percent as:
 	//   alien's move chance + random 0..30
 	// Calculate amount of moving aliens
@@ -961,6 +1017,13 @@ void Building::alienMovement(GameState &state)
 	}
 	if (bld->base)
 	{
+		if (Base::alienExposureRollSucceeds(randBoundsInclusive(state.rng, 0, 100),
+		                                    totalMoveAmount))
+		{
+			// UFO2P FUN_0006f7f8 @ object-page file 0x5F7F7: successful alien
+			// movement exposes the destination base with moved-count × 5 threshold.
+			bld->base->knownToAliens = true;
+		}
 		// Destroy base if its empty
 		if (!bld->occupied())
 		{
@@ -1018,8 +1081,7 @@ void Building::collapse(GameState &state)
 
 void Building::buildingPartChange(GameState &state, Vec3<int> part, bool intact)
 {
-	// FIXME: Implement proper base / building dying when enough is destroyed
-	// Implement agents dying when building dies
+	// Base dies when no building-part tiles remain (isAlive). Crew die when quarters are gone.
 	if (intact)
 	{
 		buildingParts.insert(part);

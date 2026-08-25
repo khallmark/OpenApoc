@@ -53,7 +53,7 @@ static const int FV_CHANCE_TO_RECOVER_EQUIPMENT = 90;
 // How much percent is "scrapped" sold for
 static const int FV_SCRAPPED_COST_PERCENT = 25;
 // How much ticks is accumulated per second of engine usage
-static const int FUEL_TICKS_PER_SECOND = 144;
+static const int FUEL_TICKS_PER_SECOND = TICKS_PER_SECOND;
 // How much ticks is required to spend one unit of fuel
 static const int FUEL_TICKS_PER_UNIT = 40000;
 // Correction factor for turning slowdown mechanic, purely found by data analysis, could not
@@ -212,6 +212,14 @@ class Vehicle : public StateObject<Vehicle>,
 	// Current shadow direction, updated every time vehicle changes facing
 	VehicleType::Direction shadowDirection = VehicleType::Direction::N;
 	int health = 0;
+	// Damaged-withdrawal threshold, as a percent of VehicleType::health, seeded at incursion
+	// spawn from the UFO's mission role. Zero means "never withdraws" (the default for anything
+	// not spawned by an incursion). UFO2P FUN_000588f8 gates on the band
+	// [crash_health, health*percent/100) and, inside that band, sets the same "arrived" flag
+	// U1(a) uses -- whose reader flies the craft to the nearest dimension gate. The percent is
+	// NOT uniform and is NOT 75%: it comes from a fixed 16-entry role-indexed table.
+	// See docs/original-game/findings/U1b-gate-consumer.md.
+	int withdrawHealthPercent = 0;
 	int shield = 0;
 	unsigned int shieldRecharge = 0;
 	int stunTicksRemaining = 0;
@@ -246,9 +254,15 @@ class Vehicle : public StateObject<Vehicle>,
 
 	// If the vehicle is currently traveling through a dimension gate
 	bool betweenDimensions = false;
+	// Dest-city portal index paired with the entry gate the player clicked.
+	// UFO2P non-4 string 0x149537 ("Click on Dimension Gate to set destination").
+	// -1 = unset; leaveDimensionGate then picks a random dest-city portal.
+	int destinationPortalIndex = -1;
 
 	/* leave the building and put vehicle into the city */
 	void leaveDimensionGate(GameState &state);
+	// Returns destinationPortalIndex when it is in [0, portalCount), else -1.
+	static int selectDimensionExitPortal(int destinationPortalIndex, int portalCount);
 	/* 'enter' the vehicle into a building*/
 	void enterDimensionGate(GameState &state);
 	/* leave the building and put vehicle into the city */
@@ -264,6 +278,10 @@ class Vehicle : public StateObject<Vehicle>,
 
 	void processRecoveredVehicle(GameState &state);
 	void dropCarriedVehicle(GameState &state);
+	// RecoverVehicle unmanned UFO: probe/scout have no battle_map. Load
+	// extracted vehicle loot onto this craft (same cargo path as a won
+	// UfoRecovery battle) before the wreck is removed.
+	void loadUnmannedUfoLoot(GameState &state, Vehicle &recovered);
 
 	// Provide cargo or passenger service. Loads cargo or passengers or bio.
 	// If otherOrg true - provides service to other orgs but only if type provides freight
@@ -344,6 +362,11 @@ class Vehicle : public StateObject<Vehicle>,
 	int getMaxFuel() const;
 	int getFuel() const;
 	int getMaxPassengers() const;
+	// UFO2P FUN_000588f8's damaged-withdrawal band, as a pure decision so it can be locked by a
+	// test without a battle or a city. True when constitution has fallen into
+	// [crashHealth, maxHealth*percent/100) -- at or below crashHealth the craft is already
+	// crashing and this is moot, and a percent of 0 never withdraws.
+	static bool withdrawBandEntered(int health, int maxHealth, int crashHealth, int percent);
 	int getPassengers() const;
 	int getMaxCargo() const;
 	int getCargo() const;

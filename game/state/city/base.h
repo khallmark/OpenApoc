@@ -30,6 +30,12 @@ class Base : public StateObject<Base>, public std::enable_shared_from_this<Base>
 	std::map<UString, unsigned> inventoryVehicleAmmo;
 	UString name;
 	StateRef<Building> building;
+	// UFO2P Base record +0x2BC. Monotonic alien-exposure flag used by role-2
+	// targeting/arrival; initialized false and never cleared while the base exists.
+	bool knownToAliens = false;
+	// Persistent reusable UFO2P base-record slot (0..15).
+	int ufo2pSlot = -1;
+	static bool alienExposureRollSucceeds(int inclusiveRoll, int movedAlienCount);
 
 	Base() = default;
 
@@ -41,6 +47,9 @@ class Base : public StateObject<Base>, public std::enable_shared_from_this<Base>
 		OutOfBounds,
 		NoMoney,
 		Indestructible,
+		// An in-range cell that simply holds no facility. Distinct from OutOfBounds, which the
+		// destroy path used to conflate with it and report for every empty tile.
+		NoFacility,
 	};
 
 	Base(GameState &state, StateRef<Building> building);

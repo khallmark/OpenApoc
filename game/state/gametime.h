@@ -14,6 +14,23 @@ static constexpr unsigned TICKS_PER_HOUR = TICKS_PER_MINUTE * 60;
 static constexpr unsigned TICKS_PER_DAY = TICKS_PER_HOUR * 24;
 static constexpr unsigned TURBO_TICKS = 5 * 60 * TICKS_PER_SECOND;
 
+// UFO2P non-4 FUN_0005d1d8 @ VA 0x5D1D8 / file 0xBF87C is inclusive [0, n].
+// Invasion delay: FUN_0006d384 @ VA 0x6D384 / file 0xCFA28 and init write
+// FUN_000ad148 @ file 0xAD231. Vanilla ticks:
+//   0x2F7600 + FUN_0005d1d8(0xB04) * 0x870 + FUN_0005d1d8(0xE10) * 0x24
+static constexpr int INVASION_DELAY_MINUTE_MAX = 0xB04;
+static constexpr int INVASION_DELAY_SECOND_MAX = 0xE10;
+static constexpr unsigned VANILLA_INVASION_DELAY_BASE = 0x2F7600;
+static constexpr unsigned VANILLA_INVASION_DELAY_MINUTE = 0x870;
+static constexpr unsigned VANILLA_INVASION_DELAY_SECOND = 0x24;
+
+inline uint64_t vanillaInvasionDelayTicks(int minuteRoll, int secondRoll)
+{
+	return static_cast<uint64_t>(TICKS_PER_DAY) +
+	       static_cast<uint64_t>(minuteRoll) * TICKS_PER_MINUTE +
+	       static_cast<uint64_t>(secondRoll) * TICKS_PER_SECOND;
+}
+
 class GameTime
 {
   private:
@@ -95,4 +112,13 @@ class GameTime
 
 	static GameTime midday();
 };
+
+// UFO2P city Speed1 advances the city clock every other rendered frame.
+// OpenApoc cityview.cpp: skipSpeed1Tick starts false, so the first Speed1 frame is skipped.
+inline unsigned vanillaCitySpeed1Ticks(unsigned proposedTicks, bool &skipThisFrame)
+{
+	skipThisFrame = !skipThisFrame;
+	return skipThisFrame ? 0u : proposedTicks;
+}
+
 } // namespace OpenApoc
