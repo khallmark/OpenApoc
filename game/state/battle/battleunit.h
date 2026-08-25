@@ -60,7 +60,18 @@ static const unsigned TICKS_TO_BRAINSUCK = TICKS_PER_SECOND * 2;
 // Chance out of 100 to be brainsucked
 static const int BRAINSUCK_CHANCE = 66;
 static const unsigned TICKS_SUPPRESS_SPOTTED_MESSAGES = TICKS_PER_TURN;
-// As per Yataka Shimaoka on forums, cloaking effect returns after 2 seconds of inaction
+// As per Yataka Shimaoka on forums, cloaking effect returns after 2 seconds of inaction.
+//
+// This is forum prior art with NO original-game basis, and that is now a searched-for negative
+// rather than an untested assumption: docs/original-game/findings/K1-cloak.md enumerated all 19
+// functions in TACP.EXE that read agent_general_data's type field and found three that merely
+// recognize type 0x0a (a UI icon picker, an AI scoring case, an AI order-preference check), none
+// of which implements concealment. Decisively, FUN_00066474 -- the per-unit tick dispatcher that
+// hosts Mind Shield's +30/cap 200 and the Disruptor Shield's charge regen -- has no case for
+// 0x0a at either hand slot. There is no tick site in the original that could carry a cloak
+// threshold, so there is no recovered value for this constant to be wrong about. Keep it, but do
+// not present it as recovered, and do not "correct" it toward the binary -- there is nothing
+// there to correct it toward.
 static const unsigned CLOAK_TICKS_REQUIRED_UNIT = TICKS_PER_SECOND * 2;
 // docs/original-game/findings/B3-G1-wounds-gadgets.md "Disruptor Shield", FUN_00057A04
 // (bound-file 0xB24A8): while worn, grants unit+0x256 (capacity) a flat +100.
