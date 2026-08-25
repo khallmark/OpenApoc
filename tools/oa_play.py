@@ -2513,6 +2513,15 @@ def match_enemy_floor(d: Driver, layout: dict) -> int:
 # ---------------------------------------------------------------------------
 
 FIRE_MODES = {"aimed": "BUTTON_AIMED", "snap": "BUTTON_SNAP", "auto": "BUTTON_AUTO"}
+# Controls the driver never touched. Every one is a real button on battle.form that a player uses
+# and the driver did not, so every battle was fought on whatever the defaults happened to be.
+BEHAVIOURS = {"aggressive": "BUTTON_AGGRESSIVE", "normal": "BUTTON_NORMAL",
+              "evasive": "BUTTON_EVASIVE"}
+MOVE_MODES = {"group": "BUTTON_MOVE_GROUP", "individual": "BUTTON_MOVE_INDIVIDUALLY"}
+RESERVES = {"aimed": "BUTTON_RESERVE_AIMED", "snap": "BUTTON_RESERVE_SNAP",
+            "auto": "BUTTON_RESERVE_AUTO", "kneel": "BUTTON_RESERVE_KNEEL"}
+# Absolute level select for flying units. LAYER_UP/DOWN step; LAYER_N jumps.
+LAYERS = {n: f"BUTTON_LAYER_{n}" for n in range(1, 10)}
 STANCES = {"kneel": "BUTTON_KNEEL", "prone": "BUTTON_PRONE",
            "walk": "BUTTON_WALK", "run": "BUTTON_RUN"}
 PSI_ACTIONS = {"control": "BUTTON_CONTROL", "panic": "BUTTON_PANIC",
@@ -2524,6 +2533,44 @@ def _press(d: Driver, control_id: str, op: str = "click") -> bool:
         return d.h.send(f"control {control_id} {op}").startswith("OK")
     except (HarnessError, OSError):
         return False
+
+
+def set_behaviour(d: Driver, mode: str = "normal") -> bool:
+    """Aggressive / Normal / Evasive. Checkboxes, so a named click is safe.
+
+    This is the engine's own cover-and-engagement doctrine switch (F9/F10/F11) and nothing in the
+    driver had ever set it -- every battle ran on the default.
+    """
+    cid = BEHAVIOURS.get(mode)
+    return bool(cid) and _press(d, cid)
+
+
+def set_move_mode(d: Driver, mode: str = "individual") -> bool:
+    """Group movement herds the squad into one clump, which is what makes a single explosive
+    catastrophic. Individual movement is the mechanical half of keeping spacing."""
+    cid = MOVE_MODES.get(mode)
+    return bool(cid) and _press(d, cid)
+
+
+def set_reserve(d: Driver, mode: str = "snap") -> bool:
+    """Reserve TU for a shot instead of spending it all walking, so a unit can answer when
+    something steps into view mid-move."""
+    cid = RESERVES.get(mode)
+    return bool(cid) and _press(d, cid)
+
+
+def set_layer(d: Driver, level: int) -> bool:
+    """Absolute level select, for flying units and for engaging a floor the squad is not on."""
+    cid = LAYERS.get(int(level))
+    if cid and _press(d, cid):
+        return True
+    # Outside 1..9, step with LAYER_UP/DOWN instead of failing silently.
+    btn = "BUTTON_LAYER_UP" if level > 0 else "BUTTON_LAYER_DOWN"
+    return _press(d, btn)
+
+
+def cease_fire(d: Driver, hold: bool = True) -> bool:
+    return _press(d, "BUTTON_CEASE_FIRE")
 
 
 def set_fire_mode(d: Driver, mode: str = "snap") -> bool:
