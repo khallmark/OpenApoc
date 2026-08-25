@@ -30,6 +30,22 @@ Any parity change must keep all 30 green. A new lock test must **fail before** i
 | Code-locks | A2 psionics, A3 TU reservation, A4 attack priority | three lock tests |
 | Code-largeunits | A1 multi-tile units | breakage list + fixes + `test_battle_large_unit` |
 | Code-groundveh | V2 ground-vehicle order defect | `test_ground_vehicle_path` |
+| Code-briefings | **New row** — ten TACP alien-building briefings unextracted | extractor + `test_city_rules` cases |
+
+## Method correction issued mid-run
+
+A `NOT BOUND` verdict on **B1 (cover metric)** rested on zero xrefs for `Cautious mode` et al,
+validated against `senator` as a known-positive control. **The control was invalid** — `senator` is
+in TACP's asset-name table (fixed 0x2E stride, directly referenced); every B1 anchor is in the
+packed message pool (`0x2DE000`–`0x2E2FFF`), whose entries are reached by index and can never carry
+a direct xref. See [METHOD-tacp-string-regions.md](METHOD-tacp-string-regions.md).
+
+All three TACP agents were sent the correction and told to enter structurally instead. **RE-cover
+was resumed** rather than accepted. New rule for negatives: a `NOT BOUND` must name the structural
+method exhausted, not cite absent xrefs.
+
+Unchased lead surfaced by the mapping: **`TU cost per wound: ` @ `0x2E0204`** — direct evidence the
+original modelled a per-wound TU cost (parity item B3), handed to RE-wounds.
 
 ## Done in this run
 
