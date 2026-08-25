@@ -77,10 +77,11 @@ sweep.**
 
 Audit of every other "zero xrefs" negative in this folder: B1's table check, O1's diplomacy-string
 check and the METHOD docs' string checks all used `getReferencesTo` already and are unaffected.
-The one closed row whose wording does not name its method is **U2(a)** (`DAT_000e0cc0`, "across all
-6 xrefs to this address in the whole binary, no instruction sets it to a nonzero value") — a closed
-negative over a `DAT_` global, which is precisely the shape this bug hits. Re-verification
-requested; until it lands, treat U2(a) as provisional rather than closed.
+The one closed row whose wording did not name its method was **U2(a)** (`DAT_000e0cc0`) — a closed
+negative over a `DAT_` global, precisely the shape this bug hits. **Re-audited with
+`getReferencesTo` and the row stands:** exactly 6 references, matching the original enumeration
+address-for-address, both writes re-confirmed as literal zero and the third site as an unmodified
+round-trip. That finding was never exposed to the bug. No other row needed re-checking.
 
 ## Six claims overturned by measurement during this run
 

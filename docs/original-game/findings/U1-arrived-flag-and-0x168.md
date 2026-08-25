@@ -110,9 +110,9 @@ branch in the two functions that own order state.
 00059186  CMP SI,0x1
 0005918a  JNZ 0x591ab                        ; only order-type == 1
 0005918c  CMP byte ptr [EDI + 0x271],0x0     ; an unnamed per-vehicle byte flag
-00059193  JZ 0x59198... -> 0005919e
-00059195  MOV byte ptr [EDI + 0x16a],0x1... 0x0   ; +0x271 != 0  -> CLEAR the flag, no further action
-0005919c  JMP 0x591ab
+00059193  JZ 0x0005919e
+00059195  MOV byte ptr [EDI + 0x16a],0x0     ; +0x271 != 0  -> CLEAR the flag, no further action
+0005919c  JMP 0x000591ab
 0005919e  CMP byte ptr [0xd5060],0x0         ; DAT_000d5060, the established side/turn discriminant
 000591a5  JNZ 0x591ab
 000591a7  MOV dword ptr [ESP + 0x10],ESI     ; +0x271==0 && DAT_000d5060==0 -> latch "assign new wander destination"
@@ -181,6 +181,17 @@ never set at all, picks a fresh random destination from its role's spawn-time mi
 **None of these three outcomes are named here** (no "escort", "patrol", or "loiter" label is asserted) —
 they are described purely by offset and observed behavior, per the task's constraint.
 
+**Data this would need on the OpenApoc side, before attempting it.** The parity guide's own lesson (a
+`BOUND` row went into implementation and came back with no code because the surrounding data model didn't
+exist) applies directly here — two prerequisites should be checked *before* queuing this for
+implementation, not discovered during it: (1) a per-vehicle field equivalent to `+0x16C` (the "type to
+rendezvous with" value) does not appear to exist in `VehicleMission`/`Vehicle` today, and outcome (a) above
+is unimplementable without it; (2) outcome (c) needs a per-side/role "wander destination catalog" — the
+original's `0x1439e0` table indexed by `DAT_000d5060` — and whether OpenApoc has (or should have) an
+equivalent structured table, versus picking a destination some other way, was not checked this session.
+Neither prerequisite was confirmed to exist or not exist in the current OpenApoc tree; this file only
+establishes what the original needs to receive.
+
 ### 1.3 A secondary, corroborating reader: `FUN_00033e84`
 
 `FUN_00033e84` (VA `0x33e84`, object-page file `0x23e83`, single caller: `FUN_00033818` @ VA `0x33adf` —
@@ -218,7 +229,8 @@ genuine stores out of the register-relative hits:**
 | `0x6cc38` | `0x5cc37` | `FUN_0006cb8c` | **NEW — repair: `constitution += repairAmount`** |
 | `0x6cc57` | `0x5cc56` | `FUN_0006cb8c` | **NEW — repair clamp: `constitution = perTypeMax`** |
 
-**`+0x168`, all struct-relative, 5 genuine stores:**
+**`+0x168`, all struct-relative, 7 genuine stores (counted by filtering the 22 raw hits to `reg+0x168`,
+excluding the `ESP`-relative false positives in `FUN_000293c4`/`FUN_00043b28`/`FUN_000aac88`):**
 
 | VA | file | Function | What |
 |---|---|---|---|
@@ -231,7 +243,7 @@ genuine stores out of the register-relative hits:**
 | `0x5df6e` | `0x4df6d` | `FUN_0005df1c` | **NEW — full runtime recompute (+ writes `+0x15C`)** |
 
 (`FUN_0005df1c`/`FUN_0005df98` are two entries in the same table because they are two distinct functions
-sharing one formula — see §2.3.)
+sharing one formula — see §2.6.)
 
 ### 2.2 `FUN_00057c8c`: constitution genuinely takes damage
 
@@ -241,19 +253,39 @@ all outside the mission-dispatch subsystem: `FUN_00054a28` (VA `0x55a44`), `FUN_
 range (`0x54xxx`/`0x7fxxx`/`0x80xxx`) is well outside the UFO-mission-counter code this whole file otherwise
 covers, consistent with a combat/weapon-hit resolution area, not the mission dispatcher calling itself.
 
-Mechanically: rolls a random amount (`FUN_0005d1d8`), absorbs it against one of six directional
-"shield"-like fields (`+0x17A`/`+0x17C`/`+0x17E`/`+0x180`/`+0x182`/`+0x184`, selected by an unnamed
-parameter) before it ever reaches constitution. If the leftover damage is `>=` current constitution
-(`(short)vehicle[+0x106][iVar9*0x13b] <= local_10`, i.e. `+0x12e <= damage`), the function builds and
-dispatches a formatted "destroyed" message via `FUN_0002ae1c`, calls `FUN_00058280` (§2.4) to retire the
-vehicle, and **returns without ever executing the subtraction below** — constitution is *not* independently
-zeroed here; `FUN_00058280` does that. Otherwise, at VA `0x581ea` (raw: `MOV word ptr [EBP+0x12e],DI`):
+Mechanically: rolls a random amount (`FUN_0005d1d8`), absorbs it against `+0x17A` first (consumed
+unconditionally via `FUN_0005cc28` before the switch below), then whatever remains against **one of six**
+direction-selected fields — `+0x17C`/`+0x17E`/`+0x180`/`+0x182`/`+0x184`/`+0x186` — chosen by an unnamed
+parameter, before the leftover ever reaches constitution. If the leftover damage is `>=` current
+constitution (`(short)vehicle[+0x12e][iVar9*0x13b] <= local_10`, i.e. `+0x12e <= damage`), the function
+builds and dispatches a formatted "destroyed" message via `FUN_0002ae1c`, calls `FUN_00058280` (§2.4) to
+retire the vehicle, and **returns without ever executing the subtraction below** — constitution is *not*
+independently zeroed here; `FUN_00058280` does that.
 
-```c
-(&DAT_00161106)[iVar9*0x13b] = (&DAT_00161106)[iVar9*0x13b] - (short)uVar6;   // constitution -= accumulated damage
+Otherwise, the decompiler renders the surviving-damage path as
+`(&DAT_00161106)[iVar9*0x13b] = (&DAT_00161106)[iVar9*0x13b] - (short)uVar6;`. Per the task's own warning
+about this exact function's decompile (the parity guide's "the other was U1(b)'s multiplicand"), that
+rendering was **not** trusted as-is — the raw listing around the store was pulled and read fresh instead
+(VA `0x581c9`–`0x581fd`, file `0x481c8`–`0x481fc`):
+
+```
+000581c9  MOV EAX,dword ptr [ESP + 0x88]     ; EAX = accumulated damage this hit
+000581d0  MOV DX,word ptr [EBP + 0x162]       ; a separate "total damage taken" tracker
+000581d7  MOV DI,word ptr [EBP + 0x12e]        ; DI = current constitution
+000581de  ADD EDX,EAX                          ; tracker += damage
+000581e0  SUB EDI,EAX                          ; ***** DI = constitution − damage — subtraction confirmed *****
+000581e2  MOV EAX,dword ptr [EBP + 0x2]         ; (type field, for the table lookup below)
+...
+000581ea  MOV word ptr [EBP + 0x12e],DI          ; constitution = DI (the decremented value)
+000581f4  MOV word ptr [EBP + 0x162],DX           ; tracker stored back too
 ```
 
-then compares the new constitution against `*(short*)(&DAT_00128618 + type*0x7E)` — the **same** per-type
+The raw listing confirms the decompiler's rendering here — `SUB EDI,EAX` at VA `0x581e0`. It was checked
+rather than trusted because this function's decompile is visibly unreliable elsewhere in the same stack
+frame (e.g. `pcVar5[-0xffffffff00000004] = 'c'` a few lines earlier in the same decompiled function), not
+because the subtraction itself was ever in doubt — constitution is unambiguously lowered by damage.
+
+The function then compares the new constitution against `*(short*)(&DAT_00128618 + type*0x7E)` — the **same** per-type
 table row already tied to `+0x168`'s spawn formula and to `FUN_000588f8`'s gates (§2.5) — and if it dropped
 below that value, dispatches a tiered "damaged" message (`FUN_000409e0`, `FUN_000983ec`) and, when the
 vehicle is currently player-selected, an org-funds adjustment via `FUN_0005faf0` (the same call already
@@ -376,25 +408,59 @@ previously untraced pair of functions.
 
 **Callers, `getReferencesTo`, exact counts:**
 
-- `FUN_0005df1c`: **9 callers.** One is `FUN_0003a910` at VA `0x3ad93` — inside the U1(a) retarget branch,
+- `FUN_0005df1c`: **9 callers.** One is `FUN_0003a910` at VA `0x3ad93` — inside the **`+0x12c != 1`** side
+  of the exact same `if` that sets the arrived flag at VA `0x3ad11` (§1.1) — i.e. the U1(a) retarget branch,
   **immediately after** `FUN_0004e0d4`'s "clamp `+0x168` down if it's `>= +0x12e`" logic (already bound,
   §1.3 of the prior doc) — i.e. every time a UFO picks a new mission-destination building at runtime,
   `+0x168` is **recomputed from the catalog formula, overwriting whatever the clamp had just set it to**.
-  Two more callers are the already-known spawn sites, `FUN_0006da88` (VA `0x6dba0`) and `FUN_0006de64` (VA
-  `0x6dec3`, the generic vehicle-slot allocator). The remaining six (`FUN_00010380`, `FUN_00059e60`,
-  `FUN_0005a120`, `FUN_0005a918`, `FUN_0005b22c`, `FUN_0005ca04`) were not examined this session.
+  This call site and the arrived-flag write are mutually exclusive on any single pass through the guard —
+  a vehicle either gets the flag latched (`+0x12c == 1`) or gets `+0x168` recomputed on retarget
+  (`+0x12c != 1`), never both in the same transition. Two more callers are the already-known spawn sites,
+  `FUN_0006da88` (VA `0x6dba0`) and `FUN_0006de64` (VA `0x6dec3`, the generic vehicle-slot allocator). The
+  remaining six (`FUN_00010380`, `FUN_00059e60`, `FUN_0005a120`, `FUN_0005a918`, `FUN_0005b22c`,
+  `FUN_0005ca04`) were not examined this session.
 - `FUN_0005df98`: **1 caller**, at VA `0x51f40`, inside an address range Ghidra does not currently resolve
   to a named function (`getFunctionContaining` returned none) — not characterized further this session.
+
+**The `FUN_0003a910` call site's inputs, read directly out of the binary.** At VA `0x3ad8c`, immediately
+before this call, `FUN_0003a910` writes `vehicle[+0x166] = 0` (raw-confirmed, `MOV byte ptr [EDI+0x166],0x0`
+— already visible in §1.1's surrounding listing). Since `+0x166` is forced to `0` right before the call, the
+formula's two inputs at *this specific call site* are both static reads, pulled directly from the binary
+this session (`QueryU1Verify2.java`, `Memory.getByte`/`getShort`, no analysis or inference involved):
+
+- `DAT_0012d950[0] = 75` (0x4B) — the percent byte, role-index forced to `0` by the `+0x166=0` write.
+- The per-type catalog word at `0x128616 + type×0x7E` varies by vehicle type — dumped for types 0–15:
+  `80, 120, 400, 500, 600, 850, 700, 500, 1800, 2800, 40, 25, 35, 60, 60, 800`. (The `0x128618`-offset word
+  used by `FUN_000588f8`'s and `FUN_0005df1c`'s other gates was dumped alongside for the same types:
+  `15, 35, 150, 150, 200, 200, 100, 80, 300, 350, 0, 0, 0, 0, 0, 0` — a visibly *different*, smaller series
+  from the same per-type row, confirming these are two distinct catalog fields, not one value read two ways.)
+
+So for this call site specifically, `+0x168 = 0.75 × table[0x128616+type×0x7E]` after every retarget —
+**not** a symbolic "some percent," but a concrete three-quarters of that per-type catalog constant. This
+constant is not merely an arbitrary reference value: §2.3 already shows `FUN_0006cb8c` (the repair writer)
+clamping constitution to exactly this same word (`if (perTypeMax <= sVar3) constitution = perTypeMax`) —
+i.e. it is confirmed, by a second independent function, to be constitution's repair *ceiling*. That gives
+the 75% figure real weight: **repair will never push constitution above this word, and `+0x168` sits at
+three-quarters of it**, so once a vehicle is at (or has been repaired to) that ceiling, the gate fires once
+damage brings it below three-quarters of the ceiling — a moderate-damage threshold, not an
+alert-on-first-scratch trigger. The one caveat that does survive: this establishes the catalog word as a
+repair *ceiling*, not proof that spawn-time constitution starts at that ceiling — a vehicle that spawns
+below three-quarters of it (spawn's own derivation, `FUN_0006da88`/`FUN_0005d6e4`, was not re-checked
+against this specific ceiling this session) would trip the gate on its very first retarget with zero combat
+damage taken. The "moderate-damage threshold" reading holds for a vehicle at or near the ceiling; whether
+that is the typical spawn state is not confirmed here.
 
 **What this means.** The previous finding's central claim — "`+0x168` starts as a fraction of constitution
 at spawn and nothing ever raises it afterward, so the gate can only fire if constitution falls" — is only
 half right. Constitution genuinely does fall (§2.2), which is sufficient on its own to make the gate
 reachable. But `+0x168` is *also* not a fixed spawn-time constant: it is unconditionally recomputed on at
 least one confirmed, ordinary, non-spawn gameplay event (retargeting to a new mission building), using the
-same catalog-percentage formula as spawn. Whether the post-retarget value ends up higher or lower than the
-pre-retarget (clamped) value depends on live game data (current type, current `+0x166` role index) not
-resolved here — so "does this specific write raise or lower `+0x168` in any given instance" is not asserted
-— but the *mechanism* is a full recompute, not a monotonic decay, and that is the corrected, bound fact.
+same catalog-percentage formula as spawn, and for that specific call site the formula's inputs (75%, and the
+per-type catalog row above) are now concretely known. Whether the post-retarget value ends up higher or
+lower than the pre-retarget (clamped) value in any given instance depends on live game data (current type,
+current constitution) not resolved here — so "does this specific write raise `+0x168` above what it was a
+moment before" is not asserted as universally true — but the *mechanism* is a full recompute from a known,
+concrete formula, not a monotonic decay, and that is the corrected, bound fact.
 
 ### 2.7 Verdict
 
