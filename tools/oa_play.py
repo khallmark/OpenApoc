@@ -64,6 +64,14 @@ STAGE_FORMS = {
     "BattleView": "battle/battle",
     "SaveMenu": "savemenu",
     "CheatOptions": "cheatoptions",
+    # Skirmish mode's three screens. Without these, controls() returns {} on all of them and
+    # every helper built on it -- click_list_row, the resolved-rect fallback in click_id -- is
+    # blind there. Note that Skirmish::begin() unconditionally pushes MapSelector
+    # (skirmish.cpp:689-693), so the Skirmish config screen is only current once a location has
+    # been chosen and MapSelector has popped back to it, never straight after BUTTON_SKIRMISH.
+    "Skirmish": "skirmish",
+    "MapSelector": "mapselector",
+    "SelectForces": "selectforces",
 }
 
 # How to RESPOND to each interrupting screen. These are not "dismiss" actions: an alien incident
@@ -925,7 +933,29 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
 
 
 def click_list_row(d: Driver, list_id: str, row: int, st: Status, item_h: int = 20) -> bool:
-    """Listbox contents are runtime data, so address rows geometrically inside the resolved rect."""
+    """Listbox contents are runtime data, so address rows geometrically inside the resolved rect.
+
+    Only for lists whose row is clickable across its own width. Where the row is an inert
+    container and the callback sits on a nested child, use the engine's own addressing instead:
+
+        d.h.send(f"control {list_id} item {row} item 1 click")
+
+    which walks the child hierarchy by position with no pixel arithmetic at all
+    (forms/harness_actions.cpp:472-495; worked example in oa_skirmish.py's pick_map, :80-101).
+    MapSelector's LISTBOX_MAPS is the case that forced it: each row is a 488px Label plus a 22px
+    GraphicButton, and only that button calls Skirmish::setLocation (mapselector.cpp:53-144), so
+    a click landing anywhere in the label -- which is where x + min(40, w // 3) lands in a 510px
+    list -- does nothing at all.
+
+    Do not make this helper fall back to `control <list> item <row> click` to cover that case.
+    Control::click() returns true for any visible, enabled control whether or not anything is
+    listening (forms/control.cpp:1255-1269), so an inert row would report success while doing
+    nothing -- the silent no-op this driver keeps having to dig itself out of.
+
+    item_h stays the caller's business: oa_forms.py treats <item> as an attribute node and drops
+    it, so the engine's real row pitch (ItemSize + ItemSpacing, listbox.cpp:83) is not visible
+    here -- it is 25 for LISTBOX_MAPS, not the 20 assumed by default.
+    """
     c = d.controls(st).get(list_id)
     if c is None or c.w <= 0:
         return False
