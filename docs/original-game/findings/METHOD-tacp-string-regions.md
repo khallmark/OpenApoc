@@ -79,6 +79,20 @@ A `NOT BOUND` verdict must state **which structural method** was exhausted:
 `NOT BOUND` remains a successful outcome — but only when reached by a method capable of finding a
 positive.
 
+## The same pattern exists in UFO2P
+
+The B1 investigation found this in TACP; the O1 investigation independently hit it in UFO2P. All
+eight diplomacy/bribe/rift UI strings there also have zero bound xrefs, and that agent named a
+probable cause: **`FUN_00092470` stashes string-table tokens before calling `FUN_00063a00`.**
+
+If that is the indirection, it is the UFO2P analogue of the TACP pool table — a token/id is stored
+and resolved later, so no code ever points at the string body. **Binding `FUN_00092470` /
+`FUN_00063a00` would unlock string-anchored entry for the whole binary**, and is probably the
+single highest-leverage unexplored target in this backlog. Unchased as of this run.
+
+Treat "zero xrefs on a UI string" as the *expected* result in **both** binaries until proven
+otherwise.
+
 ## Leads noticed while mapping, not yet chased
 
 - **`TU cost per wound: ` @ `0x2E0204`** — direct evidence the original modelled a per-wound TU
