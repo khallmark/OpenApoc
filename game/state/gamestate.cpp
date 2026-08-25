@@ -584,7 +584,16 @@ void GameState::fillOrgStartingProperty()
 
 void GameState::startGame()
 {
-	if (config().getBool("OpenApoc.NewFeature.SeedRng"))
+	// An explicit seed wins over everything: it is what makes a run reproducible on demand and
+	// still freely variable, which comparing two AIs over the same campaign requires. Zero keeps
+	// the previous behaviour exactly, so nothing that did not ask for a seed changes.
+	const auto explicitSeed = config().getInt("OpenApoc.NewFeature.RngSeed");
+	if (explicitSeed != 0)
+	{
+		LogInfo("Seeding game RNG with explicit seed {0}", explicitSeed);
+		rng.seed(static_cast<uint64_t>(explicitSeed));
+	}
+	else if (config().getBool("OpenApoc.NewFeature.SeedRng"))
 	{
 		const auto seed = static_cast<uint64_t>(std::time(nullptr));
 		LogInfo("Seeding game RNG with {0}", seed);

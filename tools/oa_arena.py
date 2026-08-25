@@ -152,7 +152,7 @@ def run_worker(wid: int, port: int, repo: Path, out: Path, aliens: dict, args,
     wout.mkdir(parents=True, exist_ok=True)
     game = None
     try:
-        game = GameProcess(repo, port, wout / "game.log")
+        game = GameProcess(repo, port, wout / "game.log", seed=(args.seed + wid) if args.seed else 0)
         game.start(wait_s=240)
         d = Driver(Harness(port=port), repo / "data/forms", shots=wout / "shots", verbose=True)
         d.checks = {}
@@ -288,6 +288,8 @@ def main() -> int:
                          "opponent, not another variable.")
     ap.add_argument("--workers", type=int, default=1,
                     help="concurrent game processes, each on its own port (port, port+1, ...)")
+    ap.add_argument("--seed", type=int, default=0,
+                    help="explicit RNG seed; 0 keeps the engine default")
     ap.add_argument("--probe", action="store_true",
                     help="fight exactly one battle and report where it got to, then exit")
     args = ap.parse_args()
@@ -304,7 +306,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     ledger = out / "battles.jsonl"
 
-    game = GameProcess(repo, args.port, out / "game.log")
+    game = GameProcess(repo, args.port, out / "game.log", seed=args.seed)
     game.start(wait_s=240)
     d = Driver(Harness(port=args.port), repo / "data/forms", shots=out / "shots", verbose=True)
     d.checks = {}

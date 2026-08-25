@@ -136,6 +136,7 @@ void dumpOptionsToLog()
 	dumpOption(optionSkipTurbo);
 	dumpOption(optionRunAndKneel);
 	dumpOption(optionSeedRng);
+	dumpOption(optionRngSeed);
 	dumpOption(optionAutoReload);
 	dumpOption(optionLeftClickIcon);
 	dumpOption(optionBattlescapeVertScroll);
@@ -437,7 +438,14 @@ ConfigOptionBool optionRunAndKneel("OpenApoc.NewFeature", "RunAndKneel",
                                    tr("All units run and kneel by default"), true);
 ConfigOptionBool optionSeedRng("OpenApoc.NewFeature", "SeedRng", tr("Seed RNG on game start"),
                                true);
-ConfigOptionBool optionAutoReload("OpenApoc.NewFeature", "AutoReload",
+
+
+// An explicit seed, so a run is both reproducible AND variable at will. SeedRng gives only two
+// behaviours -- reseed from wall-clock, or leave the default -- which means runs are either
+// unrepeatable or all identical, and neither is what comparing two AIs across the same campaign
+// needs. Zero keeps the old behaviour exactly; any non-zero value is used verbatim and logged.
+ConfigOptionInt optionRngSeed("OpenApoc.NewFeature", "RngSeed",
+                              tr("Explicit RNG seed (0 = use SeedRng behaviour)"), 0);ConfigOptionBool optionAutoReload("OpenApoc.NewFeature", "AutoReload",
                                   tr("Automatically reload weapons when empty"), true);
 ConfigOptionBool optionLeftClickIcon("OpenApoc.NewFeature", "LeftClickIconEquip",
                                      tr("Left clicking icon opens equip menu"), false);

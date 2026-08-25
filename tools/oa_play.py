@@ -440,11 +440,13 @@ def reap_stale_game(port: int) -> int:
 class GameProcess:
     """Owns a game instance so a run needs no human to start or stop anything."""
 
-    def __init__(self, repo: Path, port: int, log_path: Path, extra: list[str] | None = None):
+    def __init__(self, repo: Path, port: int, log_path: Path, extra: list[str] | None = None,
+                 seed: int = 0):
         self.repo = Path(repo)
         self.port = port
         self.log_path = Path(log_path)
         self.extra = extra or []
+        self.seed = int(seed)
         self.proc: subprocess.Popen | None = None
 
     @property
@@ -469,6 +471,10 @@ class GameProcess:
             "--Framework.AudioBackends=null",
             # Fixed RNG seed: GameState::startGame() otherwise reseeds from wall-clock.
             "--OpenApoc.NewFeature.SeedRng=0",
+            # Explicit seed. 0 keeps the engine's old behaviour; anything else is used verbatim,
+            # so a run is reproducible on demand and freely variable at will -- which comparing
+            # two AIs over the same campaign needs, and a fixed default cannot give.
+            f"--OpenApoc.NewFeature.RngSeed={self.seed}",
             # Agent equipment templates: an ordinary in-game affordance (keys 1-6,
             # Ctrl to save), and the only way to arm a squad without pixel-accurate
             # drag-and-drop onto the paper doll.
@@ -4590,6 +4596,9 @@ def main() -> int:
     ap.add_argument("--days", type=float, default=28.0)
     ap.add_argument("--leg", type=float, default=7.0)
     ap.add_argument("--no-launch", action="store_true")
+    ap.add_argument("--seed", type=int, default=0,
+                    help="explicit RNG seed; 0 keeps the engine default. Logged to the ledger so "
+                         "any run can be replayed exactly.")
     args = ap.parse_args()
 
     repo = Path(args.repo)
@@ -4599,7 +4608,7 @@ def main() -> int:
 
     game = None
     if not args.no_launch:
-        game = GameProcess(repo, args.port, out / "game.log")
+        game = GameProcess(repo, args.port, out / "game.log", seed=args.seed)
         print(f"[launch] {game.binary}", flush=True)
         game.start()
 
