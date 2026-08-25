@@ -445,7 +445,19 @@ ConfigOptionBool optionSeedRng("OpenApoc.NewFeature", "SeedRng", tr("Seed RNG on
 // unrepeatable or all identical, and neither is what comparing two AIs across the same campaign
 // needs. Zero keeps the old behaviour exactly; any non-zero value is used verbatim and logged.
 ConfigOptionInt optionRngSeed("OpenApoc.NewFeature", "RngSeed",
-                              tr("Explicit RNG seed (0 = use SeedRng behaviour)"), 0);ConfigOptionBool optionAutoReload("OpenApoc.NewFeature", "AutoReload",
+                              tr("Explicit RNG seed (0 = use SeedRng behaviour)"), 0);
+
+// Opponent doctrine for the adversarial training arena. -1 leaves every unit on whatever the
+// game itself chose, which is the shipped behaviour and the default. 0/1/2 pin non-player units
+// to Aggressive/Normal/Evasive at battle start.
+//
+// This is an ARENA control, not a player one: a human cannot set the aliens' doctrine, and
+// nothing in the normal game path reads it. It exists so a learner can field a chosen opponent
+// doctrine and measure the result, which is what makes both sides adapting to each other
+// observable rather than asserted.
+ConfigOptionInt optionOpponentBehaviorMode("OpenApoc.NewFeature", "OpponentBehaviorMode",
+                                           tr("Pin non-player unit doctrine (-1 = game's own)"),
+                                           -1);ConfigOptionBool optionAutoReload("OpenApoc.NewFeature", "AutoReload",
                                   tr("Automatically reload weapons when empty"), true);
 ConfigOptionBool optionLeftClickIcon("OpenApoc.NewFeature", "LeftClickIconEquip",
                                      tr("Left clicking icon opens equip menu"), false);
