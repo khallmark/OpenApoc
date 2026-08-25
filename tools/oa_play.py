@@ -1329,17 +1329,24 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
     # AGENT_SELECT_BOX holds a single Control per base ("Base_1"), and the agents sit in an
     # AGENT_LIST inside it -- which is why both the AlertScreen pixel offsets and the nested
     # item-addressing on AGENT_SELECT_BOX selected nobody here.
-    for i in range(8):
-        try:
-            if not d.h.send(f"control AGENT_LIST item {i} click").startswith("OK"):
+    # Real clicks, inside the AGENT_LIST rect. The assignment rows branch on
+    # e->forms().MouseInfo.Button in four places (agentassignment.cpp:92-138), which
+    # Control::click() never sets -- the same defect that stopped agent portraits selecting on the
+    # equip screen and hand icons working on the vehicle screen. A named click cannot drive any of
+    # them; the rect and a genuine mouse press can.
+    lst = d.controls(d.status()).get("AGENT_LIST")
+    if lst is not None and lst.w > 0:
+        row_h = 26
+        for i in range(8):
+            y = lst.y + 12 + i * row_h
+            if y >= lst.y + lst.h - 4:
                 break
-        except (HarnessError, OSError):
-            break
-        time.sleep(0.1)
-        if selected_count() >= 4:
-            break
+            d.h.click_xy(lst.x + lst.w // 2, y)
+            time.sleep(0.12)
+            if selected_count() >= 4:
+                break
     if selected_count() > 0:
-        d.say(f"  [raid] {selected_count()} agent(s) selected via AGENT_LIST")
+        d.say(f"  [raid] {selected_count()} agent(s) selected from AGENT_LIST")
 
     if selected_count() == 0:
         d.select_assignment_rows(d.status())
