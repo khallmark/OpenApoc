@@ -296,16 +296,20 @@ PAUSE_NOTIFICATION_FLAGS = [
             # Waiting to be told costs nothing; polling costs a trip to the city screen each time.
             "--Notifications.City.AgentDiedCity=0",
             "--Notifications.City.BaseDestroyed=0",
-            "--Notifications.City.CargoArrived=0",
+            # CargoArrived, RecoveryArrived and VehicleHeavyDamage stay ON, for the same reason
+            # AgentArrived does. Each is infrequent and each is something the driver acts on:
+            # cargo landing is the weapons it has been waiting to hand out, a recovery landing is
+            # the alien material the research chain needs, and heavy damage is the cue to send a
+            # craft home instead of losing it -- "if it gets low send it home", as the guide puts
+            # it. The rest of this list is per-tick battle chatter that pauses the game for
+            # nothing; these three are the game telling us something worth knowing.
             "--Notifications.City.NotEnoughAmmo=0",
             "--Notifications.City.NotEnoughFuel=0",
-            "--Notifications.City.RecoveryArrived=0",
             "--Notifications.City.TransferArrived=0",
             "--Notifications.City.UfoSpotted=0",
             "--Notifications.City.UnauthorizedVehicle=0",
             "--Notifications.City.VehicleDestroyed=0",
             "--Notifications.City.VehicleEscaping=0",
-            "--Notifications.City.VehicleHeavyDamage=0",
             "--Notifications.City.VehicleLightDamage=0",
             "--Notifications.City.VehicleLowFuel=0",
             "--Notifications.City.VehicleModerateDamage=0",
