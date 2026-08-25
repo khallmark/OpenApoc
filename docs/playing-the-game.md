@@ -279,6 +279,13 @@ driver already sends `QUIT` and waits before killing anything, so a clean shutdo
 
 ## Strategy (from player guides, not from the source)
 
+> **See also [campaign-plan.md](campaign-plan.md)** — the same ground re-derived from the recovered
+> `UFO2P` / `TACP` tables rather than from player guides, with a week-by-week campaign calendar.
+> It corrects several things the guides get wrong (the alien AI does not learn; destroying the
+> alien Organic Factory permanently stops UFO growth; the first incursion is 24-72h out, not on
+> day 0), and it carries this file's base-defence findings forward. This file remains the
+> authority on driving the harness; that one on what the engine and the original data do.
+
 The driver kept losing for reasons that are not harness defects at all. Distilled from UFOpaedia
 (NKF's Starter's Guide, AllOutWar's Guide, the Base Defense / Agents / Relations pages), the
 Wikibooks and StrategyWiki guides, the Roger Wong and Loodwig GameFAQs FAQs, and Lilura1's
