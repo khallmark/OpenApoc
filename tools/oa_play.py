@@ -447,20 +447,47 @@ class GameProcess:
         self.log_path = Path(log_path)
         self.extra = extra or []
         self.seed = int(seed)
+        self._run_binary = self.binary
         self.proc: subprocess.Popen | None = None
 
     @property
     def binary(self) -> Path:
         return self.repo / "build/bin/OpenApoc.app/Contents/MacOS/OpenApoc"
 
+    def snapshot_binary(self) -> Path:
+        """Copy the app bundle so a rebuild cannot kill a run in flight.
+
+        cmake --build replaces the executable in place, and on macOS that terminates any process
+        running it. Every "run failure" during a development session had the same signature -
+        ConnectionRefusedError, no crash report, no game-log error - and the cause was a rebuild
+        underneath the run, not the game. A twenty-week run and an active edit loop cannot share
+        one binary.
+
+        Falls back to the shared binary if the copy fails for any reason: a slightly fragile run
+        beats no run.
+        """
+        src = self.repo / "build/bin/OpenApoc.app"
+        dst = self.log_path.parent / "OpenApoc.app"
+        try:
+            if dst.exists():
+                shutil.rmtree(dst)
+            shutil.copytree(src, dst, symlinks=True)
+            return dst / "Contents/MacOS/OpenApoc"
+        except Exception as exc:
+            print(f"[launch] binary snapshot failed ({type(exc).__name__}: {exc}); "
+                  f"using the shared build - a rebuild will kill this run", flush=True)
+            return self.binary
+
     def start(self, wait_s: float = 90.0) -> None:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        # Take a private copy of the binary first: see snapshot_binary().
+        self._run_binary = self.snapshot_binary()
         # Clear any wedged instance still holding this port before trying to bind it.
         stale = reap_stale_game(self.port)
         if stale:
             print(f"[boot] reaped {stale} stale game process(es) on port {self.port}", flush=True)
         argv = [
-            str(self.binary),
+            str(self._run_binary),
             f"--Framework.Data={self.repo / 'data'}",
             f"--Framework.CD={self.repo / 'data/cd.iso'}",
             "--Framework.Harness.Enable=1",
