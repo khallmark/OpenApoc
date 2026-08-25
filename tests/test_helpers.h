@@ -1,0 +1,92 @@
+#pragma once
+
+#include "framework/configfile.h"
+#include "framework/logger.h"
+#include "game/state/gamestate.h"
+#include "library/strings.h"
+#include <cstdlib>
+#include <utility>
+#include <vector>
+
+namespace OpenApoc
+{
+namespace TestHelpers
+{
+
+inline thread_local bool testCheckFailed = false;
+
+#define TEST_CHECK(cond, ...)                                                                      \
+	do                                                                                             \
+	{                                                                                              \
+		if (!(cond))                                                                               \
+		{                                                                                          \
+			LogError(__VA_ARGS__);                                                                 \
+			::OpenApoc::TestHelpers::testCheckFailed = true;                                       \
+		}                                                                                          \
+	} while (0)
+
+#define TEST_REQUIRE(cond, ...)                                                                    \
+	do                                                                                             \
+	{                                                                                              \
+		if (!(cond))                                                                               \
+		{                                                                                          \
+			LogError(__VA_ARGS__);                                                                 \
+			return false;                                                                          \
+		}                                                                                          \
+	} while (0)
+
+inline void applyDeterministicTestConfig()
+{
+	config().set("OpenApoc.NewFeature.SeedRng", false);
+	config().set("Config.Save", false);
+	config().set("OpenApoc.NewFeature.FerryChecksRelationshipWhenBuying", true);
+	config().set("OpenApoc.NewFeature.CallExistingFerry", true);
+}
+
+inline bool loadStartedGameState(GameState &state, const UString &common, const UString &gamestate)
+{
+	if (!state.loadGame(common))
+	{
+		LogError("Failed to load common gamestate \"{0}\"", common);
+		return false;
+	}
+	// difficulty submods and base_gamestate both carry extracted UFO tables; loading the
+	// base zip must replace them, not append onto existing keys.
+	state.ufo_incursions.clear();
+	state.ufo_mission_preference.clear();
+	state.vehicleParkSpawnTable.clear();
+	state.fireHazardPowerTable.clear();
+	if (!state.loadGame(gamestate))
+	{
+		LogError("Failed to load gamestate \"{0}\"", gamestate);
+		return false;
+	}
+	state.startGame();
+	state.initState();
+	state.fillPlayerStartingProperty();
+	return true;
+}
+
+inline int runTestSuite(const std::vector<std::pair<const char *, bool (*)()>> &tests)
+{
+	bool anyFailed = false;
+	for (const auto &t : tests)
+	{
+		testCheckFailed = false;
+		LogInfo("Running {0}", t.first);
+		const bool ok = t.second();
+		if (!ok || testCheckFailed)
+		{
+			LogError("FAILED {0}", t.first);
+			anyFailed = true;
+		}
+		else
+		{
+			LogInfo("PASSED {0}", t.first);
+		}
+	}
+	return anyFailed ? EXIT_FAILURE : EXIT_SUCCESS;
+}
+
+} // namespace TestHelpers
+} // namespace OpenApoc
