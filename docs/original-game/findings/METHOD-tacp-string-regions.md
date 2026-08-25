@@ -28,6 +28,24 @@ Variable-length, null-terminated, tightly packed: consecutive offsets differ by 
 Entries in a packed pool are reached through a pointer/offset table or a computed index.
 **Individual strings here can never carry a direct code xref.**
 
+> **Correction (B1 run, 24 Aug):** "never" is too strong — falsified by direct counter-example.
+> A live sparse pointer table sits at object2 `0x292D18`–`0x292DEC` (non-4 file
+> `0x2E27BC`–`0x2E2890`), holding ~30 absolute 4-byte pointers into this exact pool, each with a
+> real, single `getReferencesTo` xref back to the table slot. Confirmed entries include `Ammo Clip`
+> (`0x2DF55B`), `Weight:`, `Pause`, `Health`, `Rookie`, `Psi-drain`, `Explosive`, `Smoke`,
+> `BLANK`, `Monday`, `MISSION BRIEFING`, and — the important one — `Hostile unit spotted`
+> (no-colon copy, `0x2E03B1`) and `The following units will be lost if left in combat zone:`
+> (`0x2E0361`), both combat/status **message** strings, the same category as `Unit under fire` /
+> `Unit has gone beserk`. So message-category pool strings *can* carry direct xrefs — it depends on
+> whether that specific string happens to be bound to an individually-initialized global `char*`
+> (this table's likely origin: the linker packing separately-declared `char *label = "...";`
+> globals together) rather than reached through the id/token/ordinal mechanism this document
+> argues for. **Revise the "never" claim to**: a pool string with zero xrefs is not informative on
+> its own, but a *sibling in the same pool, same category, with a confirmed xref* is a real,
+> checkable positive control — use one before writing off a target as consumer-less. Full detail,
+> including the table dump and the B1 anchor strings' absence from it (checked against the whole
+> `.object2` segment, not just this table): `B1-cover-metric.md` §2.3–§2.4.
+
 ### Asset-name table — `0x2F2000`–`0x2F3400` (non-4)
 
 Fixed **`0x2E` (46-byte) stride**. Internal resource-load keys, not display text.

@@ -10,14 +10,17 @@ resets the vehicle's role/order state to 0 and marks it target-less.
 **U1(b) `FUN_000588f8` `+0x168` vs constitution `+0x12e` gate — mechanism BOUND, field semantics
 NOT BOUND.** The gate itself is a clean, verified instruction pair (`CMP AX,[EBP+0x12e]; JLE …`).
 Three independent writers of `+0x168` were traced, and all three set it **once, at vehicle spawn**,
-either to a literal `0` or via a `(fixed-point stat) × (per-role table percent) / 100` formula
-structurally identical to the already-bound `type_percent × constitution` derivation of `+0x12e`
-itself. **No writer that raises `+0x168` after spawn was found anywhere in the traced call graph.**
-That rules out the "regenerating health, notify when topped up" reading a first pass over this data
-suggests — there is no evidence of that mechanic. What's bound: the gate, the three spawn-time
-writers, and the two runtime clamps (`+0x168 = +0x12e − 1` whenever `+0x168 ≥ +0x12e` and a new
-destination is assigned). What's unbound: what the field represents and why the periodic check in
-`FUN_000588f8` would ever see it exceed constitution.
+either to a literal `0` or via a `constitution(+0x12e) × (per-role table percent) / 100` formula —
+i.e. `+0x168` starts as a *fraction of constitution itself*, not an unrelated stat. **No writer that
+raises `+0x168` after spawn was found anywhere in the traced call graph**, and the two runtime
+touches (`FUN_0004dd14`, `FUN_0004e0d4`) only ever lower it. Since a fixed fraction of spawn-time
+constitution starts at or below constitution, and nothing raises it afterward, the gate condition
+`+0x168 > +0x12e` can only become true if constitution itself later falls — which reads as a
+damage/critical-condition threshold check, not a "regenerating stat" (an earlier draft of this
+reasoning went the other way before the arithmetic below was checked; that's corrected in §2.2).
+What's bound: the gate, the three spawn-time writers and their exact formulas, and the two runtime
+clamps. What's unbound: a name for `+0x168`, and any writer that actually lowers constitution
+(combat damage) to complete the "threshold crossed" story.
 
 **U2(a) `DAT_000e0cc0` override lifecycle — reads/override BOUND, clear sites BOUND, no set site
 found.** It is OR'd into the per-base "known to aliens" predicate in two independent functions
@@ -214,22 +217,27 @@ Every reference to displacement `0x168` in `.object1` code was enumerated (`Quer
 
 | Site | Function | What it does |
 |---|---|---|
-| VA `0x6DBDF`, object-page file `0x5DBDE` | `FUN_0006da88` (the UFO spawn function already bound for `+0x1B → +0x171`) | `(int)(EDX >> 0x10) * table[EDI + DAT_00183a72*2 + 0x22] / 100` → `+0x168`. `EDX` is loaded from `vehicle + 0x12C` as a 16.16 fixed value (`SAR EDX,0x10` extracts the integer part) — **structurally identical** to the already-bound `type_percent(role table) × constitution(vehicle_data +0x2e) / 100` derivation of `+0x12e`, just from field `+0x12C` and table column `+0x22` instead. |
+| VA `0x6DBDF`, object-page file `0x5DBDE` | `FUN_0006da88` (the UFO spawn function already bound for `+0x1B → +0x171`) | `MOV EDX,dword ptr [ESI+0x12c]; SAR EDX,0x10` then `IDIV` by `table[EDI + DAT_00183a72*2 + 0x22]`-scaled `100` → `+0x168`. A dword read at `+0x12C` spanning bytes `+0x12C..+0x12F`, right-shifted 16, keeps only the **high** word — i.e. the word at `+0x12E..+0x12F`, which is constitution itself (the same field read directly as a plain `short` at `+0x12e` in §2.1/§2.3). So this is `constitution(+0x12e) × roleTable[+0x22] / 100` — **a percentage of constitution**, not a different base field. It parallels the already-bound `type_percent × vehicle_data-constitution` derivation of `+0x12e` one level down: `+0x12e` is derived once from the catalog stat, and `+0x168` is then derived from *that* result. |
 | VA `0x70E00`, object-page file `0x60DFF` | `FUN_00070cc0` | `MOV word ptr [ESI+0x168], 0x0` — plain literal zero, alongside `+0x16c = 0xFFFF` ("no follow"). |
-| VA `0x5DCEB`, object-page file `0x4DCEA` | `FUN_0005d6e4` (called from the generic vehicle-slot allocator `FUN_0006de64`) | `(byte)table[EAX*4 + 0x12D950] * (EBX >> 0x10) / 100` → `+0x168`, where `EBX` was loaded from a dword table at `0x128614`. Same "16.16 value × table / 100" idiom again. |
+| VA `0x5DCEB`, object-page file `0x4DCEA` | `FUN_0005d6e4` (called from the generic vehicle-slot allocator `FUN_0006de64`) | `(byte)table[EAX*4 + 0x12D950] * (EBX >> 0x10) / 100` → `+0x168`, where `EBX` was loaded from a dword table at `0x128614`, so the same high-word extraction lands on the word at `0x128616` — two bytes before the per-vehicle-type table at `0x128618` (stride `0x7E`) that `FUN_000588f8` itself reads elsewhere in the same function and that `FUN_0004dd14` also reads. Plausibly the same or an adjacent per-type table row; not independently confirmed as a named field this session. |
 
 **No fourth site exists that increments, adds to, or otherwise raises `+0x168` after one of these
 spawn-time writes.** The two runtime touches found elsewhere (`FUN_0004dd14`, `FUN_0004e0d4`, both
 §1.3/§2.3) only ever **lower** it (`+0x168 = +0x12e − 1`, and only when `+0x168 ≥ +0x12e`).
 
-This directly rules out reading `+0x168` as a regenerating stat that grows toward constitution and
-fires a "topped up" message — there is no raising writer to support that, and the advisor review
-that caught this is recorded here so the wrong reading doesn't get re-derived later. What's left
-provable: `+0x168` starts life as a percentage-derived (or zeroed) per-instance stat sourced from a
-*different* base field than constitution, gets defensively clamped below constitution whenever a
-new destination is assigned, and is checked periodically (§2.3) for exceeding constitution — which,
-given no writer ever raises it past its spawn-time value, can only happen from the spawn-time
-formula itself landing above whatever `+0x12e` was independently derived to.
+This rules out the "regenerating stat, notify when topped up" reading a first pass over this data
+suggests — there is no raising writer for `+0x168` anywhere traced. But given the `FUN_0006da88`
+spawn formula is now resolved to `constitution × percent / 100` with `percent` presumably in
+`[0,100]`, `+0x168` starts **at or below** constitution at spawn. Since nothing was found that
+raises `+0x168` afterward, the only way `+0x168` can later *exceed* `+0x12e` — the exact condition
+`FUN_000588f8` checks — is for **constitution itself (`+0x12e`) to fall** below the fixed `+0x168`
+threshold. No writer that lowers `+0x12e` (e.g. combat damage) was traced this session, so that step
+is inference from the arithmetic, not an observed writer — but it is the only reading consistent
+with everything that *was* observed: a spawn-time threshold fixed as a fraction of max constitution,
+periodically checked against current constitution, and defensively re-clamped just under constitution
+whenever a new destination is assigned. That reads far more like a damage/critical-condition
+threshold than "health regenerating toward its cap," and the record here is deliberately updated
+from an earlier draft that reasoned the opposite way before this arithmetic was checked.
 
 ### 2.3 The periodic caller, and the clamp's sibling
 
@@ -391,22 +399,21 @@ branch structure, gated on the same "is this a building event, not kind 1 or 6" 
 **Caveat, stated plainly:** the classification value itself (`extraout_EDX`) is fed from a `sVar2 =
 FUN_0005f15c(); ... param_2 = extraout_EDX;` sequence a few lines earlier in the same function, but
 the decompiler's register tracking doesn't show the exact defining instruction in the excerpt
-captured this session. What's bound is the branch structure and literal type values; what isn't
-independently re-verified this session is the ultimate name of the thing driving `extraout_EDX`
-(most likely an organisation relation-tier or alert-stage value, given the surrounding code reads
-the same `DAT_0016ec25` org-relation array used elsewhere in this subsystem, but that reading is
-not asserted as bound here).
+captured this session. What's bound is the branch structure and literal type values; the ultimate
+name of the thing driving `extraout_EDX` is NOT bound this session — no name is asserted for it.
 
 ### 4.3 Corroboration and root
 
 `FUN_000aff9c`'s only caller in the binary is `FUN_000ac348` (VA `0xAC348`), passing `param_1`/
-`param_2` straight through from its own arguments. This matches
-[O1-O2-M1-city.md §"O2"](O1-O2-M1-city.md)'s independent finding that `FUN_000aff9c` has exactly one
-call site rooted in `FUN_0003a910` (this project's already-bound U1/U2 function) via `FUN_000ac08c`
-— which is itself one of `FUN_0003a910`'s callees fired from the same role==2/role==3
-mission-completion branches that clear `DAT_000e0cc0` (§3.2). **U1's mission-counter transition,
-U2's base-exposure override clear, and U2(b)'s event-type population transfer are all downstream of
-the same completion dispatch inside `FUN_0003a910`.**
+`param_2` straight through from its own arguments. `FUN_000ac348`'s only caller, in turn, is
+`FUN_000ac08c` (VA `0xAC2F7`) — both single-caller edges confirmed directly via `getReferencesTo`,
+not inferred from a callee list. `FUN_000ac08c` is itself one of `FUN_0003a910`'s callees, called
+from the same role==2/role==3 mission-completion branches that clear `DAT_000e0cc0` (§3.2). This
+independently corroborates [O1-O2-M1-city.md §"O2"](O1-O2-M1-city.md)'s finding that `FUN_000aff9c`
+has exactly one call site rooted in `FUN_0003a910`. **U1's mission-counter transition, U2's
+base-exposure override clear, and U2(b)'s event-type population transfer are all downstream of the
+same completion dispatch inside `FUN_0003a910`, via the exact chain `FUN_0003a910 → FUN_000ac08c →
+FUN_000ac348 → FUN_000aff9c`.**
 
 **Verdict: dispatch cases (types 1 and 4 → `FUN_0006f738`) BOUND. The writer function and its exact
 branch conditions for producing types 1 and 4 BOUND. The ultimate semantic driver of the
