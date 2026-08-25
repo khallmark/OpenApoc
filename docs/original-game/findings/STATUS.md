@@ -60,6 +60,28 @@ straddles the tile boundary either way, and "exactly one draw tile, inside the b
 because `addToDrawnTiles()` can only choose from `intersectingTiles`. It locked nothing, so under
 §0 it was not committed. The row stays UNVERIFIED and the guide now says why.
 
+## A seventh claim overturned — and this one has blast radius
+
+The B5 follow-up found that `scripts/QueryDataRange.java` in the research lab **structurally
+cannot see an entire class of x86 reference**: it guards its match loop with `instanceof Scalar`,
+but a direct absolute-memory operand (`MOV byte ptr [0x3009a0],CH`) is an `Address`-typed operand
+object in Ghidra's model, not a `Scalar`. Every "zero literal-operand hits" negative that script
+produced undercounts, on any address.
+
+Re-run against `DAT_003009a0` with `getReferencesTo`, the supposedly-unreferenced global has
+**six** references — three writers and three readers — and three of the four functions involved had
+never been examined.
+
+**Use `getReferencesTo(Address)` for a definitive xref check on a global. Never a `Scalar`-operand
+sweep.**
+
+Audit of every other "zero xrefs" negative in this folder: B1's table check, O1's diplomacy-string
+check and the METHOD docs' string checks all used `getReferencesTo` already and are unaffected.
+The one closed row whose wording does not name its method is **U2(a)** (`DAT_000e0cc0`, "across all
+6 xrefs to this address in the whole binary, no instruction sets it to a nonzero value") — a closed
+negative over a `DAT_` global, which is precisely the shape this bug hits. Re-verification
+requested; until it lands, treat U2(a) as provisional rather than closed.
+
 ## Six claims overturned by measurement during this run
 
 Four of them mine.
