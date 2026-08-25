@@ -3386,8 +3386,21 @@ def arm_agents_directly(d: Driver, agents: int = 24) -> int:
         return_to_city(d)
         return 0
 
+    # Only walk as many rows as there are people to arm, and stop the moment everyone has a
+    # weapon. Iterating a flat twenty-four rows and polling the inventory up to six times for each
+    # meant the driver spent most of a pass on the equip screen clicking through empty rows -- it
+    # looks exactly like what it was, aimless row-checking, and it is time the campaign needs.
+    try:
+        ag = d.h.gs("agents")
+        roster = int(ag.get("soldiers", "0") or 0)
+        already = int(ag.get("armed", "0") or 0)
+    except (HarnessError, OSError):
+        roster, already = agents, 0
+    to_visit = max(1, min(agents, roster + 2))
     armed_now = 0
-    for row in range(agents):
+    for row in range(to_visit):
+        if armed_now and (already + armed_now) >= roster:
+            break
         st = d.status()
         if st.stage != "AEquipScreen":
             break
@@ -3408,7 +3421,7 @@ def arm_agents_directly(d: Driver, agents: int = 24) -> int:
         time.sleep(0.3)
         # The list is rebuilt as the screen renders, so give it a frame before reading.
         items = {}
-        for _ in range(6):
+        for _ in range(2):
             time.sleep(0.25)
             items = d.h.gs("aequip_items")
             if items.get("detail", "-") not in ("", "-"):
