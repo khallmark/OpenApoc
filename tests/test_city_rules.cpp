@@ -714,6 +714,88 @@ static bool test_ufo_mission_counter_zero_without_building_clears_target()
 	return true;
 }
 
+// U1(a), the other branch. UFO2P FUN_0003a910 tests vehicle +0x12C at the mission-counter-zero
+// transition: value 1 latches an "arrived" flag whose reader flies the craft to the nearest
+// dimension gate, anything else runs the retarget search the three tests above lock.
+//
+// For an incursion-spawned UFO that is not a choice. FUN_0006da88 hardcodes the field to 1
+// immediately before the write, and no writer anywhere touches it on an already-spawned vehicle,
+// so the retarget branch is structurally unreachable for this population -- they always leave.
+// docs/original-game/findings/U1-retarget-reconciliation.md settles it, reconciling two earlier
+// findings that disagreed.
+//
+// The retarget branch is still real code in the original, for a different population, which is
+// why the tests above stay exactly as they are: this is a split, not a replacement.
+static bool test_ufo_mission_counter_zero_sends_aliens_to_a_portal()
+{
+	auto &state = *g_state;
+	auto cityIt = state.cities.find("CITYMAP_HUMAN");
+	TEST_REQUIRE(cityIt != state.cities.end(), "no CITYMAP_HUMAN city in gamestate");
+	auto city = cityIt->second;
+	TEST_REQUIRE(!city->portals.empty(),
+	             "CITYMAP_HUMAN has no portals, so there is no gate to fly to");
+
+	StateRef<Building> target;
+	for (auto &b : state.buildings)
+	{
+		if (b.second && b.second->isAlive() && b.second->city.id == "CITYMAP_HUMAN")
+		{
+			target = {&state, b.first};
+			break;
+		}
+	}
+	TEST_REQUIRE(!!target, "no alive CITYMAP_HUMAN building available to seed the mission target");
+
+	const Vec3<float> spawn{(float)((target->bounds.p0.x + target->bounds.p1.x) / 2) + 0.5f,
+	                        (float)((target->bounds.p0.y + target->bounds.p1.y) / 2) + 0.5f, 4.5f};
+	sp<Vehicle> v;
+	for (auto &t : state.vehicle_types)
+	{
+		if (!t.second || t.second->type != VehicleType::Type::UFO)
+		{
+			continue;
+		}
+		v = city->placeVehicle(state, {&state, t.first}, state.getAliens(), spawn, 0.0f);
+		if (v)
+		{
+			break;
+		}
+	}
+	TEST_REQUIRE(v != nullptr, "could not place any UFO-type vehicle in CITYMAP_HUMAN");
+	TEST_REQUIRE(v->owner == state.getAliens(), "placed UFO is not alien-owned");
+	v->missions.clear();
+
+	VehicleMission mission;
+	mission.type = VehicleMission::MissionType::AttackBuilding;
+	mission.targetBuilding = target;
+	mission.missionCounter = 1;
+
+	const bool keepGoing = mission.advanceMissionCounterOnArrival(state, *v);
+
+	TEST_REQUIRE(!keepGoing,
+	             "an alien UFO reaching mission-counter zero should end this mission, not carry on "
+	             "pathing to another building");
+	TEST_REQUIRE(mission.cancelled, "the AttackBuilding mission should be cancelled once it leaves");
+	bool queuedPortal = false;
+	for (auto &m : v->missions)
+	{
+		if (m.type == VehicleMission::MissionType::GotoPortal)
+		{
+			queuedPortal = true;
+		}
+	}
+	TEST_REQUIRE(queuedPortal,
+	             "no GotoPortal mission was queued -- an incursion UFO whose counter expires flies "
+	             "to the nearest dimension gate, it does not pick another building ({0} missions "
+	             "queued)",
+	             v->missions.size());
+	// And it must NOT have retargeted: that is the branch this population never takes.
+	TEST_CHECK(mission.targetBuilding == target,
+	           "the mission retargeted to {0} instead of leaving",
+	           mission.targetBuilding.id);
+	return true;
+}
+
 // U1(a) call-site lock. The three tests above drive
 // VehicleMission::advanceMissionCounterOnArrival() directly, which leaves the *hook* untested --
 // the call inside VehicleMission::start()'s MissionType::AttackBuilding re-plan branch. Delete
@@ -2949,6 +3031,8 @@ int main(int argc, char **argv)
 	    {"ufo_mission_counter_zero_picks_new_target", test_ufo_mission_counter_zero_picks_new_target},
 	    {"ufo_mission_counter_zero_without_building_clears_target",
 	     test_ufo_mission_counter_zero_without_building_clears_target},
+	    {"ufo_mission_counter_zero_sends_aliens_to_a_portal",
+	     test_ufo_mission_counter_zero_sends_aliens_to_a_portal},
 	    {"ufo_mission_counter_decrements_from_mission_start",
 	     test_ufo_mission_counter_decrements_from_mission_start},
 	    {"infiltration_display_percent", test_infiltration_display_percent},

@@ -3140,6 +3140,44 @@ bool VehicleMission::advanceMissionCounterOnArrival(GameState &state, Vehicle &v
 	{
 		return true;
 	}
+	// UFO2P FUN_0003a910 branches here on vehicle +0x12C: value 1 latches an
+	// "arrived" flag whose reader (FUN_00059148) flies the craft to the nearest
+	// dimension gate; any other value takes the retarget search below.
+	//
+	// For an incursion-spawned UFO the branch is not a choice. FUN_0006da88 --
+	// the spawn function this file already maps for clampIncursionScatter and
+	// incursionTypeThreshold -- commits the role to +0x166 and then reclobbers
+	// BX with a literal 1 immediately before calling the writer, and two
+	// independent exhaustive writer censuses found nothing that ever touches
+	// +0x12C on an already-spawned vehicle. So +0x12C == 1 is a structural
+	// invariant for this population and the retarget branch is unreachable for
+	// it: these craft always leave. See
+	// docs/original-game/findings/U1-retarget-reconciliation.md.
+	//
+	// The retarget branch is still live code in the original, just for a
+	// different population -- a periodic scheduler (FUN_00092060 ->
+	// FUN_00092470) unrelated to the dimension-gate incursion system, which
+	// writes +0x12C from its own loop index. Whether OpenApoc's other
+	// AttackBuilding caller (OrganisationRaid::UnauthorizedVehicle,
+	// organisation.cpp) is that population is NOT established, so the default
+	// below is deliberately left alone rather than guessed at.
+	//
+	// Gating on the owner rather than on a new serialized field: the two
+	// incursion call sites in gamestate.cpp are exactly the alien-owned ones,
+	// which is the same split the binary makes.
+	if (v.owner == state.getAliens())
+	{
+		// gotoPortal() picks the nearest portal, matching FUN_0005d360's
+		// nearest-match scan over the same gate table. With no portal to reach
+		// it would target {0,0,0} (or dereference an empty list), so fall
+		// through to the retarget search instead of flying at the map corner.
+		if (v.city && !v.city->portals.empty())
+		{
+			v.addMission(state, VehicleMission::gotoPortal(state, v));
+			cancelled = true;
+			return false;
+		}
+	}
 	// Cleared first: acquireTargetBuilding() only assigns targetBuilding when it
 	// finds a match, so a failed search leaves it in the "target-less" state.
 	targetBuilding.clear();
