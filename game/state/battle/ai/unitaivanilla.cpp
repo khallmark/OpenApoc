@@ -82,6 +82,24 @@ options (checked for every visible target):
 
 UnitAIVanilla::UnitAIVanilla() { type = Type::Vanilla; }
 
+float UnitAIVanilla::attackPriority(float cth, float damage, float time)
+{
+	return cth * damage / time;
+}
+
+float UnitAIVanilla::blastDamageContribution(float localDamage, bool hostile)
+{
+	return (hostile ? 1.0f : -1.0f) * localDamage;
+}
+
+bool UnitAIVanilla::aoeIsWorthThrowing(float netBlastDamage)
+{
+	// Written as the negation of the original `if (damage < 0.0f) return NULLTUPLE3;` rather than
+	// `>= 0.0f` so a NaN net (which compares false against everything) keeps the original's
+	// "don't veto" outcome instead of silently flipping it.
+	return !(netBlastDamage < 0.0f);
+}
+
 // Priority is CTH * DAMAGE / TIME
 // - Assume chance to miss is Dispersion * Distance / 10, CTH = 100 - chance to miss
 // - Assume damage is 150% for armor penetration (for simplicity), hit to torso
@@ -142,7 +160,7 @@ UnitAIVanilla::getWeaponDecision(GameState &state, BattleUnit &u, sp<AEquipment>
 	    1.0f, 100.f - (float)(100 - e->getAccuracy(u.target_body_state, u.current_movement_state,
 	                                               u.fire_aiming_mode)) *
 	                      distance / 40.0f);
-	float priority = cth * damage / time;
+	float priority = attackPriority(cth, damage, time);
 
 	// Chance to advance is equal to chance to miss
 	// Only advance if can fire on move
@@ -277,17 +295,16 @@ UnitAIVanilla::getGrenadeDecision(GameState &state, BattleUnit &u, sp<AEquipment
 		}
 		localDamage = std::max(
 		    0, payload->damage_type->dealDamage(localDamage * 1.5f, damageModifier) - armorValue);
-		damage +=
-		    (u.owner->isRelatedTo(t.second->owner) == Organisation::Relation::Hostile ? 1.0f
-		                                                                              : -1.0f) *
-		    localDamage;
+		damage += blastDamageContribution(
+		    localDamage,
+		    u.owner->isRelatedTo(t.second->owner) == Organisation::Relation::Hostile);
 	}
-	if (damage < 0.0f)
+	if (!aoeIsWorthThrowing(damage))
 	{
 		return NULLTUPLE3;
 	}
 
-	float priority = cth * damage / time;
+	float priority = attackPriority(cth, damage, time);
 
 	if (!e->getCanThrow(u, target->position))
 	{

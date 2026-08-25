@@ -167,9 +167,15 @@ bool BattleMapPart::applyBurning(GameState &state, int age)
 	return true;
 }
 
+bool BattleMapPart::fireStageBurns(int fireStage, int fireBurnTime)
+{
+	return fireStage >= 0 && fireBurnTime >= 0 && fireBurnTime < 255 && fireStage >= fireBurnTime;
+}
+
 bool BattleMapPart::canBurn(int age)
 {
-	// Explanation for how fire works is at the end of battlehazard.h
+	// Still used only by the approximate neighbour-spread path. FUN_0007b0d0's
+	// resistance/RNG behavior remains unbound.
 	int penetrativePower = std::min(255.0f, 3.0f * std::pow(2.0f, 9.0f - age / 10.0f));
 
 	return penetrativePower > type->fire_resist && type->fire_burn_time < 255 &&

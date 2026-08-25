@@ -28,7 +28,7 @@
 namespace OpenApoc
 {
 
-static int getPsiCost(PsiStatus status, bool isAttack)
+int BattleUnit::getPsiCost(PsiStatus status, bool isAttack)
 {
 	switch (status)
 	{
@@ -48,7 +48,8 @@ static int getPsiCost(PsiStatus status, bool isAttack)
 	return 0;
 }
 
-static int getPsiAttackChance(int psiAttack, int psiDefense, PsiStatus status, bool isAttack)
+int BattleUnit::getPsiAttackChance(int psiAttack, int psiDefense, PsiStatus status,
+                                  bool isAttack)
 {
 	// Psi chance as per Wong's Guide, confirmed by Mell
 	/*
@@ -75,6 +76,45 @@ static int getPsiAttackChance(int psiAttack, int psiDefense, PsiStatus status, b
 		chance = std::max(20, chance);
 	}
 	return chance;
+}
+
+int BattleUnit::applyMindShieldIncrement(int currentBonus)
+{
+	return std::min(200, currentBonus + 30);
+}
+
+// docs/original-game/findings/B3-G1-wounds-gadgets.md, "Disruptor Shield", "Follow-up -
+// overflow/passthrough" (bound, read from the raw instruction listing - an earlier
+// decompiler-misled reading described this as partial absorption, which is wrong): the buffer is
+// ALL-OR-NOTHING. `current > typeModifiedDamage` fully absorbs the hit; `current <=
+// typeModifiedDamage` (including exact equality) breaks the buffer and every point of the
+// incoming damage passes through untouched - the buffer's pre-hit value never partially offsets
+// it. Extracted as a pure, static, directly-testable step (mirroring
+// TacticalAIVanilla::retreatChancePercent()) because BattleUnit::applyDamage() itself needs a
+// live tileObject/TileMap to reach past the shield check, which no lock test in this suite
+// constructs (see tests/test_unit_ai_priority.cpp).
+BattleUnit::DisruptorShieldHitResult BattleUnit::resolveDisruptorShieldHit(int current,
+                                                                           int typeModifiedDamage)
+{
+	if (current > typeModifiedDamage)
+	{
+		return {true, current - typeModifiedDamage};
+	}
+	return {false, 0};
+}
+
+int BattleUnit::getEffectivePsiDefence() const
+{
+	if (!agent)
+	{
+		return 0;
+	}
+	int defense = agent->modified_stats.psi_defence + mindShieldBonus;
+	if (defense > 99)
+	{
+		defense = 99;
+	}
+	return defense;
 }
 
 namespace
@@ -613,21 +653,32 @@ bool BattleUnit::calculateVisionToUnit(GameState &state, BattleUnit &u)
 	{
 		return false;
 	}
-	auto target = u.tileObject->getCenter();
-	if (u.isLarge())
+	auto maxRange = VIEW_DISTANCE / (u.isCloaked() ? 2 : 1);
+	if (!u.isLarge())
 	{
-		// Offset search for large units as they can get caught up in ground
-		// that is supposed to allow units to go through it but blocks LOS
-		auto targetvVectorDelta = glm::normalize(target - eyesPos) * 0.75f;
-		target -= targetvVectorDelta;
+		auto c = map.findCollision(eyesPos, u.tileObject->getCenter(), mapPartSet, tileObject, true,
+		                           false, maxRange);
+		return !c && !c.outOfRange;
 	}
-	auto c = map.findCollision(eyesPos, target, mapPartSet, tileObject, true, false,
-	                           VIEW_DISTANCE / (u.isCloaked() ? 2 : 1));
-	if (c || c.outOfRange)
+	// A large unit is visible if any of its occupied tiles has a clear line to it, not just a
+	// single point at the exact geometric centre of its 2x2 block -- which sits precisely on the
+	// corner shared by all 8 of its tiles, a degenerate raycast endpoint that can clip terrain it
+	// has no business clipping. Check each of the four ground-level tiles it occupies.
+	Vec3<int> corner = (Vec3<int>)u.position;
+	for (int dx = -1; dx <= 0; dx++)
 	{
-		return false;
+		for (int dy = -1; dy <= 0; dy++)
+		{
+			Vec3<float> target = {corner.x + dx + 0.5f, corner.y + dy + 0.5f, u.position.z + 0.5f};
+			auto c =
+			    map.findCollision(eyesPos, target, mapPartSet, tileObject, true, false, maxRange);
+			if (!c && !c.outOfRange)
+			{
+				return true;
+			}
+		}
 	}
-	return true;
+	return false;
 }
 
 void BattleUnit::calculateVisionToUnits(GameState &state)
@@ -1021,16 +1072,29 @@ WeaponStatus BattleUnit::canAttackUnit(GameState &state, sp<BattleUnit> unit,
 
 bool BattleUnit::hasLineToUnit(const sp<BattleUnit> unit, bool useLOS) const
 {
-	auto muzzleLocation = getMuzzleLocation();
-	auto targetPosition = unit->tileObject->getVoxelCentrePosition();
-	if (unit->isLarge())
+	if (!unit->isLarge())
 	{
-		// Offset search for large units as they can get caught up in ground
-		// that is supposed to allow units to go through it but blocks LOS
-		auto targetvVectorDelta = glm::normalize(targetPosition - muzzleLocation) * 0.75f;
-		targetPosition -= targetvVectorDelta;
+		return hasLineToPosition(unit->tileObject->getVoxelCentrePosition(), useLOS);
 	}
-	return hasLineToPosition(targetPosition, useLOS);
+	// A large unit has a line to/from it if any of its occupied tiles does, not just a single
+	// point at the exact geometric centre of its 2x2 block -- that centre sits precisely on the
+	// corner shared by all 8 of its tiles, a degenerate raycast endpoint that can clip terrain it
+	// has no business clipping. Keep the aim height getVoxelCentrePosition() already computes;
+	// only its x/y (the block's shared corner) needs to vary across the four ground tiles.
+	Vec3<int> corner = (Vec3<int>)unit->position;
+	float targetZ = unit->tileObject->getVoxelCentrePosition().z;
+	for (int dx = -1; dx <= 0; dx++)
+	{
+		for (int dy = -1; dy <= 0; dy++)
+		{
+			Vec3<float> targetPosition = {corner.x + dx + 0.5f, corner.y + dy + 0.5f, targetZ};
+			if (hasLineToPosition(targetPosition, useLOS))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 bool BattleUnit::hasLineToPosition(Vec3<float> targetPosition, bool useLOS) const
@@ -1082,8 +1146,8 @@ int BattleUnit::getPsiChanceForEquipment(StateRef<BattleUnit> target, PsiStatus 
 		return 0;
 	}
 
-	return getPsiAttackChance(agent->modified_stats.psi_attack,
-	                          target->agent->modified_stats.psi_defence, status);
+	return getPsiAttackChance(agent->modified_stats.psi_attack, target->getEffectivePsiDefence(),
+	                          status);
 }
 
 bool BattleUnit::startAttackPsi(GameState &state, StateRef<BattleUnit> target, PsiStatus status,
@@ -1730,34 +1794,10 @@ bool BattleUnit::applyDamage(GameState &state, int power, StateRef<DamageType> d
 		damage = randDamage050150(state.rng, power);
 	}
 
-	// Hit shield if present
-	if (!damageType->ignore_shield)
-	{
-		auto shield = agent->getFirstShield(state);
-		if (shield)
-		{
-			damage = damageType->dealDamage(damage, shield->type->damage_modifier);
-			shield->ammo -= damage;
-			// Shield destroyed
-			if (shield->ammo <= 0)
-			{
-				agent->removeEquipment(state, shield);
-			}
-			state.current_battle->placeDoodad(shield->type->shield_graphic,
-			                                  tileObject->getCenter());
-			return true;
-		}
-	}
-
-	// Apply enzyme if penetrated shields
-	if (damageType->effectType == DamageType::EffectType::Enzyme)
-	{
-		enzymeDebuffIntensity += power * 2;
-		enzymeDebuffTicksAccumulated = 0;
-		applyEnzymeEffect(state);
-	}
-
 	// Find out armor type
+	// (Computed here, ahead of the Disruptor Shield check below, because the shield's
+	// absorption buffer compares against the same general type-modified damage value armor
+	// does - see the "Hit shield if present" comment.)
 	auto armor = agent->getArmor(bodyPart);
 	int armorValue = 0;
 	StateRef<DamageModifier> damageModifier;
@@ -1770,6 +1810,59 @@ bool BattleUnit::applyDamage(GameState &state, int power, StateRef<DamageType> d
 	{
 		armorValue = agent->type->armor.at(bodyPart);
 		damageModifier = agent->type->damage_modifier;
+	}
+
+	// Hit shield if present
+	//
+	// docs/original-game/findings/B3-G1-wounds-gadgets.md, "Disruptor Shield": FUN_0005F860 (the
+	// general damage-application function) compares the unit-level buffer (disruptorShieldCurrent,
+	// TACP unit+0x254) against damage already run through the same general damage-type
+	// resist/modifier pipeline every hit uses (bound "Follow-up 1(b)": not a shield-specific
+	// resistance table - do not use shield->type->damage_modifier here).
+	//
+	// This is an ALL-OR-NOTHING shield (bound "Follow-up - overflow/passthrough", read from the
+	// raw instruction listing - an earlier partial-absorption reading was wrong):
+	//   - current > type-modified damage: fully absorbed, nothing reaches health.
+	//   - current <= type-modified damage (including equality): the buffer breaks (zeroed) and
+	//     the FULL incoming damage continues on unmodified-by-the-shield, exactly as an
+	//     unshielded hit would (i.e. `damage` here is left untouched for the rest of this
+	//     function to process normally).
+	if (!damageType->ignore_shield && disruptorShieldCurrent > 0)
+	{
+		auto shield = agent->getFirstShield(state);
+		if (shield)
+		{
+			int shieldModifiedDamage = damageType->dealDamage(damage, damageModifier);
+			auto shieldResult =
+			    resolveDisruptorShieldHit(disruptorShieldCurrent, shieldModifiedDamage);
+			if (shieldResult.absorbed)
+			{
+				// Fully absorbed.
+				int absorbedAmount = disruptorShieldCurrent - shieldResult.remainingCurrent;
+				disruptorShieldCurrent = shieldResult.remainingCurrent;
+				// Sync the item's own charge counter in step with the buffer. FUN_0006508C's
+				// exact arithmetic here is not confirmed, but the doc notes it doesn't affect
+				// observable behaviour, since the unit-level buffer is what absorption depends
+				// on - this just keeps the item's displayed charge from drifting from it.
+				shield->ammo = std::max(0, shield->ammo - absorbedAmount);
+				return true;
+			}
+			// Depleted: buffer breaks (both fields zeroed, per FUN_00064FFC), visual cue fires,
+			// full damage passes through untouched.
+			disruptorShieldCurrent = 0;
+			disruptorShieldCapacity = 0;
+			state.current_battle->placeDoodad(shield->type->shield_graphic,
+			                                  tileObject->getCenter());
+			// Fall through with `damage` unmodified.
+		}
+	}
+
+	// Apply enzyme if penetrated shields
+	if (damageType->effectType == DamageType::EffectType::Enzyme)
+	{
+		enzymeDebuffIntensity += power * 2;
+		enzymeDebuffTicksAccumulated = 0;
+		applyEnzymeEffect(state);
 	}
 
 	if (damageType->effectType == DamageType::EffectType::Psionic)
@@ -1855,7 +1948,7 @@ void BattleUnit::applyMoraleDamage(int moraleDamage, int psiAttackPower, GameSta
 	LogWarning("Psionic damageType");
 	const int random = randBoundsExclusive(state.rng, 0, 100);
 	const int chance =
-	    getPsiAttackChance(psiAttackPower, agent->modified_stats.psi_defence, PsiStatus::Panic);
+	    getPsiAttackChance(psiAttackPower, getEffectivePsiDefence(), PsiStatus::Panic);
 
 	LogWarning("Chance: {0}  Random: {1}", chance, random);
 
@@ -1993,6 +2086,8 @@ void BattleUnit::update(GameState &state, unsigned int ticks)
 	}
 	// Unit cloak - even in TB unit returns to cloaked after firing based on time
 	updateCloak(state, ticks);
+	// Disruptor Shield capacity/current buffer
+	updateDisruptorShield(state, ticks);
 	// Unit events - was under fire, was requested to give way etc.
 	updateEvents(state);
 	// Idling: Auto-movement, auto-body change when idling
@@ -2081,6 +2176,7 @@ void BattleUnit::updateTB(GameState &state)
 
 	// Miscellaneous state updates, as well as unit's stats
 	updateCloak(state, TICKS_PER_TURN);
+	updateDisruptorShield(state, TICKS_PER_TURN);
 	updateStateAndStats(state, TICKS_PER_TURN);
 	updateRegen(state, TICKS_REGEN_PER_TURN);
 }
@@ -2101,6 +2197,62 @@ void BattleUnit::updateCloak(GameState &state [[maybe_unused]], unsigned int tic
 		{
 			cloakTicksAccumulated = 0;
 		}
+	}
+}
+
+void BattleUnit::updateDisruptorShield(GameState &state, unsigned int ticks)
+{
+	// docs/original-game/findings/B3-G1-wounds-gadgets.md, "Disruptor Shield":
+	// FUN_00057A04 grants unit+0x256 (capacity) a flat +100 while a Disruptor Shield is worn and
+	// equipped, and tops unit+0x254 (current) up from the item's own charge, clamped to
+	// capacity. Calling this every tick would runaway capacity if applied additively each time,
+	// so it is treated here as a one-time grant on the rising edge of "a shield became
+	// available" (capacity was 0), which the bound "+100" flat bonus (not "+=100 forever") and
+	// the doc's own callout of a fresh equip-transfer support. Ongoing regen after that is the
+	// separate, explicitly bound +1/TICKS_PER_DISRUPTOR_SHIELD_REGEN below.
+	auto shield = agent->getFirstShield(state);
+	if (shield)
+	{
+		if (disruptorShieldCapacity == 0)
+		{
+			disruptorShieldCapacity = DISRUPTOR_SHIELD_CAPACITY_BONUS;
+			disruptorShieldCurrent =
+			    std::min(disruptorShieldCurrent + shield->ammo, disruptorShieldCapacity);
+		}
+		if (disruptorShieldCurrent < disruptorShieldCapacity)
+		{
+			disruptorShieldRegenTicksAccumulated += ticks;
+			while (disruptorShieldRegenTicksAccumulated >= TICKS_PER_DISRUPTOR_SHIELD_REGEN)
+			{
+				disruptorShieldRegenTicksAccumulated -= TICKS_PER_DISRUPTOR_SHIELD_REGEN;
+				disruptorShieldCurrent =
+				    std::min(disruptorShieldCurrent + 1, disruptorShieldCapacity);
+				// FUN_0006511C: the same dispatcher call that steps the unit-level buffer also
+				// "regenerates the shield item's own charge field (equipment-instance-table +10)
+				// by 1 per call, gated < 100" - the extracted max_ammo is that 100. Absorption
+				// already decrements this field (FUN_0006508C, in applyDamage), so regenerating
+				// only the buffer would let the two drift apart until FUN_00057A04's equip
+				// transfer re-read the stale item charge.
+				if (shield->ammo < shield->type->max_ammo)
+				{
+					shield->ammo++;
+				}
+			}
+		}
+		else
+		{
+			disruptorShieldRegenTicksAccumulated = 0;
+		}
+	}
+	else if (disruptorShieldCapacity != 0 || disruptorShieldCurrent != 0)
+	{
+		// No worn/usable shield left to back the buffer - it has no source, so it collapses.
+		// FUN_00064FFC zeroes both fields on shield loss (bound structurally, exact removal
+		// trigger not confirmed); derived here from "no shield present" each tick rather than a
+		// specific unequip event hook.
+		disruptorShieldCapacity = 0;
+		disruptorShieldCurrent = 0;
+		disruptorShieldRegenTicksAccumulated = 0;
 	}
 }
 
@@ -2221,19 +2373,27 @@ void BattleUnit::updateMorale(GameState &state, unsigned int ticks)
 					default:
 						break;
 				}
-				// Have a chance to drop items in hand
-				if (moraleState != MoraleState::Berserk)
+				// ai.txt Panic Run: "Drops whatever in hands". Freeze keeps a 50% chance.
+				if (moraleState == MoraleState::PanicRun)
 				{
-					if (randBool(state.rng))
+					if (e1)
 					{
-						if (e1)
-						{
-							addMission(state, BattleUnitMission::dropItem(*this, e1));
-						}
-						if (e2)
-						{
-							addMission(state, BattleUnitMission::dropItem(*this, e2));
-						}
+						addMission(state, BattleUnitMission::dropItem(*this, e1));
+					}
+					if (e2)
+					{
+						addMission(state, BattleUnitMission::dropItem(*this, e2));
+					}
+				}
+				else if (moraleState == MoraleState::PanicFreeze && randBool(state.rng))
+				{
+					if (e1)
+					{
+						addMission(state, BattleUnitMission::dropItem(*this, e1));
+					}
+					if (e2)
+					{
+						addMission(state, BattleUnitMission::dropItem(*this, e2));
 					}
 				}
 			}
@@ -3770,7 +3930,7 @@ void BattleUnit::updateAI(GameState &state, unsigned int)
 	auto decision = aiList.think(state, *this);
 	if (!decision.isEmpty())
 	{
-		LogWarning("AI {0} for unit {1} decided to {2}", decision.ai, id, decision.getName());
+		LogInfo("AI {0} for unit {1} decided to {2}", decision.ai, id, decision.getName());
 		executeAIDecision(state, decision);
 	}
 }
@@ -5110,7 +5270,11 @@ bool BattleUnit::useItem(GameState &state, sp<AEquipment> item)
 		case AEquipmentType::Type::MindBender:
 		case AEquipmentType::Type::Teleporter:
 			return false;
-		// Items that do nothing
+		// Items that do nothing via an explicit "use" action.
+		// CloakingField and DisruptorShield are passive: both are bound (docs/original-game/
+		// findings/B3-G1-wounds-gadgets.md) as per-tick effects driven off simply being worn
+		// (see BattleUnit::updateCloak / BattleUnit::updateDisruptorShield), not a triggered
+		// action, so returning false here is correct rather than "not yet implemented".
 		case AEquipmentType::Type::AlienDetector:
 		case AEquipmentType::Type::Ammo:
 		case AEquipmentType::Type::Armor:
@@ -5118,7 +5282,6 @@ bool BattleUnit::useItem(GameState &state, sp<AEquipment> item)
 		case AEquipmentType::Type::DimensionForceField:
 		case AEquipmentType::Type::DisruptorShield:
 		case AEquipmentType::Type::Loot:
-		case AEquipmentType::Type::MindShield:
 		case AEquipmentType::Type::MultiTracker:
 		case AEquipmentType::Type::StructureProbe:
 		case AEquipmentType::Type::VortexAnalyzer:
@@ -5145,6 +5308,10 @@ bool BattleUnit::useItem(GameState &state, sp<AEquipment> item)
 				}
 			}
 			item->inUse = !item->inUse;
+			return true;
+		case AEquipmentType::Type::MindShield:
+			mindShieldBonus = applyMindShieldIncrement(mindShieldBonus);
+			item->inUse = true;
 			return true;
 		case AEquipmentType::Type::MediKit:
 			// Initial use of medikit just brings up interface, action and TU spent happens
@@ -5545,7 +5712,16 @@ Vec3<float> BattleUnit::getMuzzleLocation() const
 
 Vec3<float> BattleUnit::getEyeLocation() const
 {
-	return Vec3<float>{(int)position.x + 0.5f, (int)position.y + 0.5f,
+	// Snap to the centre of whichever tile/block is currently occupied, ignoring any sub-tile
+	// interpolation from movement animation. A small unit's position is already a tile centre
+	// (x+0.5, y+0.5), so truncating to the current integer tile and re-adding 0.5 recovers it. A
+	// large unit's position is its 2x2 block's own max-x/max-y/min-z corner, and a 2x2 block's
+	// centre coincides with that corner value exactly -- no +0.5 needed, and applying it (as this
+	// used to do unconditionally) put a large unit's eyes half a tile off from the block it
+	// actually occupies, and off from its own muzzle (getMuzzleLocation(), which is not offset).
+	Vec3<float> centre = isLarge() ? Vec3<float>{(float)(int)position.x, (float)(int)position.y, 0}
+	                               : Vec3<float>{(int)position.x + 0.5f, (int)position.y + 0.5f, 0};
+	return Vec3<float>{centre.x, centre.y,
 	                   (int)position.z +
 	                       ((float)agent->type->bodyType->muzzleZPosition.at(current_body_state)) /
 	                           40.0f};
@@ -5588,7 +5764,7 @@ bool BattleUnit::popFinishedMissions(GameState &state)
 	bool popped = false;
 	while (missions.size() > 0 && missions.front()->isFinished(state, *this))
 	{
-		LogWarning("Unit {0} mission \"{1}\" finished", id, missions.front()->getName());
+		LogInfo("Unit {0} mission \"{1}\" finished", id, missions.front()->getName());
 		missions.pop_front();
 		popped = true;
 		// We may have retreated as a result of finished mission
@@ -5604,7 +5780,7 @@ bool BattleUnit::popFinishedMissions(GameState &state)
 		}
 		else
 		{
-			LogWarning("No next unit mission, going idle");
+			LogInfo("No next unit mission, going idle");
 			break;
 		}
 	}
