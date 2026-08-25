@@ -1301,8 +1301,29 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
         except (ValueError, IndexError):
             return -1
 
-    d.select_assignment_rows(d.status())
-    time.sleep(0.3)
+    # Address the rows by name before resorting to pixels. AGENT_SELECT_BOX is a MultilistBox
+    # whose entries are themselves list controls -- agents on the left, craft on the right
+    # (agentassignment.cpp:345-361) -- so the nested "item N item M" form reaches a row directly,
+    # and does not care where the screen happens to draw it. The measured offsets were taken on
+    # AlertScreen and simply miss here.
+    for depth in (2, 1, 3):
+        for i in range(4):
+            for j in range(6):
+                path = "item 0 " * (depth - 2) + f"item {i} item {j}"
+                try:
+                    d.h.send(f"control AGENT_SELECT_BOX {path} click")
+                except (HarnessError, OSError):
+                    continue
+                time.sleep(0.08)
+            if selected_count() > 0:
+                d.say(f"  [raid] rows select via AGENT_SELECT_BOX item {i} item N (depth {depth})")
+                break
+        if selected_count() > 0:
+            break
+
+    if selected_count() == 0:
+        d.select_assignment_rows(d.status())
+        time.sleep(0.3)
     if selected_count() == 0:
         box = d.controls(d.status()).get("AGENT_ASSIGNMENT")
         if box and box.w > 0:
