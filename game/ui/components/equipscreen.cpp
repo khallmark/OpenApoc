@@ -20,18 +20,22 @@ EquipmentPaperDoll::EquipmentPaperDoll(Vec2<int> position, Vec2<int> size, Vec2<
 Vec2<int>
 EquipmentPaperDoll::getSlotPositionFromScreenPosition(const Vec2<int> &screenPosition) const
 {
-	auto pos = screenPosition - this->resolvedLocation;
-	return pos / slotSizePixels;
+	const int s = fw().uiGetScale();
+	auto pos = screenPosition - this->getLocationOnScreen();
+	return pos / (slotSizePixels * s);
 }
 
 Vec2<int> EquipmentPaperDoll::getScreenPositionFromSlotPosition(const Vec2<int> &slot) const
 {
-	return this->resolvedLocation + slot * slotSizePixels;
+	const int s = fw().uiGetScale();
+	return this->getLocationOnScreen() + slot * slotSizePixels * s;
 }
 
 Vec2<int> EquipmentPaperDoll::getScreenPositionFromSlotPosition(const Vec2<float> &slot) const
 {
-	return this->resolvedLocation + Vec2<int>(slot.x * slotSizePixels.x, slot.y * slotSizePixels.y);
+	const int s = fw().uiGetScale();
+	return this->getLocationOnScreen() +
+	       Vec2<int>(slot.x * slotSizePixels.x * s, slot.y * slotSizePixels.y * s);
 }
 
 void EquipmentPaperDoll::setObject(sp<EquippableObject> newObject)

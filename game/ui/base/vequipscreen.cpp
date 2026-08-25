@@ -94,10 +94,61 @@ VEquipScreen::VEquipScreen(sp<GameState> state)
 	this->setHighlightedSlotType(EquipmentSlotType::VehicleWeapon);
 }
 
-VEquipScreen::~VEquipScreen() = default;
+VEquipScreen::~VEquipScreen() { setHarnessQueryHandler(previousHarnessHandler); }
+
+void VEquipScreen::registerVEquipIntrospection()
+{
+	// The inventory rows are drawn from a per-frame list of screen rects (inventoryItems), with
+	// no control ids of any kind, so the only way a driver can fit a weapon is to ask this screen
+	// where the items are. Without it, better guns simply sat in the warehouse: a campaign flew
+	// craft with their default armament while two Bolter 4000s and two Lancer 7000s went unused,
+	// and lost the craft.
+	previousHarnessHandler = getHarnessQueryHandler();
+	auto previous = previousHarnessHandler;
+	VEquipScreen *screen = this;
+	setHarnessQueryHandler(
+	    [previous, screen](const UString &query) -> UString
+	    {
+		    const auto q = to_lower(query);
+		    if (q == "vequip_items")
+		    {
+			    UString out;
+			    int n = 0;
+			    for (const auto &pair : screen->inventoryItems)
+			    {
+				    const auto &rect = pair.first;
+				    const auto &type = pair.second;
+				    if (!type)
+				    {
+					    continue;
+				    }
+				    UString name = type->name;
+				    std::replace(name.begin(), name.end(), ' ', '_');
+				    if (n++ > 0)
+				    {
+					    out += "|";
+				    }
+				    // Report damage as well as identity: a driver choosing between a Bolter 4000
+				    // and a Lancer 7000 needs to know which one actually hits harder.
+				    out += format("{0}:at={1},{2}:size={3},{4}:weapon={5}:damage={6}:air={7}", name,
+				                   rect.p0.x, rect.p0.y, rect.p1.x - rect.p0.x,
+				                   rect.p1.y - rect.p0.y,
+				                   type->type == EquipmentSlotType::VehicleWeapon ? 1 : 0,
+				                   type->damage,
+				                   type->users.count(VEquipmentType::User::Air) ? 1 : 0);
+			    }
+			    UString veh = screen->selected ? screen->selected->name : UString("-");
+			    std::replace(veh.begin(), veh.end(), ' ', '_');
+			    return format("count={0} vehicle={1} detail={2}", n, veh,
+			                  out.empty() ? UString("-") : out);
+		    }
+		    return previous ? previous(query) : UString("");
+	    });
+}
 
 void VEquipScreen::begin()
 {
+	registerVEquipIntrospection();
 	form->findControlTyped<Label>("TEXT_FUNDS")->setText(state->getPlayerBalance());
 
 	vehicleSelectBox = form->findControlTyped<ListBox>("VEHICLE_SELECT_BOX");
@@ -371,7 +422,7 @@ void VEquipScreen::eventOccurred(Event *e)
 			Vec2<int> equipmentPos = fw().getCursor().getPosition() + this->draggedEquipmentOffset;
 			// If this is within the grid try to snap it
 			Vec2<int> equipmentGridPos = equipmentPos - equipOffset;
-			equipmentGridPos /= EQUIP_GRID_SLOT_SIZE;
+			equipmentGridPos /= (EQUIP_GRID_SLOT_SIZE * fw().uiGetScale());
 			if (this->selected->canAddEquipment(equipmentGridPos, this->draggedEquipment))
 			{
 				if (!draggedEquipment->research_dependency.satisfied())
@@ -511,8 +562,9 @@ void VEquipScreen::render()
 		// Draw equipment we're currently dragging (snapping to the grid if possible)
 		Vec2<int> equipmentPos = fw().getCursor().getPosition() + this->draggedEquipmentOffset;
 		// If this is within the grid try to snap it
+		const Vec2<int> slotPx = EQUIP_GRID_SLOT_SIZE * fw().uiGetScale();
 		Vec2<int> equipmentGridPos = equipmentPos - equipOffset;
-		equipmentGridPos /= EQUIP_GRID_SLOT_SIZE;
+		equipmentGridPos /= slotPx;
 		if (equipmentGridPos.x < 0 || equipmentGridPos.x >= EQUIP_GRID_SLOTS.x ||
 		    equipmentGridPos.y < 0 || equipmentGridPos.y >= EQUIP_GRID_SLOTS.y)
 		{
@@ -521,7 +573,7 @@ void VEquipScreen::render()
 		else
 		{
 			// Inside the grid, snap
-			equipmentPos = equipmentGridPos * EQUIP_GRID_SLOT_SIZE;
+			equipmentPos = equipmentGridPos * slotPx;
 			equipmentPos += equipOffset;
 		}
 		fw().renderer->draw(this->draggedEquipment->equipscreen_sprite, equipmentPos);

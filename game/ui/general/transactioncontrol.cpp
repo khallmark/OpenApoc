@@ -17,6 +17,7 @@
 #include "game/state/gamestate.h"
 #include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/city/vammotype.h"
+#include "game/state/rules/city/vequipmenttype.h"
 #include "game/state/shared/organisation.h"
 #include "game/ui/general/messagebox.h"
 
@@ -35,6 +36,23 @@ sp<Image> TransactionControl::scrollRight;
 sp<Image> TransactionControl::transactionShade;
 sp<BitmapFont> TransactionControl::labelFont;
 bool TransactionControl::resourcesInitialised = false;
+
+void TransactionControl::releaseCachedImages()
+{
+	bgLeft = nullptr;
+	bgRight = nullptr;
+	purchaseBoxIcon = nullptr;
+	purchaseXComIcon = nullptr;
+	purchaseArrow = nullptr;
+	alienContainedDetain = nullptr;
+	alienContainedKill = nullptr;
+	scrollLeft = nullptr;
+	scrollRight = nullptr;
+	transactionShade = nullptr;
+	labelFont = nullptr;
+	// initResources() repopulates these if a transaction screen is opened again.
+	resourcesInitialised = false;
+}
 
 void TransactionControl::initResources()
 {
@@ -271,7 +289,7 @@ TransactionControl::createControl(GameState &state, StateRef<AEquipmentType> age
 	int price = 0;
 	int storeSpace = agentEquipmentType->store_space;
 
-	const bool researched = isBio || agentEquipmentType->isResearched();
+	const bool researched = isBio || agentEquipmentType->isEconomyVisible();
 
 	std::vector<int> initialStock;
 	bool hasStock = false;
@@ -302,11 +320,9 @@ TransactionControl::createControl(GameState &state, StateRef<AEquipmentType> age
 		if (state.economy.find(agentEquipmentType.id) != state.economy.end())
 		{
 			auto &economy = state.economy[agentEquipmentType.id];
-			int week = state.gameTime.getWeek();
 			initialStock[ECONOMY_IDX] = economy.currentStock;
 			price = economy.currentPrice;
-			economyUnavailable =
-			    economy.weekAvailable == 0 || economy.weekAvailable > week || !researched;
+			economyUnavailable = !agentEquipmentType->isMarketListed(state);
 		}
 		if (!hasStock && economyUnavailable)
 		{
@@ -342,6 +358,7 @@ TransactionControl::createControl(GameState &state, StateRef<VEquipmentType> veh
 	int price = 0;
 	int storeSpace = vehicleEquipmentType->store_space;
 	bool researched = vehicleEquipmentType->research_dependency.satisfied();
+	const bool economyVisible = vehicleEquipmentType->isEconomyVisible(state);
 
 	std::vector<int> initialStock;
 	bool hasStock = false;
@@ -365,11 +382,9 @@ TransactionControl::createControl(GameState &state, StateRef<VEquipmentType> veh
 		if (state.economy.find(vehicleEquipmentType.id) != state.economy.end())
 		{
 			auto &economy = state.economy[vehicleEquipmentType.id];
-			int week = state.gameTime.getWeek();
 			initialStock[ECONOMY_IDX] = economy.currentStock;
 			price = economy.currentPrice;
-			economyUnavailable =
-			    economy.weekAvailable == 0 || economy.weekAvailable > week || !researched;
+			economyUnavailable = !economyVisible;
 		}
 		if (!hasStock && economyUnavailable)
 		{

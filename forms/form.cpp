@@ -2,13 +2,31 @@
 #include "dependencies/pugixml/src/pugixml.hpp"
 #include "framework/data.h"
 #include "framework/framework.h"
+#include "harness_actions.h"
+#include <algorithm>
 
 namespace OpenApoc
 {
 
-Form::Form() : Control() {}
+namespace
+{
+// Raw pointers, not shared: this is a liveness index, not ownership. Entries are added and
+// removed by the constructor/destructor pair below, so a pointer here is always a live Form.
+std::vector<Form *> g_liveForms;
+} // namespace
 
-Form::~Form() = default;
+const std::vector<Form *> &Form::liveForms() { return g_liveForms; }
+
+Form::Form() : Control()
+{
+	g_liveForms.push_back(this);
+	installFormsHarnessActions();
+}
+
+Form::~Form()
+{
+	g_liveForms.erase(std::remove(g_liveForms.begin(), g_liveForms.end(), this), g_liveForms.end());
+}
 
 void Form::readFormStyle(pugi::xml_node *node)
 {
@@ -33,11 +51,40 @@ void Form::readFormStyle(pugi::xml_node *node)
 
 void Form::eventOccured(Event *e) { Control::eventOccured(e); }
 
-void Form::onRender() { Control::onRender(); }
+void Form::onRender()
+{
+	if (auto self = std::dynamic_pointer_cast<Form>(weak_from_this().lock()))
+	{
+		notifyVisibleForm(self);
+	}
+	Control::onRender();
+}
 
 void Form::update()
 {
+	if (auto self = std::dynamic_pointer_cast<Form>(weak_from_this().lock()))
+	{
+		notifyVisibleForm(self);
+	}
 	Control::update();
+	if (!getParent())
+	{
+		const Vec2<int> parent = getParentSize();
+		const int scale = uiScale();
+		if (parent != lastAlignParent || scale != lastAlignUiScale)
+		{
+			if (alignedX)
+			{
+				align(alignmentX);
+			}
+			if (alignedY)
+			{
+				align(alignmentY);
+			}
+			lastAlignParent = parent;
+			lastAlignUiScale = scale;
+		}
+	}
 	resolveLocation();
 }
 

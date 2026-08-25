@@ -22,6 +22,7 @@
 #include "game/state/city/agentmission.h"
 #include "game/state/city/base.h"
 #include "game/state/city/building.h"
+#include "game/state/shared/doodad.h"
 #include "game/state/city/city.h"
 #include "game/state/city/facility.h"
 #include "game/state/city/research.h"
@@ -31,10 +32,14 @@
 #include "game/state/city/vequipment.h"
 #include "game/state/gameevent.h"
 #include "game/state/gamestate.h"
+#include "framework/harness.h"
+#include "game/state/gamestateintrospect.h"
+#include "game/state/gametime.h"
 #include "game/state/message.h"
 #include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/battle/battlemap.h"
 #include "game/state/rules/city/citycommonsamplelist.h"
+#include "game/state/rules/city/facilitytype.h"
 #include "game/state/rules/city/scenerytiletype.h"
 #include "game/state/rules/city/ufopaedia.h"
 #include "game/state/rules/city/vammotype.h"
@@ -65,9 +70,11 @@
 #include "game/ui/components/locationscreen.h"
 #include "game/ui/general/aequipscreen.h"
 #include "game/ui/general/ingameoptions.h"
+#include "game/ui/general/mainmenu.h"
 #include "game/ui/general/messagebox.h"
 #include "game/ui/general/messagelogscreen.h"
 #include "game/ui/general/notificationscreen.h"
+#include "game/ui/general/videoscreen.h"
 #include "game/ui/ufopaedia/ufopaediacategoryview.h"
 #include "game/ui/ufopaedia/ufopaediaview.h"
 #include "library/sp.h"
@@ -505,7 +512,7 @@ void CityView::showWeeklyFundingReport()
 
 void CityView::tryOpenUfopaediaEntry(StateRef<UfopaediaEntry> ufopaediaEntry)
 {
-	if (ufopaediaEntry && ufopaediaEntry->dependency.satisfied())
+	if (ufopaediaEntry && ufopaediaEntry->isVisible(*this->state))
 	{
 		sp<UfopaediaCategory> ufopaedia_category;
 		for (auto &cat : this->state->ufopaedia)
@@ -1192,6 +1199,8 @@ CityView::CityView(sp<GameState> state)
       lastSpeed(CityUpdateSpeed::Pause), state(state), followVehicle(false),
       selectionState(CitySelectionState::Normal)
 {
+	registerGameStateIntrospection(state);
+	registerCityViewIntrospection();
 	weaponType.resize(3);
 	weaponDisabled.resize(3, false);
 	weaponAmmo.resize(3, -1);
@@ -1224,7 +1233,8 @@ CityView::CityView(sp<GameState> state)
 	}
 	this->baseForm->findControl("BUTTON_FOLLOW_VEHICLE")
 	    ->addCallback(FormEventType::CheckBoxChange,
-	                  [this](FormsEvent *e) {
+	                  [this](FormsEvent *e)
+	                  {
 		                  this->followVehicle =
 		                      std::dynamic_pointer_cast<CheckBox>(e->forms().RaisedBy)->isChecked();
 	                  });
@@ -1257,7 +1267,8 @@ CityView::CityView(sp<GameState> state)
 	                  [this](Event *) { this->updateSpeed = CityUpdateSpeed::Speed5; });
 	this->baseForm->findControl("BUTTON_SHOW_ALIEN_INFILTRATION")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *) {
+	                  [this](Event *)
+	                  {
 		                  fw().stageQueueCommand(
 		                      {StageCmd::Command::PUSH, mksp<InfiltrationScreen>(this->state)});
 	                  });
@@ -1267,19 +1278,22 @@ CityView::CityView(sp<GameState> state)
 	        { fw().stageQueueCommand({StageCmd::Command::PUSH, mksp<ScoreScreen>(this->state)}); });
 	this->baseForm->findControl("BUTTON_SHOW_UFOPAEDIA")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *) {
+	                  [this](Event *)
+	                  {
 		                  fw().stageQueueCommand(
 		                      {StageCmd::Command::PUSH, mksp<UfopaediaView>(this->state)});
 	                  });
 	this->baseForm->findControl("BUTTON_SHOW_OPTIONS")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *) {
+	                  [this](Event *)
+	                  {
 		                  fw().stageQueueCommand(
 		                      {StageCmd::Command::PUSH, mksp<InGameOptions>(this->state)});
 	                  });
 	this->baseForm->findControl("BUTTON_SHOW_LOG")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *) {
+	                  [this](Event *)
+	                  {
 		                  fw().stageQueueCommand({StageCmd::Command::PUSH,
 		                                          mksp<MessageLogScreen>(this->state, *this)});
 	                  });
@@ -1817,7 +1831,14 @@ CityView::CityView(sp<GameState> state)
 #endif
 }
 
-CityView::~CityView() = default;
+CityView::~CityView()
+{
+	// Our harness handler captured a raw `this`. Normally the next gameplay stage re-registers
+	// and displaces it, but "Abandon Game" replaces the stack with MainMenu and nothing
+	// re-registers -- leaving a global std::function holding a dangling CityView. Put back
+	// whatever was installed before us.
+	setHarnessQueryHandler(previousHarnessHandler);
+}
 
 void CityView::begin()
 {
@@ -1852,19 +1873,72 @@ void CityView::resume()
 	modifierRCtrl = false;
 	modifierRShift = false;
 
-	this->uiTabs[0]->findControlTyped<Label>("TEXT_BASE_NAME")->setText(state->current_base->name);
+	// There may be no base left. Losing a base-defence mission destroys it, Base::die clears
+	// current_base, and BattleDebriefing's OK handler constructs a CityView immediately -- before
+	// the XComDefeated event it raised gets a chance to replace the stage stack. Dereferencing an
+	// empty StateRef yields nullptr rather than throwing, so this read used to segfault on the
+	// way out of the player's final battle.
+	this->uiTabs[0]->findControlTyped<Label>("TEXT_BASE_NAME")->setText(currentBaseName());
 
 	refreshBaseView();
 }
 
+void CityView::pause()
+{
+	CityTileView::pause();
+	snapshotCity();
+}
+
+void CityView::snapshotCity()
+{
+	const Vec2<unsigned int> displayPixels{(unsigned)fw().displayGetWidth(),
+	                                       (unsigned)fw().displayGetHeight()};
+	if (!this->surface || this->surface->size != displayPixels)
+	{
+		this->surface = mksp<Surface>(displayPixels);
+	}
+	RendererSurfaceBinding b(*fw().renderer, this->surface);
+	renderCityScene();
+}
+
+// Everything drawMiniBase() reads with the default highlight: the corridor grid and
+// each facility's identity, footprint and build state.
+static size_t miniBaseSignature(const Base &base)
+{
+	size_t hash = 1469598103934665603u;
+	auto mix = [&hash](size_t value)
+	{
+		hash = (hash ^ value) * 1099511628211u;
+	};
+
+	mix(base.facilities.size());
+	for (const auto &column : base.corridors)
+	{
+		for (const bool corridor : column)
+		{
+			mix(corridor ? 1u : 0u);
+		}
+	}
+	for (const auto &facility : base.facilities)
+	{
+		mix(std::hash<const Facility *>{}(facility.get()));
+		mix((size_t)facility->pos.x);
+		mix((size_t)facility->pos.y);
+		mix((size_t)facility->type->size);
+		mix((size_t)facility->buildTime);
+	}
+	return hash;
+}
+
 void CityView::refreshBaseView()
 {
+	// Called every frame while the base tab is up. Rebinding a button re-registers its
+	// click handler, and drawMiniBase() allocates a fresh image that costs a permanent
+	// slot in the renderer's sprite atlas, so both are gated on an actual change.
 	if (miniViews.size() != state->player_bases.size())
 	{
-		this->uiTabs[0]
-		    ->findControlTyped<Label>("TEXT_BASE_NAME")
-		    ->setText(state->current_base->name);
-		for (auto view : miniViews)
+		this->uiTabs[0]->findControlTyped<Label>("TEXT_BASE_NAME")->setText(currentBaseName());
+		for (auto &view : miniViews)
 		{
 			view->setData(nullptr);
 			view->setImage(nullptr);
@@ -1874,194 +1948,704 @@ void CityView::refreshBaseView()
 		}
 
 		miniViews.clear();
+		miniViewSignatures.clear();
+
+		int b = 0;
+		for (auto &pair : state->player_bases)
+		{
+			auto &viewBase = pair.second;
+			auto viewName = format("BUTTON_BASE_{0}", ++b);
+			auto view = this->uiTabs[0]->findControlTyped<GraphicButton>(viewName);
+			if (!view)
+			{
+				LogError("Failed to find UI control matching \"{0}\"", viewName);
+				continue;
+			}
+			view->setVisible(true);
+			view->setData(viewBase);
+			auto viewImage = BaseGraphics::drawMiniBase(*viewBase);
+			view->setImage(viewImage);
+			view->setDepressedImage(viewImage);
+			view->ToolTipText = viewBase->name;
+			if (miniViewsWithCallback.insert(view).second)
+			{
+				view->addCallback(
+				    FormEventType::ButtonClick,
+				    [this](FormsEvent *e)
+				    {
+					    auto clickedBase = StateRef<Base>(this->state.get(),
+					                                      e->forms().RaisedBy->getData<Base>());
+					    if (clickedBase == this->state->current_base)
+					    {
+						    this->setScreenCenterTile(clickedBase->building->crewQuarters);
+					    }
+					    else
+					    {
+						    this->state->current_base = clickedBase;
+						    this->uiTabs[0]
+						        ->findControlTyped<Label>("TEXT_BASE_NAME")
+						        ->setText(this->state->current_base->name);
+					    }
+				    });
+			}
+			miniViews.push_back(view);
+			miniViewSignatures.push_back(miniBaseSignature(*viewBase));
+		}
+		return;
 	}
 
-	int b = 0;
+	size_t index = 0;
 	for (auto &pair : state->player_bases)
 	{
-		auto &viewBase = pair.second;
-		auto viewName = format("BUTTON_BASE_{0}", ++b);
-		auto view = this->uiTabs[0]->findControlTyped<GraphicButton>(viewName);
-		if (!view)
+		if (index >= miniViews.size())
 		{
-			LogError("Failed to find UI control matching \"{0}\"", viewName);
+			break;
 		}
-		view->setVisible(true);
-		view->setData(viewBase);
-		auto viewImage = BaseGraphics::drawMiniBase(*viewBase);
-		view->setImage(viewImage);
-		view->setDepressedImage(viewImage);
-		view->ToolTipText = viewBase->name;
-		view->addCallback(FormEventType::ButtonClick,
-		                  [this](FormsEvent *e)
-		                  {
-			                  auto clickedBase = StateRef<Base>(
-			                      this->state.get(), e->forms().RaisedBy->getData<Base>());
-			                  if (clickedBase == this->state->current_base)
-			                  {
-				                  this->setScreenCenterTile(clickedBase->building->crewQuarters);
-			                  }
-			                  else
-			                  {
-				                  this->state->current_base = clickedBase;
-				                  this->uiTabs[0]
-				                      ->findControlTyped<Label>("TEXT_BASE_NAME")
-				                      ->setText(this->state->current_base->name);
-			                  }
-		                  });
-		miniViews.push_back(view);
+		const size_t signature = miniBaseSignature(*pair.second);
+		if (miniViewSignatures[index] != signature)
+		{
+			miniViewSignatures[index] = signature;
+			auto viewImage = BaseGraphics::drawMiniBase(*pair.second);
+			miniViews[index]->setImage(viewImage);
+			miniViews[index]->setDepressedImage(viewImage);
+		}
+		index++;
 	}
 }
 
 void CityView::render()
 {
-	if (!this->surface)
+	if (fw().stageGetCurrent() != this->shared_from_this())
 	{
-		this->drawCity = true;
-		this->surface = mksp<Surface>(fw().displayGetSize());
-	}
-
-	if (drawCity)
-	{
-		this->drawCity = false;
-		RendererSurfaceBinding b(*fw().renderer, this->surface);
-
-		CityTileView::render();
-		if (DEBUG_SHOW_VEHICLE_PATH || DEBUG_SHOW_VEHICLE_TARGETS)
+		if (this->surface)
 		{
-			static const Colour groundColor = {255, 255, 64, 255};
-			static const Colour flyingColor = {64, 255, 255, 255};
-			static const Colour targetXCOMColor = {0, 255, 0, 255};
-			static const Colour targetOtherColor = {255, 0, 0, 255};
-			static const Colour targetMutualColor = {255, 240, 0, 255};
-			for (auto &pair : state->vehicles)
-			{
-				auto v = pair.second;
-				if (DEBUG_SHOW_VEHICLE_PATH)
-				{
-					auto vTile = v->tileObject;
-					if (v->city != state->current_city)
-						continue;
-					if (!vTile)
-						continue;
-					if (v->missions.empty())
-					{
-						continue;
-					}
-					auto &path = v->missions.front().currentPlannedPath;
-					Vec3<float> prevPos = vTile->getPosition();
-					for (auto &pos : path)
-					{
-						Vec3<float> posf = pos;
-						posf += Vec3<float>{0.5f, 0.5f, 0.5f};
-						Vec2<float> screenPosA = this->tileToOffsetScreenCoords(prevPos);
-						Vec2<float> screenPosB = this->tileToOffsetScreenCoords(posf);
-
-						fw().renderer->drawLine(screenPosA, screenPosB,
-						                        v->type->isGround() ? groundColor : flyingColor);
-
-						prevPos = posf;
-					}
-				}
-				if (DEBUG_SHOW_VEHICLE_TARGETS)
-				{
-					if (v->city != state->current_city)
-						continue;
-					if (v->missions.empty())
-					{
-						continue;
-					}
-					StateRef<Vehicle> targetVehicle = v->missions.front().targetVehicle;
-					if (targetVehicle)
-					{
-						auto &targetPos = targetVehicle->position;
-						auto &attackerPos = v->position;
-						Vec2<float> targetScreenPos = this->tileToOffsetScreenCoords(targetPos);
-						Vec2<float> attackerScreenPos = this->tileToOffsetScreenCoords(attackerPos);
-
-						fw().renderer->drawLine(
-						    attackerScreenPos, targetScreenPos,
-						    targetVehicle->missions.front().targetVehicle == v ? targetMutualColor
-						    : v->owner == state->getPlayer()                   ? targetXCOMColor
-						                                                       : targetOtherColor);
-					}
-				}
-			}
+			fw().renderer->drawTinted(this->surface, {0, 0}, {128, 128, 128, 255});
 		}
-		if (DEBUG_SHOW_ROAD_PATHFINDING)
-		{
-			static const auto lineColorFriend = Colour(0, 0, 0, 255);
-			static const auto lineColorEnemy = Colour(255, 0, 0, 255);
+		return;
+	}
+	renderCityScene();
+}
 
-			for (int i = 0; i < state->current_city->roadSegments.size(); i++)
+void CityView::renderCityScene()
+{
+	CityTileView::render();
+	if (DEBUG_SHOW_VEHICLE_PATH || DEBUG_SHOW_VEHICLE_TARGETS)
+	{
+		static const Colour groundColor = {255, 255, 64, 255};
+		static const Colour flyingColor = {64, 255, 255, 255};
+		static const Colour targetXCOMColor = {0, 255, 0, 255};
+		static const Colour targetOtherColor = {255, 0, 0, 255};
+		static const Colour targetMutualColor = {255, 240, 0, 255};
+		for (auto &pair : state->vehicles)
+		{
+			auto v = pair.second;
+			if (DEBUG_SHOW_VEHICLE_PATH)
 			{
-				auto &s = state->current_city->roadSegments[i];
-				if (s.empty())
+				auto vTile = v->tileObject;
+				if (v->city != state->current_city)
+					continue;
+				if (!vTile)
+					continue;
+				if (v->missions.empty())
 				{
 					continue;
 				}
-				// Connections
-				auto color = (s.connections.size() > 2 && s.tilePosition.size() > 1)
-				                 ? lineColorEnemy
-				                 : lineColorFriend;
-				int count = 0;
-				for (auto &c : s.connections)
+				auto &path = v->missions.front().currentPlannedPath;
+				Vec3<float> prevPos = vTile->getPosition();
+				for (auto &pos : path)
 				{
-					Vec3<float> thisPos =
-					    s.connections.front() == c ? s.tilePosition.front() : s.tilePosition.back();
-					thisPos += Vec3<float>{0.5f, 0.5f, 0.0f};
-					auto &s2 = state->current_city->roadSegments[c];
-					Vec3<float> tarPos = s2.connections.front() == i ? s2.tilePosition.front()
-					                                                 : s2.tilePosition.back();
-					tarPos += Vec3<float>{0.5f, 0.5f, 0.0f};
-					fw().renderer->drawLine(
-					    this->tileToOffsetScreenCoords(thisPos),
-					    this->tileToOffsetScreenCoords(thisPos * 0.6f + tarPos * 0.4f), color);
-					if (s.connections.size() > 2 && s.tilePosition.size() > 1)
-					{
-						auto &img = debugLabelsOK[count++];
-						fw().renderer->draw(img, this->tileToOffsetScreenCoords(thisPos) +
-						                             Vec2<float>{count * 8, -10});
-					}
-				}
-				// Tiles
-				for (auto j = 0; j < s.tilePosition.size(); j++)
-				{
-					auto &img = s.tileIntact[j] ? debugLabelsOK[i] : debugLabelsDead[i];
-					fw().renderer->draw(img, this->tileToOffsetScreenCoords(s.tilePosition[j]));
+					Vec3<float> posf = pos;
+					posf += Vec3<float>{0.5f, 0.5f, 0.5f};
+					Vec2<float> screenPosA = this->tileToOffsetScreenCoords(prevPos);
+					Vec2<float> screenPosB = this->tileToOffsetScreenCoords(posf);
+
+					fw().renderer->drawLine(screenPosA, screenPosB,
+					                        v->type->isGround() ? groundColor : flyingColor);
+
+					prevPos = posf;
 				}
 			}
-		}
-
-		baseForm->render();
-		overlayTab->render();
-		debugOverlay->render();
-		if (activeTab == uiTabs[0])
-		{
-			// Highlight selected base
-			for (auto &view : miniViews)
+			if (DEBUG_SHOW_VEHICLE_TARGETS)
 			{
-				auto viewBase = view->getData<Base>();
-				if (state->current_base == viewBase)
+				if (v->city != state->current_city)
+					continue;
+				if (v->missions.empty())
 				{
-					Vec2<int> pos = view->getLocationOnScreen() - 1;
-					Vec2<int> size = view->Size + 2;
-					fw().renderer->drawRect(pos, size, Colour{255, 0, 0});
-					break;
+					continue;
+				}
+				StateRef<Vehicle> targetVehicle = v->missions.front().targetVehicle;
+				if (targetVehicle)
+				{
+					auto &targetPos = targetVehicle->position;
+					auto &attackerPos = v->position;
+					Vec2<float> targetScreenPos = this->tileToOffsetScreenCoords(targetPos);
+					Vec2<float> attackerScreenPos = this->tileToOffsetScreenCoords(attackerPos);
+
+					fw().renderer->drawLine(
+					    attackerScreenPos, targetScreenPos,
+					    targetVehicle->missions.front().targetVehicle == v ? targetMutualColor
+					    : v->owner == state->getPlayer()                   ? targetXCOMColor
+					                                                       : targetOtherColor);
 				}
 			}
 		}
 	}
+	if (DEBUG_SHOW_ROAD_PATHFINDING)
+	{
+		static const auto lineColorFriend = Colour(0, 0, 0, 255);
+		static const auto lineColorEnemy = Colour(255, 0, 0, 255);
 
-	// If there's a modal dialog, darken the screen
-	if (fw().stageGetCurrent() != this->shared_from_this())
-	{
-		fw().renderer->drawTinted(this->surface, {0, 0}, {128, 128, 128, 255});
+		for (int i = 0; i < state->current_city->roadSegments.size(); i++)
+		{
+			auto &s = state->current_city->roadSegments[i];
+			if (s.empty())
+			{
+				continue;
+			}
+			// Connections
+			auto color = (s.connections.size() > 2 && s.tilePosition.size() > 1)
+			                 ? lineColorEnemy
+			                 : lineColorFriend;
+			int count = 0;
+			for (auto &c : s.connections)
+			{
+				Vec3<float> thisPos =
+				    s.connections.front() == c ? s.tilePosition.front() : s.tilePosition.back();
+				thisPos += Vec3<float>{0.5f, 0.5f, 0.0f};
+				auto &s2 = state->current_city->roadSegments[c];
+				Vec3<float> tarPos = s2.connections.front() == i ? s2.tilePosition.front()
+				                                                 : s2.tilePosition.back();
+				tarPos += Vec3<float>{0.5f, 0.5f, 0.0f};
+				fw().renderer->drawLine(
+				    this->tileToOffsetScreenCoords(thisPos),
+				    this->tileToOffsetScreenCoords(thisPos * 0.6f + tarPos * 0.4f), color);
+				if (s.connections.size() > 2 && s.tilePosition.size() > 1)
+				{
+					auto &img = debugLabelsOK[count++];
+					fw().renderer->draw(img, this->tileToOffsetScreenCoords(thisPos) +
+					                             Vec2<float>{count * 8, -10});
+				}
+			}
+			// Tiles
+			for (auto j = 0; j < s.tilePosition.size(); j++)
+			{
+				auto &img = s.tileIntact[j] ? debugLabelsOK[i] : debugLabelsDead[i];
+				fw().renderer->draw(img, this->tileToOffsetScreenCoords(s.tilePosition[j]));
+			}
+		}
 	}
-	else
+
+	baseForm->render();
+	overlayTab->render();
+	debugOverlay->render();
+	if (activeTab == uiTabs[0])
 	{
-		fw().renderer->draw(this->surface, {0, 0});
+		// Highlight selected base
+		for (auto &view : miniViews)
+		{
+			auto viewBase = view->getData<Base>();
+			if (state->current_base == viewBase)
+			{
+				Vec2<int> pos = view->getLocationOnScreen() - 1;
+				Vec2<int> size = view->getSizeOnDisplay() + 2;
+				fw().renderer->drawRect(pos, size, Colour{255, 0, 0});
+				break;
+			}
+		}
 	}
+}
+
+UString CityView::currentBaseName() const
+{
+	// Empty once the player's last base has been destroyed; StateRef::operator-> would return
+	// nullptr rather than throw, so callers must not dereference it blind.
+	return state->current_base ? state->current_base->name : UString("");
+}
+
+void CityView::registerCityViewIntrospection()
+{
+	// Chain in front of the GameState handler installed by registerGameStateIntrospection():
+	// view-space queries are answered here, everything else falls through unchanged.
+	previousHarnessHandler = getHarnessQueryHandler();
+	auto stateHandler = previousHarnessHandler;
+	std::weak_ptr<GameState> weakState = state;
+	CityView *view = this;
+	setHarnessQueryHandler(
+	    [stateHandler, weakState, view](const UString &query) -> UString
+	    {
+		    const auto q = to_lower(query);
+		    auto gameState = weakState.lock();
+		    // "centre_on_ufo": bring the nearest live UFO into view so a driver can click it.
+		    // Craft off the visible area cannot be targeted at all, which made automated
+		    // interception a no-op whenever the camera sat over the player's base.
+		    // Our own base building. Craft parked in its hangar have no tileObject, so
+		    // centre_on_own cannot find them at campaign start -- but crewing a transport means
+		    // clicking the building itself, which is always on the map.
+		    // Which craft the city view currently has selected, and whether any of them can
+		    // actually recover a wreck. handleClickedVehicle scans
+		    // cityViewSelectedOwnedVehicles for a Soldier and silently issues no mission when it
+		    // finds none (cityview.cpp:1069-1090), so a driver that has crewed a transport but
+		    // left an interceptor selected gets no error and no recovery -- just nothing.
+		    if (gameState && q == "selected")
+		    {
+			    size_t count = 0, withSoldier = 0;
+			    for (const auto &v : gameState->current_city->cityViewSelectedOwnedVehicles)
+			    {
+				    if (!v || v->owner != gameState->getPlayer())
+				    {
+					    continue;
+				    }
+				    count++;
+				    for (const auto &a : v->currentAgents)
+				    {
+					    if (a->type->role == AgentType::Role::Soldier)
+					    {
+						    withSoldier++;
+						    break;
+					    }
+				    }
+			    }
+			    // Also report what the first selected craft is currently doing: a refused
+			    // recovery is indistinguishable from a successful one otherwise, since neither
+			    // produces a message.
+			    UString mission = "none";
+			    for (auto &v : gameState->current_city->cityViewSelectedOwnedVehicles)
+			    {
+				    if (v && v->owner == gameState->getPlayer() && !v->missions.empty())
+				    {
+					    mission = v->missions.front().getName();
+					    break;
+				    }
+			    }
+			    std::replace(mission.begin(), mission.end(), ' ', '_');
+			    UString ids;
+			    for (auto &v : gameState->current_city->cityViewSelectedOwnedVehicles)
+			    {
+				    if (v && v->owner == gameState->getPlayer())
+				    {
+					    ids += (ids.empty() ? "" : "|") +
+					           format("{0}:{1}", v->name, v->currentAgents.size());
+				    }
+			    }
+			    return format("selected={0} with_soldier={1} mission={2} ids={3}", count,
+			                  withSoldier, mission, ids.empty() ? UString("-") : ids);
+		    }
+		    // Follow whatever craft the driver currently has selected, so the view tracks the
+		    // action instead of staying wherever it was last pointed.
+		    if (gameState && q == "centre_on_selected")
+		    {
+			    for (auto &v : gameState->current_city->cityViewSelectedOwnedVehicles)
+			    {
+				    if (!v || v->owner != gameState->getPlayer() || !v->tileObject)
+				    {
+					    continue;
+				    }
+				    view->setScreenCenterTile(v->getPosition());
+				    const auto screen = view->tileToOffsetScreenCoords<float>(v->getPosition());
+				    return format("centred=1 at={0},{1},0", (int)screen.x, (int)screen.y);
+			    }
+			    return UString("centred=0");
+		    }
+		    if (gameState && q == "centre_on_base")
+		    {
+			    const auto base = gameState->current_base;
+			    if (!base || !base->building)
+			    {
+				    return UString("centred=0");
+			    }
+			    const auto &b = base->building->bounds;
+			    const Vec3<float> mid{(b.p0.x + b.p1.x) / 2.0f, (b.p0.y + b.p1.y) / 2.0f, 2.0f};
+			    view->setScreenCenterTile(mid);
+			    const auto screen = view->tileToOffsetScreenCoords<float>(mid);
+			    return format("centred=1 at={0},{1},0", (int)screen.x, (int)screen.y);
+		    }
+		    // Centre on a wreck that can be recovered without a battle: a craft type with no
+		    // battle_map is recovered unmanned and force-completes the same alien-craft research
+		    // for free (cityview.cpp UfoRecoveryBegin). With soldiers scarce, these are the only
+		    // wrecks worth going to.
+		    // Dimension gates. Crossing to the alien city is the gate on the entire endgame, and
+		    // it is ordered by right-clicking a portal doodad with a shifter-equipped craft
+		    // selected (cityview.cpp Doodad handling -> VehicleMission::gotoPortal). The portals
+		    // live in City::portals as doodads, so their screen positions are not otherwise
+		    // discoverable by a driver.
+		    // Frame the next alien building that is actually raidable: alien-owned, and with its
+		    // accessTopic researched, since BuildingScreen refuses the raid otherwise
+		    // (buildingscreen.cpp:112-122). Winning one force-completes the unlock for the next,
+		    // and the last of them ends the game.
+		    if (gameState && q == "centre_on_basesite")
+		    {
+			    // Frame a building that could become a second base. XComDefeated is raised on
+			    // exactly one condition -- player_bases.empty() (base.cpp:150-159) -- so a
+			    // campaign with two bases cannot be ended by losing one, however badly a base
+			    // defence goes. Funding termination merely zeroes income; it is not defeat.
+			    // BaseSelectScreen only accepts a building with a base_layout owned by the
+			    // government (baseselectscreen.cpp:93-97), and the price is set from its
+			    // footprint, so report the cheapest eligible site and whether it is affordable.
+			    if (!gameState->current_city)
+			    {
+				    return UString("centred=0");
+			    }
+			    const auto gov = gameState->getGovernment();
+			    sp<Building> best;
+			    UString bestId;
+			    int bestPrice = 0;
+			    for (const auto &ref : gameState->current_city->buildings)
+			    {
+				    const auto bld = ref.getSp();
+				    if (!bld || bld->base_layout.id.empty() || !bld->owner ||
+				        bld->owner.id != gov.id)
+				    {
+					    continue;
+				    }
+				    if (bld->base)
+				    {
+					    continue;
+				    }
+				    const Vec2<int> size = bld->bounds.size();
+				    // BaseBuyScreen::COST_PER_TILE is private; it is 2000
+				    // (basebuyscreen.h:18) and the formula is basebuyscreen.cpp:31.
+				    const int price = std::min(size.x, 8) * std::min(size.y, 8) * 2000;
+				    if (!best || price < bestPrice)
+				    {
+					    best = bld;
+					    bestId = ref.id;
+					    bestPrice = price;
+				    }
+			    }
+			    if (!best)
+			    {
+				    return UString("centred=0");
+			    }
+			    const auto &bb = best->bounds;
+			    const Vec3<float> mid{(bb.p0.x + bb.p1.x) / 2.0f, (bb.p0.y + bb.p1.y) / 2.0f, 2.0f};
+			    view->setScreenCenterTile(mid);
+			    const auto screen = view->tileToOffsetScreenCoords<float>(mid);
+			    return format("centred=1 building={0} price={1} balance={2} affordable={3} "
+			                  "bases={4} at={5},{6},0",
+			                  bestId, bestPrice, gameState->getPlayer()->balance,
+			                  gameState->getPlayer()->balance >= bestPrice ? 1 : 0,
+			                  gameState->player_bases.size(), (int)screen.x, (int)screen.y);
+		    }
+		    if (gameState && q.substr(0, 18) == "centre_on_building")
+		    {
+			    // Frame one NAMED building. This exists so a driver can act on what the game has
+			    // already told it -- an alert naming the building aliens were seen entering --
+			    // rather than consulting a global list of every infiltrated building, which is
+			    // knowledge no player has. A human watches the UFOs and infers; the honest
+			    // equivalent is to remember the alerts and come back to those addresses.
+			    if (!gameState->current_city)
+			    {
+				    return UString("centred=0");
+			    }
+			    UString wanted = q.length() > 19 ? query.substr(19) : UString("");
+			    while (!wanted.empty() && wanted[0] == ' ')
+			    {
+				    wanted = wanted.substr(1);
+			    }
+			    if (wanted.empty())
+			    {
+				    return UString("centred=0 reason=no-building-named");
+			    }
+			    for (const auto &ref : gameState->current_city->buildings)
+			    {
+				    const auto bld = ref.getSp();
+				    if (!bld)
+				    {
+					    continue;
+				    }
+				    // Match the state id OR the display name. An alert names the building the way
+				    // a player reads it ("Parallax Tower"), with spaces already replaced for the
+				    // wire, and that is the only handle a driver honestly has.
+				    UString shown = bld->name;
+				    std::replace(shown.begin(), shown.end(), ' ', '_');
+				    if (ref.id != wanted && shown != wanted)
+				    {
+					    continue;
+				    }
+				    int crew = 0;
+				    for (const auto &c : bld->current_crew)
+				    {
+					    crew += c.second;
+				    }
+				    const auto &bb = bld->bounds;
+				    const Vec3<float> mid{(bb.p0.x + bb.p1.x) / 2.0f, (bb.p0.y + bb.p1.y) / 2.0f,
+				                          2.0f};
+				    view->setScreenCenterTile(mid);
+				    const auto screen = view->tileToOffsetScreenCoords<float>(mid);
+				    return format("centred=1 building={0} crew={1} at={2},{3},0", ref.id, crew,
+				                  (int)screen.x, (int)screen.y);
+			    }
+			    return UString("centred=0 reason=no-such-building");
+		    }
+		    if (gameState && q == "centre_on_message")
+		    {
+			    // Walk the player's own message log for the most recent alien-activity report
+			    // that still has a location, and frame it. This is the log the city view already
+			    // shows and lets a player click to zoom (zoomLastEvent), so it is information
+			    // they genuinely have -- and it is the honest answer to alerts missed while the
+			    // squad was in a battle. Reading a global list of infiltrated buildings would
+			    // not be; watching the reports come in is.
+			    if (!gameState->current_city)
+			    {
+				    return UString("centred=0");
+			    }
+			    for (auto it = gameState->messages.rbegin(); it != gameState->messages.rend();
+			         ++it)
+			    {
+				    if (it->location == EventMessage::NO_LOCATION)
+				    {
+					    continue;
+				    }
+				    const auto lower = to_lower(it->text);
+				    if (lower.find("alien") == UString::npos)
+				    {
+					    continue;
+				    }
+				    // The location must actually be a building. Matching on the word "alien"
+				    // alone picked up "Civilian Car 40 destroyed by Alien Fast Attack Ship" and
+				    // sent the squad to a patch of road, where right-clicking opens nothing.
+				    // Resolving the coordinates to a building is text-independent and says what
+				    // a player clicking that message would actually be looking at.
+				    UString atBuilding;
+				    for (const auto &bref : gameState->current_city->buildings)
+				    {
+					    const auto b = bref.getSp();
+					    if (!b)
+					    {
+						    continue;
+					    }
+					    if (it->location.x >= b->bounds.p0.x && it->location.x < b->bounds.p1.x &&
+					        it->location.y >= b->bounds.p0.y && it->location.y < b->bounds.p1.y)
+					    {
+						    atBuilding = bref.id;
+						    break;
+					    }
+				    }
+				    if (atBuilding.empty())
+				    {
+					    continue;
+				    }
+				    const Vec3<float> at{(float)it->location.x, (float)it->location.y,
+				                         (float)it->location.z};
+				    view->setScreenCenterTile(at);
+				    const auto screen = view->tileToOffsetScreenCoords<float>(at);
+				    UString text = it->text;
+				    std::replace(text.begin(), text.end(), ' ', '_');
+				    return format("centred=1 at={0},{1},0 tile={2},{3},{4} text={5}",
+				                  (int)screen.x, (int)screen.y, it->location.x, it->location.y,
+				                  it->location.z, text);
+			    }
+			    return UString("centred=0");
+		    }
+		    if (gameState && q == "centre_on_infiltrated")
+		    {
+			    // Frame the human-owned building holding the most aliens. This is the mechanic
+			    // that decides whether a campaign keeps its funding: crews in buildings raise
+			    // their owner's infiltrationValue every hour (organisation.cpp:657-673), and
+			    // aliens left alone spread to neighbours (Building::alienMovement). Clearing them
+			    // is a ground raid, and a ground raid costs no relation -- the collateral penalty
+			    // in Scenery::handleCollision is city-map only; battlemappart has no equivalent.
+			    // Alien-owned buildings are excluded: those are the dimension raids, handled by
+			    // centre_on_raidable.
+			    const auto aliens = gameState->getAliens();
+			    if (!gameState->current_city)
+			    {
+				    return UString("centred=0");
+			    }
+			    sp<Building> worst;
+			    UString worstId;
+			    int worstCrew = 0;
+			    for (const auto &ref : gameState->current_city->buildings)
+			    {
+				    const auto bld = ref.getSp();
+				    if (!bld || bld->current_crew.empty())
+				    {
+					    continue;
+				    }
+				    if (bld->owner && bld->owner.id == aliens.id)
+				    {
+					    continue;
+				    }
+				    if (bld->base)
+				    {
+					    continue;  // our own base defends itself
+				    }
+				    int crew = 0;
+				    for (const auto &c : bld->current_crew)
+				    {
+					    crew += c.second;
+				    }
+				    if (crew > worstCrew)
+				    {
+					    worst = bld;
+					    worstId = ref.id;
+					    worstCrew = crew;
+				    }
+			    }
+			    if (!worst)
+			    {
+				    return UString("centred=0");
+			    }
+			    const auto &bb = worst->bounds;
+			    const Vec3<float> mid{(bb.p0.x + bb.p1.x) / 2.0f, (bb.p0.y + bb.p1.y) / 2.0f, 2.0f};
+			    view->setScreenCenterTile(mid);
+			    const auto screen = view->tileToOffsetScreenCoords<float>(mid);
+			    return format("centred=1 building={0} crew={1} owner={2} at={3},{4},0", worstId,
+			                  worstCrew, worst->owner ? worst->owner.id : UString("-"),
+			                  (int)screen.x, (int)screen.y);
+		    }
+		    if (gameState && q == "centre_on_raidable")
+		    {
+			    const auto aliens = gameState->getAliens();
+			    if (!gameState->current_city)
+			    {
+				    return UString("centred=0");
+			    }
+			    for (const auto &ref : gameState->current_city->buildings)
+			    {
+				    const auto bld = ref.getSp();
+				    if (!bld || !bld->owner || bld->owner.id != aliens.id)
+				    {
+					    continue;
+				    }
+				    if (bld->accessTopic && !bld->accessTopic->isComplete())
+				    {
+					    continue;
+				    }
+				    const auto &bb = bld->bounds;
+				    const Vec3<float> mid{(bb.p0.x + bb.p1.x) / 2.0f, (bb.p0.y + bb.p1.y) / 2.0f,
+				                          2.0f};
+				    view->setScreenCenterTile(mid);
+				    const auto screen = view->tileToOffsetScreenCoords<float>(mid);
+				    return format("centred=1 building={0} victory={1} at={2},{3},0", ref.id,
+				                  bld->victory ? 1 : 0, (int)screen.x, (int)screen.y);
+			    }
+			    return UString("centred=0");
+		    }
+		    if (gameState && q == "centre_on_portal")
+		    {
+			    if (!gameState->current_city || gameState->current_city->portals.empty())
+			    {
+				    return UString("centred=0");
+			    }
+			    const auto &portal = gameState->current_city->portals.front();
+			    if (!portal)
+			    {
+				    return UString("centred=0");
+			    }
+			    view->setScreenCenterTile(portal->getPosition());
+			    const auto screen = view->tileToOffsetScreenCoords<float>(portal->getPosition());
+			    return format("centred=1 portals={0} at={1},{2},0 tile={3},{4},{5}",
+			                  gameState->current_city->portals.size(), (int)screen.x,
+			                  (int)screen.y, (int)portal->getPosition().x,
+			                  (int)portal->getPosition().y, (int)portal->getPosition().z);
+		    }
+		    if (gameState && q == "centre_on_free_crash")
+		    {
+			    const auto aliens = gameState->getAliens();
+			    for (const auto &v : gameState->vehicles)
+			    {
+				    const auto &vehicle = v.second;
+				    if (!vehicle || !vehicle->owner || !vehicle->tileObject ||
+				        vehicle->city != gameState->current_city || !vehicle->crashed ||
+				        vehicle->owner.id != aliens.id)
+				    {
+					    continue;
+				    }
+				    if (vehicle->type && vehicle->type->battle_map)
+				    {
+					    continue;
+				    }
+				    view->setScreenCenterTile(vehicle->getPosition());
+				    return format("centred=1 type={0} at={1},{2},{3}",
+				                  vehicle->type ? vehicle->type.id : UString("-"),
+				                  (int)vehicle->getPosition().x, (int)vehicle->getPosition().y,
+				                  (int)vehicle->getPosition().z);
+			    }
+			    return UString("centred=0");
+		    }
+		    if (gameState && (q == "centre_on_ufo" || q == "centre_on_own" ||
+		                      q == "centre_on_crash"))
+		    {
+			    const auto aliens = gameState->getAliens();
+			    if (q == "centre_on_own")
+			    {
+				    const auto owner = gameState->getPlayer();
+				    for (const auto &v : gameState->vehicles)
+				    {
+					    const auto &vehicle = v.second;
+					    if (!vehicle || !vehicle->owner || !vehicle->tileObject ||
+					        vehicle->city != gameState->current_city ||
+					        vehicle->owner.id != owner.id)
+					    {
+						    continue;
+					    }
+					    view->setScreenCenterTile(vehicle->getPosition());
+					    return format("centred=1 at={0},{1},{2}", (int)vehicle->getPosition().x,
+					                  (int)vehicle->getPosition().y,
+					                  (int)vehicle->getPosition().z);
+				    }
+				    return UString("centred=0");
+			    }
+			    for (const auto &v : gameState->vehicles)
+			    {
+				    const auto &vehicle = v.second;
+				    // centre_on_crash wants exactly what centre_on_ufo skips: a downed wreck.
+				    // Recovering one is what starts a crash-site mission, and it is the only
+				    // source of the alien artifacts the whole research tree depends on.
+				    const bool wantCrashed = (q == "centre_on_crash");
+				    if (!vehicle || !vehicle->owner || !vehicle->tileObject ||
+				        vehicle->city != gameState->current_city ||
+				        vehicle->crashed != wantCrashed || vehicle->owner.id != aliens.id)
+				    {
+					    continue;
+				    }
+				    view->setScreenCenterTile(vehicle->getPosition());
+				    return format("centred=1 at={0},{1},{2}", (int)vehicle->getPosition().x,
+				                  (int)vehicle->getPosition().y, (int)vehicle->getPosition().z);
+			    }
+			    return UString("centred=0");
+		    }
+		    if (gameState && (q == "ufos_screen" || q == "vehicles_screen"))
+		    {
+			    const bool wantAliens = (q == "ufos_screen");
+			    const auto player = gameState->getPlayer();
+			    const auto aliens = gameState->getAliens();
+			    UString out;
+			    int count = 0;
+			    for (const auto &v : gameState->vehicles)
+			    {
+				    const auto &vehicle = v.second;
+				    if (!vehicle || !vehicle->owner || !vehicle->tileObject ||
+				        vehicle->city != gameState->current_city)
+				    {
+					    continue;
+				    }
+				    const bool isAlien = vehicle->owner.id == aliens.id;
+				    const bool isMine = vehicle->owner.id == player.id;
+				    if (wantAliens ? !isAlien : !isMine)
+				    {
+					    continue;
+				    }
+				    const auto screen =
+				        view->tileToOffsetScreenCoords<float>(vehicle->getPosition());
+				    // Only report craft actually on screen; the driver clicks these coordinates.
+				    const auto size = fw().displayGetSize();
+				    if (screen.x < 0 || screen.y < 0 || screen.x >= size.x || screen.y >= size.y)
+				    {
+					    continue;
+				    }
+				    if (count++ > 0)
+				    {
+					    out += ";";
+				    }
+				    out += format("{0},{1},{2}", (int)screen.x, (int)screen.y,
+				                  vehicle->crashed ? 1 : 0);
+			    }
+			    return format("count={0} at={1}", count, out.empty() ? UString("-") : out);
+		    }
+		    return stateHandler ? stateHandler(query) : UString("");
+	    });
 }
 
 void CityView::update()
@@ -2074,13 +2658,7 @@ void CityView::update()
 		case CityUpdateSpeed::Pause:
 			ticks = 0;
 			break;
-		/* POSSIBLE FIXME: 'vanilla' apoc appears to implement Speed1 as 1/2 speed - that is
-		 * only
-		 * every other call calls the update loop, meaning that the later update tick counts are
-		 * halved as well.
-		 * This effectively means that all openapoc tick counts count for 1/2 the value of
-		 * vanilla
-		 * apoc ticks */
+		// Vanilla Speed1 advances the city every other frame (half-rate vs later speeds).
 		case CityUpdateSpeed::Speed1:
 			ticks = 1;
 			break;
@@ -2106,6 +2684,11 @@ void CityView::update()
 			break;
 	}
 	baseForm->findControl("BUTTON_SPEED5")->Enabled = this->state->canTurbo();
+
+	if (this->updateSpeed == CityUpdateSpeed::Speed1)
+	{
+		ticks = vanillaCitySpeed1Ticks(ticks, skipSpeed1Tick);
+	}
 
 	if (turbo)
 	{
@@ -2186,7 +2769,6 @@ void CityView::update()
 		}
 	}
 
-	this->drawCity = true;
 	CityTileView::update();
 
 	// Update debug menu
@@ -3027,7 +3609,7 @@ void CityView::update()
 			{
 				const auto selectedVehicleIsUnresearchedUfo =
 				    selectedVehicle->owner == state->getAliens() &&
-				    !selectedVehicle->type->ufopaedia_entry->dependency.satisfied();
+				    !selectedVehicle->type->ufopaedia_entry->isVisible(*state);
 
 				const auto vehicleDisplayName =
 				    selectedVehicleIsUnresearchedUfo ? tr("UFO") : selectedVehicle->name;
@@ -3346,7 +3928,6 @@ void CityView::initiateBuildingMission(sp<GameState> state, StateRef<Building> b
 
 void CityView::eventOccurred(Event *e)
 {
-	this->drawCity = true;
 	if (overlayTab->isVisible())
 	{
 		overlayTab->eventOccured(e);
@@ -3796,7 +4377,12 @@ bool CityView::handleMouseDown(Event *e)
 								}
 							}
 						}
-						LogWarning("{0}", debug);
+						// Scenery-inspection dump for a debug click; it is diagnostic output, and
+						// on a tile with no scenery it is not even output.
+						if (!debug.empty())
+						{
+							LogInfo("{0}", debug);
+						}
 					}
 
 					if (modifierLAlt && modifierLCtrl && modifierLShift)
@@ -3817,10 +4403,10 @@ bool CityView::handleMouseDown(Event *e)
 				{
 					vehicle =
 					    std::dynamic_pointer_cast<TileObjectVehicle>(collision.obj)->getVehicle();
-					LogWarning("CLICKED VEHICLE {0} at {1}", vehicle->name, vehicle->position);
+					LogInfo("CLICKED VEHICLE {0} at {1}", vehicle->name, vehicle->position);
 					for (auto &m : vehicle->missions)
 					{
-						LogWarning("Mission {0}", m.getName());
+						LogInfo("Mission {0}", m.getName());
 					}
 					for (auto &c : vehicle->cargo)
 					{
@@ -3865,11 +4451,11 @@ bool CityView::handleMouseDown(Event *e)
 				{
 					vehicle = std::dynamic_pointer_cast<TileObjectVehicle>(collisionVehicle.obj)
 					              ->getVehicle();
-					LogWarning("SECONDARY CLICK ON VEHICLE {0} at {1}", vehicle->name,
+					LogInfo("SECONDARY CLICK ON VEHICLE {0} at {1}", vehicle->name,
 					           vehicle->position);
 					for (auto &m : vehicle->missions)
 					{
-						LogWarning("Mission {0}", m.getName());
+						LogInfo("Mission {0}", m.getName());
 					}
 					for (auto &c : vehicle->cargo)
 					{
@@ -3986,6 +4572,8 @@ bool CityView::handleGameStateEvent(Event *e)
 			case GameEventType::MissionCompletedBuildingNormal:
 			case GameEventType::MissionCompletedBuildingRaid:
 			case GameEventType::MissionCompletedVehicle:
+			case GameEventType::AliensDefeated:
+			case GameEventType::XComDefeated:
 			{
 				// Never pause for these
 				break;
@@ -4064,14 +4652,10 @@ bool CityView::handleGameStateEvent(Event *e)
 	{
 		case GameEventType::AlienTakeover:
 		{
-			// FIXME: Proper takeover message
 			auto gameOrgEvent = dynamic_cast<GameOrganisationEvent *>(e);
 			fw().stageQueueCommand(
 			    {StageCmd::Command::PUSH,
-			     mksp<NotificationScreen>(
-			         state, *this,
-			         format("Aliens have taken over {0}", gameOrgEvent->organisation->name),
-			         gameEvent->type)});
+			     mksp<NotificationScreen>(state, *this, gameOrgEvent->message(), gameEvent->type)});
 		}
 		break;
 		case GameEventType::DefendTheBase:
@@ -4097,7 +4681,7 @@ bool CityView::handleGameStateEvent(Event *e)
 				                                    gameRecoveryEvent->actor));
 				for (auto &u : gameRecoveryEvent->vehicle->type->researchUnlock)
 				{
-					u->forceComplete();
+					u->forceComplete(state.get());
 				}
 			}
 			break;
@@ -4105,7 +4689,7 @@ bool CityView::handleGameStateEvent(Event *e)
 		case GameEventType::UfoRecoveryUnmanned:
 		{
 			auto gameRecoveryEvent = dynamic_cast<GameVehicleEvent *>(e);
-			LogWarning("Load unmanned ufo loot on craft!");
+			gameRecoveryEvent->actor->loadUnmannedUfoLoot(*state, *gameRecoveryEvent->vehicle);
 			// Remove ufo
 			gameRecoveryEvent->vehicle->die(*state, true);
 			// Return to base
@@ -4421,6 +5005,20 @@ bool CityView::handleGameStateEvent(Event *e)
 			showWeeklyFundingReport();
 		}
 		break;
+		case GameEventType::AliensDefeated:
+		{
+			fw().stageQueueCommand(
+			    {StageCmd::Command::REPLACEALL,
+			     mksp<VideoScreen>("SMK:xcom3/smk/wingame2.smk", mksp<MainMenu>())});
+		}
+		break;
+		case GameEventType::XComDefeated:
+		{
+			fw().stageQueueCommand(
+			    {StageCmd::Command::REPLACEALL,
+			     mksp<VideoScreen>("SMK:xcom3/smk/lose1.smk", mksp<MainMenu>())});
+		}
+		break;
 		default:
 			break;
 	}
@@ -4571,12 +5169,16 @@ void CityView::setUpdateSpeed(CityUpdateSpeed updateSpeed)
 
 void CityView::zoomLastEvent()
 {
-	if (!state->messages.empty())
+	// Walk back to the most recent message that actually has a location. Only inspecting the very
+	// last one meant the button did nothing whenever that message happened to be locationless --
+	// a funding report, a research completion -- even though the ticker was still showing older
+	// events the player could reasonably expect to be taken to.
+	for (auto it = state->messages.rbegin(); it != state->messages.rend(); ++it)
 	{
-		auto message = state->messages.back();
-		if (message.location != EventMessage::NO_LOCATION)
+		if (it->location != EventMessage::NO_LOCATION)
 		{
-			setScreenCenterTile(message.location);
+			setScreenCenterTile(it->location);
+			return;
 		}
 	}
 }

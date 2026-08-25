@@ -119,12 +119,24 @@ void TileView::eventOccurred(Event *e)
 			this->setScreenCenterTile(newPos);
 		}
 	}
+	else if (e->type() == EVENT_WINDOW_RESIZE)
+	{
+		refreshDisplaySize();
+	}
 	else if (e->type() == EVENT_MOUSE_MOVE)
 	{
 		scrollLeftM = autoScroll && e->mouse().X < MOUSE_SCROLL_MARGIN;
 		scrollRightM = autoScroll && e->mouse().X >= dpySize.x - MOUSE_SCROLL_MARGIN;
 		scrollUpM = autoScroll && e->mouse().Y < MOUSE_SCROLL_MARGIN;
 		scrollDownM = autoScroll && e->mouse().Y >= dpySize.y - MOUSE_SCROLL_MARGIN;
+	}
+	else if (e->type() == EVENT_WINDOW_DEACTIVATE)
+	{
+		// These latch until an opposing event arrives. Switching away with the pointer at
+		// a screen edge, or with a scroll key held, would otherwise leave the map drifting
+		// in the background - the matching key release goes to whichever app took focus.
+		scrollLeftM = scrollRightM = scrollUpM = scrollDownM = false;
+		scrollLeftKB = scrollRightKB = scrollUpKB = scrollDownKB = false;
 	}
 }
 
@@ -286,5 +298,18 @@ void TileView::renderStrategyOverlay(Renderer &r)
 	}
 }
 
-void TileView::update() { applyScrolling(); }
+void TileView::refreshDisplaySize()
+{
+	const Vec2<int> next{fw().displayGetWidth(), fw().displayGetHeight()};
+	if (next != dpySize)
+	{
+		dpySize = next;
+	}
+}
+
+void TileView::update()
+{
+	refreshDisplaySize();
+	applyScrolling();
+}
 }; // namespace OpenApoc
