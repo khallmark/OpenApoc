@@ -38,6 +38,28 @@ was never traced. No code written.
 B5 type 1-vs-3 · K1 (20 candidate functions unexamined) · U1(b) field semantics ·
 B2/B4 (depend on B1) · MultiTracker's downstream meaning
 
+## Second pass — the loose ends
+
+Four rows this branch had already marked done were re-examined. Three of them were not.
+
+| Row | What the second pass found |
+|---|---|
+| **A2** psionics | `psi_costs_match_prior_art` asserted local constants against themselves and could never fail. Root cause was not the test: `getPsiCost()` was declared `static` at namespace scope in `battleunit.h`, giving it internal linkage in every TU that saw the header while the only definition sat in `battleunit.cpp` — a latent undefined-reference for any caller anywhere. Promoted with its sibling `getPsiAttackChance()` to public `BattleUnit` statics. |
+| **A4** attack priority | Froze local copies of `cth*damage/time` and of the AOE friendly-fire rule; editing `unitaivanilla.cpp` left it green. Three primitives extracted to public `UnitAIVanilla` statics and called from the same private methods. |
+| **U1(a)** mission counter | Three tests drove `advanceMissionCounterOnArrival()` directly; the call site in `VehicleMission::start()` was untested and deleting it failed nothing. New case drives the real `start()`. |
+| **G1** Disruptor Shield | Only one of the **two** bound writers of the item's charge field was implemented. `FUN_0006508C`'s decrement on absorb was in; `FUN_0006511C`'s +1-per-dispatcher-call regen was not, so the item charge and the unit buffer drifted apart. Separately, `AEquipment::updateInner()` was applying a *second* regen to the same field at one-per-four-seconds, from hardcoded 2016 extractor literals. |
+
+All four locks verified red by mutation before being committed.
+
+## One test written and then discarded
+
+A1's draw-order step got a candidate lock test for the block-confinement invariant. Two
+independent control mutations — collapsing the large-unit bounds to `{1,1}`, and moving its
+`centerOffset.z` from `1.0` to `0.5` — both left it **green**. At integer positions the half-extent
+straddles the tile boundary either way, and "exactly one draw tile, inside the block" is structural
+because `addToDrawnTiles()` can only choose from `intersectingTiles`. It locked nothing, so under
+§0 it was not committed. The row stays UNVERIFIED and the guide now says why.
+
 ## Six claims overturned by measurement during this run
 
 Four of them mine.
