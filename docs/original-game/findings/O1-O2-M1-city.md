@@ -8,28 +8,30 @@ ticker, and an infiltration-detection accumulator, none of which touch an org's 
 `Organisation::costOfBribeBy` / `diplomaticRiftOffer` stay prior-art.
 
 **O2 — NOT BOUND (event-type → cargo mapping); BOUND (org `+8` is a funds field, not relation):**
-`FUN_000b32ac`'s four event types are produced exclusively by `FUN_000aff9c`, which has exactly
-one call site in the whole binary — inside the UFO mission-arrival/deposit-completion handler
-`FUN_0003a910` (already bound by this project's U1/U2 work). There is no path from
-`Building::updateCargo`'s hostile-destination seize check into any of the four event types.
-Org `+8` is a funds/budget field (shares the org-budget table already flagged as a trap, holds
-`worth×50`-scale magnitudes, and is written separately from the clamped ±100 relation matrix in
-the same routine). **Do not wire `Cargo::seize` from this dispatcher.**
+`FUN_000b32ac`'s four event types are produced by `FUN_000aff9c`, reached only through
+`FUN_000ac348` → `FUN_000ac08c`. All seven of `FUN_000ac08c`'s own call sites were individually
+checked; three sit directly inside the UFO mission-arrival/deposit-completion handler
+`FUN_0003a910` (already bound by this project's U1/U2 work), and the rest sit in code that reads
+the same org-status/relation/scripted-incident machinery, with `FUN_0003a910` reachable from most
+of them too. There is no path from `Building::updateCargo`'s hostile-destination seize check into
+any of the four event types. Org `+8` is a funds/budget field (shares the org-budget table already
+flagged as a trap, holds `worth×50`-scale magnitudes, and is written separately from the clamped
+±100 relation matrix in the same routine). **Do not wire `Cargo::seize` from this dispatcher.**
 
-**M1 — BOUND (consumer only; trigger condition still unbound):** the layered
-`GROUP_1..4`/`getnextmusic` tension-music system has a real, traced consumer reachable from
-city-side UFO-mission completion — the *same* `FUN_0003a910` root as O2 — via `FUN_000ac08c` →
-`FUN_000b523c` (the tension-tier state machine) → `FUN_000b5678`/`FUN_000b6280` (track playback).
-This satisfies the task's pass criterion, "city mix only after a bound consumer." **It does not,
-by itself, authorize wiring a city Action playlist**: `FUN_000b523c` already runs every tick from
-the generic top-level loop regardless of city/battle state, so the mission-arrival call could be a
-redundant "re-evaluate now" with no effect on which tier plays, and nothing found here ties this
-call to *tier escalation* specifically — tier 3 (the group that actually holds `ACTION.RAW`) has
-no bound driver. The two gate fields checked before the city-side call, and the condition that
-raises the tension tier, remain unbound. Do not invent either.
+**M1 — NOT BOUND:** a real consumer of the `getnextmusic`/`GROUP_*` layered music system was
+found, and a call edge from the UFO mission-arrival handler `FUN_0003a910` into it was traced —
+but a re-check of `FUN_000b523c`'s full caller list (an earlier pass in this session mis-read it
+as having only two callers, off a truncated log excerpt) found roughly **49 call sites** spanning
+menus, base screens, and mission code alike. That makes the mission-arrival call indistinguishable
+from routine per-screen music polling, not a deliberate city-combat trigger. The catalog-only
+strings (`Action music`, `/MUSIC/GROUP_*`) stay exactly as unbound as the gap matrix already
+recorded. See §3.3 for the correction and the reasoning.
 
-All three targets root in the same place: `FUN_0003a910`, the UFO mission-arrival function this
-project already bound for U1 (mission-counter) and U2 (base exposure).
+O1's dead ends, O2's event producer, and M1's call edge all ultimately trace back to
+`FUN_0003a910`, the UFO mission-arrival function this project already bound for U1
+(mission-counter) and U2 (base exposure) — this pass adds no new binding beyond what U1/U2 already
+established, only confirms that neither the bribe/rift UI, cargo seizure, nor city music hook into
+it in a way this session could locate.
 
 ---
 
@@ -59,10 +61,11 @@ against citations already in `next-implementation.md`/`parity-guide.md`:
 
 Scripts added this session (adapted from `scripts/QueryTacpGaps.java` and
 `scripts/QueryFunctions.java`, run via `scripts/ghidra_env.sh` against the existing
-`OpenApocOG.rep` project, no re-import): `QueryO1O2M1.java`, `QueryO1O2M1_v2.java`,
-`QueryO1O2M1_v3.java`, `QueryO1O2M1_v4.java`, `QueryO1O2M1_offsets.java`,
-`QueryO1O2M1_offsets2.java`. Read-only queries; no listing edits beyond the standard
-`MarkObject1Executable` preScript already used by `analyze_ufo2p_tail.sh`.
+`OpenApocOG.rep` project, no re-import): `QueryO1O2M1.java` through `QueryO1O2M1_v5.java`,
+`QueryO1O2M1_offsets.java`, `QueryO1O2M1_offsets2.java`. `_v5` is the verification pass that
+found the `FUN_000ac08c`/`FUN_000b523c` caller-count errors corrected in §2.2/§3.3. Read-only
+queries; no listing edits beyond the standard `MarkObject1Executable` preScript already used by
+`analyze_ufo2p_tail.sh`.
 
 ---
 
@@ -227,7 +230,7 @@ found.**
 
 `FUN_000ac08c` also independently confirms the type-2 "else" tail (`FUN_000705f8` +
 `FUN_000b3114`) belongs to the same UFO-mission root: it calls both directly when its own
-`param_2 == 5`, alongside `FUN_000b426c` (§1.2) and (critically for M1, §3) `FUN_000b523c`.
+`param_2 == 5`, alongside `FUN_000b426c` (§1.2) and (the M1 call edge, §3) `FUN_000b523c`.
 
 `FUN_000b3114` (the type-2 else branch, file `0x1157B8`) operates on `DAT_000d942c +
 param*0x2be` — the **0x2BE-byte, 16-entry X-COM Base runtime record already bound for U2** — and
@@ -272,7 +275,7 @@ Per the task brief and `next-implementation.md`: **do not wire `Cargo::seize` fr
 
 ---
 
-## 3. M1 — city action music: BOUND (consumer only; trigger unbound)
+## 3. M1 — city action music: NOT BOUND
 
 ### 3.1 Catalog-only strings confirmed as such
 
@@ -304,30 +307,41 @@ integer per `GROUP_1..4` folder — and:
 - is itself gated on four flag bytes (`DAT_00135818`, `DAT_000d4c80._3_1_`, `DAT_000d4cb2`,
   `DAT_00135814`) whose meaning was **not** decoded this session.
 
-### 3.3 The city-side call site
+### 3.3 The call edge exists, but is not distinguishing — corrected after re-check
 
-`FUN_000b523c` has **exactly two callers**:
+An earlier pass of this session read `FUN_000b523c`'s caller list off a truncated log excerpt and
+reported "exactly two callers" (`FUN_00010010` and `FUN_000ac08c`). Re-checking the full
+`getReferencesTo` dump against the actual section boundaries in the tool output shows that was
+wrong: **`FUN_000b523c` has on the order of 49 call sites**, spanning menu code
+(`FUN_00018754`), base/UI screens (`FUN_00087e14`, `FUN_00089654`, `FUN_000a5968`,
+`FUN_000bc69c`, ...), the message-ticker helper itself (`FUN_0002ae1c`, `FUN_000889a0`), and,
+yes, `FUN_000ac08c` (twice — once **unconditionally** at its own entry, before any parameter
+branching, and once more at its tail behind the `(ctx+0x58 != 0 && ctx+0x5c != 0)` gate cited in
+the previous draft).
 
-1. `FUN_00010010` (VA `0x10010`) — a generic top-level per-tick update function that also calls
-   the O2 dispatcher chain (`FUN_000b1dc0` → ... → `FUN_000b32ac`) unconditionally every tick,
-   regardless of city or battle state. This call site alone would prove nothing about city-vs-
-   battle.
-2. **`FUN_000ac08c`** (VA `0xAC08C`, file `0x10E730`) — the **exact same function identified in
-   §2.2 as one of `FUN_0003a910`'s three call targets.** Near its tail, gated on
-   `(*(int*)(ctx+0x5c) != 0) && (*(int*)(ctx+0x58) != 0)`, it calls `FUN_000b523c` directly.
+This changes the finding materially. A function called from roughly fifty unrelated places across
+menus, base screens, and mission code reads as a generic **"poll the dynamic-music system"**
+call sprinkled through the engine's per-screen update boilerplate — most plausibly because
+`FUN_000b523c` itself does nothing unless its four internal gate flags (`DAT_00135818`,
+`DAT_000d4c80._3_1_`, `DAT_000d4cb2`, `DAT_00135814`) are all set, so callers invoke it
+opportunistically rather than as a deliberate signal. `FUN_000ac08c`'s **first** call to it is
+exactly this same unconditional boilerplate pattern, indistinguishable from the other ~47 sites.
+Only the **second**, gated call is even a candidate for something UFO-mission-specific, and I have
+no way — within this session — to tell whether that gated call differs meaningfully from the
+pattern at the other call sites, or what the two gate fields actually mean.
 
-Since `FUN_0003a910` is the UFO mission-arrival/deposit-completion handler (already bound for
-U1/U2 — subversion craft, base exposure, mission-target completion, all city-map activity), this
-is a genuine **city-side call edge into the music-tier selector**, independent of the
-battle-exclusive trigger already wired in `game/ui/tileview/battleview.cpp:1825`
-(`Options.Misc.ActionMusic` + `battle.ticksWithoutSeenAction`).
+**The city-side call edge from `FUN_0003a910` into the music selector genuinely exists** (traced
+and confirmed above), but on this evidence it is not distinguishable from ordinary per-frame
+polling that happens throughout the game regardless of context. It does not establish that UFO
+city-mission completion does anything to the music system that a menu screen does not.
 
 ### 3.4 What is NOT claimed
 
-- The two gate fields at `ctx+0x58`/`ctx+0x5c` inside `FUN_000ac08c`, and the four flag bytes
-  gating `FUN_000b523c`/`FUN_000b5678`, were **not** decoded. I do not know precisely which UFO
-  mission outcome (subversion success, base exposure, terror action, etc.) reaches this call, only
-  that the call edge exists and originates from `FUN_0003a910`.
+- That `FUN_000ac08c`'s gated call to `FUN_000b523c` has any effect beyond what the ~47 other
+  call sites already produce every frame. Given the caller-count correction in §3.3, this session
+  has **no evidence** the mission-arrival call is special.
+- What the two gate fields at `ctx+0x58`/`ctx+0x5c` inside `FUN_000ac08c`, or the four flag bytes
+  gating `FUN_000b523c`/`FUN_000b5678`, actually mean.
 - `DAT_00183ba7`'s tier levels map to `GROUP_1..4` by position, **not** by name — tier 3 is the
   group actually containing `ACTION.RAW`/`CHASE.RAW`; tier 4 (`GROUP_4`: `FEAR`/`LOWTONE`/
   `MINDMAZE`/`STRANGE`) is a *different* mood, not more "action". Nothing in this session's
@@ -338,16 +352,18 @@ battle-exclusive trigger already wired in `game/ui/tileview/battleview.cpp:1825`
 
 ### 3.5 Verdict
 
-**BOUND, consumer only:** a real, traced consumer of the `getnextmusic`/`GROUP_*` tension-music
-system exists outside battle, reachable from city-map UFO-mission completion (`FUN_0003a910` →
-`FUN_000ac08c` → `FUN_000b523c` → `FUN_000b5678`/`FUN_000b6280`). This satisfies "city mix only
-after a bound consumer" and rules out wiring city Action music to an invented heuristic — but it is
-**not** itself a green light to wire a city Action playlist. `FUN_000b523c` already runs every
-tick unconditionally from the generic top-level loop, so the mission-arrival call may just force an
-immediate re-evaluation with no effect on tier; nothing found here binds *which* UFO-mission
-outcome escalates the tension tier, or that it escalates at all. The trigger condition and
-tier-selection formula remain unbound and should **not** be guessed at to close this row further —
-only the existence of a bound, non-battle consumer is established here.
+**NOT BOUND.** The catalog strings (`Action music`, `/MUSIC/GROUP_*`) are confirmed UI/data-only,
+as the gap matrix already recorded. This session did locate the real reader behind
+`getnextmusic` (`FUN_000b6280`, file `0x118924`) and its caller chain up through
+`FUN_000b5678` → `FUN_000b523c`, and did confirm a genuine call edge from the UFO
+mission-arrival handler (`FUN_0003a910`) through `FUN_000ac08c` into that chain. But
+`FUN_000b523c` turns out to have roughly 49 callers spanning nearly the entire UI/mission
+codebase, which makes that call edge indistinguishable from routine per-screen music polling —
+**not evidence of a deliberate city-combat trigger**. No condition that selects or escalates the
+`GROUP` tension tier was found bound to anything city-specific. Per the prime directive, the row
+stays open: city Action music should **not** be wired from this call graph, and the earlier draft
+of this section (which read "BOUND, consumer only" off a mis-scoped caller count) should be
+disregarded in favor of this corrected verdict.
 
 ---
 
@@ -358,4 +374,4 @@ only the existence of a bound, non-battle consumer is established here.
 | O1 bribe/rift formula | **NOT BOUND** | 8/8 UI strings zero xref; all 17 call sites (6 functions) of the relation primitive `FUN_0005faf0` (file `0xC2194`) walked and decompiled — none touch currency |
 | O2 event→cargo mapping | **NOT BOUND** | Sole event producer `FUN_000aff9c` (file `0x112640`) reached only via `FUN_000ac348`; that function's caller `FUN_000ac08c`'s 7 call sites (verified individually) all sit in the UFO-mission/alien-incident family rooted at `FUN_0003a910`, none touch `Building::updateCargo` |
 | O2 org `+8` field type | **BOUND** — funds, not relation | Shares the `0x1b6`-stride org-budget table; unclamped `worth×50` magnitude; a separate clamped write exists for the real relation matrix in the same function |
-| M1 city music trigger | **BOUND, consumer only** | `FUN_000ac08c` (file `0x10E730`), reachable from `FUN_0003a910`, directly invokes the tension-tier state machine `FUN_000b523c` → `FUN_000b5678`/`FUN_000b6280` (`getnextmusic`, file `0x118924`); tier-escalation condition itself stays unbound |
+| M1 city music trigger | **NOT BOUND** | Real reader found (`getnextmusic` = `FUN_000b6280`, file `0x118924`) and a call edge from `FUN_0003a910` traced into it, but `FUN_000b523c` has ~49 unrelated callers — the edge is indistinguishable from routine per-screen music polling, not a bound city trigger |
