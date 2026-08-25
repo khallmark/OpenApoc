@@ -617,17 +617,24 @@ original as described".
 | ID | Feature | Evidence status |
 |---|---|---|
 | **C1** | Umbilical collapse | **No printable `umbilical` in UFO2P.** |
-| **C2** | UFO mushrooms as next-week spawn feedback | **No printable `mushroom` in UFO2P.** |
+| **C2** | UFO mushrooms as next-week spawn feedback | ~~No printable `mushroom` in UFO2P~~ — **RECLASSIFIED to Class B.** UFO2P has none, but **TACP does**, at file `0x2E1468`. See [findings/C1-C4-no-evidence-items.md](findings/C1-C4-no-evidence-items.md). |
 | **C3** | Large-UFO bombing after first alien-dimension entry | No recovered trigger table. |
 | **C4** | City-wide "Apocalypse" attack after the control centre dies | No recovered trigger table. |
 
-C2 deserves a note: the *mechanic* players remember — destroying the alien Organic Factory stops UFO
-production — **is implemented**, via `UFOGrowth::craftFactoryIntact`
-([ufogrowth.cpp:51](../../game/state/rules/city/ufogrowth.cpp#L51)), gating
-`GameState::updateUfoGrowth` at [gamestate.cpp:1545](../../game/state/gamestate.cpp#L1545). What is
-missing is only the *visual mushroom feedback*. See
-[campaign-plan.md §3.7](../campaign-plan.md#37-the-organic-factory-shuts-the-tap-off) for why that
-gate is strategically decisive.
+**C2 has been reclassified.** The matrix recorded "no printable `mushroom` in UFO2P" — true, but it
+only searched UFO2P. **TACP has one**, at file offset `0x2E1468`: the Organic Factory Ufopaedia
+entry, which describes embryonic UFOs growing on stems and ends *"All embryonic UFOs must be
+destroyed."*
+
+That is a **mission objective in the battlescape**, not cityscape feedback — so the row was also
+filed under the wrong subsystem (`game/state/city`). OpenApoc's growth gate
+`UFOGrowth::craftFactoryIntact` ([ufogrowth.cpp:51](../../game/state/rules/city/ufogrowth.cpp#L51))
+keys on the **building** being alive; the original text implies the objective is the **embryos**,
+which may carry their own completion condition. That gate is strategically decisive — see
+[campaign-plan.md §3.7](../campaign-plan.md#37-the-organic-factory-shuts-the-tap-off) — so the
+distinction matters. Investigation steps are in
+[findings/C1-C4-no-evidence-items.md](findings/C1-C4-no-evidence-items.md). **Do not add a
+cityscape mushroom visual.**
 
 C3 and C4 are the only Class C rows that could reasonably be built as **declared original design**
 rather than parity: both are late-campaign escalation, and both would need a new data table
@@ -652,7 +659,7 @@ Dependency-ordered, not value-ordered. Value is in the notes.
 | 6 | K1 cloak | B | Small, isolated, replaces a forum-sourced constant. |
 | 7 | B3 → B4 wounded | B | B4 needs B1 and B3. |
 | 8 | U1, U2, O1, O2, G1, M1, V1 | B | Long-tail bindings; several may end as recorded negative results. |
-| 9 | C1–C4 | C | Decide and close. Do not leave them open implying future work. |
+| 9 | C1, C3, C4 | C | Confirmed absent from both binaries — close them. **C2 is no longer Class C**; it moves into the Class B queue with a real TACP string behind it. |
 
 **Realistic expectation:** several Class B rows will end as *"no consumer exists in the original"*.
 That is a successful outcome and should be written into the matrix as such. The failure mode this
