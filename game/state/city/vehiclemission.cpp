@@ -2754,47 +2754,36 @@ void VehicleMission::setPathTo(GameState &state, Vehicle &v, Vec3<int> target, i
 	// Did not reach destination
 	if (path.empty() || path.back() != target)
 	{
-		// If target was close enough to reach
-		if (maxIterations > (int)distance)
+		// A ground vehicle restricted to roads dies the instant the road under it is destroyed
+		// (see GroundVehicleMover::update), so a *severed* road network -- the target's segment
+		// no longer connected to ours, e.g. a bombed-out gap somewhere between here and there --
+		// is an entirely ordinary outcome of issuing a move order, not a collision. The
+		// pathfinder still returns a non-empty `path`, just one that stops short of `target` at
+		// the closest reachable point.
+		//
+		// Only a vehicle that got *no* path at all (`path.empty()`), with a destination close
+		// enough that a route should plainly have existed, is genuinely stuck in place (e.g.
+		// boxed in solid by other vehicles) -- crash it so it becomes recoverable. Every other
+		// non-reaching case, close or far, empty or partial, means the vehicle can still drive;
+		// give up cleanly or spend a retry, but never destroy a vehicle that isn't stuck.
+		//
+		// The two sub-cases used to be handled separately and each left a gap: the "close"
+		// branch crashed on give-up regardless of whether a usable partial path existed, and a
+		// far target with a non-empty-but-short path hit neither branch, so reRouteAttempts never
+		// moved and GotoLocation re-planned the same unreachable target forever.
+		const bool stuckInPlace = path.empty() && maxIterations > (int)distance;
+		if (giveUpIfInvalid)
 		{
-			// If told to give up - cancel mission and crash vehicle so recovery can be initiated
-			if (giveUpIfInvalid)
+			cancelled = true;
+			if (stuckInPlace)
 			{
-				cancelled = true;
 				v.setCrashed(state);
-				return;
 			}
-			// If not told to give up - subtract attempt
-			else
-			{
-				if (reRouteAttempts > 0)
-				{
-					reRouteAttempts--;
-				}
-			}
+			return;
 		}
-		else if (path.empty())
+		if (reRouteAttempts > 0)
 		{
-			// Target too far for the "close enough to reach" heuristic above, and the search
-			// produced no usable path at all. This case used to consume no attempt, so
-			// GotoLocation re-planned from the same stale targetLocation every tick forever --
-			// observed as a single craft emitting hundreds of consecutive "target unreachable"
-			// warnings near a map-edge portal.
-			//
-			// Terminate here rather than only decrementing: the caller decides giveUpIfInvalid
-			// from reRouteAttempts == 0, so a branch that merely decrements becomes a silent
-			// no-op once the budget is spent and never actually stops the loop. Cancel the
-			// mission but do NOT crash the craft -- unlike the permanently-blocked close target
-			// above, "I cannot plot a route that far" is a planning failure, not a collision.
-			if (giveUpIfInvalid)
-			{
-				cancelled = true;
-				return;
-			}
-			if (reRouteAttempts > 0)
-			{
-				reRouteAttempts--;
-			}
+			reRouteAttempts--;
 		}
 	}
 
