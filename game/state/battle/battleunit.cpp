@@ -5282,9 +5282,28 @@ bool BattleUnit::useItem(GameState &state, sp<AEquipment> item)
 		case AEquipmentType::Type::DimensionForceField:
 		case AEquipmentType::Type::DisruptorShield:
 		case AEquipmentType::Type::Loot:
-		case AEquipmentType::Type::MultiTracker:
 		case AEquipmentType::Type::StructureProbe:
 		case AEquipmentType::Type::VortexAnalyzer:
+			return false;
+		// MultiTracker returns false for the SAME reason the Disruptor Shield does -- it is a
+		// passive item, so having no "use" action is correct -- and NOT because it is dead like
+		// the three above it. That distinction was got wrong once already on the shield, where
+		// `useItem` returning false was read as "unimplemented" when the real feature lived
+		// elsewhere and was quietly doing the wrong thing for years.
+		//
+		// TACP FUN_000A3170 is a literal `type == 0x04` test gating a live display: an
+		// INSTANTANEOUS, non-decaying snapshot of nearby units' positions, height-encoded into a
+		// fixed 81x81 widget and redrawn from scratch every refresh. It has no accumulation
+		// state, which makes it a different mechanic from the Motion Scanner -- that one blits a
+		// separately-maintained 15-level DECAYING recency heatmap, which is what
+		// BattleScanner::movementTicks already models here. A port must not reuse that fade.
+		//
+		// Not implemented, and deliberately not guessed at: which units qualify for the display
+		// depends on wearer/candidate tag-equality fields (unit+0x20 / unit+0xA8) whose meaning
+		// is unbound -- "same side" is plausible and unconfirmed. Implementing the widget while
+		// inventing its filter would be a fabricated mechanic wearing recovered clothing.
+		// See docs/original-game/findings/G1-multitracker-downstream.md.
+		case AEquipmentType::Type::MultiTracker:
 			return false;
 		case AEquipmentType::Type::MotionScanner:
 			if (item->inUse)
