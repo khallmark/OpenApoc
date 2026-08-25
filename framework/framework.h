@@ -4,8 +4,10 @@
 #include "library/sp.h"
 #include "library/strings.h"
 #include "library/vec.h"
+#include <cstdint>
 #include <functional>
 #include <future>
+#include <list>
 
 namespace OpenApoc
 {
@@ -43,6 +45,7 @@ class Framework
 
 	UString language;
 	UString languageCountry;
+	uint64_t frameNumber = 0;
 
   public:
 	std::unique_ptr<Data> data;
@@ -68,13 +71,20 @@ class Framework
 
 	void displayInitialise();
 	void displayShutdown();
+	void displayRefreshSize();
+	void displayToggleFullscreen();
 	int displayGetWidth();
 	int displayGetHeight();
 	Vec2<int> displayGetSize();
+
+	// Resize the window as if the user dragged it. Test/automation hook.
+	void displaySetSize(Vec2<int> size);
+	int uiGetScale() const;
 	void displaySetTitle(UString NewTitle);
 	void displaySetIcon(sp<RGBImage> icon);
 	bool displayHasWindow() const;
 	void *getWindowHandle() const;
+	bool writeScreenshot(const UString &path);
 
 	// Map coordinates from window to display, for scaled displays
 	int coordWindowToDisplayX(int x) const;
@@ -83,6 +93,8 @@ class Framework
 
 	bool isSlowMode();
 	void setSlowMode(bool SlowEnabled);
+
+	uint64_t getFrameNumber() const { return frameNumber; }
 
 	sp<Stage> stageGetCurrent();
 	sp<Stage> stageGetPrevious();

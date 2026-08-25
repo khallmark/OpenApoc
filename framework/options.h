@@ -23,12 +23,14 @@ extern ConfigOptionInt screenDisplayNumberOption;
 extern ConfigOptionInt screenScaleXOption;
 extern ConfigOptionInt screenScaleYOption;
 extern ConfigOptionBool screenAutoScale;
+extern ConfigOptionInt screenUiScaleOption;
 extern ConfigOptionString languageOption;
 extern ConfigOptionBool mouseCaptureOption;
 
 extern ConfigOptionInt frameLimit;
 extern ConfigOptionInt targetFPS;
 extern ConfigOptionInt swapInterval;
+extern ConfigOptionInt profileFrames;
 
 extern ConfigOptionBool autoScrollOption;
 extern ConfigOptionBool actionMusicOption;
@@ -109,6 +111,7 @@ extern ConfigOptionBool optionFuelCrashingVehicles;
 extern ConfigOptionBool optionSkipTurbo;
 extern ConfigOptionBool optionRunAndKneel;
 extern ConfigOptionBool optionSeedRng;
+extern ConfigOptionInt optionRngSeed;
 extern ConfigOptionBool optionAutoReload;
 extern ConfigOptionBool optionLeftClickIcon;
 extern ConfigOptionBool optionBattlescapeVertScroll;
@@ -152,6 +155,10 @@ extern ConfigOptionBool packSaveOption;
 
 extern ConfigOptionBool skipIntroOption;
 extern ConfigOptionString loadGameOption;
+
+extern ConfigOptionBool harnessEnable;
+extern ConfigOptionInt harnessPort;
+extern ConfigOptionBool harnessWarpCursor;
 
 extern ConfigOptionString modList;
 extern ConfigOptionString modPath;

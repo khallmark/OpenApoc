@@ -12,14 +12,21 @@ namespace OpenApoc
 namespace
 {
 
-LogFunction previousFunction; // To allow chaining log functions
+// Chained log sinks are reached from Log() during static destruction (see logger.cpp), so the
+// same rule applies here: a namespace-scope std::function is unsafe to invoke once its own
+// destructor has run. Leak these deliberately rather than depend on destruction order.
+LogFunction &previousFunction()
+{
+	static LogFunction *fn = new LogFunction();
+	return *fn;
+}
 
 std::atomic<SDL_Window *> parentWindow = nullptr;
 LogLevel dialogLogLevel = LogLevel::Nothing;
 
 void SDLDialogLogFunction(LogLevel level, UString prefix, const UString &text)
 {
-	previousFunction(level, prefix, text);
+	previousFunction()(level, prefix, text);
 	if (level > dialogLogLevel)
 	{
 		return;
@@ -40,7 +47,7 @@ void enableSDLDialogLogger(SDL_Window *win)
 	}
 	parentWindow = win;
 	dialogLogLevel = (LogLevel)Options::dialogLogLevelOption.get();
-	previousFunction = getLogCallback();
+	previousFunction() = getLogCallback();
 	setLogCallback(SDLDialogLogFunction);
 }
 

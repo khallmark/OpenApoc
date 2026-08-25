@@ -1,6 +1,9 @@
 #include "framework/options.h"
 #include "framework/logger.h"
 #include "library/strings_format.h"
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 
 namespace
 {
@@ -45,12 +48,14 @@ void dumpOptionsToLog()
 	dumpOption(screenScaleXOption);
 	dumpOption(screenScaleYOption);
 	dumpOption(screenAutoScale);
+	dumpOption(screenUiScaleOption);
 	dumpOption(languageOption);
 	dumpOption(mouseCaptureOption);
 
 	dumpOption(targetFPS);
 	dumpOption(frameLimit);
 	dumpOption(swapInterval);
+	dumpOption(profileFrames);
 
 	dumpOption(autoScrollOption);
 	dumpOption(actionMusicOption);
@@ -131,6 +136,7 @@ void dumpOptionsToLog()
 	dumpOption(optionSkipTurbo);
 	dumpOption(optionRunAndKneel);
 	dumpOption(optionSeedRng);
+	dumpOption(optionRngSeed);
 	dumpOption(optionAutoReload);
 	dumpOption(optionLeftClickIcon);
 	dumpOption(optionBattlescapeVertScroll);
@@ -174,6 +180,9 @@ void dumpOptionsToLog()
 
 	dumpOption(skipIntroOption);
 	dumpOption(loadGameOption);
+	dumpOption(harnessEnable);
+	dumpOption(harnessPort);
+	dumpOption(harnessWarpCursor);
 
 	dumpOption(modList);
 	dumpOption(modPath);
@@ -217,10 +226,12 @@ ConfigOptionInt audioMusicGainOption("Framework.Audio", "MusicGain", tr("Music a
 ConfigOptionInt
     audioConcurrentSampleCount("Framework.Audio", "ConcurrentSamples",
                                tr("The number of concurrent samples to play at one time"), 10);
-ConfigOptionInt screenWidthOption("Framework.Screen", "Width",
-                                  tr("Initial screen width (in pixels)"), 1280);
-ConfigOptionInt screenHeightOption("Framework.Screen", "Height",
-                                   tr("Initial screen height (in pixels)"), 720);
+ConfigOptionInt screenWidthOption(
+    "Framework.Screen", "Width",
+    tr("Initial screen width in pixels (0 = desktop width)"), 1280);
+ConfigOptionInt screenHeightOption(
+    "Framework.Screen", "Height",
+    tr("Initial screen height in pixels (0 = desktop height)"), 720);
 ConfigOptionString screenModeOption("Framework.Screen", "Mode",
                                     tr("Mode: {windowed,fullscreen,borderless}"), "windowed");
 ConfigOptionInt screenDisplayNumberOption("Framework.Screen", "Display",
@@ -231,8 +242,13 @@ ConfigOptionInt screenScaleYOption("Framework.Screen", "ScaleY",
                                    tr("Scale screen in Y direction by (percent)"), 100);
 ConfigOptionBool screenAutoScale(
     "Framework.Screen", "AutoScale",
-    tr("Automatically scale up game viewport for modern screens (overrides ScaleX and ScaleY)"),
+    tr("Scale the whole game (world + UI) to ~1280-wide. Prefer UiScale to keep UI size and expand "
+       "the map."),
     false);
+ConfigOptionInt screenUiScaleOption(
+    "Framework.Screen", "UiScale",
+    tr("Integer UI scale (1-4). 0 = auto from window width. Does not scale city/battle tiles."),
+    0);
 ConfigOptionString languageOption("Framework", "Language",
                                   tr("The language used ingame (empty for system default)"), "");
 
@@ -245,6 +261,8 @@ ConfigOptionInt frameLimit("Framework", "FrameLimit",
                            tr("Quit after this many frames - 0 = unlimited"), 0);
 ConfigOptionInt swapInterval("Framework", "SwapInterval",
                              tr("Swap interval (0 = tear, 1 = wait for vsync"), 0);
+ConfigOptionInt profileFrames("Framework", "ProfileFrames",
+                              tr("Log average update/render times every N frames - 0 = off"), 0);
 
 ConfigOptionBool autoScrollOption("Options.Misc", "AutoScroll", tr("Enable scrolling with mouse"),
                                   true);
@@ -420,7 +438,14 @@ ConfigOptionBool optionRunAndKneel("OpenApoc.NewFeature", "RunAndKneel",
                                    tr("All units run and kneel by default"), true);
 ConfigOptionBool optionSeedRng("OpenApoc.NewFeature", "SeedRng", tr("Seed RNG on game start"),
                                true);
-ConfigOptionBool optionAutoReload("OpenApoc.NewFeature", "AutoReload",
+
+
+// An explicit seed, so a run is both reproducible AND variable at will. SeedRng gives only two
+// behaviours -- reseed from wall-clock, or leave the default -- which means runs are either
+// unrepeatable or all identical, and neither is what comparing two AIs across the same campaign
+// needs. Zero keeps the old behaviour exactly; any non-zero value is used verbatim and logged.
+ConfigOptionInt optionRngSeed("OpenApoc.NewFeature", "RngSeed",
+                              tr("Explicit RNG seed (0 = use SeedRng behaviour)"), 0);ConfigOptionBool optionAutoReload("OpenApoc.NewFeature", "AutoReload",
                                   tr("Automatically reload weapons when empty"), true);
 ConfigOptionBool optionLeftClickIcon("OpenApoc.NewFeature", "LeftClickIconEquip",
                                      tr("Left clicking icon opens equip menu"), false);
@@ -474,7 +499,7 @@ ConfigOptionFloat optionStatGrowthMultiplierCheat("OpenApoc.Cheat", "StatGrowthM
 
 ConfigOptionBool optionEnableTouchEvents("Framework", "EnableTouchEvents",
                                          tr("Enable touch events"),
-#ifdef ANDROID
+#if defined(ANDROID) || (defined(__APPLE__) && TARGET_OS_IPHONE)
                                          true
 #else
                                          false
@@ -517,6 +542,15 @@ ConfigOptionBool packSaveOption("Game.Save", "Pack", tr("Pack saved games into a
 
 ConfigOptionBool skipIntroOption("Game", "SkipIntro", tr("Skip intro video"), false);
 ConfigOptionString loadGameOption("Game", "Load", tr("Path to save game to load at startup"), "");
+
+ConfigOptionBool harnessEnable("Framework.Harness", "Enable",
+                               "Listen on 127.0.0.1 for click/key/screenshot commands", false);
+ConfigOptionInt harnessPort("Framework.Harness", "Port", "Harness TCP port (localhost only)",
+                            17321);
+ConfigOptionBool harnessWarpCursor("Framework.Harness", "WarpCursor",
+                                   "Move the OS cursor to follow injected harness input. Off by "
+                                   "default so automated runs do not hijack the physical mouse.",
+                                   false);
 
 ConfigOptionString modList("Game", "Mods",
                            tr("A colon-separated list of mods to load (relative to mod directory)"),

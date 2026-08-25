@@ -12,13 +12,124 @@
 #include <mutex>
 #include <thread>
 
+#include <vector>
+
 /* Workaround MSVC not liking int64_t being defined here and in allegro */
 #define GLEXT_64_TYPES_DEFINED
 #include "framework/render/gl20/gl_2_0.hpp"
 #include "framework/render/gl20/gl_2_0.inl"
 
+// STATIC keeps this copy internal - the GLES3 backend links its own implementation.
+#define STB_RECT_PACK_STATIC
+#define STB_RECT_PACK_IMPLEMENTATION
+#include "framework/render/gles30_v2/stb_rect_pack.h"
+
 namespace
 {
+
+static std::atomic<uint64_t> drawCallCount{0};
+static std::atomic<uint64_t> spriteCount{0};
+
+// This backend issues one draw call per sprite, and a city frame is thousands of
+// sprites. Asking the driver for the current binding before each one (glGetIntegerv)
+// costs more than the draw itself, especially on macOS where GL runs on top of Metal.
+// The renderer owns every binding in its context, so mirror the state here. UNKNOWN
+// forces the next call through, and every delete invalidates - GL reuses names, so a
+// stale entry could otherwise swallow a bind the caller needs.
+class GLStateCache
+{
+  public:
+	static constexpr int MAX_UNITS = 8;
+	static constexpr int TARGET_COUNT = 3;
+	static constexpr int MAX_ATTRIBS = 8;
+	static constexpr GLuint UNKNOWN = 0xffffffffu;
+
+	static int targetIndex(GLenum target)
+	{
+		switch (target)
+		{
+			case gl20::TEXTURE_1D:
+				return 0;
+			case gl20::TEXTURE_2D:
+				return 1;
+			case gl20::TEXTURE_3D:
+				return 2;
+			default:
+				LogError("Unknown texture enum {0}", static_cast<int>(target));
+				return 1;
+		}
+	}
+
+	GLuint activeUnit = UNKNOWN;
+	GLuint framebuffer = UNKNOWN;
+	GLint unpackAlignment = -1;
+	GLuint texture[MAX_UNITS][TARGET_COUNT];
+	bool attribEnabled[MAX_ATTRIBS];
+
+	GLStateCache() { reset(); }
+
+	void reset()
+	{
+		activeUnit = UNKNOWN;
+		framebuffer = UNKNOWN;
+		unpackAlignment = -1;
+		for (auto &enabled : attribEnabled)
+		{
+			enabled = false;
+		}
+		invalidateTextures();
+	}
+
+	void invalidateTextures()
+	{
+		for (auto &unit : texture)
+		{
+			for (auto &target : unit)
+			{
+				target = UNKNOWN;
+			}
+		}
+	}
+
+	bool textureBound(int unit, GLenum target, GLuint id) const
+	{
+		if (unit < 0 || unit >= MAX_UNITS)
+		{
+			return false;
+		}
+		return texture[unit][targetIndex(target)] == id;
+	}
+};
+
+static GLStateCache glState;
+
+// Vertex attribute arrays are never disabled by this renderer, so re-enabling one
+// every sprite is pure driver overhead.
+static void enableVertexAttrib(GLuint index)
+{
+	if (index < GLStateCache::MAX_ATTRIBS)
+	{
+		if (glState.attribEnabled[index])
+		{
+			return;
+		}
+		glState.attribEnabled[index] = true;
+	}
+	gl20::EnableVertexAttribArray(index);
+}
+
+static void disableVertexAttrib(GLuint index)
+{
+	if (index < GLStateCache::MAX_ATTRIBS)
+	{
+		if (!glState.attribEnabled[index])
+		{
+			return;
+		}
+		glState.attribEnabled[index] = false;
+	}
+	gl20::DisableVertexAttribArray(index);
+}
 
 using namespace OpenApoc;
 
@@ -296,6 +407,96 @@ class PaletteProgram : public SpriteProgram
 	}
 };
 
+// Same palette lookup as PaletteProgram, but the tint travels per vertex so sprites
+// with different tints stay in one batch.
+const char *PaletteBatchProgram_vertexSource = {
+    "#version 110\n"
+    "attribute vec2 position;\n"
+    "attribute vec2 texcoord_in;\n"
+    "attribute vec4 tint_in;\n"
+    "varying vec2 texcoord;\n"
+    "varying vec4 tint;\n"
+    "uniform vec2 screenSize;\n"
+    "uniform bool flipY;\n"
+    "void main() {\n"
+    "  texcoord = texcoord_in;\n"
+    "  tint = tint_in;\n"
+    "  vec2 tmpPos = position;\n"
+    "  tmpPos /= screenSize;\n"
+    "  tmpPos -= vec2(0.5,0.5);\n"
+    "  if (flipY) gl_Position = vec4((tmpPos.x*2.0), -(tmpPos.y*2.0),0.0,1.0);\n"
+    "  else gl_Position = vec4((tmpPos.x*2.0), (tmpPos.y*2.0),0.0,1.0);\n"
+    "}\n"};
+const char *PaletteBatchProgram_fragmentSource = {
+    "#version 110\n"
+    "varying vec2 texcoord;\n"
+    "varying vec4 tint;\n"
+    "uniform sampler2D tex;\n"
+    "uniform sampler2D pal;\n"
+    "void main() {\n"
+    " float idx = texture2D(tex, texcoord,0.0).r;\n"
+    " gl_FragColor = tint * texture2D(pal, vec2(idx,0.0),0.0);\n"
+    "}\n"};
+class PaletteBatchProgram : public Program
+{
+  private:
+	Vec2<int> currentScreenSize{0, 0};
+	bool currentFlipY = false;
+	GLint currentTexUnit = -1;
+	GLint currentPalUnit = -1;
+
+  public:
+	GLint posLoc = -1;
+	GLint texcoordLoc = -1;
+	GLint tintLoc = -1;
+	GLint screenSizeLoc = -1;
+	GLint texLoc = -1;
+	GLint palLoc = -1;
+	GLint flipYLoc = -1;
+
+	PaletteBatchProgram()
+	    : Program(PaletteBatchProgram_vertexSource, PaletteBatchProgram_fragmentSource)
+	{
+		this->posLoc = gl20::GetAttribLocation(this->prog, "position");
+		this->texcoordLoc = gl20::GetAttribLocation(this->prog, "texcoord_in");
+		this->tintLoc = gl20::GetAttribLocation(this->prog, "tint_in");
+		this->screenSizeLoc = gl20::GetUniformLocation(this->prog, "screenSize");
+		this->texLoc = gl20::GetUniformLocation(this->prog, "tex");
+		this->palLoc = gl20::GetUniformLocation(this->prog, "pal");
+		this->flipYLoc = gl20::GetUniformLocation(this->prog, "flipY");
+	}
+
+	bool valid() const
+	{
+		return prog && posLoc >= 0 && texcoordLoc >= 0 && tintLoc >= 0 && screenSizeLoc >= 0 &&
+		       texLoc >= 0 && palLoc >= 0 && flipYLoc >= 0;
+	}
+
+	void setUniforms(Vec2<int> screenSize, bool flipY, GLint texUnit = 0, GLint palUnit = 1)
+	{
+		if (screenSize != currentScreenSize)
+		{
+			currentScreenSize = screenSize;
+			this->uniform(this->screenSizeLoc, screenSize);
+		}
+		if (texUnit != currentTexUnit)
+		{
+			currentTexUnit = texUnit;
+			this->uniform(this->texLoc, texUnit);
+		}
+		if (palUnit != currentPalUnit)
+		{
+			currentPalUnit = palUnit;
+			this->uniform(this->palLoc, palUnit);
+		}
+		if (flipY != currentFlipY)
+		{
+			currentFlipY = flipY;
+			this->uniform(this->flipYLoc, flipY);
+		}
+	}
+};
+
 const char *SolidColourProgram_vertexSource = {
     "#version 110\n"
     "attribute vec2 position;\n"
@@ -400,17 +601,19 @@ class Quad
 	}
 	void draw(GLuint vertexAttribPos, GLuint texcoordAttribPos)
 	{
-		gl20::EnableVertexAttribArray(vertexAttribPos);
+		enableVertexAttrib(vertexAttribPos);
 		gl20::VertexAttribPointer(vertexAttribPos, 2, gl20::FLOAT, gl20::FALSE_, 0, &vertices);
-		gl20::EnableVertexAttribArray(texcoordAttribPos);
+		enableVertexAttrib(texcoordAttribPos);
 		gl20::VertexAttribPointer(texcoordAttribPos, 2, gl20::FLOAT, gl20::FALSE_, 0, &texcoords);
 		gl20::DrawArrays(gl20::TRIANGLE_STRIP, 0, 4);
+		drawCallCount++;
 	}
 	void draw(GLuint vertexAttribPos)
 	{
-		gl20::EnableVertexAttribArray(vertexAttribPos);
+		enableVertexAttrib(vertexAttribPos);
 		gl20::VertexAttribPointer(vertexAttribPos, 2, gl20::FLOAT, gl20::FALSE_, 0, &vertices);
 		gl20::DrawArrays(gl20::TRIANGLE_STRIP, 0, 4);
+		drawCallCount++;
 	}
 };
 class Line
@@ -425,9 +628,10 @@ class Line
 	void draw(GLuint vertexAttribPos)
 	{
 		gl20::LineWidth(thickness);
-		gl20::EnableVertexAttribArray(vertexAttribPos);
+		enableVertexAttrib(vertexAttribPos);
 		gl20::VertexAttribPointer(vertexAttribPos, 2, gl20::FLOAT, gl20::FALSE_, 0, &vertices);
 		gl20::DrawArrays(gl20::LINES, 0, 2);
+		drawCallCount++;
 	}
 };
 class ActiveTexture
@@ -439,13 +643,13 @@ class ActiveTexture
 
 	ActiveTexture(int unit)
 	{
-		GLenum prevUnit;
-		gl20::GetIntegerv(gl20::ACTIVE_TEXTURE, reinterpret_cast<GLint *>(&prevUnit));
-		if (prevUnit == getUnitEnum(unit))
+		const GLenum unitEnum = getUnitEnum(unit);
+		if (glState.activeUnit == unitEnum)
 		{
 			return;
 		}
-		gl20::ActiveTexture(getUnitEnum(unit));
+		gl20::ActiveTexture(unitEnum);
+		glState.activeUnit = unitEnum;
 	}
 };
 
@@ -456,13 +660,12 @@ class UnpackAlignment
   public:
 	UnpackAlignment(int align)
 	{
-		GLint prevAlign;
-		gl20::GetIntegerv(gl20::UNPACK_ALIGNMENT, &prevAlign);
-		if (prevAlign == align)
+		if (glState.unpackAlignment == align)
 		{
 			return;
 		}
 		gl20::PixelStorei(gl20::UNPACK_ALIGNMENT, align);
+		glState.unpackAlignment = align;
 	}
 };
 
@@ -473,31 +676,22 @@ class BindTexture
   public:
 	GLenum bind;
 	int unit;
-	static GLenum getBindEnum(GLenum e)
-	{
-		switch (e)
-		{
-			case gl20::TEXTURE_1D:
-				return gl20::TEXTURE_BINDING_1D;
-			case gl20::TEXTURE_2D:
-				return gl20::TEXTURE_BINDING_2D;
-			case gl20::TEXTURE_3D:
-				return gl20::TEXTURE_BINDING_3D;
-			default:
-				LogError("Unknown texture enum {0}", static_cast<int>(e));
-				return gl20::TEXTURE_BINDING_2D;
-		}
-	}
+
 	BindTexture(GLuint id, GLint unit = 0, GLenum bind = gl20::TEXTURE_2D) : bind(bind), unit(unit)
 	{
 		ActiveTexture a(unit);
-		GLuint prevID;
-		gl20::GetIntegerv(getBindEnum(bind), reinterpret_cast<GLint *>(&prevID));
-		if (prevID == id)
+		if (unit < 0 || unit >= GLStateCache::MAX_UNITS)
+		{
+			gl20::BindTexture(bind, id);
+			return;
+		}
+		GLuint &cached = glState.texture[unit][GLStateCache::targetIndex(bind)];
+		if (cached == id)
 		{
 			return;
 		}
 		gl20::BindTexture(bind, id);
+		cached = id;
 	}
 };
 
@@ -529,15 +723,18 @@ class BindFramebuffer
   public:
 	BindFramebuffer(GLuint id)
 	{
-		GLuint prevID;
-		gl20::GetIntegerv(gl20::FRAMEBUFFER_BINDING_EXT, reinterpret_cast<GLint *>(&prevID));
-		if (prevID == id)
+		if (glState.framebuffer == id)
 		{
 			return;
 		}
 		gl20::BindFramebufferEXT(gl20::FRAMEBUFFER_EXT, id);
+		glState.framebuffer = id;
 	}
 };
+
+// Defined once OGL20Renderer is complete. Reading a surface back has to see sprites
+// that are still sitting in the batch buffer.
+static void flushRendererBatch(OGL20Renderer *r);
 
 class FBOData : public RendererImageData
 {
@@ -554,8 +751,14 @@ class FBOData : public RendererImageData
 	{
 	}
 
+	void resize(Vec2<unsigned int> newSize) override
+	{
+		this->size = {(float)newSize.x, (float)newSize.y};
+	}
+
 	sp<Image> readBack() override
 	{
+		flushRendererBatch(this->owner);
 		auto img = mksp<RGBImage>(size);
 		BindFramebuffer f(this->fbo);
 
@@ -641,16 +844,140 @@ class GLPalette : public RendererImageData
 	~GLPalette() override;
 };
 
+// A city frame is thousands of paletted sprites. One texture each means one draw call
+// each, which is what makes this backend slow. Packing them into shared pages lets a
+// whole screen of tiles go out as a handful of batched draws instead.
+class PaletteAtlas
+{
+  public:
+	static constexpr int PAGE_SIZE = 2048;
+	// Keep a transparent gutter so nearest sampling at a quad edge can never land on a
+	// neighbour.
+	static constexpr int PADDING = 1;
+	// Anything approaching page size would evict everything else; those keep their own
+	// texture and their own draw call.
+	static constexpr int MAX_SPRITE = 512;
+
+	struct Page
+	{
+		GLuint texID = 0;
+		stbrp_context context{};
+		std::vector<stbrp_node> nodes;
+	};
+
+	void reset() { pages.clear(); }
+
+	GLuint pageTexture(int page) const
+	{
+		if (page < 0 || page >= (int)pages.size())
+		{
+			return 0;
+		}
+		return pages[page]->texID;
+	}
+
+	// Returns false if the sprite should keep its own texture.
+	bool add(const sp<PaletteImage> &image, int &outPage, Vec2<int> &outPos)
+	{
+		const int w = (int)image->size.x;
+		const int h = (int)image->size.y;
+		if (w <= 0 || h <= 0 || w > MAX_SPRITE || h > MAX_SPRITE)
+		{
+			return false;
+		}
+
+		for (size_t i = 0; i < pages.size(); i++)
+		{
+			if (packInto(*pages[i], w, h, outPos))
+			{
+				outPage = (int)i;
+				upload(*pages[i], image, outPos);
+				return true;
+			}
+		}
+
+		pages.push_back(newPage());
+		if (!packInto(*pages.back(), w, h, outPos))
+		{
+			LogError("Failed to pack {0}x{1} sprite into an empty atlas page", w, h);
+			pages.pop_back();
+			return false;
+		}
+		outPage = (int)pages.size() - 1;
+		upload(*pages.back(), image, outPos);
+		return true;
+	}
+
+  private:
+	std::vector<up<Page>> pages;
+
+	static up<Page> newPage()
+	{
+		auto page = std::make_unique<Page>();
+		// stb_rect_pack wants roughly one node per column of the target.
+		page->nodes.resize(PAGE_SIZE);
+		stbrp_init_target(&page->context, PAGE_SIZE, PAGE_SIZE, page->nodes.data(),
+		                  (int)page->nodes.size());
+
+		gl20::GenTextures(1, &page->texID);
+		BindTexture b(page->texID);
+		UnpackAlignment align(1);
+		gl20::TexParameteri(gl20::TEXTURE_2D, gl20::TEXTURE_MIN_FILTER, gl20::NEAREST);
+		gl20::TexParameteri(gl20::TEXTURE_2D, gl20::TEXTURE_MAG_FILTER, gl20::NEAREST);
+		gl20::TexParameteri(gl20::TEXTURE_2D, gl20::TEXTURE_WRAP_S, gl20::CLAMP_TO_EDGE);
+		gl20::TexParameteri(gl20::TEXTURE_2D, gl20::TEXTURE_WRAP_T, gl20::CLAMP_TO_EDGE);
+		// Index 0 is the transparent palette entry, so a zeroed page reads as empty.
+		const std::vector<uint8_t> blank((size_t)PAGE_SIZE * PAGE_SIZE, 0);
+		gl20::TexImage2D(gl20::TEXTURE_2D, 0, 1, PAGE_SIZE, PAGE_SIZE, 0, gl20::RED,
+		                 gl20::UNSIGNED_BYTE, blank.data());
+		LogInfo("Created palette atlas page {0}x{0}", PAGE_SIZE);
+		return page;
+	}
+
+	static bool packInto(Page &page, int w, int h, Vec2<int> &outPos)
+	{
+		stbrp_rect rect{};
+		rect.w = (stbrp_coord)(w + PADDING);
+		rect.h = (stbrp_coord)(h + PADDING);
+		stbrp_pack_rects(&page.context, &rect, 1);
+		if (!rect.was_packed)
+		{
+			return false;
+		}
+		outPos = {rect.x, rect.y};
+		return true;
+	}
+
+	static void upload(Page &page, const sp<PaletteImage> &image, Vec2<int> pos)
+	{
+		PaletteImageLock l(image, ImageLockUse::Read);
+		BindTexture b(page.texID);
+		UnpackAlignment align(1);
+		gl20::TexSubImage2D(gl20::TEXTURE_2D, 0, pos.x, pos.y, image->size.x, image->size.y,
+		                    gl20::RED, gl20::UNSIGNED_BYTE, l.getData());
+	}
+};
+
+static PaletteAtlas paletteAtlas;
+
 class GLPaletteImage : public RendererImageData
 {
   public:
-	GLuint texID;
+	GLuint texID = 0;
 	Vec2<float> size;
+	// >= 0 when this sprite lives in a shared atlas page and can be batched.
+	int atlasPage = -1;
+	Vec2<int> atlasPos{0, 0};
 	std::weak_ptr<PaletteImage> parent;
 	OGL20Renderer *owner;
 	GLPaletteImage(sp<PaletteImage> parent, OGL20Renderer *owner)
 	    : size(parent->size), parent(parent), owner(owner)
 	{
+		if (paletteAtlas.add(parent, this->atlasPage, this->atlasPos))
+		{
+			return;
+		}
+
 		PaletteImageLock l(parent, ImageLockUse::Read);
 		gl20::GenTextures(1, &this->texID);
 		BindTexture b(this->texID);
@@ -671,8 +998,21 @@ class OGL20Renderer : public Renderer
 	sp<RGBProgram> rgbProgram;
 	sp<SolidColourProgram> colourProgram;
 	sp<PaletteProgram> paletteProgram;
+	sp<PaletteBatchProgram> paletteBatchProgram;
 	GLuint currentBoundProgram;
 	GLuint currentBoundFBO;
+
+	struct BatchVertex
+	{
+		float x, y;
+		float u, v;
+		uint8_t r, g, b, a;
+	};
+	std::vector<BatchVertex> batchVertices;
+	GLuint batchVBO = 0;
+	int batchPage = -1;
+	GLuint batchPalTex = 0;
+	bool batchFlipY = false;
 
 	sp<Surface> currentSurface;
 	sp<Palette> currentPalette;
@@ -690,7 +1030,7 @@ class OGL20Renderer : public Renderer
 			s->rendererPrivateData.reset(new FBOData(s->size, this));
 
 		FBOData *fbo = static_cast<FBOData *>(s->rendererPrivateData.get());
-		gl20::BindFramebufferEXT(gl20::FRAMEBUFFER_EXT, fbo->fbo);
+		BindFramebuffer b(fbo->fbo);
 		this->currentBoundFBO = fbo->fbo;
 		gl20::Viewport(0, 0, s->size.x, s->size.y);
 	}
@@ -706,8 +1046,17 @@ class OGL20Renderer : public Renderer
   public:
 	OGL20Renderer()
 	    : rgbProgram(new RGBProgram()), colourProgram(new SolidColourProgram()),
-	      paletteProgram(new PaletteProgram()), currentBoundProgram(0), currentBoundFBO(0)
+	      paletteProgram(new PaletteProgram()), paletteBatchProgram(new PaletteBatchProgram()),
+	      currentBoundProgram(0), currentBoundFBO(0)
 	{
+		glState.reset();
+		paletteAtlas.reset();
+		gl20::GenBuffers(1, &this->batchVBO);
+		this->batchVertices.reserve(6 * 4096);
+		if (!this->paletteBatchProgram->valid())
+		{
+			LogWarning("Palette batch shader unavailable - falling back to one draw per sprite");
+		}
 		this->bound_thread = std::this_thread::get_id();
 		GLint viewport[4];
 		gl20::GetIntegerv(gl20::VIEWPORT, viewport);
@@ -726,7 +1075,25 @@ class OGL20Renderer : public Renderer
 		                        gl20::DST_ALPHA);
 		renderer_dead = false;
 	}
-	~OGL20Renderer() override { renderer_dead = true; };
+	~OGL20Renderer() override
+	{
+		// Release the renderer's own GL-backed objects while renderer_dead is still false and the
+		// context is still current. Flipping the flag first (as this used to) meant the implicit
+		// member destructors ran afterwards, hit the "destroyed after renderer" guard and returned
+		// early -- so their textures and framebuffers were never actually deleted.
+		if (this->batchVBO)
+		{
+			gl20::DeleteBuffers(1, &this->batchVBO);
+		}
+		this->currentSurface.reset();
+		this->defaultSurface.reset();
+		this->currentPalette.reset();
+		this->rgbProgram.reset();
+		this->colourProgram.reset();
+		this->paletteProgram.reset();
+		this->paletteBatchProgram.reset();
+		renderer_dead = true;
+	};
 	void clear(Colour c = Colour{0, 0, 0, 0}) override
 	{
 		this->flush();
@@ -743,88 +1110,86 @@ class OGL20Renderer : public Renderer
 		this->currentPalette = p;
 	}
 	sp<Palette> getPalette() override { return this->currentPalette; }
-	void draw(sp<Image> image, Vec2<float> position) override
+	void draw(const sp<Image> &image, Vec2<float> position) override
 	{
 		drawScaled(image, position, image->size, Scaler::Nearest);
 	}
-	void drawRotated(sp<Image> image, Vec2<float> center, Vec2<float> position,
+	void drawRotated(const sp<Image> &image, Vec2<float> center, Vec2<float> position,
 	                 float angle) override
 	{
-		auto size = image->size;
-		sp<RGBImage> rgbImage = std::dynamic_pointer_cast<RGBImage>(image);
-		if (rgbImage)
+		if (image->imageType != ImageType::RGB)
 		{
-			GLRGBImage *img = dynamic_cast<GLRGBImage *>(rgbImage->rendererPrivateData.get());
-			if (!img)
-			{
-				img = new GLRGBImage(rgbImage, this);
-				image->rendererPrivateData.reset(img);
-			}
-			this->drawRgb(*img, position, size, Scaler::Linear, center, angle);
+			LogError("Unsupported image type");
 			return;
 		}
-
-		sp<PaletteImage> paletteImage = std::dynamic_pointer_cast<PaletteImage>(image);
-		LogError("Unsupported image type");
+		auto *img = static_cast<GLRGBImage *>(image->rendererPrivateData.get());
+		if (!img)
+		{
+			img = new GLRGBImage(std::static_pointer_cast<RGBImage>(image), this);
+			image->rendererPrivateData.reset(img);
+		}
+		this->drawRgb(*img, position, image->size, Scaler::Linear, center, angle);
 	}
-	void drawScaled(sp<Image> image, Vec2<float> position, Vec2<float> size,
+	void drawScaled(const sp<Image> &image, Vec2<float> position, Vec2<float> size,
 	                Scaler scaler = Scaler::Linear) override
 	{
 		drawScaledImage(image, position, size, scaler);
 	}
-	void drawScaledImage(sp<Image> image, Vec2<float> position, Vec2<float> size,
+	// Hot path: called once per sprite, thousands of times a frame. Dispatch on the
+	// image's own type tag and stay on raw pointers - the old dynamic_pointer_cast chain
+	// cost more per sprite than the draw it was dispatching to.
+	void drawScaledImage(const sp<Image> &image, Vec2<float> position, Vec2<float> size,
 	                     Scaler scaler = Scaler::Linear, Colour tint = {255, 255, 255, 255})
 	{
-
-		sp<RGBImage> rgbImage = std::dynamic_pointer_cast<RGBImage>(image);
-		if (rgbImage)
+		auto *priv = image->rendererPrivateData.get();
+		switch (image->imageType)
 		{
-			GLRGBImage *img = dynamic_cast<GLRGBImage *>(rgbImage->rendererPrivateData.get());
-			if (!img)
+			case ImageType::Palette:
 			{
-				img = new GLRGBImage(rgbImage, this);
-				image->rendererPrivateData.reset(img);
+				auto *img = static_cast<GLPaletteImage *>(priv);
+				if (!img)
+				{
+					img = new GLPaletteImage(std::static_pointer_cast<PaletteImage>(image), this);
+					image->rendererPrivateData.reset(img);
+				}
+				if (scaler != Scaler::Nearest)
+				{
+					// blending indices doesn't make sense. You'll have to render
+					// it to an RGB surface then scale that
+					LogError("Only nearest scaler is supported on paletted images");
+				}
+				this->drawPalette(*img, position, size, tint);
+				return;
 			}
-			this->drawRgb(*img, position, size, scaler, {0, 0}, 0, tint);
-			return;
-		}
-
-		sp<PaletteImage> paletteImage = std::dynamic_pointer_cast<PaletteImage>(image);
-		if (paletteImage)
-		{
-			GLPaletteImage *img =
-			    dynamic_cast<GLPaletteImage *>(paletteImage->rendererPrivateData.get());
-			if (!img)
+			case ImageType::RGB:
 			{
-				img = new GLPaletteImage(paletteImage, this);
-				image->rendererPrivateData.reset(img);
+				auto *img = static_cast<GLRGBImage *>(priv);
+				if (!img)
+				{
+					img = new GLRGBImage(std::static_pointer_cast<RGBImage>(image), this);
+					image->rendererPrivateData.reset(img);
+				}
+				this->drawRgb(*img, position, size, scaler, {0, 0}, 0, tint);
+				return;
 			}
-			if (scaler != Scaler::Nearest)
+			case ImageType::Surface:
 			{
-				// blending indices doesn't make sense. You'll have to render
-				// it to an RGB surface then scale that
-				LogError("Only nearest scaler is supported on paletted images");
+				auto *fbo = static_cast<FBOData *>(priv);
+				if (!fbo)
+				{
+					fbo = new FBOData(image->size, this);
+					image->rendererPrivateData.reset(fbo);
+				}
+				this->drawSurface(*fbo, position, size, scaler, tint);
+				return;
 			}
-			this->drawPalette(*img, position, size, tint);
-			return;
-		}
-
-		sp<Surface> surface = std::dynamic_pointer_cast<Surface>(image);
-		if (surface)
-		{
-			FBOData *fbo = dynamic_cast<FBOData *>(surface->rendererPrivateData.get());
-			if (!fbo)
-			{
-				fbo = new FBOData(image->size, this);
-				image->rendererPrivateData.reset(fbo);
-			}
-			this->drawSurface(*fbo, position, size, scaler, tint);
-			return;
+			case ImageType::Lazy:
+				break;
 		}
 		LogError("Unsupported image type");
 	}
 
-	void drawTinted(sp<Image> i, Vec2<float> position, Colour tint) override
+	void drawTinted(const sp<Image> &i, Vec2<float> position, Colour tint) override
 	{
 		drawScaledImage(i, position, i->size, Scaler::Nearest, tint);
 	}
@@ -910,6 +1275,7 @@ class OGL20Renderer : public Renderer
 	}
 	void flush() override
 	{
+		this->flushBatch();
 		// Cleanup any outstanding destroyed texture or framebuffer objects
 		{
 			std::lock_guard<std::mutex> lock(this->destroyed_texture_list_mutex);
@@ -917,6 +1283,10 @@ class OGL20Renderer : public Renderer
 			for (auto &id : this->destroyed_texture_list)
 			{
 				gl20::DeleteTextures(1, &id);
+			}
+			if (!this->destroyed_texture_list.empty())
+			{
+				glState.invalidateTextures();
 			}
 			this->destroyed_texture_list.clear();
 		}
@@ -927,18 +1297,117 @@ class OGL20Renderer : public Renderer
 			{
 				gl20::DeleteFramebuffersEXT(1, &id);
 			}
+			if (!this->destroyed_framebuffer_list.empty())
+			{
+				glState.framebuffer = GLStateCache::UNKNOWN;
+			}
 			this->destroyed_framebuffer_list.clear();
 		}
 	}
+	uint64_t takeDrawCallCount() override { return drawCallCount.exchange(0); }
+	uint64_t takeSpriteCount() override { return spriteCount.exchange(0); }
 	UString getName() override { return "OGL2.0 Renderer"; }
 	sp<Surface> getDefaultSurface() override { return this->defaultSurface; }
 
 	void bindProgram(sp<Program> p)
 	{
+		// Anything that is not another batched sprite ends the batch, which keeps the
+		// painter's-algorithm draw order the tile views rely on.
+		if (p != this->paletteBatchProgram)
+		{
+			this->flushBatch();
+		}
 		if (this->currentBoundProgram == p->prog)
 			return;
 		gl20::UseProgram(p->prog);
 		this->currentBoundProgram = p->prog;
+	}
+
+	void flushBatch()
+	{
+		if (this->batchVertices.empty())
+		{
+			return;
+		}
+		// Swap out before binding: bindProgram() would otherwise recurse back in here.
+		std::vector<BatchVertex> verts;
+		verts.swap(this->batchVertices);
+
+		bindProgram(this->paletteBatchProgram);
+		this->paletteBatchProgram->setUniforms(this->currentSurface->size, this->batchFlipY);
+		BindTexture pal(this->batchPalTex, 1);
+		BindTexture tex(paletteAtlas.pageTexture(this->batchPage), 0);
+
+		gl20::BindBuffer(gl20::ARRAY_BUFFER, this->batchVBO);
+		gl20::BufferData(gl20::ARRAY_BUFFER, (GLsizeiptr)(verts.size() * sizeof(BatchVertex)),
+		                 verts.data(), gl20::STREAM_DRAW);
+
+		const GLsizei stride = sizeof(BatchVertex);
+		enableVertexAttrib(this->paletteBatchProgram->posLoc);
+		gl20::VertexAttribPointer(this->paletteBatchProgram->posLoc, 2, gl20::FLOAT, gl20::FALSE_,
+		                          stride, (const void *)offsetof(BatchVertex, x));
+		enableVertexAttrib(this->paletteBatchProgram->texcoordLoc);
+		gl20::VertexAttribPointer(this->paletteBatchProgram->texcoordLoc, 2, gl20::FLOAT,
+		                          gl20::FALSE_, stride, (const void *)offsetof(BatchVertex, u));
+		enableVertexAttrib(this->paletteBatchProgram->tintLoc);
+		gl20::VertexAttribPointer(this->paletteBatchProgram->tintLoc, 4, gl20::UNSIGNED_BYTE,
+		                          gl20::TRUE_, stride, (const void *)offsetof(BatchVertex, r));
+
+		gl20::DrawArrays(gl20::TRIANGLES, 0, (GLsizei)verts.size());
+		drawCallCount++;
+
+		// No other program re-points the tint attribute, so leaving it enabled would let
+		// later draws read the batch buffer past its end.
+		disableVertexAttrib(this->paletteBatchProgram->tintLoc);
+		// The single-sprite paths below feed GL from client memory, which only works
+		// while no array buffer is bound.
+		gl20::BindBuffer(gl20::ARRAY_BUFFER, 0);
+
+		verts.clear();
+		this->batchVertices.swap(verts);
+	}
+
+	// Returns false when the sprite cannot be batched and needs its own draw call.
+	bool batchPaletteSprite(GLPaletteImage &img, Vec2<float> offset, Vec2<float> size, Colour tint,
+	                        bool flipY)
+	{
+		if (img.atlasPage < 0 || !this->paletteBatchProgram->valid())
+		{
+			return false;
+		}
+		// Scaled draws would let nearest sampling reach past the sprite's own texels.
+		if (size != img.size)
+		{
+			return false;
+		}
+
+		const GLuint palTexID =
+		    static_cast<GLPalette *>(this->currentPalette->rendererPrivateData.get())->texID;
+		if (this->batchPage != img.atlasPage || this->batchPalTex != palTexID ||
+		    this->batchFlipY != flipY)
+		{
+			this->flushBatch();
+			this->batchPage = img.atlasPage;
+			this->batchPalTex = palTexID;
+			this->batchFlipY = flipY;
+		}
+
+		constexpr float pageSize = (float)PaletteAtlas::PAGE_SIZE;
+		const float u0 = (float)img.atlasPos.x / pageSize;
+		const float v0 = (float)img.atlasPos.y / pageSize;
+		const float u1 = ((float)img.atlasPos.x + size.x) / pageSize;
+		const float v1 = ((float)img.atlasPos.y + size.y) / pageSize;
+		const float x0 = offset.x;
+		const float y0 = offset.y;
+		const float x1 = offset.x + size.x;
+		const float y1 = offset.y + size.y;
+
+		const BatchVertex tl{x0, y0, u0, v0, tint.r, tint.g, tint.b, tint.a};
+		const BatchVertex tr{x1, y0, u1, v0, tint.r, tint.g, tint.b, tint.a};
+		const BatchVertex bl{x0, y1, u0, v1, tint.r, tint.g, tint.b, tint.a};
+		const BatchVertex br{x1, y1, u1, v1, tint.r, tint.g, tint.b, tint.a};
+		this->batchVertices.insert(this->batchVertices.end(), {tl, tr, bl, bl, tr, br});
+		return true;
 	}
 	void drawRgb(GLRGBImage &img, Vec2<float> offset, Vec2<float> size, Scaler scaler,
 	             Vec2<float> rotationCenter = {0, 0}, float rotationAngleRadians = 0,
@@ -973,16 +1442,26 @@ class OGL20Renderer : public Renderer
 	void drawPalette(GLPaletteImage &img, Vec2<float> offset, Vec2<float> size,
 	                 Colour tint = {255, 255, 255, 255})
 	{
-		bindProgram(paletteProgram);
-		Rect<float> pos(offset, offset + size);
+		spriteCount++;
 		bool flipY = false;
 		if (currentBoundFBO == 0)
 			flipY = true;
+		if (batchPaletteSprite(img, offset, size, tint, flipY))
+		{
+			return;
+		}
+		bindProgram(paletteProgram);
+		Rect<float> pos(offset, offset + size);
 		paletteProgram->setUniforms(this->currentSurface->size, flipY, tint);
+		// Bind the palette first so the sprite bind leaves unit 0 active: the palette is
+		// the same for a whole screen, so this skips two glActiveTexture calls per sprite.
+		const GLuint palTexID =
+		    static_cast<GLPalette *>(this->currentPalette->rendererPrivateData.get())->texID;
+		if (!glState.textureBound(1, gl20::TEXTURE_2D, palTexID))
+		{
+			BindTexture p(palTexID, 1);
+		}
 		BindTexture t(img.texID, 0);
-
-		BindTexture p(
-		    static_cast<GLPalette *>(this->currentPalette->rendererPrivateData.get())->texID, 1);
 		Quad q(pos, Rect<float>{{0, 0}, {1, 1}});
 		q.draw(paletteProgram->posLoc, paletteProgram->texcoordLoc);
 	}
@@ -1034,6 +1513,7 @@ class OGL20Renderer : public Renderer
 		if (this->bound_thread == std::this_thread::get_id())
 		{
 			gl20::DeleteTextures(1, &id);
+			glState.invalidateTextures();
 			return;
 		}
 		// Otherwise add it to a list for future destruction
@@ -1048,6 +1528,7 @@ class OGL20Renderer : public Renderer
 		if (this->bound_thread == std::this_thread::get_id())
 		{
 			gl20::DeleteFramebuffersEXT(1, &id);
+			glState.framebuffer = GLStateCache::UNKNOWN;
 			return;
 		}
 		// Otherwise add it to a list for future destruction
@@ -1127,8 +1608,21 @@ GLPalette::~GLPalette()
 	}
 	owner->delete_texture_object(this->texID);
 }
+static void flushRendererBatch(OGL20Renderer *r)
+{
+	if (r && !renderer_dead)
+	{
+		r->flushBatch();
+	}
+}
+
 GLPaletteImage::~GLPaletteImage()
 {
+	if (this->atlasPage >= 0)
+	{
+		// Atlas space is owned by the page and is not reclaimed.
+		return;
+	}
 	if (renderer_dead)
 	{
 		LogWarning("GLPaletteImage being destroyed after renderer");

@@ -22,14 +22,25 @@ enum class ImageLockUse
 	ReadWrite,
 };
 
+// Renderers dispatch on this instead of dynamic_cast. A city frame draws thousands of
+// sprites, and three chained dynamic_pointer_casts each cost more than the draw itself.
+enum class ImageType
+{
+	Lazy,
+	Surface,
+	Palette,
+	RGB,
+};
+
 class Image : public ResObject
 {
   protected:
-	Image(Vec2<unsigned int> size);
+	Image(Vec2<unsigned int> size, ImageType imageType);
 
   public:
 	virtual ~Image();
 	Vec2<unsigned int> size;
+	const ImageType imageType;
 
 	sp<RendererImageData> rendererPrivateData;
 	bool dirty;

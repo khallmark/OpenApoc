@@ -61,7 +61,7 @@ class NullSoundBackendFactory : public SoundBackendFactory
   public:
 	SoundBackend *create(int concurrent_sample_count) override
 	{
-		LogWarning("Creating NULL sound backend (Sound disabled)");
+		LogInfo("Creating NULL sound backend (Sound disabled)");
 		return new NullSoundBackend(concurrent_sample_count);
 	}
 

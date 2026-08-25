@@ -775,6 +775,7 @@ class GLSurface final : public RendererImageData
 		}
 	}
 	~GLSurface() override;
+	void resize(Vec2<unsigned int> newSize) override { this->size = newSize; }
 	sp<Image> readBack() override
 	{
 		BindFramebuffer b(this->fbo_id);
@@ -1362,11 +1363,11 @@ class OGLES30Renderer final : public Renderer
 		gl->BindTexture(GL::TEXTURE_2D, pal->tex_id);
 	}
 	sp<Palette> getPalette() override { return this->current_palette; }
-	void draw(sp<Image> i, Vec2<float> position) override
+	void draw(const sp<Image> &i, Vec2<float> position) override
 	{
 		this->drawScaled(i, position, i->size, Scaler::Nearest);
 	}
-	void drawRotated(sp<Image> i, Vec2<float> center, Vec2<float> position, float angle) override
+	void drawRotated(const sp<Image> &i, Vec2<float> center, Vec2<float> position, float angle) override
 	{
 		this->flush();
 		auto viewport_size = this->current_surface->size;
@@ -1396,7 +1397,7 @@ class OGLES30Renderer final : public Renderer
 		}
 		LogError("Unknown image type");
 	}
-	void drawScaled(sp<Image> i, Vec2<float> position, Vec2<float> size, Scaler scaler) override
+	void drawScaled(const sp<Image> &i, Vec2<float> position, Vec2<float> size, Scaler scaler) override
 	{
 		auto viewport_size = this->current_surface->size;
 		bool flip_y = (this->current_surface == this->default_surface);
@@ -1452,7 +1453,7 @@ class OGLES30Renderer final : public Renderer
 		}
 		LogError("Unknown image type");
 	}
-	void drawTinted(sp<Image> i, Vec2<float> position, Colour tint) override
+	void drawTinted(const sp<Image> &i, Vec2<float> position, Colour tint) override
 	{
 		auto viewport_size = this->current_surface->size;
 		bool flip_y = (this->current_surface == this->default_surface);
@@ -1752,13 +1753,26 @@ class OGLES30RendererFactory : public RendererFactory
 		{
 			LogAssert(gl == nullptr);
 			alreadyInitialised = true;
-			// First see if we're a direct OpenGL|ES context
+#ifdef OPENAPOC_GLES
+			// Real ES context: do not query GL_EXTENSIONS (invalid on ES 3).
+			if (GL::supported(false))
+			{
+				LogInfo("Using OpenGL|ES context");
+				gl.reset(new GL(false));
+			}
+			else
+			{
+				LogInfo("Failed to find ES3-compatible device");
+				return nullptr;
+			}
+#else
+			// First see if we're a desktop GL context with GL_ARB_ES3_compatibility
 			if (GL::supported(true))
 			{
 				LogInfo("Using OpenGL ES3 compatibility");
 				gl.reset(new GL(true));
 			}
-			// Then check for ES3 compatibility extension on desktop OpenGL
+			// Then check for a native OpenGL ES context
 			else if (GL::supported(false))
 			{
 				LogInfo("Using OpenGL|ES context");
@@ -1769,6 +1783,7 @@ class OGLES30RendererFactory : public RendererFactory
 				LogInfo("Failed to find ES3-compatible device");
 				return nullptr;
 			}
+#endif
 			return new OGLES30Renderer();
 		}
 		else
