@@ -714,6 +714,73 @@ static bool test_ufo_mission_counter_zero_without_building_clears_target()
 	return true;
 }
 
+// U1(a) call-site lock. The three tests above drive
+// VehicleMission::advanceMissionCounterOnArrival() directly, which leaves the *hook* untested --
+// the call inside VehicleMission::start()'s MissionType::AttackBuilding re-plan branch. Delete
+// that one line and all three still pass. This drives the real start() instead, so the counter
+// can only move if the production call site is still there.
+//
+// Preconditions for reaching the branch (vehiclemission.cpp, AttackBuilding case): targetBuilding
+// must already be set (or start() cancels before reaching it), takeOffCheck() must return false
+// (true once the vehicle has a tileObject, which placeVehicle gives it), and currentPlannedPath
+// must be empty (true for a fresh mission). start() then decrements and re-plans through
+// setPathTo, which needs the real extracted city map -- hence placeVehicle on CITYMAP_HUMAN
+// rather than the synthetic City the direct-call tests above can get away with.
+static bool test_ufo_mission_counter_decrements_from_mission_start()
+{
+	auto &state = *g_state;
+	auto cityIt = state.cities.find("CITYMAP_HUMAN");
+	TEST_REQUIRE(cityIt != state.cities.end(), "no CITYMAP_HUMAN city in gamestate");
+	auto city = cityIt->second;
+
+	StateRef<Building> target;
+	for (auto &b : state.buildings)
+	{
+		if (b.second && b.second->isAlive() && b.second->city.id == "CITYMAP_HUMAN")
+		{
+			target = {&state, b.first};
+			break;
+		}
+	}
+	TEST_REQUIRE(!!target, "no alive CITYMAP_HUMAN building available to seed the mission target");
+
+	const Vec3<float> spawn{(float)((target->bounds.p0.x + target->bounds.p1.x) / 2) + 0.5f,
+	                        (float)((target->bounds.p0.y + target->bounds.p1.y) / 2) + 0.5f, 4.5f};
+	sp<Vehicle> v;
+	for (auto &t : state.vehicle_types)
+	{
+		if (!t.second || t.second->type != VehicleType::Type::UFO)
+		{
+			continue;
+		}
+		v = city->placeVehicle(state, {&state, t.first}, state.getAliens(), spawn, 0.0f);
+		if (v)
+		{
+			break;
+		}
+	}
+	TEST_REQUIRE(v != nullptr, "could not place any UFO-type vehicle in CITYMAP_HUMAN");
+	TEST_REQUIRE((bool)v->tileObject, "placed UFO has no tile object, so takeOffCheck() would fire");
+
+	VehicleMission mission;
+	mission.type = VehicleMission::MissionType::AttackBuilding;
+	mission.targetBuilding = target;
+	mission.missionCounter = 3;
+
+	mission.start(state, *v);
+
+	TEST_REQUIRE(mission.missionCounter == 2,
+	             "VehicleMission::start() left missionCounter at {0}, expected 2 -- the "
+	             "advanceMissionCounterOnArrival() call in the AttackBuilding re-plan branch is "
+	             "not being reached",
+	             mission.missionCounter);
+	TEST_CHECK(!mission.cancelled, "a non-zero decrement must not cancel the mission");
+	TEST_CHECK(mission.targetBuilding == target,
+	           "target building must be unchanged while the counter is still above zero, got {0}",
+	           mission.targetBuilding.id);
+	return true;
+}
+
 static int growthCount(const UFOGrowth &growth, const UString &typeId)
 {
 	for (auto &entry : growth.vehicleTypeList)
@@ -2882,6 +2949,8 @@ int main(int argc, char **argv)
 	    {"ufo_mission_counter_zero_picks_new_target", test_ufo_mission_counter_zero_picks_new_target},
 	    {"ufo_mission_counter_zero_without_building_clears_target",
 	     test_ufo_mission_counter_zero_without_building_clears_target},
+	    {"ufo_mission_counter_decrements_from_mission_start",
+	     test_ufo_mission_counter_decrements_from_mission_start},
 	    {"infiltration_display_percent", test_infiltration_display_percent},
 	    {"ufo_growth_rates_match_exe", test_ufo_growth_rates_match_exe},
 	    {"manufacture_dimension_probe", test_manufacture_dimension_probe},

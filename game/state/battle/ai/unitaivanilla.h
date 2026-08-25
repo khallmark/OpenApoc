@@ -46,6 +46,22 @@ class UnitAIVanilla : public UnitAI
 	// void reportExecuted(AIAction &action) override;
 	void reportExecuted(AIMovement &movement) override;
 
+	// Vanilla attack-priority primitives, extracted from getWeaponDecision()/getGrenadeDecision()
+	// so they can be tested. Those two remain private and need a populated tile map just to be
+	// reached (getAttackDecision -> canAttackUnit -> hasLineToUnit -> map.findCollision), which
+	// is why the arithmetic that actually decides between weapons lives out here instead. The
+	// precedent is TacticalAIVanilla::retreatChancePercent(). See tests/test_unit_ai_priority.cpp.
+
+	// The documented ranking function: "Priority is CTH * DAMAGE / TIME". Ordering is the
+	// contract; the absolute value is not compared against anything but other priorities.
+	static float attackPriority(float cth, float damage, float time);
+	// One unit's signed contribution to an AOE throw's worth: hostiles count for it, everyone
+	// else (allies, civilians, the thrower's own side) counts against it.
+	static float blastDamageContribution(float localDamage, bool hostile);
+	// Whether an AOE throw survives the friendly-fire veto, given the summed contributions.
+	// Negative net damage means the blast hurts our own more than theirs - don't throw.
+	static bool aoeIsWorthThrowing(float netBlastDamage);
+
 	void notifyUnderFire(Vec3<int> position) override;
 	void notifyHit(Vec3<int> position) override;
 	void notifyEnemySpotted(Vec3<int> position) override;

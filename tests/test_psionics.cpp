@@ -16,13 +16,13 @@
 // Provenance for the initial/upkeep pairs mirrored below: BattleUnit::getPsiCost(),
 // game/state/battle/battleunit.cpp:31-49 (as of this writing, lines 38-45 for the switch body).
 //
-// getPsiCost() itself cannot be called from this file: it is declared `static` at namespace
-// scope in battleunit.h (internal linkage) with no out-of-line definition there, and its only
-// definition lives in battleunit.cpp. Any other translation unit - including this one - that
-// includes the header and calls it gets an unresolved-symbol link error. Making it callable would
-// mean editing game/, which is out of scope for a lock test. psi_costs_match_prior_art therefore
-// asserts the documented *initial* costs as named, cited constants: it freezes the documentation
-// claim for a reviewer to diff against battleunit.cpp by eye, not the executable.
+// getPsiCost() used to be uncallable from here: it was declared `static` at namespace scope in
+// battleunit.h, which gives it internal linkage in every translation unit that sees the header
+// while its only definition lived in battleunit.cpp - so any caller outside that .cpp failed to
+// link, and the first version of this test could only restate the documented numbers as local
+// constants for a reviewer to diff by eye. It is now a public static member of BattleUnit (the
+// precedent is TacticalAIVanilla::retreatChancePercent(), extracted for exactly this reason), so
+// psi_costs_match_prior_art below calls the real cost table and fails if battleunit.cpp changes.
 //
 // The *upkeep* half of the table is not similarly stranded: BattleUnit::updatePsi() (public,
 // battleunit.cpp:3747) is the real-time consumer that applies getPsiCost(status, /*attack=*/false)
@@ -170,15 +170,39 @@ int upkeepPerCheck(GameState &state, StateRef<Organisation> owner, StateRef<Agen
 
 } // namespace
 
+// Drives BattleUnit::getPsiCost() - the real cost table every psi entry point reads - for both
+// halves of psionics.txt's table. The initial (attack=true) costs all match the document; the
+// upkeep (attack=false) column matches for Control, Stun and Probe and diverges for Panic, which
+// is locked to the code deliberately - see PSI_UPKEEP_PER_CHECK_PANIC above.
 static bool test_psi_costs_match_prior_art()
 {
-	// See the file-level comment: getPsiCost() has internal linkage and cannot be called from
-	// here without editing game/. This freezes the documentation claim, not the executable -
-	// psi_upkeep_per_second below is what actually exercises production code.
-	TEST_REQUIRE(PSI_INITIAL_CONTROL == 32, "psionics.txt Control initial cost is 32");
-	TEST_REQUIRE(PSI_INITIAL_PANIC == 10, "psionics.txt Panic initial cost is 10");
-	TEST_REQUIRE(PSI_INITIAL_STUN == 16, "psionics.txt Stun initial cost is 16");
-	TEST_REQUIRE(PSI_INITIAL_PROBE == 8, "psionics.txt Probe initial cost is 8");
+	TEST_REQUIRE(BattleUnit::getPsiCost(PsiStatus::Control) == PSI_INITIAL_CONTROL,
+	             "Control initial cost is {0}, psionics.txt says {1}",
+	             BattleUnit::getPsiCost(PsiStatus::Control), PSI_INITIAL_CONTROL);
+	TEST_REQUIRE(BattleUnit::getPsiCost(PsiStatus::Panic) == PSI_INITIAL_PANIC,
+	             "Panic initial cost is {0}, psionics.txt says {1}",
+	             BattleUnit::getPsiCost(PsiStatus::Panic), PSI_INITIAL_PANIC);
+	TEST_REQUIRE(BattleUnit::getPsiCost(PsiStatus::Stun) == PSI_INITIAL_STUN,
+	             "Stun initial cost is {0}, psionics.txt says {1}",
+	             BattleUnit::getPsiCost(PsiStatus::Stun), PSI_INITIAL_STUN);
+	TEST_REQUIRE(BattleUnit::getPsiCost(PsiStatus::Probe) == PSI_INITIAL_PROBE,
+	             "Probe initial cost is {0}, psionics.txt says {1}",
+	             BattleUnit::getPsiCost(PsiStatus::Probe), PSI_INITIAL_PROBE);
+
+	// The upkeep column at its source, independent of the real-time cadence that spends it.
+	TEST_CHECK(BattleUnit::getPsiCost(PsiStatus::Control, false) == PSI_UPKEEP_PER_CHECK_CONTROL,
+	           "Control upkeep cost is {0}, psionics.txt implies {1}",
+	           BattleUnit::getPsiCost(PsiStatus::Control, false), PSI_UPKEEP_PER_CHECK_CONTROL);
+	TEST_CHECK(BattleUnit::getPsiCost(PsiStatus::Panic, false) == PSI_UPKEEP_PER_CHECK_PANIC,
+	           "Panic upkeep cost is {0}, expected the locked current value {1} (psionics.txt "
+	           "implies 2 - read PSI_UPKEEP_PER_CHECK_PANIC's comment before changing either side)",
+	           BattleUnit::getPsiCost(PsiStatus::Panic, false), PSI_UPKEEP_PER_CHECK_PANIC);
+	TEST_CHECK(BattleUnit::getPsiCost(PsiStatus::Stun, false) == PSI_UPKEEP_PER_CHECK_STUN,
+	           "Stun upkeep cost is {0}, psionics.txt implies {1}",
+	           BattleUnit::getPsiCost(PsiStatus::Stun, false), PSI_UPKEEP_PER_CHECK_STUN);
+	TEST_CHECK(BattleUnit::getPsiCost(PsiStatus::Probe, false) == PSI_UPKEEP_PER_CHECK_PROBE,
+	           "Probe upkeep cost is {0}, psionics.txt implies {1}",
+	           BattleUnit::getPsiCost(PsiStatus::Probe, false), PSI_UPKEEP_PER_CHECK_PROBE);
 	return true;
 }
 

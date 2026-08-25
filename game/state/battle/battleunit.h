@@ -150,11 +150,6 @@ static const std::list<BattleUnitType> BattleUnitTypeList = {
     BattleUnitType::LargeFlyer, BattleUnitType::LargeWalker, BattleUnitType::SmallFlyer,
     BattleUnitType::SmallWalker};
 
-// Get cost of psi attack or upkeep
-static int getPsiCost(PsiStatus status, bool attack = true);
-// Get chance of psi attack going through psi defence
-static int getPsiAttackChance(int psiAttack, int psiDefense, PsiStatus status, bool attack = true);
-
 class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_from_this<BattleUnit>
 {
   public:
@@ -448,6 +443,19 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	// a single hit against the unit-level buffer - see the .cpp definition for the bound
 	// all-or-nothing semantics this locks.
 	static DisruptorShieldHitResult resolveDisruptorShieldHit(int current, int typeModifiedDamage);
+
+	// Get cost of psi attack or upkeep.
+	// Public statics rather than the namespace-scope `static` declarations these used to be: a
+	// `static` free-function declaration in a header has internal linkage in every translation
+	// unit that sees it, so the only definition (in battleunit.cpp) was unreachable from
+	// anywhere else and any caller elsewhere would have failed to link. Class statics both fix
+	// that and give tests/test_psionics.cpp a real seam onto the cost table - the precedent is
+	// TacticalAIVanilla::retreatChancePercent(), extracted for exactly the same reason.
+	static int getPsiCost(PsiStatus status, bool attack = true);
+	// Get chance of psi attack going through psi defence
+	static int getPsiAttackChance(int psiAttack, int psiDefense, PsiStatus status,
+	                              bool attack = true);
+
 	int getEffectivePsiDefence() const;
 	// Get chance of psi attack to succeed
 	int getPsiChanceForEquipment(StateRef<BattleUnit> target, PsiStatus status,
