@@ -116,6 +116,21 @@ RESPONSES = {
 # MessageBox maps Return->OK/Yes and Escape->Cancel/No (game/ui/general/messagebox.cpp:129-155).
 KEY_RESPONSES = {
     "MessageBox": ["Return", "Escape"],
+    # The UFOpaedia is reachable BY ACCIDENT, not only through visit_ufopaedia(). A research or
+    # score MessageBox offers to open the relevant entry, and respond_to_event() answers YES
+    # (deliberately -- see the decline-order comment there, changing it cancelled every
+    # recruitment), which pushes UfopaediaCategoryView. Both UFOpaedia stages are listed in
+    # WORKING_STAGES, so the "unknown screen" rescue below skips them and returns False, and
+    # nothing dismisses them: the run strands there with the campaign clock stopped, showing what
+    # looks like a research screen. Observed on a real run at day 2 -- the driver sat on
+    # UfopaediaCategoryView until a human closed the window by hand.
+    #
+    # Escape is the right key (it pops one level: category -> title -> CityView, so two passes
+    # get home). Handling it here rather than by removing the stages from WORKING_STAGES keeps
+    # that set's meaning intact, and does not disturb visit_ufopaedia(), which drives its own
+    # Escape loop synchronously and never routes through respond_to_event().
+    "UfopaediaCategoryView": ["Escape"],
+    "UfopaediaView": ["Escape"],
 }
 
 # Stages where the driver is doing real work and must not be treated as an interruption.
