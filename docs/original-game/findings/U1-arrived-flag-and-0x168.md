@@ -24,13 +24,24 @@ not a `Scalar`). Every count below was cross-checked by two independent means wh
 
 ## Verdicts
 
+**Correction notice (added after coordinator follow-up — see §5).** Verdict 1 and §1.2/§2.6 below originally
+described `FUN_00059148`'s second outcome as "a fresh random waypoint from the vehicle's per-side
+mission-data catalog," at address `0x1439e0`, and called that table "the same table already tied to
+`UFO_mission_data`." **Both of those claims were wrong.** `0x1439e0` is a **dimension-gate (portal) table**
+— confirmed this session from its initializer/pairing/rebuild code, not from `UFO_mission_data` (which is a
+structurally unrelated 45×42-byte table at a different address, `0x13DDFC`). The corrected reading: that
+outcome sends the vehicle to **the nearest active dimension gate**, i.e. the UFO leaves through a portal.
+Full evidence and the corrected implications are in §5; the specific sentences below are corrected in place
+and flagged inline.
+
 1. **The arrived-flag branch (`+0x16A`) has a real, byte-exact-verified reader: `FUN_00059148`.** It is
    called 9 times — 8 from inside `FUN_0003a910` (essentially at the tail of every mission-dispatch branch)
    and once from `FUN_000588f8` (the U1(b) gate function). On the tick it runs with the flag set, it either
-   sends the vehicle toward a nearby vehicle matching a second field (`+0x16C`), or picks a fresh random
-   waypoint from the vehicle's per-side mission-data catalog, or — if neither condition is met — **re-arms
-   itself** for the next call. This is BOUND, with raw disassembly for every branch, and is enough to
-   implement.
+   sends the vehicle toward a nearby vehicle matching a second field (`+0x16C`), or ~~picks a fresh random
+   waypoint from the vehicle's per-side mission-data catalog~~ **[CORRECTED, §5] flies to the nearest active
+   dimension gate**, or — if neither condition is met — **re-arms itself** for the next call. This is BOUND,
+   with raw disassembly for every branch, and is enough to implement — more directly than first thought,
+   since OpenApoc already has `City::portals` / `VehicleMission::MissionType::GotoPortal`.
 
 2. **`+0x168` vs constitution (`+0x12e`) — the gate is reachable in practice, and `+0x168` is not fixed
    after spawn either.** Two things the previous pass did not find:
@@ -160,37 +171,56 @@ one-shot consumption.
 **Resolution — the two outcomes, fully raw-verified (VA `0x59406`–`0x59536` and `0x59480`–`0x59536`, file
 `0x49405`–`0x49535`):**
 
-- **"Assign new wander destination"** (only when order-type == 1): calls `FUN_0005d360` (VA `0x59426`) — a
-  10-entry nearest-match scan over the per-side block of the mission-data catalog
-  (`0x1439e0 + DAT_000d5060×0x2D4`, the same table already tied to `UFO_mission_data` in U1(a)) using
-  `FUN_00038678` for the distance compare (the same primitive already bound inside `FUN_0004db84`). If a
-  match is found, it directly commits `+0x4e/+0x50/+0x52` (nav x/y/z) from that catalog entry, sets
-  `+0xCF = 2`, mirrors `+0x100 → +0x102`, and stages `+0xD0/+0xD2` from the new `+0x4e/+0x50` — VA
+- **"Fly to the nearest dimension gate"** ~~"Assign new wander destination" from a "mission-data
+  catalog"~~ **[CORRECTED, §5 — this outcome was mischaracterized; see §5 for the full re-derivation]**
+  (only when order-type == 1): calls `FUN_0005d360` (VA `0x59426`) — a 10-entry nearest-match scan over the
+  per-side block of the **dimension-gate table** (`0x1439e0 + DAT_000d5060×0x2D4`; **not** the same table as
+  `UFO_mission_data`, which lives at the unrelated address `0x13DDFC` — see §5.2) using `FUN_00038678` for
+  the distance compare (the same primitive already bound inside `FUN_0004db84`). If a valid (linked) gate
+  slot is found, it directly commits `+0x4e/+0x50/+0x52` (nav x/y/z) from that gate record's coordinates,
+  sets `+0xCF = 2`, mirrors `+0x100 → +0x102`, and stages `+0xD0/+0xD2` from the new `+0x4e/+0x50` — VA
   `0x59435`–`0x59474`.
 - **"Follow the candidate"**: reads the candidate's position (self `+0xCE` index into the vehicle array, or
   the game's currently-selected vehicle if `BX != 0`), sets `+0x4e/+0x50/+0x52` from it, and adds a random
   jitter to each axis via three separate `FUN_0005d1d8` calls — VA `0x594a2`–`0x59529`.
 
-**What this means for implementation.** The reader's contract is precise and small: a vehicle with
-order-type 1 whose arrived flag is set either (a) rendezvous with the nearest other active, same-side,
-`+0x271==0` vehicle whose `+4` field matches its own `+0x16C` field (excluding vehicles that share its own
-`+4`), with position jitter, or (b) if no such vehicle exists yet, retries every call until one does (or
-until `DAT_000d505c` becomes nonzero), and once the retry path is abandoned in favor of the alternate gate
-(`+0x271 != 0` — see Block 1), the flag is simply cleared; or (c) if the `+0x16C` "type to follow" field was
-never set at all, picks a fresh random destination from its role's spawn-time mission-data catalog block.
-**None of these three outcomes are named here** (no "escort", "patrol", or "loiter" label is asserted) —
-they are described purely by offset and observed behavior, per the task's constraint.
+**What this means for implementation — corrected causal framing (the first version of this paragraph got the
+trigger backwards).** Re-reading Blocks 1–2's guards precisely: **the
+escort/rendezvous search in Block 2 is *not* gated on the arrived flag.** Its guard (VA `0x591ab`–`0x591c5`)
+is `+0x16C != -1 && order-type == 1` only. That means the search — and its "follow" outcome — runs on
+**every** `FUN_00059148` call for a `+0x16C`-tagged, order-type-1 vehicle, at all 9 call sites, almost all of
+which have nothing to do with the arrived flag. On the overwhelming majority of those calls the flag
+(`+0x16A`) is *not* set, and the check at VA `0x592c0` reads that as: **"follow" is the default outcome** —
+the vehicle heads for the nearest matching, same-side, `+0x271==0` candidate (excluding its own `+4` value),
+with position jitter, continuously, tracking whichever candidates exist right now.
 
-**Data this would need on the OpenApoc side, before attempting it.** The parity guide's own lesson (a
-`BOUND` row went into implementation and came back with no code because the surrounding data model didn't
-exist) applies directly here — two prerequisites should be checked *before* queuing this for
-implementation, not discovered during it: (1) a per-vehicle field equivalent to `+0x16C` (the "type to
-rendezvous with" value) does not appear to exist in `VehicleMission`/`Vehicle` today, and outcome (a) above
-is unimplementable without it; (2) outcome (c) needs a per-side/role "wander destination catalog" — the
-original's `0x1439e0` table indexed by `DAT_000d5060` — and whether OpenApoc has (or should have) an
-equivalent structured table, versus picking a destination some other way, was not checked this session.
-Neither prerequisite was confirmed to exist or not exist in the current OpenApoc tree; this file only
-establishes what the original needs to receive.
+**The arrived flag's actual role is to *override* that default with "go to the nearest dimension gate"
+instead** (§5) — not to trigger the search in the first place. That override fires when, at the moment the
+flag is set (mission-counter-zero, §1.1, or `+0x168`-gate crossing, §2.5): (i) the vehicle's own `+0x271==0`
+and `DAT_000d5060==0` (Block 1's direct path, VA `0x591a7`), or (ii) Block 2's live scan just found no
+candidate and `DAT_000d505c==0` re-armed the flag (VA `0x592b9`), so the flag is still set when Block 2's
+own tail check runs at `0x592c0`. If `+0x271 != 0` when the flag is set, Block 1 simply clears it (VA
+`0x59195`) and the vehicle falls through to whatever Block 2 resolves — ordinarily "follow." If `+0x16C` was
+never set at all, Block 2 never runs (VA `0x591b7` jumps straight past it), and the gate-flight outcome can
+only come from Block 1's own direct path. **None of this is named beyond what the bytes show** — no
+"escort", "patrol", or "loiter" label is asserted for the follow outcome — but the gate-flight outcome is
+tied to a concrete, already-modeled OpenApoc concept (`City::portals` / `MissionType::GotoPortal`, confirmed
+to exist this session — `game/state/city/city.h:94`, `game/state/city/vehiclemission.h:274`,
+`game/state/city/vehicle.cpp:1311-1332`'s `Vehicle::leaveDimensionGate`), not an invented label.
+
+**Data this would need on the OpenApoc side, before attempting it — revised after the coordinator's
+follow-up (§5).** ~~(1) a per-vehicle field equivalent to `+0x16C` … does not appear to exist in
+`VehicleMission`/`Vehicle` today~~ **[CORRECTED, §5.7] — it does, as `UfoIncursion::Slot::followVehicleType`,
+and outcome (a) is already implemented at spawn time as a `FollowVehicle` mission
+(`game/state/gamestate.cpp:1085`).** What's still open is narrower than "does the data exist": the original
+runs the escort/follow search **continuously, on every `FUN_00059148` dispatch call**, not just when the
+flag fires (corrected above) — whether that continuous re-evaluation is a behavioral gap against OpenApoc's
+spawn-time-only assignment is answered in §5.7.
+~~(2) outcome (c) needs a per-side/role "wander destination catalog" … whether OpenApoc has (or should have)
+an equivalent structured table … was not checked this session~~ **[CORRECTED, §5] — outcome (c) needs no new
+catalog: it is dimension-gate navigation, and OpenApoc already models `City::portals` and
+`VehicleMission::MissionType::GotoPortal`, confirmed to exist this session (`game/state/city/city.h:94`,
+`game/state/city/vehiclemission.h:274`).** This prerequisite question is resolved, not merely narrowed.
 
 ### 1.3 A secondary, corroborating reader: `FUN_00033e84`
 
@@ -559,3 +589,195 @@ and fresh raw disassembly for every write site. The `QueryDataRange.java` Scalar
 session found is real and worth checking against every other "zero hits" claim in this project that used
 that specific script — but this particular finding was never exposed to it, and the fresh re-audit changes
 nothing about its conclusion.
+
+---
+
+## 5. Coordinator follow-up — `0x1439e0` is the dimension-gate table, not a mission-data catalog
+
+**Verdict up front: the coordinator's suspicion was correct, and the `openapoc-gap-matrix.md` row is the
+accurate one.** `0x1439e0` holds a per-dimension, up-to-10-entry table of paired portal (dimension-gate)
+records, initialized, paired, and rebuilt by exactly the three functions the gap matrix names. My §1.2/§2.6
+above called it "the same table already tied to `UFO_mission_data`" — that was wrong, and was an inherited
+assumption I did not check against the bytes, exactly as flagged. It has been corrected in place (marked,
+not silently changed) in §1.2 and in the Verdicts section, and this section is the full evidence trail.
+
+### 5.1 `UFO_mission_data` and `0x1439e0` are two unrelated tables — settled from the OpenApoc side first
+
+Before touching the binary again, the OpenApoc extractor settles this immediately: `UfoMissionData`
+(`tools/extractors/common/ufoincursion.h:30-42`) is a fixed 42-byte record —
+`craft[3]`/`count[3]`/`role[3]`/`follow_slot[3]`/`zone_mode[3]`/`mission_counter[3]`/`scatter[3]`/
+`type_percent[3]` (all `UFO_MISSION_SLOT_COUNT = 3`), `static_assert(sizeof(...) == 42)`, drawn from
+`UFO_MISSION_RECORD_COUNT = 45` records — matching the gap matrix's "45×42 at `0x13DDFC`" exactly. This is
+a **per-mission-pattern catalog**: 45 rows, each describing one incursion's up-to-3 primary/escort/attack
+slots. `0x1439e0`, by contrast, is addressed as `0x1439e0 + DAT_000d5060×0x2D4` — **two (or more) 0x2D4-byte
+blocks**, each holding 10 parallel short arrays (structure-of-arrays, not 45 packed records). These are
+different shapes entirely: 45 records of 42 bytes each vs. 2+ blocks of 724 bytes each holding 10-wide
+field arrays. There was never a plausible way these were "the same table," and the OpenApoc source alone —
+without opening Ghidra — already shows it.
+
+### 5.2 What `0x1439e0` holds: record layout, derived from the initializer code (not guessed)
+
+The layout was not read directly off the bytes (see §5.6 for why) — it was derived from what the
+initializer/pairing code writes to and reads from, which is unambiguous. Per side-block (base `B = 0x1439e0
++ side×0x2D4`), 10-wide parallel arrays, 2 bytes apart per entry, each accessed via the "read a dword, keep
+the high word" idiom already established throughout this file (§1.1):
+
+| Offset from `B` | Field (by observed behavior) | Set by |
+|---|---|---|
+| `B+4` .. `B+0x16` | x coordinate (short array, dword-high-word read) | `FUN_0006cdd0` (init to `-1`), `FUN_0006eab0` (pairing placeholder), `FUN_000706f8` (real value) |
+| `B+0x18` .. `B+0x2a` | y coordinate | same three |
+| `B+0x2c` .. `B+0x3e` | z coordinate (`DAT_00143a0c` in the decompile) | same three |
+| `B+0x3e` .. `B+0x50`* | validity/"is this slot linked" dword (low word of the same dword whose high word is the field below) | `FUN_0006cdd0` init, tested by `FUN_0005d360` and `FUN_000706f8` |
+| `B+0x40` .. `B+0x52` | linked-side index (which other side/dimension this gate connects to) | `FUN_0006eab0`'s pairing write |
+| `B+0x54` .. `B+0x66` | linked-slot index (which slot in that other side's block) | `FUN_0006eab0`'s pairing write |
+| `B+0x72` .. `B+0x84` (byte array) | slot state (`1` = empty/reserved by init, `2` = paired) | `FUN_0006cdd0` init, `FUN_0006eab0` on pairing |
+
+*`B+0x3e` and `B+0x40` are the same dword: `FUN_0005d360`'s validity test reads `*(int*)(B+i*2+0x3e)` and
+checks the high word — which is exactly the linked-side field at `B+0x40+i*2`. **A slot is "valid" precisely
+when it has been paired with another side** — there is no separate validity flag distinct from the pairing
+itself. This is exactly the shape of a portal: unusable until its far end is assigned.
+
+### 5.3 `FUN_0006cdd0` / `FUN_0006eab0` / `FUN_000706f8` — raw-verified, and they do corroborate the reading
+
+All three were re-decompiled and re-disassembled in full this session (VAs and file offsets below match the
+gap matrix's own citations exactly, independently derived).
+
+**`FUN_0006cdd0`** (VA `0x6cdd0`, file `0x5cdcf` — matches the gap matrix's citation exactly). Zeroes/inits
+every field above to its "unset" sentinel for 10 slots (raw: `MOV dword ptr [0x143cb4],EBX` /
+`MOV word ptr [EBX*2+0x1439e4],CX` with `CX=-1`, looped `AX<0xa`), then, at the very end, rolls a random
+start index into a 0x24-byte-stride table at `0x13c680` (`DAT_000d5068`), sets `DAT_000d5060 = 0`, and calls
+`FUN_0006eab0` **3 times, each with `param_1 = 1`** (raw: `MOV EDI,0x1; ...; MOV EAX,EDI; ...; CALL
+0x0006eab0`, looped `BX<3`) — i.e. it creates 3 initial gate slots originating from side/dimension index 1.
+
+**`FUN_0006eab0`** (VA `0x6eab0`, file `0x5eaaf` — matches). This is the pairing function, and it is the
+single strongest piece of evidence in this section. Given a side index (`param_1`): finds the first empty
+slot (validity field `-1`) in `param_1`'s own block; separately rolls a **different, random side index**
+(`FUN_0005d1d8`, retried until it differs from `param_1` and has its own empty slot); writes the pairing
+**bidirectionally** — `param_1`'s new slot gets `+0x40 = <random side>`, `+0x54 = <that side's slot index>`,
+and the random side's slot gets `+0x40 = param_1`, `+0x54 = <param_1's slot index>` back (raw: VA
+`0x6ebbc`/`0x6ebc4` write the first direction, VA `0x6ed8f`/`0x6ed9a` write the second). **Only if the
+randomly-chosen partner side equals the currently-active `DAT_000d5060`** does it roll real coordinates for
+that endpoint — a nested triple loop rejecting positions where `FUN_0005ce00` (tile occupancy) reports
+non-zero, bounded to `x,y ∈ [0,100)` and a small `z` band (raw: VA `0x6ec34`–`0x6ec53` bounds checks, VA
+`0x6ec9f` the occupancy call). If the partner side is *not* currently active, that endpoint is left `-1,-1,-1`
+(raw: VA `0x6ed50`–`0x6ed60`) — coordinates can only be rolled for whichever city/dimension is actually
+loaded. This is precisely how a portal system that can only place a marker in the currently-loaded map would
+have to work: bidirectional endpoint linkage between two "sides," deferred coordinate placement for the
+side that isn't loaded yet, tile-occupancy-checked placement for the side that is.
+
+**`FUN_000706f8`** (VA `0x706f8`, file `0x606f7` — matches). Two passes, confirmed raw. Pass 1 iterates the
+**first 10 slots of one block only** (`local_30` from `&DAT_001439e0` to `&DAT_001439f4`, i.e. the currently
+relevant side's block — the "rebuilt for the human city" step): for every slot whose validity field is set
+(already paired, per §5.2), re-rolls fresh coordinates with the identical tile-occupancy-checked,
+`[0,100)`-bounded search as `FUN_0006eab0` (raw: VA `0x70742`–`0x70895`, `FUN_0005ce00` called again at VA
+`0x7086b`). Pass 2 (VA `0x708da`–`0x70936`) then builds a **second, 10-entry, 10-byte-stride array at
+`0x17DEB8`**: for every valid slot, writes a `type = 6` tag and the coordinate scaled to **tile-center pixel
+space** — `x×0x20+0x10`, `y×0x20+0x10` (`0x20` = standard city tile size, `+0x10` = half-tile center offset)
+and `z<<4`. This second pass has no plausible reading other than "build the on-screen marker/icon list for
+these positions" — a renderer-facing overlay array, tagged with a type code, placed at exact tile centers.
+Static "mission data" has no reason to be projected onto tile-center pixel coordinates for rendering;
+portal/gate markers do.
+
+### 5.4 What `FUN_0005d360` actually reads, and what `+0x4e/+0x50/+0x52` become
+
+`FUN_0005d360`'s raw listing (full, not previously captured this precisely) confirms it operates on exactly
+this table and nothing else. VA `0x5d382`–`0x5d38c`: `EDX = 0x1439e0 + DAT_000d5060×0x2D4` — the same block
+base as §5.2-§5.3. Per candidate slot `i` (0–9, VA `0x5d393`–`0x5d3f2`): VA `0x5d39d` reads
+`*(int*)(entry+0x3e)`, high word tested `!= -1` — **the identical validity/pairing test** used by
+`FUN_000706f8`'s Pass 1 and derived in §5.2, confirmed byte-identical. For slots that pass, VA
+`0x5d3b3`/`0x5d3c5`/`0x5d3c8` read dwords at `entry+0x2a`/`entry+0x16`/`entry+0x2` — high words of those
+three dwords are exactly `entry+0x2c` (z), `entry+0x18` (y), `entry+0x4` (x), matching §5.2's field table —
+and feed them to `FUN_00038678` (distance) against the caller's own position, keeping the nearest. Back in
+`FUN_00059148` (§1.2), the winning index is used at VA `0x59435`–`0x59447` to read
+`[block+idx×2+4]`/`[block+idx×2+0x18]`/`[block+idx×2+0x2c]` — the exact same x/y/z fields — directly into
+`+0x4e/+0x50/+0x52` (the vehicle's live navigation target). **There is no ambiguity left: this outcome sets
+the vehicle's destination to the position of the nearest currently-linked dimension-gate slot.** No random
+"mission" is being picked; a portal is.
+
+### 5.5 Which document was wrong
+
+**Mine.** `docs/original-game/findings/U1-U2-V1-incursion.md` (the row this file built on) never made this
+claim — it only established that `+0x171`'s source, `UFO_mission_data`, exists and is a 45-record catalog,
+which is correct and unrelated to this question. The error was introduced in my own first pass on this task,
+when I saw `0x1439e0` referenced from the same function family (`FUN_0003a910`) that also touches
+`UFO_mission_data`-derived fields, and inferred continuity without checking the address against
+`openapoc-gap-matrix.md` or re-deriving the table's shape from its own initializer. `openapoc-gap-matrix.md`
+had the correct characterization already on record ("VA `0x1439E0` is dimension-gate runtime RAM initialized
+by `FUN_0006cdd0`… paired by `FUN_0006eab0`… rebuilt… by `FUN_000706f8`") — it needs no correction from this
+session; if anything, this section is independent, byte-level confirmation of a claim it stated without full
+derivation.
+
+### 5.6 A loose end, disclosed rather than hidden
+
+A raw byte dump of both `0x1439e0` and `0x13DDFC` (`Memory.getByte` against the loaded Ghidra program) read
+as all-zero at both addresses in this session, which would be consistent with `0x1439e0` being genuine
+runtime BSS but is *not* consistent with `0x13DDFC` being a static catalog the extractor reads real values
+from — so that specific check was inconclusive (likely an artifact of how `.object2`'s pages were mapped
+into this Ghidra project, distinct from whatever file-offset convention the C++ extractor uses directly
+against the disk EXE) and is **not** relied on above. Every claim in §5.2–§5.4 instead rests on what the
+initializer/pairing/reader **code** does — which does not depend on that byte read and was independently
+raw-disassembled — not on the static byte contents. This is flagged rather than silently dropped.
+
+### 5.7 The narrower, real question: does the original re-pick a rendezvous target each time the flag fires?
+
+**Yes, but the trigger is broader than "each time the flag fires" — corrected here from an earlier draft of
+this section that inherited the same backwards framing as §1.2 did before its own correction above.**
+`game/state/gamestate.cpp:1085`'s comment is accurate as far as it goes (`FUN_00059148` does match `craft[
+follow_slot]`'s type), and `UfoIncursion::Slot::followVehicleType` genuinely is `+0x16C`'s extracted value —
+that prerequisite is not missing, corrected in §1.2 above. `City::portals` / `VehicleMission::MissionType::
+GotoPortal` were independently confirmed to exist this session, not taken on the coordinator's word:
+`game/state/city/city.h:94` (`std::vector<sp<Doodad>> portals`), `game/state/city/vehiclemission.h:274`
+(`GotoPortal` enumerator), and `game/state/city/vehicle.cpp:1311-1332`
+(`Vehicle::leaveDimensionGate`/`selectDimensionExitPortal`, which already picks a portal — random if none is
+pre-selected — and even carries its own original-game byte citation, `// Paired exit when the player clicked
+a gate (UFO2P non-4 0x149537)`). Portals are modeled as `Doodad`s with map positions, which is a striking
+structural echo of §5.3's `FUN_000706f8` Pass 2 building a tile-center-positioned marker array for the same
+records — independent confirmation the two systems really are the same *kind* of object, not just
+similarly-named.
+
+But OpenApoc's wiring issues `FollowVehicle` **once, at spawn**, against whichever same-type vehicles have
+already spawned earlier in the same incursion batch (`escorted`, built up slot-by-slot in the loop at
+`gamestate.cpp:1043-1085`). The original's `FUN_00059148` Block 2 (§1.2, VA `0x591e6`–`0x59289`) is gated
+only on `+0x16C != -1 && order-type == 1` — **not** on the arrived flag — so it performs this identical
+candidate search live, from scratch, on **every one of the 9 call sites**, i.e. far more often than the flag
+ever fires: at the tail of essentially every mission-dispatch branch in `FUN_0003a910` and from
+`FUN_000588f8`, scanning the full 80-slot vehicle array as it stands *at that moment*, not a snapshot taken
+at spawn. The arrived flag's role is narrower than "trigger the search" — it *overrides* the search's default
+"follow" resolution with "go to the nearest gate" instead, per §1.2's corrected causal account.
+
+Concrete, raw-verified behavioral consequences follow, none of which OpenApoc's spawn-time-only wiring
+reproduces:
+
+1. **Late binding.** A vehicle whose intended escort target hadn't spawned yet (or was still mid-spawn) when
+   *this* vehicle spawned gets nothing in OpenApoc (`followRandomized` is empty at that point in the loop,
+   so no `FollowVehicle` mission is ever issued, permanently). The original's search re-runs on **every**
+   `FUN_00059148` call for this vehicle — not only when the arrived flag happens to be set — so it picks up a
+   newly-valid target the first time the scan succeeds, however much later, independent of the flag.
+2. **No re-target on loss.** If a followed vehicle is destroyed or otherwise becomes invalid
+   (`candidate[+0x271] != 0` excludes it from the scan, VA `0x5922e`), the original's live re-scan can select
+   a *different* matching vehicle on the very next call. OpenApoc's `targetVehicle` (with its `targets`
+   fallback list) is fixed at spawn from the vehicles available then; whether its fallback-list consumption on
+   invalidation happens to reach the same set of later-spawned candidates was not checked this session, but
+   the *mechanism* — spawn-time list vs. continuous live re-scan — is different in kind.
+3. **The bigger gap: "follow" is the default, and the arrived flag can override it with "go to a dimension
+   gate" instead of ever following anyone.** When the arrived flag is set — at a mission-counter-zero
+   transition or a `+0x168`-gate crossing — and the vehicle's own `+0x271 == 0` and `DAT_000d5060 == 0`
+   (Block 1's direct path), or the live scan just found no candidate and re-armed the flag (`DAT_000d505c ==
+   0`), the resolution sends the vehicle toward the nearest linked dimension gate **instead of** its would-be
+   escort target — i.e. it can abandon the rendezvous and leave the map. OpenApoc's spawn-time
+   `FollowVehicle` wiring has no code path that ever does this; once issued, it stays a `FollowVehicle`
+   mission unless something else in OpenApoc's own mission-management logic supersedes it (not traced this
+   session).
+
+**What this means for the row.** The prerequisite question from §1.2's original "Data this would need"
+paragraph is resolved rather than merely narrowed: the field exists, outcome (a) already has a spawn-time
+implementation, and the gate-flight outcome needs no new catalog — `City::portals`/`GotoPortal` already
+exist and were confirmed by file:line this session. What remains open, and is a much smaller, better-scoped
+piece of work than "implement the branch," is specifically: **does the original's continuous live
+re-evaluation (late binding, reassignment-on-loss, and flag-triggered gate-flight override) produce a
+materially different game outcome from OpenApoc's spawn-time-only assignment, and if so, is it worth adding
+a per-arrival re-check to `FollowVehicle`'s handling (or a new trigger into the existing `GotoPortal`
+mission for the override case) rather than leaving it as spawn-time-only?** That evaluation was not made
+here — it is a design judgment about how much fidelity this specific divergence is worth, not a further
+reverse-engineering question — but the underlying original-game mechanism it would be judged against is now
+fully bound.
