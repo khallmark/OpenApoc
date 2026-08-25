@@ -127,7 +127,18 @@ void City::initCity(GameState &state)
 		LogInfo("Car: {0}", b->carEntranceLocation);
 		if (b->crewQuarters == Vec3<int>{-1, -1, -1})
 		{
-			LogWarning("Building {0} has no car exit?", b.id);
+			// Both carEntranceLocation and crewQuarters are derived from a Terminal road tile
+			// touching the building. The alien dimension has no road network at all, so every
+			// alien building legitimately lacks one; only flag it for the human city, where a
+			// missing car exit really would mean bad road/building data.
+			if (this->id == "CITYMAP_HUMAN")
+			{
+				LogWarning("Building {0} has no car exit?", b.id);
+			}
+			else
+			{
+				LogInfo("Building {0} has no car exit (no road network in {1})", b.id, this->id);
+			}
 			b->crewQuarters = {(b->bounds.p0.x + b->bounds.p1.x) / 2,
 			                   (b->bounds.p0.y + b->bounds.p1.y) / 2, 2};
 		}
@@ -349,6 +360,26 @@ bool City::canPlacePortal(Vec3<float> position)
 	return true;
 }
 
+int City::getNearestPortalIndex(Vec3<float> position) const
+{
+	if (portals.empty())
+	{
+		return -1;
+	}
+	int best = 0;
+	float bestDist = std::numeric_limits<float>::max();
+	for (size_t i = 0; i < portals.size(); i++)
+	{
+		const float d = glm::length(portals[i]->getPosition() - position);
+		if (d < bestDist)
+		{
+			bestDist = d;
+			best = static_cast<int>(i);
+		}
+	}
+	return best;
+}
+
 void City::generatePortals(GameState &state)
 {
 	const static auto zWeight = {1, 1, 3, 4, 6};
@@ -371,9 +402,6 @@ void City::generatePortals(GameState &state)
 		}
 		else
 		{
-			// FIXME: Implement portals in alien city staying where they are
-			// and starting where they should (Need to be linked to portals in human city)
-
 			static const int iterLimit = 1000;
 			for (auto &p : portals)
 			{
@@ -381,25 +409,84 @@ void City::generatePortals(GameState &state)
 			}
 			this->portals.clear();
 
-			std::normal_distribution<double> xyPos(70.0, portalDev);
-			std::discrete_distribution<int> zPos(zWeight.begin(), zWeight.end());
-
-			for (int p = 0; p < 3; p++)
+			std::vector<Vec3<float>> linkedPositions;
+			if (this->id != "CITYMAP_HUMAN")
 			{
-				for (int i = 0; i < iterLimit; i++)
+				auto humanIt = state.cities.find("CITYMAP_HUMAN");
+				if (humanIt != state.cities.end())
 				{
-					Vec3<float> pos(std::clamp(static_cast<int>(xyPos(state.rng)), 20, 120),
-					                std::clamp(static_cast<int>(xyPos(state.rng)), 20, 120),
-					                zPos(state.rng) + 4);
-					if (canPlacePortal(pos))
+					for (auto &humanPortal : humanIt->second->portals)
 					{
-						auto doodad =
-						    mksp<Doodad>(pos + Vec3<float>{0.5f, 0.5f, 0.5f},
-						                 StateRef<DoodadType>{&state, "DOODAD_6_DIMENSION_GATE"});
-						doodad->voxelMap = state.city_common_image_list->portalVoxelMap;
-						map->addObjectToMap(doodad);
-						this->portals.push_back(doodad);
-						break;
+						linkedPositions.push_back(humanPortal->position -
+						                          Vec3<float>{0.5f, 0.5f, 0.5f});
+					}
+					if (linkedPositions.empty())
+					{
+						for (auto &p : humanIt->second->initial_portals)
+						{
+							linkedPositions.push_back((Vec3<float>)p);
+						}
+					}
+				}
+			}
+
+			if (!linkedPositions.empty())
+			{
+				for (auto &pos : linkedPositions)
+				{
+					Vec3<float> place = pos;
+					if (!canPlacePortal(place))
+					{
+						bool found = false;
+						for (int i = 0; i < iterLimit; i++)
+						{
+							Vec3<float> tryPos =
+							    pos + Vec3<float>{static_cast<float>(i % 7 - 3),
+							                      static_cast<float>(i / 7 % 7 - 3), 0};
+							if (canPlacePortal(tryPos))
+							{
+								place = tryPos;
+								found = true;
+								break;
+							}
+						}
+						if (!found)
+						{
+							continue;
+						}
+					}
+					auto doodad =
+					    mksp<Doodad>(place + Vec3<float>{0.5f, 0.5f, 0.5f},
+					                 StateRef<DoodadType>{&state, "DOODAD_6_DIMENSION_GATE"});
+					doodad->voxelMap = state.city_common_image_list->portalVoxelMap;
+					map->addObjectToMap(doodad);
+					this->portals.push_back(doodad);
+					initial_portals.push_back(Vec3<int>{place});
+				}
+			}
+
+			if (portals.empty())
+			{
+				std::normal_distribution<double> xyPos(70.0, portalDev);
+				std::discrete_distribution<int> zPos(zWeight.begin(), zWeight.end());
+
+				for (int p = 0; p < 3; p++)
+				{
+					for (int i = 0; i < iterLimit; i++)
+					{
+						Vec3<float> pos(std::clamp(static_cast<int>(xyPos(state.rng)), 20, 120),
+						                std::clamp(static_cast<int>(xyPos(state.rng)), 20, 120),
+						                zPos(state.rng) + 4);
+						if (canPlacePortal(pos))
+						{
+							auto doodad = mksp<Doodad>(
+							    pos + Vec3<float>{0.5f, 0.5f, 0.5f},
+							    StateRef<DoodadType>{&state, "DOODAD_6_DIMENSION_GATE"});
+							doodad->voxelMap = state.city_common_image_list->portalVoxelMap;
+							map->addObjectToMap(doodad);
+							this->portals.push_back(doodad);
+							break;
+						}
 					}
 				}
 			}
@@ -726,7 +813,7 @@ void City::repairVehicles(GameState &state [[maybe_unused]])
 
 void City::initialSceneryLinkUp()
 {
-	LogWarning("Begun scenery link up!");
+	LogInfo("Begun scenery link up!");
 	auto &mapref = *map;
 
 	for (auto &s : this->scenery)
@@ -747,7 +834,7 @@ void City::initialSceneryLinkUp()
 			}
 		}
 	}
-	LogWarning("Begun scenery link up cycle!");
+	LogInfo("Begun scenery link up cycle!");
 	bool foundSupport;
 	// First support without clinging to establish proper links
 	do
@@ -790,11 +877,11 @@ void City::initialSceneryLinkUp()
 		if (mp->willCollapse())
 		{
 			auto pos = mp->tileObject->getOwningTile()->position;
-			LogWarning("SC {0} at {1} is UNLINKED", mp->type.id, pos);
+			LogDebug("SC {0} at {1} is UNLINKED before final attach pass", mp->type.id, pos);
 		}
 	}
 
-	LogWarning("Attempting link up of unlinked parts");
+	LogInfo("Attempting link up of unlinked parts");
 	do
 	{
 		foundSupport = false;
@@ -823,7 +910,7 @@ void City::initialSceneryLinkUp()
 	}
 
 	mapref.updateAllCityInfo();
-	LogWarning("Link up finished!");
+	LogInfo("Link up finished!");
 }
 
 sp<Doodad> City::placeDoodad(StateRef<DoodadType> type, Vec3<float> position)

@@ -21,6 +21,11 @@ namespace OpenApoc
 
 constexpr int Base::SIZE;
 
+bool Base::alienExposureRollSucceeds(int inclusiveRoll, int movedAlienCount)
+{
+	return movedAlienCount > 0 && inclusiveRoll < 5 * movedAlienCount;
+}
+
 template <> sp<Base> StateObject<Base>::get(const GameState &state, const UString &id)
 {
 	auto it = state.player_bases.find(id);
@@ -56,6 +61,7 @@ template <> const UString &StateObject<Base>::getId(const GameState &state, cons
 
 Base::Base(GameState &state, StateRef<Building> building) : building(building)
 {
+	ufo2pSlot = state.allocateUfo2pBaseSlot();
 	corridors = std::vector<std::vector<bool>>(SIZE, std::vector<bool>(SIZE, false));
 	for (auto &rect : building->base_layout->baseCorridors)
 	{
@@ -121,11 +127,17 @@ void Base::die(GameState &state, bool collapse)
 			}
 		}
 	}
-	for (auto a : building->currentAgents)
+	// Copy both lists before iterating: Agent::die erases from currentBuilding->currentAgents and
+	// Vehicle::die from currentBuilding->currentVehicles, so a range-for over the live set
+	// increments an iterator whose node has already been freed. That is a SIGSEGV on the way back
+	// from a base-defence mission. Vehicle::die already guards its own agent loop this way.
+	auto agentsCopy = building->currentAgents;
+	for (auto a : agentsCopy)
 	{
 		a->die(state, true);
 	}
-	for (auto v : building->currentVehicles)
+	auto vehiclesCopy = building->currentVehicles;
+	for (auto v : vehiclesCopy)
 	{
 		v->die(state, true);
 	}
@@ -138,7 +150,14 @@ void Base::die(GameState &state, bool collapse)
 	state.current_base.clear();
 	if (state.player_bases.empty())
 	{
-		LogError("Player lost, but we have no screen for that yet!");
+		if (state.current_battle)
+		{
+			state.eventFromBattle = GameEventType::XComDefeated;
+		}
+		else
+		{
+			fw().pushEvent(new GameEvent(GameEventType::XComDefeated));
+		}
 		return;
 	}
 	else
@@ -220,7 +239,13 @@ void Base::startingBase(GameState &state)
 		{
 			for (int x = 0; x < this->SIZE; x++)
 			{
-				this->destroyFacility(state, {x, y});
+				// Only ask to destroy tiles that actually hold a removable facility. Sweeping
+				// blindly made every empty tile and the fixed access lift log a warning, which is
+				// thousands of lines per campaign start because placement legitimately retries.
+				if (this->canDestroyFacility(state, {x, y}) == BuildError::NoError)
+				{
+					this->destroyFacility(state, {x, y});
+				}
 			}
 		}
 		// There always must be a single 'access lift' base module even if everything else has been
@@ -366,7 +391,8 @@ Base::BuildError Base::canDestroyFacility(GameState &state, Vec2<int> pos) const
 
 	if (facility == nullptr)
 	{
-		return BuildError::OutOfBounds;
+		return pos.x < 0 || pos.y < 0 || pos.x >= SIZE || pos.y >= SIZE ? BuildError::OutOfBounds
+		                                                                : BuildError::NoFacility;
 	}
 
 	if (facility->type->fixed)

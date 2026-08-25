@@ -143,13 +143,68 @@ void GameState::initState()
 		current_battle->initBattle(*this);
 	}
 
+	// Populate persistent UFO2P base slots for older saves and repair duplicates.
+	// Everything below walks references that a *loaded* save may not have resolved. A save whose
+	// object graph is even slightly incomplete -- a city listing a building id that is not in the
+	// state, a scenery tile whose type went missing -- turns into a null dereference at a tiny
+	// offset on a thread-pool worker, which is what the crash reports from resumed campaigns all
+	// look like: SIGSEGV in GameState::initState via BootUp::update. Loading a bad save should
+	// fail visibly, not take the process down.
+	std::array<bool, UFO2P_BASE_SLOT_COUNT> usedBaseSlots{};
+	for (auto &entry : player_bases)
+	{
+		if (!entry.second)
+		{
+			LogWarning("Base \"{0}\" did not resolve while initialising state", entry.first);
+			continue;
+		}
+		auto &slot = entry.second->ufo2pSlot;
+		if (slot >= 0 && slot < UFO2P_BASE_SLOT_COUNT && !usedBaseSlots[slot])
+		{
+			usedBaseSlots[slot] = true;
+		}
+		else
+		{
+			slot = -1;
+		}
+	}
+	for (auto &entry : player_bases)
+	{
+		if (!entry.second || entry.second->ufo2pSlot >= 0)
+		{
+			continue;
+		}
+		for (int slot = 0; slot < UFO2P_BASE_SLOT_COUNT; slot++)
+		{
+			if (!usedBaseSlots[slot])
+			{
+				entry.second->ufo2pSlot = slot;
+				usedBaseSlots[slot] = true;
+				break;
+			}
+		}
+	}
+
 	for (auto &c : this->cities)
 	{
 		auto &city = c.second;
+		if (!city)
+		{
+			LogWarning("City \"{0}\" did not resolve while initialising state", c.first);
+			continue;
+		}
 		for (auto &s : city->scenery)
 		{
+			if (!s || !s->type)
+			{
+				continue;
+			}
 			for (auto &b : city->buildings)
 			{
+				if (!b)
+				{
+					continue;
+				}
 				Vec2<int> pos2d{s->initialPosition.x, s->initialPosition.y};
 				if (b->bounds.within(pos2d))
 				{
@@ -275,16 +330,16 @@ void GameState::setCurrentCity(StateRef<City> city)
 	current_city = city;
 	for (auto &u : current_city->researchUnlock)
 	{
-		u->forceComplete();
+		u->forceComplete(this);
 	}
 }
 
 void GameState::validate()
 {
-	LogWarning("Validating GameState");
+	LogInfo("Validating GameState");
 	validateResearch();
 	validateScenery();
-	LogWarning("Validated GameState");
+	LogInfo("Validated GameState");
 }
 
 void GameState::validateResearch()
@@ -529,7 +584,16 @@ void GameState::fillOrgStartingProperty()
 
 void GameState::startGame()
 {
-	if (config().getBool("OpenApoc.NewFeature.SeedRng"))
+	// An explicit seed wins over everything: it is what makes a run reproducible on demand and
+	// still freely variable, which comparing two AIs over the same campaign requires. Zero keeps
+	// the previous behaviour exactly, so nothing that did not ask for a seed changes.
+	const auto explicitSeed = config().getInt("OpenApoc.NewFeature.RngSeed");
+	if (explicitSeed != 0)
+	{
+		LogInfo("Seeding game RNG with explicit seed {0}", explicitSeed);
+		rng.seed(static_cast<uint64_t>(explicitSeed));
+	}
+	else if (config().getBool("OpenApoc.NewFeature.SeedRng"))
 	{
 		const auto seed = static_cast<uint64_t>(std::time(nullptr));
 		LogInfo("Seeding game RNG with {0}", seed);
@@ -646,8 +710,10 @@ void GameState::startGame()
 
 	newGame = true;
 	firstDetection = true;
-	nextInvasion = gameTime.getTicks() + 10 * TICKS_PER_HOUR +
-	               randBoundsInclusive(rng, 0, (int)(2 * TICKS_PER_HOUR));
+	nextInvasion =
+	    gameTime.getTicks() +
+	    vanillaInvasionDelayTicks(randBoundsInclusive(rng, 0, INVASION_DELAY_MINUTE_MAX),
+	                              randBoundsInclusive(rng, 0, INVASION_DELAY_SECOND_MAX));
 }
 
 // Fills out initial player property
@@ -788,6 +854,46 @@ void GameState::fillPlayerStartingProperty()
 	bld->city->cityViewScreenCenter = {buildingCenter.x, buildingCenter.y, 1.0f};
 }
 
+int GameState::allocateUfo2pBaseSlot() const
+{
+	std::array<bool, UFO2P_BASE_SLOT_COUNT> used{};
+	for (const auto &entry : player_bases)
+	{
+		if (entry.second && entry.second->ufo2pSlot >= 0 &&
+		    entry.second->ufo2pSlot < UFO2P_BASE_SLOT_COUNT)
+		{
+			used[entry.second->ufo2pSlot] = true;
+		}
+	}
+	for (int slot = 0; slot < UFO2P_BASE_SLOT_COUNT; slot++)
+	{
+		if (!used[slot])
+		{
+			return slot;
+		}
+	}
+	return -1;
+}
+
+int GameState::selectKnownBaseSlot(const std::array<bool, UFO2P_BASE_SLOT_COUNT> &active,
+                                   const std::array<bool, UFO2P_BASE_SLOT_COUNT> &knownToAliens,
+                                   int startSlot)
+{
+	if (startSlot < 0 || startSlot >= UFO2P_BASE_SLOT_COUNT)
+	{
+		return -1;
+	}
+	for (int scanned = 0; scanned < UFO2P_BASE_SLOT_COUNT; scanned++)
+	{
+		const int slot = (startSlot + scanned) % UFO2P_BASE_SLOT_COUNT;
+		if (active[slot] && knownToAliens[slot])
+		{
+			return slot;
+		}
+	}
+	return -1;
+}
+
 void GameState::invasion()
 {
 	auto invadedCity = StateRef<City>{this, "CITYMAP_HUMAN"};
@@ -796,8 +902,10 @@ void GameState::invasion()
 		nextInvasion += TICKS_PER_MINUTE;
 		return;
 	}
-	nextInvasion = gameTime.getTicks() + 24 * TICKS_PER_HOUR +
-	               randBoundsInclusive(rng, 0, (int)(72 * TICKS_PER_HOUR));
+	nextInvasion =
+	    gameTime.getTicks() +
+	    vanillaInvasionDelayTicks(randBoundsInclusive(rng, 0, INVASION_DELAY_MINUTE_MAX),
+	                              randBoundsInclusive(rng, 0, INVASION_DELAY_SECOND_MAX));
 
 	auto invadingCity = StateRef<City>{this, "CITYMAP_ALIEN"};
 	auto invadingOrg = StateRef<Organisation>{this, "ORG_ALIEN"};
@@ -821,6 +929,12 @@ void GameState::invasion()
 	{
 		preference = this->ufo_mission_preference.find(
 		    format("{0}{1}", UFOMissionPreference::getPrefix(), "DEFAULT"));
+	}
+	if (preference == this->ufo_mission_preference.end() || !preference->second ||
+	    preference->second->missionList.empty())
+	{
+		LogWarning("No UFO mission preference for week {0}; skipping invasion", week);
+		return;
 	}
 	auto missionType = pickRandom(rng, preference->second->missionList);
 	// Compile list of missions rated by priority
@@ -869,22 +983,59 @@ void GameState::invasion()
 		return;
 	}
 
-	std::set<StateRef<Vehicle>> escorted;
-	for (auto &v : currentIncursion->primaryList)
+	std::array<StateRef<Base>, UFO2P_BASE_SLOT_COUNT> baseSlots;
+	std::array<bool, UFO2P_BASE_SLOT_COUNT> activeBases{};
+	std::array<bool, UFO2P_BASE_SLOT_COUNT> knownBases{};
+	bool preferredKnownBaseUsed = false;
+	if (missionType == UFOIncursion::PrimaryMission::Subversion)
 	{
+		for (auto &entry : player_bases)
+		{
+			const int slot = entry.second ? entry.second->ufo2pSlot : -1;
+			if (slot < 0 || slot >= UFO2P_BASE_SLOT_COUNT || !entry.second ||
+			    !entry.second->building)
+			{
+				continue;
+			}
+			baseSlots[slot] = {this, entry.first};
+			activeBases[slot] = entry.second->building->isAlive();
+			knownBases[slot] = entry.second->knownToAliens;
+		}
+	}
+
+	std::set<StateRef<Vehicle>> escorted;
+	for (size_t primaryIdx = 0; primaryIdx < currentIncursion->primaryList.size(); primaryIdx++)
+	{
+		auto &v = currentIncursion->primaryList[primaryIdx];
+		int zoneMode = -1;
+		int scatter = 0;
+		unsigned int missionCounter = 0;
+		int withdrawPercent = 0;
+		if (primaryIdx < currentIncursion->primarySlots.size())
+		{
+			const auto &slot = currentIncursion->primarySlots[primaryIdx];
+			withdrawPercent = UFO_WITHDRAW_HEALTH_PERCENT_BY_ROLE[slot.role & 0xF];
+			zoneMode = slot.zoneMode;
+			scatter = VehicleMission::clampIncursionScatter(slot.scatter, slot.typePercent);
+			missionCounter = slot.missionCounter;
+		}
 		for (int i = 0; i < v.second; i++)
 		{
 			auto invader = invaders[v.first].front();
 			invaders[v.first].pop_front();
 
+			invader->withdrawHealthPercent = withdrawPercent;
 			invader->enterDimensionGate(*this);
 			invader->equipDefaultEquipment(*this);
 			invader->city = invadedCity;
-			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader));
+			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader, 0,
+			                                                                   zoneMode, scatter));
 			switch (missionType)
 			{
 				case UFOIncursion::PrimaryMission::Attack:
-					invader->addMission(*this, VehicleMission::attackBuilding(*this, *invader),
+					invader->addMission(*this,
+					                    VehicleMission::attackBuilding(*this, *invader, nullptr,
+					                                                    missionCounter),
 					                    true);
 					break;
 				case UFOIncursion::PrimaryMission::Infiltration:
@@ -893,54 +1044,125 @@ void GameState::invasion()
 					    true);
 					break;
 				case UFOIncursion::PrimaryMission::Subversion:
-					invader->addMission(
-					    *this, VehicleMission::infiltrateOrSubvertBuilding(*this, *invader, true),
-					    true);
-					break;
-				case UFOIncursion::PrimaryMission::Overspawn:
-					LogWarning("Implement Overspawn, just attacking for now");
-					// FIXME: Implement Overspawn, just attacking for now
-					invader->addMission(*this, VehicleMission::attackBuilding(*this, *invader),
+				{
+					// FUN_000702e4 consumes rand16(15) for every role-2 craft,
+					// before consulting the one-preferred-target latch.
+					const int startSlot = randBoundsInclusive(rng, 0, UFO2P_BASE_SLOT_COUNT - 1);
+					const int slot = selectKnownBaseSlot(activeBases, knownBases, startSlot);
+					StateRef<Building> preferredKnownBase;
+					if (!preferredKnownBaseUsed && slot >= 0)
+					{
+						preferredKnownBase = baseSlots[slot]->building;
+						preferredKnownBaseUsed = true;
+					}
+					invader->addMission(*this,
+					                    VehicleMission::infiltrateOrSubvertBuilding(
+					                        *this, *invader, true, preferredKnownBase),
 					                    true);
+					break;
+				}
+				case UFOIncursion::PrimaryMission::Overspawn:
+					// Overspawn dumps aliens into buildings rather than bombing them.
+					// Dedicated attackers still come from attackList below.
+					invader->addMission(
+					    *this, VehicleMission::infiltrateOrSubvertBuilding(*this, *invader, false),
+					    true);
 					break;
 			}
 			escorted.emplace(this, invader);
 		}
 	}
-	for (auto &v : currentIncursion->escortList)
+	for (size_t escortIdx = 0; escortIdx < currentIncursion->escortList.size(); escortIdx++)
 	{
+		auto &v = currentIncursion->escortList[escortIdx];
+		UString followType;
+		int withdrawPercent = 0;
+		int zoneMode = -1;
+		int scatter = 0;
+		if (escortIdx < currentIncursion->escortSlots.size())
+		{
+			const auto &slot = currentIncursion->escortSlots[escortIdx];
+			withdrawPercent = UFO_WITHDRAW_HEALTH_PERCENT_BY_ROLE[slot.role & 0xF];
+			followType = slot.followVehicleType;
+			zoneMode = slot.zoneMode;
+			scatter = VehicleMission::clampIncursionScatter(slot.scatter, slot.typePercent);
+		}
 		for (int i = 0; i < v.second; i++)
 		{
 			auto invader = invaders[v.first].front();
 			invaders[v.first].pop_front();
 
+			invader->withdrawHealthPercent = withdrawPercent;
 			invader->enterDimensionGate(*this);
 			invader->city = invadedCity;
-			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader));
-			// This creates a copy of escorted list in randomised order
-			auto escortedCopy = escorted;
-			std::list<StateRef<Vehicle>> escortedRandomized;
-			while (!escortedCopy.empty())
+			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader, 0,
+			                                                                   zoneMode, scatter));
+			// FUN_0006da88 stores craft[follow_slot]; FUN_00059148 matches that type.
+			// follow_slot 0xFFFF leaves followVehicleType empty — no FollowVehicle.
+			if (followType.empty())
 			{
-				auto item = pickRandom(rng, escortedCopy);
-				escortedCopy.erase(item);
-				escortedRandomized.push_back(item);
+				continue;
 			}
-			invader->addMission(
-			    *this, VehicleMission::followVehicle(*this, *invader, escortedRandomized), true);
+			std::set<StateRef<Vehicle>> followCopy;
+			for (auto &e : escorted)
+			{
+				if (e && e->type.id == followType)
+				{
+					followCopy.emplace(e);
+				}
+			}
+			std::list<StateRef<Vehicle>> followRandomized;
+			while (!followCopy.empty())
+			{
+				auto item = pickRandom(rng, followCopy);
+				followCopy.erase(item);
+				followRandomized.push_back(item);
+			}
+			if (!followRandomized.empty())
+			{
+				invader->addMission(
+				    *this, VehicleMission::followVehicle(*this, *invader, followRandomized), true);
+			}
 		}
 	}
-	for (auto &v : currentIncursion->attackList)
+	for (size_t attackIdx = 0; attackIdx < currentIncursion->attackList.size(); attackIdx++)
 	{
+		auto &v = currentIncursion->attackList[attackIdx];
+		int zoneMode = -1;
+		int scatter = 0;
+		unsigned int missionCounter = 0;
+		int withdrawPercent = 0;
+		if (attackIdx < currentIncursion->attackSlots.size())
+		{
+			const auto &slot = currentIncursion->attackSlots[attackIdx];
+			withdrawPercent = UFO_WITHDRAW_HEALTH_PERCENT_BY_ROLE[slot.role & 0xF];
+			zoneMode = slot.zoneMode;
+			scatter = VehicleMission::clampIncursionScatter(slot.scatter, slot.typePercent);
+			missionCounter = slot.missionCounter;
+		}
 		for (int i = 0; i < v.second; i++)
 		{
 			auto invader = invaders[v.first].front();
 			invaders[v.first].pop_front();
 
+			invader->withdrawHealthPercent = withdrawPercent;
 			invader->enterDimensionGate(*this);
 			invader->city = invadedCity;
-			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader));
-			invader->addMission(*this, VehicleMission::attackBuilding(*this, *invader), true);
+			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader, 0,
+			                                                                   zoneMode, scatter));
+			if (missionType == UFOIncursion::PrimaryMission::Overspawn)
+			{
+				invader->addMission(
+				    *this, VehicleMission::infiltrateOrSubvertBuilding(*this, *invader, false),
+				    true);
+			}
+			else
+			{
+				invader->addMission(*this,
+				                    VehicleMission::attackBuilding(*this, *invader, nullptr,
+				                                                    missionCounter),
+				                    true);
+			}
 		}
 	}
 }
@@ -1302,6 +1524,11 @@ void GameState::updateEndOfDay()
 		o.second->updateVehicleAgentPark(*this);
 		o.second->updateHirableAgents(*this);
 		o.second->updateDailyInfiltrationHistory();
+		if (o.second->initiatesDiplomacy)
+		{
+			// Must run before updateRelations overwrites long_term with current.
+			o.second->setRaidMissions(*this, current_city);
+		}
 		const float relationshipDelta = o.second->updateRelations(player);
 
 		if (o.second->initiatesDiplomacy)
@@ -1313,8 +1540,6 @@ void GameState::updateEndOfDay()
 				fw().pushEvent(new GameOrganisationEvent(GameEventType::OrganisationRequestBribe,
 				                                         {this, o.first}));
 			}
-
-			o.second->setRaidMissions(*this, current_city);
 		}
 	}
 	for (auto &a : this->agents)
@@ -1338,19 +1563,16 @@ void GameState::updateEndOfDay()
 void GameState::updateUfoGrowth()
 {
 	const int week = static_cast<int>(this->gameTime.getWeek());
-
-	// TODO: Make this query the UFOGrowth::week value?
-	auto growthIt = this->ufo_growth_lists.find(format("UFO_GROWTH_{0}", week));
-	if (growthIt == this->ufo_growth_lists.end())
-	{
-		growthIt = this->ufo_growth_lists.find("UFO_GROWTH_DEFAULT");
-	}
-	if (growthIt == this->ufo_growth_lists.end())
+	const auto growth = UFOGrowth::selectForWeek(*this, week);
+	if (!growth)
 	{
 		LogWarning("No valid UFO growth lists found");
 		return;
 	}
-	const auto &growth = growthIt->second;
+	if (!UFOGrowth::craftFactoryIntact(*this))
+	{
+		return;
+	}
 
 	const auto limitIt = this->ufo_growth_lists.find("UFO_GROWTH_LIMIT");
 	if (limitIt == this->ufo_growth_lists.end())
@@ -1664,22 +1886,24 @@ void GameState::updateOrgFinances()
 
 int GameState::calculateFundingModifier() const
 {
+	// UFO2P non-4 ~0xF6EC7: cmp week-score then idiv funding. Matching bands overwrite;
+	// the tightest (largest |threshold|) wins. 10000 uses the 6400/5 band, not 400/20.
 	int fundingModifier = 0;
+	int bestAbs = -1;
 	const int totalRating = weekScore.getTotal();
 	for (const auto &threshold : weekly_rating_rules)
 	{
-		// If score threshold is negative or 0, then use it if our value is smaller
-		// (i.e. -2400 rating uses -1600 threshold)
-
-		// If score threshold is positive, then score has to be higher
-		// (i.e. 10000 rating uses 6400's value)
-		int scoreThreshold = threshold.first;
-		int modifier = threshold.second;
-
+		const int scoreThreshold = threshold.first;
+		const int modifier = threshold.second;
 		if ((scoreThreshold <= 0 && totalRating < scoreThreshold) ||
 		    (scoreThreshold > 0 && totalRating > scoreThreshold))
 		{
-			fundingModifier = modifier;
+			const int tightness = scoreThreshold < 0 ? -scoreThreshold : scoreThreshold;
+			if (tightness > bestAbs)
+			{
+				bestAbs = tightness;
+				fundingModifier = modifier;
+			}
 		}
 	}
 	return fundingModifier;
@@ -1765,6 +1989,12 @@ void GameState::updateAfterBattle()
 			fw().pushEvent(new GameEvent(eventFromBattle));
 			break;
 		}
+		case GameEventType::AliensDefeated:
+		case GameEventType::XComDefeated:
+		{
+			fw().pushEvent(new GameEvent(eventFromBattle));
+			break;
+		}
 		default:
 			break;
 	}
@@ -1839,7 +2069,7 @@ void GameState::loadMods()
 	auto mods = split(Options::modList.get(), ":");
 	for (const auto &modString : mods)
 	{
-		LogWarning("loading mod \"{0}\"", modString);
+		LogInfo("loading mod \"{0}\"", modString);
 		auto modPath = Options::modPath.get() + "/" + modString;
 		auto _modInfo = ModInfo::getInfo(modPath);
 		if (!_modInfo)

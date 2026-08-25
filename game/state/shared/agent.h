@@ -19,6 +19,8 @@ namespace OpenApoc
 {
 
 static const unsigned TELEPORT_TICKS_REQUIRED_AGENT = TICKS_PER_SECOND * 30;
+// Burst-fire hand priority: 40 vanilla seconds so remaining ticks sort above idle 0–4 ranks.
+static const int HAND_WEAPON_FIRE_PRIORITY_BASE = 40 * VANILLA_TICKS_PER_SECOND;
 
 class Organisation;
 class AEquipment;

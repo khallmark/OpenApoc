@@ -115,8 +115,16 @@ class Organisation : public StateObject<Organisation>
 	int balance = 0;
 	int income = 0;
 	unsigned int rebuildingRate = 0;
+	// UFO2P organisation_data.organization_type / raiding_strength (file 0x141468).
+	// Types 1 (Megapol) and 3 (Psyke/Diablo/Osiron) are militarized.
+	int organizationType = 0;
+	int raidingStrength = 0;
+	static bool militarizedFromType(int organizationType);
 	int infiltrationValue = 0;
 	std::list<int> infiltrationHistory;
+	// UFOPaedia and the infiltration graph show 0..100; runtime stores 0..200.
+	static int infiltrationDisplayPercent(int rawValue);
+	int getInfiltrationDisplayPercent() const;
 	// Modified for all infiltration attempts at this org
 	int infiltrationSpeed = 0;
 	unsigned int ticksTakeOverAttemptAccumulated = 0;
@@ -142,21 +150,47 @@ class Organisation : public StateObject<Organisation>
 	std::map<StateRef<City>, std::list<RaidMission>> raid_missions;
 	std::map<StateRef<City>, std::list<RecurringMission>> recurring_missions;
 	std::map<StateRef<VehicleType>, int> vehiclePark;
+	// UFO2P organisation index (0..27) and organisation_vehicle_park scalar.
+	// FUN_00092060 skips the high-manpower bucket when the attacker is index 3.
+	static constexpr int EXE_ORG_INDEX_MEGAPOL = 3;
+	int exeOrgIndex = -1;
+	int parkBudgetWeight = 0;
 	// Hirable agent types, min and max growth per day
 	std::map<StateRef<AgentType>, std::pair<int, int>> hirableAgentTypes;
 
 	Organisation() = default;
 
 	void setRaidMissions(GameState &state, StateRef<City> city);
+	// long_term − current, floored at 1. Call before updateRelations snapshots long_term.
+	float raidRelationPressure(const StateRef<Organisation> &other) const;
 	void updateMissions(GameState &state);
 	void updateHirableAgents(GameState &state);
 	void updateInfiltration(GameState &state);
 	void updateTakeOver(GameState &state, unsigned int ticks);
 	void updateVehicleAgentPark(GameState &state);
+	int parkHostileWeight(GameState &state) const;
+	int parkPurchaseBudget(GameState &state) const;
+	void buyFromParkSpawnTable(GameState &state);
+	static bool isParkSpawnType(const GameState &state, const StateRef<VehicleType> &type);
 	void updateDailyInfiltrationHistory();
 	float updateRelations(StateRef<Organisation> &playerOrg);
 
+	// UFO2P FUN_000aec70 @ VA 0xAEC70 / file 0x101314: FUN_0005d1d8(50),
+	// (average_guards * (roll + 75)) / 100, cap 20. Same formula in FUN_000aedb0.
+	static int guardCountFromRoll(int averageGuards, int rollInclusive0to50);
 	int getGuardCount(GameState &state) const;
+	// FUN_00092060 @ VA 0x92060 / file 0xE4704: (quantity / 100) * avg * avg.
+	// quantity is building+0xC2 workforce, or org+2 raiding_strength if no building.
+	static int raidManpower(int quantity, int averageGuards);
+	enum class RaidManpowerBucket
+	{
+		Low,
+		Normal,
+		High,
+	};
+	// att < def → Low; def*2 < att && attacker is not Megapol (exe index 3) → High.
+	static RaidManpowerBucket raidManpowerBucket(int attackerStrength, int defenderStrength,
+	                                             bool attackerIsMegapol);
 	StateRef<Building> pickRandomBuilding(GameState &state, StateRef<City> city) const;
 
 	void takeOver(GameState &state, bool forced = false);

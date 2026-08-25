@@ -38,6 +38,7 @@
 #include <glm/gtx/vector_angle.hpp>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <random>
 
 namespace OpenApoc
@@ -892,7 +893,6 @@ void VehicleMover::updateFalling(GameState &state, unsigned int ticks)
 		if (vehicleHealth != 0 && vehicle.getMaxHealth() / vehicle.getHealth() >= 3 &&
 		    randBoundsExclusive(state.rng, 0, 100) < 2)
 		{
-			LogWarning("Doodads");
 			UString doodadId = randBool(state.rng) ? "DOODAD_1_AUTOCANNON" : "DOODAD_2_AIRGUARD";
 			auto doodadPos = vehicle.position;
 			doodadPos.x += (float)randBoundsInclusive(state.rng, -3, 3) / 10.0f;
@@ -1123,6 +1123,33 @@ void VehicleMover::updateFalling(GameState &state, unsigned int ticks)
 				break;
 			}
 		}
+		else if (newPosition.z <= 0.0f)
+		{
+			// Reached the map floor with nothing to land on (open or destroyed terrain). The
+			// landing logic above only runs where the tile has scenery, so a vehicle falling here
+			// used to accelerate downwards past z=0 while TileObject::setPosition clamped it back
+			// and warned every physics tick until something else destroyed it.
+			//
+			// falling does not imply crashed -- a healthy craft gets here after losing fuel, or
+			// after the road under a ground vehicle was destroyed. Letting it settle unharmed
+			// would be more lenient than either neighbouring outcome: landing on scenery always
+			// applies collision damage, and falling off the map edge above calls die(). Match the
+			// off-map case, and only let an already-crashed hulk come to rest so it stays
+			// recoverable.
+			if (!vehicle.crashed)
+			{
+				vehicle.die(state, false, nullptr);
+				return;
+			}
+			vehicle.falling = false;
+			vehicle.velocity = {0.0f, 0.0f, 0.0f};
+			vehicle.angularVelocity = 0.0f;
+			newPosition.z = 0.0f;
+			vehicle.setPosition(newPosition);
+			vehicle.goalPosition = vehicle.position;
+			vehicle.goalWaypoints.clear();
+			break;
+		}
 	}
 
 	vehicle.updateSprite(state);
@@ -1269,6 +1296,19 @@ VehicleMover::~VehicleMover() = default;
 
 Vehicle::~Vehicle() = default;
 
+int Vehicle::selectDimensionExitPortal(int destinationPortalIndex, int portalCount)
+{
+	if (portalCount <= 0)
+	{
+		return -1;
+	}
+	if (destinationPortalIndex >= 0 && destinationPortalIndex < portalCount)
+	{
+		return destinationPortalIndex;
+	}
+	return -1;
+}
+
 void Vehicle::leaveDimensionGate(GameState &state)
 {
 	// No portals to leave from. return here
@@ -1276,10 +1316,23 @@ void Vehicle::leaveDimensionGate(GameState &state)
 	{
 		return;
 	}
-	auto portal = city->portals.begin();
-	std::uniform_int_distribution<int> portal_rng(0, city->portals.size() - 1);
-	std::advance(portal, portal_rng(state.rng));
-	auto initialPosition = (*portal)->getPosition();
+	// Paired exit when the player clicked a gate (UFO2P non-4 0x149537).
+	// Unset / out-of-range keeps the random dest-city pick.
+	const int exitIndex =
+	    selectDimensionExitPortal(destinationPortalIndex, static_cast<int>(city->portals.size()));
+	sp<Doodad> portal;
+	if (exitIndex >= 0)
+	{
+		portal = city->portals[exitIndex];
+	}
+	else
+	{
+		std::uniform_int_distribution<int> portal_rng(0,
+		                                              static_cast<int>(city->portals.size()) - 1);
+		portal = city->portals[portal_rng(state.rng)];
+	}
+	destinationPortalIndex = -1;
+	auto initialPosition = portal->getPosition();
 	auto initialFacing = 0.0f;
 
 	LogInfo("Leaving dimension gate {0}", this->name);
@@ -1568,6 +1621,28 @@ void Vehicle::dropCarriedVehicle(GameState &state)
 	carriedVehicle->startFalling(state);
 	carriedVehicle->carriedByVehicle.clear();
 	carriedVehicle.clear();
+}
+
+void Vehicle::loadUnmannedUfoLoot(GameState &state, Vehicle &recovered)
+{
+	StateRef<Building> destination = homeBuilding;
+	if (!destination && !state.player_bases.empty())
+	{
+		destination = state.player_bases.begin()->second->building;
+	}
+	std::map<StateRef<VEquipmentType>, int> counts;
+	for (auto &e : recovered.loot)
+	{
+		if (e)
+		{
+			counts[e]++;
+		}
+	}
+	for (auto &entry : counts)
+	{
+		cargo.emplace_back(state, entry.first, entry.second, 0, nullptr, destination);
+	}
+	recovered.loot.clear();
 }
 
 void Vehicle::provideService(GameState &state, bool otherOrg)
@@ -2088,8 +2163,52 @@ Vec3<float> Vehicle::getMuzzleLocation() const
 	                             (float)type->height / 16.0f);
 }
 
+bool Vehicle::withdrawBandEntered(int health, int maxHealth, int crashHealth, int percent)
+{
+	// Recovered from UFO2P FUN_000588f8 (docs/original-game/findings/U1b-gate-consumer.md): the
+	// gate compares current constitution against a role-derived fraction of the type's ceiling,
+	// and fires only while the craft is still flying. Two roles (Escort, and the unnamed role 9)
+	// sit at 10%, which is below crash_health on every hull, so their band is empty by
+	// construction -- that falls out of this comparison rather than needing a special case.
+	if (percent <= 0 || maxHealth <= 0)
+	{
+		return false;
+	}
+	const int threshold = maxHealth * percent / 100;
+	// INCLUSIVE lower bound. FUN_000588f8 @ 0x5894d does CMP against the floor table then JL to
+	// skip -- it jumps away only when constitution is strictly BELOW the floor, so the block runs
+	// at floor[type] <= constitution < threshold. An earlier version of this used `>` and
+	// asserted "at crash health the craft is already going down" in the test, which was a
+	// paraphrase invented here rather than read from the listing.
+	return health >= crashHealth && health < threshold;
+}
+
 void Vehicle::update(GameState &state, unsigned int ticks)
 {
+	// Damaged UFOs break off and leave through the nearest dimension gate. The original runs this
+	// as a periodic, calendar-staggered sweep over all vehicle slots (FUN_0005760c, mod-18
+	// rotation) rather than as a reaction at the instant of a hit; checking it in the per-vehicle
+	// update is the same behaviour at a finer cadence, and the band test is idempotent so a
+	// craft already withdrawing is not re-ordered.
+	if (withdrawHealthPercent > 0 && type && !crashed && !falling && !isDead() &&
+	    owner == state.getAliens() &&
+	    withdrawBandEntered(health, type->health, type->crash_health, withdrawHealthPercent))
+	{
+		bool alreadyLeaving = false;
+		for (auto &m : missions)
+		{
+			if (m.type == VehicleMission::MissionType::GotoPortal)
+			{
+				alreadyLeaving = true;
+				break;
+			}
+		}
+		if (!alreadyLeaving && city && !city->portals.empty())
+		{
+			setMission(state, VehicleMission::gotoPortal(state, *this));
+		}
+	}
+
 	if (isDead() && status == VehicleStatus::Operational)
 	{
 		status = VehicleStatus::Destroyed;
@@ -3794,13 +3913,17 @@ void Vehicle::equipDefaultEquipment(GameState &state)
 		auto &pos = pair.first;
 		auto &etype = pair.second;
 
-		if (alien && state.totalScore.craftShotDownUFO < etype->scoreRequirement)
+		if (alien &&
+		    state.totalScore.craftShotDownUFO < etype->scoreRequirementFor(state.difficulty))
 		{
 			continue;
 		}
 		loot.push_back(etype);
 		auto eq = this->addEquipment(state, pos, etype);
-		eq->ammo = eq->type->max_ammo;
+		if (eq)
+		{
+			eq->ammo = eq->type->max_ammo;
+		}
 	}
 	shield = getMaxShield();
 	health = getMaxHealth();
@@ -3971,7 +4094,8 @@ void Cargo::refund(GameState &state, StateRef<Building> currentBuilding)
 			LogError("Bought cargo from nobody!? WTF?");
 			return;
 		}
-		originalOwner->balance -= cost * count / divisor;
+		// Purchase already credited originalOwner via settleMarketPurchase.
+		// Expiry refunds the buyer only (UFO2P cancel-order copy).
 		if (destination->owner == state.getPlayer())
 		{
 			fw().pushEvent(
@@ -4100,8 +4224,15 @@ void Cargo::seize(GameState &state, StateRef<Organisation> org [[maybe_unused]])
 			break;
 	}
 	int worth = cost * count / divisor;
-	// FIXME: Adjust relationship accordingly to seized cargo's worth
-	LogWarning("Adjust relationship accordingly to worth: {0}", worth);
+	// No relationship adjustment: this was chased twice and closed as a negative, not left open.
+	// The candidate mechanism was UFO2P's four-way event dispatcher FUN_000b32ac, but its own
+	// `worth` traces to a hardcoded zero (two independent writers, both storing a just-zeroed
+	// register), and the global gating half its case bodies has the identical always-zero shape --
+	// so those branches are dead code, including the one an earlier pass read as an infiltration
+	// walk. None of the live tails references an item id, cost, count or destination building,
+	// which is the defining shape of Cargo. Do not wire this from that dispatcher.
+	// See docs/original-game/findings/O2-cargo-seize-pass2.md.
+	LogInfo("Cargo seized, worth {0}; no relationship change (bound negative, O2)", worth);
 	if (destination->owner == state.getPlayer())
 	{
 		fw().pushEvent(

@@ -42,13 +42,15 @@
     <member>agentEquipmentTemplates</member>
     <member>totalScore</member>
     <member>weekScore</member>
-    <member>micronoidRainChance</member>
     <member>objectIdCount</member>
     <member type="Section">city_common_image_list</member>
     <member type="Section">city_common_sample_list</member>
     <member type="Section">battle_common_image_list</member>
     <member type="Section">battle_common_sample_list</member>
     <member type="Section">economy</member>
+    <member>vehicleParkSpawnTable</member>
+    <member>vehicleParkSpawnCap</member>
+    <member>fireHazardPowerTable</member>
     <member>player</member>
     <member>aliens</member>
     <member>civilian</member>
@@ -302,6 +304,8 @@
     <member>required_lab_size</member>
     <member>dependencies</member>
     <member>ufopaedia_entry</member>
+    <member>ufopaediaGroup</member>
+    <member>ufopaediaEntry</member>
     <member>man_hours_progress</member>
     <member>current_lab</member>
     <member>score</member>
@@ -319,6 +323,7 @@
   </object>
   <object>
     <name>ItemDependency</name>
+    <member>type</member>
     <member>agentItemsRequired</member>
     <member>vehicleItemsRequired</member>
     <member>agentItemsConsumed</member>
@@ -413,6 +418,8 @@
     <value>BuildingDisabled</value>
     <value>MissionCompletedVehicle</value>
     <value>MissionCompletedBuildingAlien</value>
+    <value>AliensDefeated</value>
+    <value>XComDefeated</value>
     <value>None</value>
   </enum>
   <enum>
@@ -459,6 +466,7 @@
     <member>direction</member>
     <member>shadowDirection</member>
     <member>health</member>
+    <member>withdrawHealthPercent</member>
     <member>shield</member>
     <member>shieldRecharge</member>
     <member>stunTicksRemaining</member>
@@ -476,6 +484,7 @@
     <member>carriedVehicle</member>
     <member>carriedByVehicle</member>
     <member>betweenDimensions</member>
+    <member>destinationPortalIndex</member>
   </object>
   <object>
     <name>VEquipment</name>
@@ -498,6 +507,8 @@
     <member>targetBuilding</member>
     <member>targetVehicle</member>
     <member>targets</member>
+    <member>incursionZoneMode</member>
+    <member>incursionScatter</member>
     <member>timeToSnooze</member>
     <member>missionCounter</member>
     <member>currentPlannedPath</member>
@@ -553,6 +564,8 @@
     <member>inventoryVehicleAmmo</member>
     <member>name</member>
     <member>building</member>
+    <member>knownToAliens</member>
+    <member>ufo2pSlot</member>
   </object>
   <object>
     <name>Facility</name>
@@ -658,6 +671,10 @@
     <member>doors</member>
     <member>explosions</member>
     <member>hazards</member>
+    <member>fireSchedulerTicksAccumulated</member>
+    <member>fireSchedulerRowY</member>
+    <member>fireSchedulerRowZ</member>
+    <member>fireSchedulerContactCounter</member>
     <member>participants</member>
     <member>leadershipBonus</member>
     <member>aiBlock</member>
@@ -696,6 +713,7 @@
     <member>exitsX</member>
     <member>exitsY</member>
     <member>reinforcementsInterval</member>
+    <member>briefing</member>
     <member>tilesets</member>
     <member>destroyed_ground_tile</member>
     <member>rubble_left_wall</member>
@@ -837,6 +855,7 @@
     <member>woundTicksAccumulated</member>
     <member>regenTicksAccumulated</member>
     <member>stunDamage</member>
+    <member>mindShieldBonus</member>
     <member>enzymeDebuffTicksAccumulated</member>
     <member>fireDebuffTicksAccumulated</member>
     <member>enzymeDebuffIntensity</member>
@@ -848,6 +867,9 @@
     <member>reserveShotCost</member>
     <member>cloakTicksAccumulated</member>
     <member>ticksUntillNextCry</member>
+    <member>disruptorShieldCapacity</member>
+    <member>disruptorShieldCurrent</member>
+    <member>disruptorShieldRegenTicksAccumulated</member>
     <member>behavior_mode</member>
     <member>fire_aiming_mode</member>
     <member>fire_permission_mode</member>
@@ -912,6 +934,7 @@
     <member>power</member>
     <member>lifetime</member>
     <member>age</member>
+    <member>fireOverlay</member>
     <member>frame</member>
     <member>ticksUntilVisible</member>
     <member>frameChangeTicksAccumulated</member>
@@ -1110,11 +1133,23 @@
     <member>pendingInvestigatorCount</member>
   </object>
   <object>
+    <name>UFOIncursionSlot</name>
+    <member>followVehicleType</member>
+    <member>zoneMode</member>
+    <member>missionCounter</member>
+    <member>scatter</member>
+    <member>typePercent</member>
+    <member>role</member>
+  </object>
+  <object>
     <name>UFOIncursion</name>
     <member>primaryMission</member>
     <member>primaryList</member>
     <member>escortList</member>
     <member>attackList</member>
+    <member>primarySlots</member>
+    <member>escortSlots</member>
+    <member>attackSlots</member>
     <member>priority</member>
   </object>
   <object>
@@ -1233,6 +1268,8 @@
     <member>bioRemains</member>
     <member>launcher</member>
     <member>artifact</member>
+    <member>artifactUnhidden</member>
+    <member>hazardResist</member>
     <member>body_sprite</member>
     <member>damage_modifier</member>
     <member>body_part</member>
@@ -1308,7 +1345,9 @@
     <member>teleporting</member>
     <member>dimensionShifting</member>
     <member>scoreRequirement</member>
+    <member>scoreRequirementByDifficulty</member>
     <member>research_dependency</member>
+    <member>economyUnhidden</member>
   </object>
   <object>
     <name>DoodadFrame</name>
@@ -1394,6 +1433,8 @@
     <member>balance</member>
     <member>income</member>
     <member>rebuildingRate</member>
+    <member>organizationType</member>
+    <member>raidingStrength</member>
     <member>infiltrationValue</member>
     <member>infiltrationHistory</member>
     <member>infiltrationSpeed</member>
@@ -1415,6 +1456,8 @@
     <member>raid_missions</member>
     <member>recurring_missions</member>
     <member>vehiclePark</member>
+    <member>exeOrgIndex</member>
+    <member>parkBudgetWeight</member>
     <member>hirableAgentTypes</member>
   </object>
   <object>
@@ -1468,6 +1511,10 @@
     <member>data_id</member>
     <member>data_type</member>
     <member>dependency</member>
+    <member>startVisible</member>
+    <member>startVisibleFromExe</member>
+    <member>catalogCategory</member>
+    <member>catalogIndex</member>
   </object>
   <object>
     <name>ResearchDependency</name>
@@ -1824,6 +1871,11 @@
     <value>All</value>
   </enum>
   <enum>
+    <name>ItemDependency::Type</name>
+    <value>Any</value>
+    <value>All</value>
+  </enum>
+  <enum>
     <name>UfopaediaEntry::Data</name>
     <value>Nothing</value>
     <value>Organisation</value>
@@ -2057,6 +2109,8 @@
     <name>UnitAIBehavior</name>
     <member>type</member>
     <member>active</member>
+    <member>attackerPosition</member>
+    <member>hitsSinceThink</member>
   </object>
   <object external="true" full="true">
     <name>UnitAIVanilla</name>

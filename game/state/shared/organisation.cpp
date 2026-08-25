@@ -11,7 +11,11 @@
 #include "game/state/gamestate.h"
 #include "game/state/rules/city/baselayout.h"
 #include "game/state/rules/city/scenerytiletype.h"
+#include "game/state/rules/city/vehicletype.h"
 #include "library/strings.h"
+#include "library/vec.h"
+#include "library/xorshift.h"
+#include <algorithm>
 
 // Uncomment to turn off org missions
 // #define DEBUG_TURN_OFF_ORG_MISSIONS
@@ -19,11 +23,49 @@
 namespace OpenApoc
 {
 
-// Returns 100% +- 25%, with a max of 20
+static void settleMarketPurchase(Organisation &seller, StateRef<Organisation> buyer, int count,
+                                 int price)
+{
+	const int total = count * price;
+	buyer->balance -= total;
+	if (seller.id != buyer.id)
+	{
+		seller.balance += total;
+	}
+}
+
+int Organisation::guardCountFromRoll(int averageGuards, int rollInclusive0to50)
+{
+	// FUN_000aec70 @ VA 0xAEC70 / file 0x101314 (on-disk MOV EAX,0x32 @ 0x111373).
+	const int roll = std::max(0, std::min(50, rollInclusive0to50));
+	const int count = (std::max(0, averageGuards) * (roll + 75)) / 100;
+	return count > 20 ? 20 : count;
+}
+
 int Organisation::getGuardCount(GameState &state) const
 {
-	return std::min(
-	    20, randBoundsInclusive(state.rng, average_guards * 75 / 100, average_guards * 125 / 100));
+	return guardCountFromRoll(average_guards, randBoundsInclusive(state.rng, 0, 50));
+}
+
+int Organisation::raidManpower(int quantity, int averageGuards)
+{
+	const int q = std::max(0, quantity);
+	const int g = std::max(0, averageGuards);
+	return (q / 100) * g * g;
+}
+
+Organisation::RaidManpowerBucket
+Organisation::raidManpowerBucket(int attackerStrength, int defenderStrength, bool attackerIsMegapol)
+{
+	if (attackerStrength < defenderStrength)
+	{
+		return RaidManpowerBucket::Low;
+	}
+	if (defenderStrength * 2 < attackerStrength && !attackerIsMegapol)
+	{
+		return RaidManpowerBucket::High;
+	}
+	return RaidManpowerBucket::Normal;
 }
 
 StateRef<Building> Organisation::pickRandomBuilding(GameState &state, StateRef<City> city) const
@@ -200,8 +242,7 @@ void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
 	                             StateRef<Organisation>{&state, id}, buyer);
 	LogWarning("PURCHASE: {0} bought {1}x{2} at {3} to {4} ", buyer->owner.id, count,
 	           vehicleEquipment.id, building.id, buyer.id);
-	auto owner = buyer->owner;
-	owner->balance -= count * price;
+	settleMarketPurchase(*this, buyer->owner, count, price);
 }
 
 void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
@@ -234,8 +275,7 @@ void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
 	                             StateRef<Organisation>{&state, id}, buyer);
 	LogWarning("PURCHASE: {0} bought {1}x{2} at {3} to {4} ", buyer->owner.id, count,
 	           vehicleAmmo.id, building.id, buyer.id);
-	auto owner = buyer->owner;
-	owner->balance -= count * price;
+	settleMarketPurchase(*this, buyer->owner, count, price);
 }
 
 void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
@@ -270,8 +310,7 @@ void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
 	    price, StateRef<Organisation>{&state, id}, buyer);
 	LogWarning("PURCHASE: {0} bought {1}x{2} at {3} to {4} ", buyer->owner.id, count,
 	           agentEquipment.id, building.id, buyer.id);
-	auto owner = buyer->owner;
-	owner->balance -= count * price;
+	settleMarketPurchase(*this, buyer->owner, count, price);
 }
 
 void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
@@ -305,8 +344,7 @@ void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
 	}
 	LogWarning("PURCHASE: {0} bought {1}x{2} at {3} to {4} ", buyer->owner.id, count,
 	           vehicleType.id, building.id, buyer.id);
-	auto owner = buyer->owner;
-	owner->balance -= count * price;
+	settleMarketPurchase(*this, buyer->owner, count, price);
 }
 
 void Organisation::setRaidMissions(GameState &state, StateRef<City> city)
@@ -322,24 +360,18 @@ void Organisation::setRaidMissions(GameState &state, StateRef<City> city)
 		}
 	}
 
-	if (ownedBuildingsList.empty())
-	{
-		return;
-	}
-
 	for (const auto &org : state.organisations)
 	{
 		const StateRef<Organisation> otherOrg{&state, org.first};
 		if (isRelatedTo(otherOrg) == Relation::Hostile)
 		{
-			// every time (for every hostile org) pick a new building
-			const auto sourceBuilding = pickRandom(state.rng, ownedBuildingsList);
-			if (!sourceBuilding)
+			StateRef<Building> sourceBuilding;
+			if (!ownedBuildingsList.empty())
 			{
-				continue;
+				sourceBuilding = pickRandom(state.rng, ownedBuildingsList);
 			}
 
-			if (std::max(1.0f, long_term_relations[otherOrg] - current_relations[otherOrg]) >
+			if (raidRelationPressure(otherOrg) >
 			    randBoundsInclusive(state.rng, 0, rules.nextRaidTimer))
 			{
 				rules.nextRaidTimer = 80 - 2 * state.difficulty;
@@ -354,22 +386,23 @@ void Organisation::setRaidMissions(GameState &state, StateRef<City> city)
 				    state.gameTime.getTicks() + randBoundsInclusive(state.rng, 50, 1250) *
 				                                    static_cast<uint64_t>(TICKS_PER_MINUTE);
 
-				// calculate manpower available and probability of raid success
-				const float targetGuards = otherOrg->average_guards * otherOrg->average_guards *
-				                           targetBuilding->currentWorkforce;
-
-				// make sure it's not 0 (in case of X-Com)
-				const float guardRatio = average_guards * average_guards *
-				                         sourceBuilding->currentWorkforce /
-				                         std::max(1.0f, targetGuards);
+				// FUN_00092060 @ file 0xE4704: (workforce/100)*avg², or
+				// (raiding_strength/100)*avg² when FUN_00091f70 returns -1 twice.
+				const int attacker = raidManpower(sourceBuilding ? sourceBuilding->currentWorkforce
+				                                                 : raidingStrength,
+				                                  average_guards);
+				const int defender =
+				    raidManpower(targetBuilding->currentWorkforce, otherOrg->average_guards);
+				const auto bucket =
+				    raidManpowerBucket(attacker, defender, exeOrgIndex == EXE_ORG_INDEX_MEGAPOL);
 
 				auto &raidMissionChance = rules.neutral_low_manpower;
-				if (guardRatio > 2)
+				if (bucket == RaidManpowerBucket::High)
 				{
 					raidMissionChance =
 					    (militarized) ? rules.military_high_manpower : rules.neutral_high_manpower;
 				}
-				else if (guardRatio > 1)
+				else if (bucket == RaidManpowerBucket::Normal)
 				{
 					raidMissionChance =
 					    (militarized) ? rules.military_normal : rules.neutral_normal;
@@ -602,7 +635,10 @@ void Organisation::updateHirableAgents(GameState &state)
 void Organisation::updateInfiltration(GameState &state)
 {
 	StateRef<Organisation> org = {&state, id};
-	if (org == state.getPlayer() || org == state.getAliens())
+	// UFO2P FUN_0007fcc0 @ VA 0x7FCC0 / file 0xD2364 (ISO non-4 CRC 0x4749ffc1), hourly
+	// from the city clock (callers file 0xAD2A4 / 0xAD514). Loop ecx 0..0x1A (27 orgs);
+	// civilian is index 27 and is not updated. X-COM and Alien orgs are in the loop.
+	if (org == state.getCivilian())
 	{
 		return;
 	}
@@ -613,11 +649,11 @@ void Organisation::updateInfiltration(GameState &state)
 		return;
 	}
 
-	// FIXME: Properly read incursions value and difficulty
-	int ufoIncursions = 1;
-	int divizor = 42 - ufoIncursions;
+	// Divisor is 42 − ([0x10C9A] >> 16). That high word is difficulty 0..4
+	// (writers at file 0xC4DA8 store 0/1/2/3/4 at obj2+0x10C9C). 4-build
+	// FUN at file 0xD21EC is `42 - word[0x10C9C]`.
+	int divizor = 42 - state.difficulty;
 
-	// Calculate infiltration modifier
 	int infiltrationModifier = 0;
 	for (auto &b : buildings)
 	{
@@ -630,12 +666,33 @@ void Organisation::updateInfiltration(GameState &state)
 		infiltrationModifier += infiltrationBuilding;
 	}
 	infiltrationModifier /= divizor;
-	infiltrationModifier -= state.difficulty;
+	org->infiltrationValue += infiltrationModifier;
 	if (state.gameTime.getHours() % 2)
 	{
-		infiltrationModifier--;
+		org->infiltrationValue--;
 	}
-	org->infiltrationValue = clamp(org->infiltrationValue + infiltrationModifier, 0, 200);
+	org->infiltrationValue = clamp(org->infiltrationValue, 0, 200);
+}
+
+int Organisation::infiltrationDisplayPercent(int rawValue) { return clamp(rawValue / 2, 0, 100); }
+
+int Organisation::getInfiltrationDisplayPercent() const
+{
+	return infiltrationDisplayPercent(infiltrationValue);
+}
+
+bool Organisation::militarizedFromType(int organizationType)
+{
+	return organizationType == 1 || organizationType == 3;
+}
+
+float Organisation::raidRelationPressure(const StateRef<Organisation> &other) const
+{
+	const auto longIt = long_term_relations.find(other);
+	const auto curIt = current_relations.find(other);
+	const float longTerm = (longIt == long_term_relations.end()) ? 0.0f : longIt->second;
+	const float current = (curIt == current_relations.end()) ? 0.0f : curIt->second;
+	return std::max(1.0f, longTerm - current);
 }
 
 float Organisation::updateRelations(StateRef<Organisation> &playerOrg)
@@ -719,12 +776,13 @@ void Organisation::updateVehicleAgentPark(GameState &state)
 	//	}
 	//}
 
+	const bool useSpawnTable = !state.vehicleParkSpawnTable.empty();
 	for (auto &entry : vehiclePark)
 	{
 		int countVehicles = 0;
 		for (auto &v : state.vehicles)
 		{
-			if (v.second->owner.id == id && v.second->type == entry.first)
+			if (v.second->owner.id == id && v.second->type == entry.first && !v.second->isDead())
 			{
 				countVehicles++;
 			}
@@ -742,9 +800,19 @@ void Organisation::updateVehicleAgentPark(GameState &state)
 				}
 			}
 		}
-		while (countVehicles < entry.second)
+		const bool spawnPoolType = useSpawnTable && isParkSpawnType(state, entry.first);
+		while (countVehicles < entry.second && !spawnPoolType)
 		{
-			// FIXME: Check if org has funds before buying vehicle
+			int price = 0;
+			auto economyIt = state.economy.find(entry.first.id);
+			if (economyIt != state.economy.end())
+			{
+				price = economyIt->second.currentPrice;
+			}
+			if (price > 0 && balance < price)
+			{
+				break;
+			}
 
 			std::list<StateRef<Building>> buildingsRandomizer;
 
@@ -772,10 +840,164 @@ void Organisation::updateVehicleAgentPark(GameState &state)
 
 			auto v = building->city->placeVehicle(state, entry.first, {&state, id}, building);
 			v->homeBuilding = {&state, building};
+			if (price > 0)
+			{
+				balance -= price;
+			}
 
 			countVehicles++;
 		}
+		while (countVehicles > entry.second && !spaceLiner)
+		{
+			sp<Vehicle> surplus;
+			for (auto &v : state.vehicles)
+			{
+				if (v.second->owner.id == id && v.second->type == entry.first &&
+				    v.second->missions.empty() && v.second->currentAgents.empty() &&
+				    !v.second->crashed && !v.second->isDead())
+				{
+					surplus = v.second;
+					break;
+				}
+			}
+			if (!surplus)
+			{
+				break;
+			}
+			int price = 0;
+			auto economyIt = state.economy.find(entry.first.id);
+			if (economyIt != state.economy.end())
+			{
+				price = economyIt->second.currentPrice;
+			}
+			if (price > 0)
+			{
+				balance += price;
+			}
+			surplus->die(state, true);
+			countVehicles--;
+		}
 	}
+	if (useSpawnTable)
+	{
+		buyFromParkSpawnTable(state);
+	}
+}
+
+int Organisation::parkHostileWeight(GameState &state) const
+{
+	int hostile = 0;
+	for (auto &orgPair : state.organisations)
+	{
+		if (!orgPair.second || orgPair.second.get() == this || orgPair.second->exeOrgIndex == 1)
+		{
+			continue;
+		}
+		if (getRelationTo({&state, orgPair.first}) < -49.0f)
+		{
+			hostile += 2;
+		}
+	}
+	return hostile;
+}
+
+int Organisation::parkPurchaseBudget(GameState &state) const
+{
+	return (balance * (parkHostileWeight(state) + parkBudgetWeight)) / 100;
+}
+
+bool Organisation::isParkSpawnType(const GameState &state, const StateRef<VehicleType> &type)
+{
+	for (auto &entry : state.vehicleParkSpawnTable)
+	{
+		if (entry == type)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void Organisation::buyFromParkSpawnTable(GameState &state)
+{
+	if (state.vehicleParkSpawnTable.size() < 20 || exeOrgIndex < 2 || exeOrgIndex >= 27)
+	{
+		return;
+	}
+	int budget = parkPurchaseBudget(state);
+	if (budget <= 0)
+	{
+		return;
+	}
+	balance -= budget;
+	const int poolOffset = (exeOrgIndex == 3) ? 20 : 0;
+	std::list<StateRef<Building>> buildingsRandomizer;
+	for (auto &b : buildings)
+	{
+		if (b->city.id != "CITYMAP_HUMAN")
+		{
+			continue;
+		}
+		for (auto i = 0; i <= std::max(0, 8 - (int)b->currentVehicles.size()); i++)
+		{
+			buildingsRandomizer.emplace_back(b);
+		}
+	}
+	if (buildingsRandomizer.empty())
+	{
+		balance += budget;
+		return;
+	}
+	for (int t = 0; t < 50; t++)
+	{
+		const int idx = randBoundsInclusive(state.rng, 0, 19) + poolOffset;
+		if (idx < 0 || idx >= static_cast<int>(state.vehicleParkSpawnTable.size()))
+		{
+			continue;
+		}
+		const auto type = state.vehicleParkSpawnTable[idx];
+		if (!type)
+		{
+			continue;
+		}
+		int owned = 0;
+		for (auto &v : state.vehicles)
+		{
+			if (v.second->owner.id == id && v.second->type == type && !v.second->isDead())
+			{
+				owned++;
+			}
+		}
+		int cap = 0;
+		auto capIt = state.vehicleParkSpawnCap.find(type.id);
+		if (capIt != state.vehicleParkSpawnCap.end())
+		{
+			cap = capIt->second;
+		}
+		if (owned >= cap)
+		{
+			continue;
+		}
+		int price = 0;
+		auto economyIt = state.economy.find(type.id);
+		if (economyIt != state.economy.end())
+		{
+			price = economyIt->second.currentPrice;
+		}
+		if (price <= 0 || price > budget)
+		{
+			continue;
+		}
+		StateRef<Building> building = pickRandom(state.rng, buildingsRandomizer);
+		auto v = building->city->placeVehicle(state, type, {&state, id}, building);
+		if (!v)
+		{
+			continue;
+		}
+		v->homeBuilding = {&state, building};
+		budget -= price;
+	}
+	balance += budget;
 }
 
 float Organisation::getRelationTo(const StateRef<Organisation> &other) const
