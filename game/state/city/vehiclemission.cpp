@@ -3157,10 +3157,17 @@ bool VehicleMission::advanceMissionCounterOnArrival(GameState &state, Vehicle &v
 	// The retarget branch is still live code in the original, just for a
 	// different population -- a periodic scheduler (FUN_00092060 ->
 	// FUN_00092470) unrelated to the dimension-gate incursion system, which
-	// writes +0x12C from its own loop index. Whether OpenApoc's other
-	// AttackBuilding caller (OrganisationRaid::UnauthorizedVehicle,
-	// organisation.cpp) is that population is NOT established, so the default
-	// below is deliberately left alone rather than guessed at.
+	// writes +0x12C from its own loop index.
+	//
+	// RESOLVED: that scheduler IS OpenApoc's OrganisationRaid::UnauthorizedVehicle
+	// population, so the owner gate below is already the right split and the
+	// default needs no change. The value that becomes +0x12C is an
+	// organisation-table index, not a vehicle type: FUN_00092060 writes it from
+	// the outer-loop variable indexing the same 27-entry 0x1b6-stride org table
+	// bound in O1-O2-M1-city.md, and a raw CMP SI,1/JZ at that loop's top
+	// excludes org indices 0 and 1 -- exactly ORG_XCOM and ORG_ALIENS, and
+	// exactly the set gamestate.cpp gates setRaidMissions on via
+	// initiatesDiplomacy. See findings/U1-scheduler-population.md.
 	//
 	// Gating on the owner rather than on a new serialized field: the two
 	// incursion call sites in gamestate.cpp are exactly the alien-owned ones,
