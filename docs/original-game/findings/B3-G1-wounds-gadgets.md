@@ -227,6 +227,15 @@ Inside `FUN_0005F860`, the two tables the type-modified damage value is computed
   confirmation that a live consumer touches that exact table region — worth relaying to whoever
   owns firming up that extractor's confidence, separately from this row.
 
+  **Relayed and declined — do not upgrade the CSV on this.** A later pass checked whether this
+  justifies raising `damage_modifier_data`'s `low` confidence in `labels/tacp_rebase.csv`, and it
+  does not. That field grades the **rebase mapping** — the method is `near_first_of_2`, meaning the
+  4-build counterpart at `0x2FF45C` was chosen from two candidate byte-matches by taking the first.
+  The evidence above is entirely within the **non-4** build: it establishes that the table region
+  is real and read by live code, which was never the doubt. It cannot discriminate between the two
+  4-build candidates, so it leaves the graded question untouched. Firming that row up means
+  disambiguating the second candidate, not adding more non-4 readers.
+
 **Bound answer:** the Disruptor Shield does **not** discriminate by damage type on its own. Damage
 is converted to an "effective" value by the same general damage-type resist/modifier system every
 other damage application already uses, and the shield buffer then absorbs whatever effective value
