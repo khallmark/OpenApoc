@@ -7,6 +7,22 @@ Branch: `khallmark/parity-implementation`, cut from `develop` @ `26a72467`.
 - `cmake --build build -j` — **green**, extract-data ran clean.
 - `ctest --test-dir build` — **30/30 passed, 12.97 s.**
 
+## Current — 20 commits in
+
+**`ctest` 35/35 passing.** Five new test executables plus new cases inside `test_city_rules`.
+
+| Landed | |
+|---|---|
+| `fix(city)` | ground vehicles no longer destroyed for merely failing to reach a target |
+| `feat(battle)` | ten alien-building briefings extracted and shown pre-battle |
+| `feat(city)` | UFO mission-counter zero-transition, live in real incursion spawns |
+| `fix(battle)` | large-unit occupancy and line-of-sight geometry |
+| `test(parity)` | psionics, TU reservation and AI weapon priority frozen |
+| `docs(parity)` | all R&D verdicts, two methodology notes, four Class C rows closed |
+
+In flight: Disruptor Shield implementation, hazard-spread RNG implementation, and an A4 upgrade
+from a contract test to one that drives the real private AI decision path.
+
 Any parity change must keep all 30 green. A new lock test must **fail before** its change and
 **pass after**; a lock test that passes on arrival proves nothing (see
 [../parity-guide.md](../parity-guide.md#1-workflow-a--closing-a-code-only-gap)).
