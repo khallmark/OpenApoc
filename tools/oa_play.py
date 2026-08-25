@@ -1595,18 +1595,42 @@ def station_at_gates(d: Driver) -> int:
         if len(bits) < 3 or not bits[0].isdigit():
             continue
         flags = bits[-1]
-        # pax=0, NOT crew=0. crew= is who is aboard RIGHT NOW, so an empty troop transport
-        # reports crew=0 and is indistinguishable from a pure fighter -- the first version of
-        # this filter cheerfully sent the Wolfhound APC and the Stormdog to hold a gate, which
-        # is precisely the mistake it was written to prevent. pax= is capacity, added to the
-        # interceptors introspection for this.
+        # Two earlier filters were wrong, both provable from the fleet the game actually starts
+        # you with:
+        #   0:Valkyrie_Interceptor_1 flying=1,armed=1,crew=0,pax=12
+        #   1:Stormdog_1             flying=0,armed=1,crew=0,pax=4
+        #   2:Phoenix_Hovercar_1     flying=1,armed=1,crew=0,pax=4
+        #   3:Phoenix_Hovercar_2     flying=1,armed=1,crew=0,pax=4
+        #   4:Wolfhound_APC_1        flying=0,armed=1,crew=0,pax=14
+        # crew=0 sent the APC and the Stormdog to hold a gate -- crew is who is aboard RIGHT NOW,
+        # so an empty transport looks identical to a fighter. pax=0 then stationed NOTHING,
+        # because no craft in this game has zero capacity: every one of them carries someone.
         # flying=1 is a TYPE check (VehicleType::Type::Flying), not "currently airborne", so it
-        # correctly excludes road vehicles without excluding craft parked in the hangar -- and a
-        # hangar queen is exactly what should be sent to hold a gate.
-        if "armed=1" not in flags or "flying=1" not in flags or "pax=0" not in flags:
+        # drops road vehicles without dropping craft parked in the hangar -- and a hangar queen
+        # is exactly what should be holding a gate.
+        if "armed=1" not in flags or "flying=1" not in flags:
             continue
-        fighters.append(int(bits[0]))
+        pax = 0
+        for f in flags.split(","):
+            if f.startswith("pax="):
+                try:
+                    pax = int(f[4:])
+                except ValueError:
+                    pax = 0
+        fighters.append((pax, int(bits[0])))
     if not fighters:
+        return 0
+
+    # Reserve the roomiest flying craft as the squad transport, station the rest. Derived from the
+    # fleet rather than hardcoded: "hoverbikes and hovercars" are the small-capacity flyers
+    # (pax=4); the Valkyrie (pax=12) is the transport. A fixed threshold would need a magic number
+    # and would rot as soon as the fleet changes -- reserving the largest adapts by itself.
+    fighters.sort(reverse=True)
+    reserved_pax, reserved_idx = fighters[0]
+    fighters = [idx for _p, idx in fighters[1:]]
+    if not fighters:
+        d.say(f"  [gates] only one armed flyer (craft {reserved_idx}, pax={reserved_pax}); "
+              f"holding it back as transport")
         return 0
 
     if not d.click_id("BUTTON_TAB_2", st):
