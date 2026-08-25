@@ -10,9 +10,10 @@ strings is not by itself evidence of a missing consumer — that applies to the 
 
 ## Verdict — B3 wounded move/shoot penalty
 
-> **NOT BOUND — no consumer found via four independent structural methods (string xref, whole-
-> memory pointer scan, whole-binary code-constant scan, SCASB-walker cross-reference); wound
-> counter's struct offset was not established.**
+> **NOT BOUND — no consumer found via five independent structural methods (string xref, whole-
+> memory pointer scan, whole-binary code-constant scan, SCASB-walker cross-reference, and
+> cross-check against the one confirmed real pool resolver table); wound counter's struct offset
+> was not established.**
 
 ### What was searched
 
@@ -52,6 +53,21 @@ of them is expected, not conclusive — which is why this investigation did not 
      `0x28E0C6`, an **adjacent but distinct** stat-percentage label table, not the wound pool.
    - `FUN_0005B7A8` (bound-file `0xC0208`) — a random callsign generator, reading a **different**
      table at `0x28E6FA` (first-name/colour fragments), unrelated to combat messages.
+5. Cross-checked against the one **confirmed real** resolver mechanism in this pool, found mid-run
+   by RE-cover (B1): a sparse pointer table at object2 `0x292D18`–`0x292DEC` (non-4 file
+   `0x2E27BC`–`0x2E2890`) holding one absolute 4-byte pointer per entry, each with a genuine
+   `getReferencesTo` xref — full dump plus a wider margin scan to confirm the boundary is
+   `0x292D18` exact (everything below it, from `0x292C00`, is the string bytes of the table's own
+   first entry, not more pointers). Checked every one of the ~24 non-null entries against `Unit
+   critically wounded`, `TU cost per wound: `, and (as a proposed same-category, same-pool
+   control) `TU cost per shot: ` — **none of the three appear in this table**, and `TU cost per
+   shot: `'s own direct xref is independently **0** too, so it is not actually a valid positive
+   control: the whole `TU cost per X` family (wound/shot/throw/use/activate/attempt) is absent
+   from this specific mechanism, not just the wound member. The table's real entries skew toward
+   short UI-widget labels and one-shot system dialogs (`Ammo Clip`, `Weight:`, `Health`, `Pause`,
+   `MISSION BRIEFING`, `Hostile unit spotted`, `PLEASE PUT THE XCOM CD BACK IN THE DRIVE`) rather
+   than combat-log severity text — consistent with it being linker-packed individual `char *`
+   globals for a different subsystem than whatever prints combat messages.
 
 No method produced a positive lead. This is recorded per the project's stated rule as a genuine
 structural exhaustion, not an absent-xref shortcut — see
@@ -124,9 +140,20 @@ addresses TACP.EXE non-4:
   `entry+10` by `amount` and returns (fully absorbed); otherwise subtracts the shield's remaining
   capacity from `amount` and falls through to `FUN_000598D4` — the F1-documented type-4 doodad
   spawner (`docs/original-game/parity-guide.md` §F1) — i.e. a visible effect fires when the
-  shield's charge is exceeded. **Not traced:** the caller of `FUN_0006508C`, so the exact incoming
-  quantity (stun damage, physical damage, or something else) is not confirmed — only that a
-  charge-based absorption mechanic exists and is wired to a visual cue on overflow.
+  shield's charge is exceeded.
+  **Caller traced:** `FUN_0005F860` (bound-file `0xBA304`) — the general "apply `amount` of
+  damage-type `type` to `unit`" function (`unit`, `short damage`, `short damageTypeIndex`),
+  called from the fire/hazard subsystem (`FUN_0007BCB8`, `FUN_0007BD8C`, in the same `0x7B000`–
+  `0x7E000` neighbourhood as the F1-documented fire functions) as well as elsewhere — i.e. this is
+  a general damage-application entry point, not fire-specific. Inside it, `unit+0x254` (same field
+  `FUN_00057A04` fills from the Disruptor Shield) is read as a **damage-absorption buffer**: if
+  the type-modified incoming damage is less than `unit+0x254`, the buffer absorbs it fully
+  (`unit+0x254 -= damage`) and calls `FUN_0006508C`; otherwise the buffer is zeroed, the excess
+  damage passes through to health, and `FUN_00064FFC` (the shield-break/doodad cleanup, above)
+  fires instead. This confirms `unit+0x254`/`unit+0x256` is a general rechargeable
+  damage-absorption stat, and the Disruptor Shield is what feeds it (+100 capacity, plus the
+  item's own charge, while worn) — i.e. **a rechargeable damage shield that soaks incoming damage
+  ahead of health**, not a stun-specific mechanic.
 - **`FUN_00057A04`** (bound-file `0xB24A8`) — per-unit function. While a Disruptor Shield is worn
   and equipped (gated by a `FUN_00023960() != 0` check), adds **100** to `unit+0x256` (a capacity
   field) and adds the shield's own charge (`entry+10`) to `unit+0x254` (a current field), then
@@ -145,12 +172,14 @@ gated `×0xc` multiplier formula with Mind Shield (case `5`) and Cloaking Field 
 i.e. the AI treats these three as one "defensive shield" priority class when deciding what to
 equip.
 
-**What is NOT claimed:** a regen rate, an absorb formula in game terms, or which damage types this
-gates. The mechanism (rechargeable per-item charge pool, granting the unit a capacity/current stat
-pair, absorbing an amount up to capacity with a visual overflow cue, recharging 1/tick and fully
-resetting to 100 on some trigger) is real and reproducible from the decompile above; the exact
-gameplay semantics of `unit+0x254`/`unit+0x256` (is this "stun resistance"? a generic damage
-shield?) need the `FUN_0006508C` caller traced before an OpenApoc implementation is attempted.
+**What is NOT claimed:** an exact regen rate in seconds/ticks, the precise damage-type modifier
+table values consumed by `FUN_0005F860`, or whether the mission-start/per-turn reset trigger for
+the two `FUN_0005797C`/`FUN_00012D3C` full-recharge sites is confirmed (it is inferred from their
+loop shape, not from a caller trace). The mechanism itself — a per-item rechargeable charge that
+grants the unit +100 capacity and its own charge as current on a general damage-absorption buffer,
+which soaks type-modified incoming damage ahead of health, with a visual cue on overflow and a
+1/tick regen — is fully reproducible from the decompile chain above and should be treated as solid
+enough to implement `Type::DisruptorShield` from, modulo the two open numeric details just named.
 
 ### Cloaking Field (`0x0a`) — BOUND (partial), cross-ref K1
 
@@ -211,9 +240,11 @@ already dead weight in the shipped TACP.EXE**, not merely unwired in OpenApoc.
 
 - Do not invent a wound TU/accuracy penalty magnitude, subtraction-vs-percentage split, or
   body-part specificity for B3. Nothing above supports any of that.
-- Do not invent a Disruptor Shield regen rate, absorb-per-hit formula, or damage-type gate beyond
-  what the decompile literally shows (charge pool, capacity/current pair, doodad-on-overflow,
-  100-point resets). The `FUN_0006508C` caller is unconfirmed.
+- Do not invent a Disruptor Shield exact regen-rate cadence or the damage-type modifier table
+  values — those two numeric details are still open. The absorption mechanism itself (charge pool,
+  capacity/current pair on `unit+0x254`/`+0x256`, doodad-on-overflow, 100-point resets) is
+  confirmed via `FUN_0005F860`, the general damage-application function, and should not be
+  re-litigated as unconfirmed.
 - Do not invent a Cloaking Field detection/concealment mechanism from this file — see K1.
 - Do not promote MultiTracker to "confirmed dead" — the evidence here is thinner than for
   Structure Probe / Vortex Analyzer / Alien Detector.

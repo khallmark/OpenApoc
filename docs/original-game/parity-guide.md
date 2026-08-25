@@ -40,6 +40,12 @@ R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/)
 | **V2** ground-vehicle order defect | **FIXED** | Root cause found in `VehicleMission::setPathTo`: a severed road yields a *non-empty but short* path that fell through both give-up branches — near targets crashed an undamaged vehicle, far targets looped forever. Lock test on the real extracted city. Suite 31/31. |
 | **F1** hazard spread RNG | **BOUND — ready to implement** | `FUN_0001eee8` (VA `0x1EEE8`, file `0x7998C`) is a **precomputed 10,013-entry lookup table, not an LCG**. `FUN_0007B0D0` (file `0xD5B74`) decompiled: fire spread is `RNG(0..10) + inherited baseline` vs a per-terrain resistance byte from `FUN_0007AA8C`, behind two veto lookups, neighbour direction drawn `RNG(0,4)` from a table at `0x293068`. **`HAZARD_SPREAD_CHANCE` can be deleted on this evidence.** One open question — see below. |
 | **B5** enzyme | **PARTIAL** | Confirmed: a real **4-way jump table** (`FUN_0007B610`) dispatches overlay type 1 / 2 (fire) / 3 to peer stage-advance functions sharing one decode triplet, one encode triplet, and a generalized placement engine (`FUN_0007AE78`) of which fire's is a special case. Not bound: which of type 1/3 is Enzyme (dispatch variable has zero static xrefs), and the armour-damage formula. **Not guessed.** |
+| **G1 · Disruptor Shield (0x08)** | **BOUND — new finding, implementable** | Marked dead in OpenApoc (`useItem` returns false) but **wired in the original**. Full chain traced: item charge pool → unit `+0x254`/`+0x256` capacity/current buffer → consumed as real damage absorption inside `FUN_0005F860`, the general damage-application function (confirmed by caller trace, not inferred) → visual doodad on overflow → 1/tick regen → periodic full recharge. Two numbers still open: exact regen cadence, and damage-type modifier values. |
+| **G1 · Mind Shield (0x05)** | **RECONFIRMED** | Re-bound at a fresh address; logic unchanged. Resolves the audit item below — the old citation failed because **Ghidra addresses drift between import sessions**, not because the binding was wrong. |
+| **G1 · MultiTracker (0x04)** | **INCONCLUSIVE** | A predicate exists; its caller chain was not traced past a 3-function local cluster. **Flagged for follow-up, explicitly not called dead.** |
+| **G1 · Vortex Analyzer (0x03), Structure Probe (0x02), Alien Detector (0x07)** | **NOT BOUND — clean negatives** | No reader anywhere in a full 20-function survey of general-type consumers. Dead in the original too. |
+| **G1 · Dimension Force Field (0x0b)** | **NOT BOUND** | UI-picker fallback only, no effect consumer. |
+| **B3** wounded penalty | **NOT BOUND — closed** | Five independent methods exhausted, including a cross-check against the pointer table discovered *after* the first pass. Wound-counter struct offset not established. No magnitude, split or body-part specificity invented. |
 | **K1** cloak | **OPEN LEAD** *(revised from NOT BOUND)* | `agent_general_data` runtime VA `0x2B2E70` recovered, 25 xrefs / 21 functions confirmed reading its `type` field. The strongest candidate shows no `type==0x0A` compare and reads like inventory code, but **20 candidate functions remain unexamined** — not a closed negative. |
 | **K1** cloak | **NOT BOUND** | No reader of the `agent_general_data` type field found. Raised a separate audit item — see below. |
 | **O1** bribe / rift | **NOT BOUND** | The binary's one relation-adjustment primitive `FUN_0005faf0` was walked to its roots; none touch an org funds field. Stays prior-art. |
@@ -67,11 +73,16 @@ Two audit items this run produced, both about **existing** claims rather than op
    fixed-stride asset-name table whose entries can. Using one as a control for the other produced a
    wrong `NOT BOUND`. See [findings/METHOD-tacp-string-regions.md](findings/METHOD-tacp-string-regions.md).
    **Every future TACP negative must name the structural method exhausted, not cite absent xrefs.**
-2. **The Mind Shield citation does not resolve.** The gap matrix records Mind Shield as
-   `implemented / high` on `TACP FUN_0009b780 @ 0x9B780`. That cites a **Ghidra VA twice** rather
-   than a file offset, contrary to this folder's own rule, and `0x9B780` lands mid-function inside
-   `FUN_0009b058` in the bound project. The *behaviour* (+30, cap 200) is not disputed here — the
-   *evidence* is unverifiable as written. **Re-verify and restate the citation as a file offset.**
+2. **The Mind Shield citation does not resolve — now explained, and it generalises.** The gap
+   matrix records Mind Shield on `TACP FUN_0009b780 @ 0x9B780`, which cites a Ghidra VA twice
+   rather than a file offset. It was re-bound this run at a **different** address with the logic
+   unchanged, because **`FUN_*` addresses drift between Ghidra import sessions.**
+
+   So the binding was always sound; the *citation form* was not. This is not one bad row — **every
+   `FUN_*` VA recorded anywhere in this folder is an unstable reference**, and the project's own
+   rule ("cite binary + generation + file offset") is exactly the defence against it. Treat a
+   `FUN_*` name as a convenience label for the current session only, and re-locate by file offset
+   before trusting any address in these docs.
 
 ### Status at a glance
 
