@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Reference copy of UFO2P non-4 vehicle_park_spawn_table at 0x188F18 (40×uint32)
+     and caps at 0x188FB8 (33×uint32). FUN_000962cc @ file 0xE8970 reads
+     rand16(19) + (org==3 ? 20 : 0); index 39 is the dword past 0–38.
+     Do not XInclude under common_patch/gamestate/ — loadGame appends vectors. -->
+<vehicle_park_spawn>
+  <table>16 16 16 16 16 16 16 17 17 17 18 18 18 18 18 19 19 19 19 19 10 10 10 10 10 10 32 27 27 27 27 27 32 32 18 18 18 19 19 19</table>
+  <caps>0 0 0 0 0 0 0 0 0 0 15 0 0 0 0 0 7 4 4 2 0 0 0 0 0 0 0 15 0 4 2 2 1</caps>
+</vehicle_park_spawn>
