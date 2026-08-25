@@ -42,6 +42,46 @@ cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
 
 The first build runs the data extractor (`EXTRACT_DATA=ON` by default) and needs `data/cd.iso` to exist before `cmake` configures.
 
+## Working in a second worktree (agents, parallel branches)
+
+A fresh `git worktree` has **no submodules, no `data/cd.iso`, and no configured build tree**, so it
+cannot build or run the gamestate tests until it is provisioned. Do this first, before anything
+else:
+
+```bash
+./tools/setup-worktree.sh                       # or: ./tools/setup-worktree.sh <branch>
+```
+
+It is idempotent and safe to re-run. It fast-forwards onto the target branch **only** when that is
+a true fast-forward and the tree is clean, initialises submodules against the main checkout's
+object store rather than re-cloning from the network, links `data/cd.iso`, and configures `build/`
+with `ENABLE_TESTS=ON`.
+
+**Install `ccache` — this is the difference between a cold build and a warm one.**
+
+```bash
+brew install ccache
+```
+
+`cmake/ccache.cmake` already wires it in automatically when present, but it is detected at
+**configure** time, so a build tree configured before you installed it will not use it. Reconfigure
+that tree once (`cmake -S . -B build …`, or delete `build/CMakeCache.txt`) to pick it up.
+
+For the cache to be shared **across** worktrees rather than one silo per directory, relativise the
+paths once:
+
+```bash
+ccache --set-config base_dir=/path/to/parent/of/checkouts
+ccache --set-config hash_dir=false
+ccache -M 25G
+```
+
+Without `base_dir`/`hash_dir`, every worktree hashes its own absolute paths and gets zero hits from
+its siblings — which is the failure mode that makes N parallel worktrees cost N full builds.
+
+Only re-run `cmake --build build --target extract-data` if you changed `tools/extractors/`; it is
+by far the slowest step and is unnecessary for ordinary code changes.
+
 ## Game data layout
 
 | Path | Purpose |
