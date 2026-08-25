@@ -2377,6 +2377,42 @@ void CityView::registerCityViewIntrospection()
 			    }
 			    return UString("centred=0 reason=no-such-building");
 		    }
+		    if (gameState && q == "centre_on_message")
+		    {
+			    // Walk the player's own message log for the most recent alien-activity report
+			    // that still has a location, and frame it. This is the log the city view already
+			    // shows and lets a player click to zoom (zoomLastEvent), so it is information
+			    // they genuinely have -- and it is the honest answer to alerts missed while the
+			    // squad was in a battle. Reading a global list of infiltrated buildings would
+			    // not be; watching the reports come in is.
+			    if (!gameState->current_city)
+			    {
+				    return UString("centred=0");
+			    }
+			    for (auto it = gameState->messages.rbegin(); it != gameState->messages.rend();
+			         ++it)
+			    {
+				    if (it->location == EventMessage::NO_LOCATION)
+				    {
+					    continue;
+				    }
+				    const auto lower = to_lower(it->text);
+				    if (lower.find("alien") == UString::npos)
+				    {
+					    continue;
+				    }
+				    const Vec3<float> at{(float)it->location.x, (float)it->location.y,
+				                         (float)it->location.z};
+				    view->setScreenCenterTile(at);
+				    const auto screen = view->tileToOffsetScreenCoords<float>(at);
+				    UString text = it->text;
+				    std::replace(text.begin(), text.end(), ' ', '_');
+				    return format("centred=1 at={0},{1},0 tile={2},{3},{4} text={5}",
+				                  (int)screen.x, (int)screen.y, it->location.x, it->location.y,
+				                  it->location.z, text);
+			    }
+			    return UString("centred=0");
+		    }
 		    if (gameState && q == "centre_on_infiltrated")
 		    {
 			    // Frame the human-owned building holding the most aliens. This is the mechanic

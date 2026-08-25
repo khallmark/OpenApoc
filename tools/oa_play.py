@@ -1272,7 +1272,15 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
         # Either it is gone or the aliens have moved on; stop tracking it.
         d.alerted_buildings.pop(0)
     if not target:
-        return "nothing-reported"
+        # Nothing pending from an alert we happened to be present for. Fall back to the player's
+        # own message log, which is the same record the city view shows and lets you click to
+        # zoom: reports of alien activity we were in a battle for at the time. Six alerts caught
+        # against twenty-two infiltrated buildings is what a driver that only reads live alerts
+        # manages, and the difference is exactly the ones it was too busy to see.
+        info = d.h.gs("centre_on_message")
+        if info.get("centred") != "1":
+            return "nothing-reported"
+        d.say(f"  [raid] from the message log: {info.get('text', '?')[:60]}")
     at = info.get("at", "")
     try:
         bx, by = (int(v) for v in at.split(",")[:2])
