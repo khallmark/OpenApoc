@@ -2,8 +2,11 @@
 #include "game/state/battle/ai/aidecision.h"
 #include "game/state/battle/battleunit.h"
 #include "game/state/gamestate.h"
+#include "game/state/tilemap/tileobject_battleunit.h"
 #include "game/state/shared/aequipment.h"
 #include <cfloat>
+#include <cmath>
+#include <vector>
 #include <glm/glm.hpp>
 
 namespace OpenApoc
@@ -139,6 +142,27 @@ sp<AIMovement> UnitAIHelper::getRetreatMovement(GameState &state, BattleUnit &u,
 	return nullptr;
 }
 
+int UnitAIHelper::exposureScore(const std::vector<Vec3<float>> &threats, Vec3<float> candidate,
+                                int boxXY, int boxZ)
+{
+	// TACP FUN_0007e600: accumulator starts at 0 and only ever decreases, so 0 means "no
+	// qualifying threat found in the box" and more negative means more exposed. The caller keeps
+	// the maximum (`if (best < score)`), i.e. the least-exposed candidate.
+	int score = 0;
+	const float halfXY = boxXY / 2.0f;
+	const float halfZ = boxZ / 2.0f;
+	for (const auto &t : threats)
+	{
+		if (std::abs(t.x - candidate.x) > halfXY || std::abs(t.y - candidate.y) > halfXY ||
+		    std::abs(t.z - candidate.z) > halfZ)
+		{
+			continue;
+		}
+		score -= 1;
+	}
+	return score;
+}
+
 sp<AIMovement> UnitAIHelper::getTakeCoverMovement(GameState &state, BattleUnit &u, bool forced)
 {
 	// Chance to take cover is 33% * sqrt(num_enemies_seen), if no one is seen then assume 3
@@ -156,8 +180,71 @@ sp<AIMovement> UnitAIHelper::getTakeCoverMovement(GameState &state, BattleUnit &
 		}
 	}
 
-	// Cover-tile search is not implemented. Callers fall through to kneel / prone (ai.txt).
-	return nullptr;
+	// B1, recovered: the original does NOT sweep neighbouring tiles looking for solidity. It
+	// scores a short, fixed MENU of named candidate destinations by threat exposure and moves to
+	// the least-exposed one (TACP FUN_0008c1fc, ~9 candidates, max-select over FUN_0007e600).
+	// That distinction matters -- "search adjacent tiles for the best cover" is the mechanic the
+	// parity guide originally guessed at, and it is not what the binary does.
+	//
+	// The candidate menu here is the subset this engine can express: the unit's own position
+	// (staying put is always a candidate, and often the right one), and the positions of allied
+	// units, which stand in for the original's rally/home points. The original also reads up to
+	// four pre-authored per-map "AI waypoints" from a table this engine does not extract; that
+	// is a named, disclosed gap rather than something invented here.
+	auto &map = u.tileObject->map;
+	std::vector<Vec3<float>> threats;
+	for (auto &e : state.current_battle->visibleEnemies[u.owner])
+	{
+		if (e && e->isConscious())
+		{
+			threats.push_back(e->position);
+		}
+	}
+	if (threats.empty())
+	{
+		return nullptr;
+	}
+
+	std::vector<Vec3<float>> candidates{u.position};
+	for (auto &other : state.current_battle->units)
+	{
+		if (other.second && other.second->owner == u.owner && other.second->isConscious() &&
+		    other.second->id != u.id)
+		{
+			candidates.push_back(other.second->position);
+		}
+	}
+
+	Vec3<float> best = u.position;
+	int bestScore = exposureScore(threats, u.position);
+	for (const auto &c : candidates)
+	{
+		const int score = exposureScore(threats, c);
+		if (score > bestScore)
+		{
+			bestScore = score;
+			best = c;
+		}
+	}
+	// Staying put won: nothing on the menu is safer, so fall through to kneel/prone as ai.txt
+	// describes for that case rather than moving for the sake of moving.
+	if (best == u.position)
+	{
+		return nullptr;
+	}
+	// findShortestPath works in tile coordinates; compare in the same space as the other helpers
+	// in this file do, rather than against the float position.
+	const Vec3<int> bestTile{(int)best.x, (int)best.y, (int)best.z};
+	if (state.current_battle->findShortestPath(u.position, bestTile, {map, u}).back() != bestTile)
+	{
+		return nullptr;
+	}
+	auto result = mksp<AIMovement>();
+	result->type = AIMovement::Type::Advance;
+	result->movementMode = MovementMode::Running;
+	result->kneelingMode = KneelingMode::None;
+	result->targetLocation = best;
+	return result;
 }
 
 sp<AIMovement> UnitAIHelper::getKneelMovement(GameState &state, BattleUnit &u, bool forced)

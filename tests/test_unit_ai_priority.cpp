@@ -31,6 +31,7 @@
 
 #include "framework/configfile.h"
 #include "framework/framework.h"
+#include "game/state/battle/ai/unitaihelper.h"
 #include "game/state/battle/ai/unitaivanilla.h"
 #include "game/state/gamestate.h"
 #include "game/state/rules/aequipmenttype.h"
@@ -61,6 +62,57 @@ bool aoeIsUsable(float hostileDamage, float friendlyDamage)
 }
 
 } // namespace
+
+// B1 cover metric, recovered from TACP FUN_0007e600 / FUN_0008c1fc.
+//
+// The original does NOT sweep neighbouring tiles for solidity -- it scores a short fixed menu of
+// candidate destinations by threat exposure and keeps the least-exposed. See
+// docs/original-game/findings/B1-cover-metric-pass2.md.
+//
+// NO-CHEAT PROPERTY, locked here deliberately: the score is computed from a caller-supplied list
+// of threat positions, and the only caller fills that list from
+// Battle::visibleEnemies[u.owner] -- units that side has actually SEEN via
+// BattleUnit::refreshUnitVision's LOS check, not the full unit table. exposureScore() has no
+// access to the game state at all, so it structurally cannot consult a hostile the side has not
+// spotted. That is the same information a human commander has on screen.
+static bool test_cover_exposure_metric()
+{
+	// Accumulator starts at 0 and only decreases (FUN_0007e600). Zero means "nothing qualifying
+	// in the box"; the caller max-selects, so higher is safer.
+	TEST_REQUIRE(UnitAIHelper::exposureScore({}, {10.0f, 10.0f, 1.0f}) == 0,
+	             "no threats at all must score exactly 0");
+
+	const std::vector<Vec3<float>> one{{10.0f, 10.0f, 1.0f}};
+	TEST_REQUIRE(UnitAIHelper::exposureScore(one, {10.0f, 10.0f, 1.0f}) == -1,
+	             "a threat on top of the candidate costs one unit of exposure");
+
+	// The box is 21x21x13, recovered exactly. A threat outside it does not count, however
+	// dangerous it would be if it could see us.
+	TEST_REQUIRE(UnitAIHelper::exposureScore(one, {10.0f, 100.0f, 1.0f}) == 0,
+	             "a threat outside the 21-tile box must not count");
+	TEST_REQUIRE(UnitAIHelper::exposureScore(one, {20.0f, 10.0f, 1.0f}) == -1,
+	             "10 tiles away is inside the half-width of a 21-wide box");
+	TEST_REQUIRE(UnitAIHelper::exposureScore(one, {21.0f, 10.0f, 1.0f}) == 0,
+	             "11 tiles away is outside it");
+
+	// Z uses the 13-deep half-extent (6.5), not the XY one (10.5). Written out because the first
+	// version of this test asserted the wrong boundary and the code was right.
+	TEST_REQUIRE(UnitAIHelper::exposureScore(one, {10.0f, 10.0f, 7.0f}) == -1,
+	             "6 levels up is inside a 13-deep box (half-extent 6.5)");
+	TEST_REQUIRE(UnitAIHelper::exposureScore(one, {10.0f, 10.0f, 8.0f}) == 0,
+	             "7 levels up is outside it");
+
+	// More visible threats is strictly worse, which is the ordering the caller relies on.
+	const std::vector<Vec3<float>> three{
+	    {10.0f, 10.0f, 1.0f}, {11.0f, 10.0f, 1.0f}, {12.0f, 10.0f, 1.0f}};
+	const int exposed = UnitAIHelper::exposureScore(three, {10.0f, 10.0f, 1.0f});
+	const int sheltered = UnitAIHelper::exposureScore(three, {10.0f, 40.0f, 1.0f});
+	TEST_REQUIRE(exposed == -3, "three threats in the box cost three, got {0}", exposed);
+	TEST_REQUIRE(sheltered == 0, "a candidate out of everyone's box scores 0, got {0}", sheltered);
+	TEST_REQUIRE(sheltered > exposed,
+	             "the safer candidate must score HIGHER -- the caller keeps the maximum");
+	return true;
+}
 
 static bool test_weapon_priority_formula_ordering_and_inversion()
 {
@@ -180,6 +232,7 @@ int main(int argc, char **argv)
 	}
 
 	const int rc = runTestSuite({
+	    {"cover_exposure_metric", test_cover_exposure_metric},
 	    {"weapon_priority_formula_ordering_and_inversion",
 	     test_weapon_priority_formula_ordering_and_inversion},
 	    {"weapon_priority_inputs_are_sane_for_real_weapons",
