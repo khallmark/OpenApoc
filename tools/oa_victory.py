@@ -692,8 +692,18 @@ class Victory:
             # win that race. A player does not accelerate time while aliens are loose in the city,
             # and neither should this: when something is known to need clearing, run at ordinary
             # speed so the response keeps pace with the threat.
+            # Hold normal speed only while we can ACT on the queue. The first version held it
+            # whenever anything was pending, and since the queue never empties that meant the
+            # campaign ran permanently at speed 3 -- thirty game-minutes per five wall-minutes,
+            # far too slow to ever reach the research and manufacturing the endgame needs. Slowing
+            # down to fight infiltration is right; slowing down while unable to fight it is just
+            # losing on a different axis.
             pending = len(self.d.alerted_buildings)
-            if pending:
+            try:
+                can_act = int(self.d.h.gs("agents").get("armed", "0") or 0) >= 3
+            except (HarnessError, OSError):
+                can_act = False
+            if pending and can_act:
                 if self.turbo_held != pending:
                     self.say(f"{pending} building(s) awaiting a sweep - holding normal speed "
                              f"rather than fast-forwarding through the invasion")

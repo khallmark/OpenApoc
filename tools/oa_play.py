@@ -708,6 +708,10 @@ class Driver:
         name = name.rstrip("_")
         if name and name not in ("none", "-") and name not in self.alerted_buildings:
             self.alerted_buildings.append(name)
+            # Keep the queue short. An address noted many alerts ago has almost certainly been
+            # cleared or its crew has moved on, and a queue that only grows holds the campaign at
+            # walking pace for ever.
+            del self.alerted_buildings[:-6]
             self.say(f"  [alert] aliens reported in {name}; noted for a sweep")
 
     def respond_to_event(self, st: Status) -> bool:
