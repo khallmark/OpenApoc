@@ -71,13 +71,30 @@ For the cache to be shared **across** worktrees rather than one silo per directo
 paths once:
 
 ```bash
-ccache --set-config base_dir=/path/to/parent/of/checkouts
+ccache --set-config base_dir="$HOME"      # see the warning below before narrowing this
 ccache --set-config hash_dir=false
+ccache --set-config compiler_check=content
 ccache -M 25G
 ```
 
 Without `base_dir`/`hash_dir`, every worktree hashes its own absolute paths and gets zero hits from
-its siblings — which is the failure mode that makes N parallel worktrees cost N full builds.
+its siblings — the failure mode that makes N parallel worktrees cost N full builds.
+
+> **`base_dir` must contain *every* worktree root, and they are not all in one place.** ccache only
+> rewrites absolute paths that live *below* `base_dir`; anything outside is hashed verbatim and can
+> never hit. This repo has worktrees in two unrelated locations:
+>
+> | Created by | Path |
+> |---|---|
+> | `gitw up` / `open` / `agent` | `~/.worktrees/OpenApoc/<branch>` |
+> | coding-agent isolation | `<repo>/.claude/worktrees/agent-<id>` |
+>
+> Setting `base_dir` to the parent of the checkouts covers only the second, and a fresh `gitw`
+> worktree still builds **0 hits / 319 misses** — fully cold. `$HOME` covers both.
+>
+> Verify rather than assume, with a paired test on an empty cache: compile one file in the main
+> checkout (expect a miss), then the same file in another worktree (expect a hit). Measured 1 miss
+> then 1 hit after this fix, against 0/319 before it.
 
 Only re-run `cmake --build build --target extract-data` if you changed `tools/extractors/`; it is
 by far the slowest step and is unnecessary for ordinary code changes.
