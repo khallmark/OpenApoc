@@ -22,6 +22,7 @@ class DamageType;
 class DamageModifier;
 class AgentType;
 class UfopaediaEntry;
+class GameState;
 
 enum class TriggerType
 {
@@ -95,8 +96,16 @@ class AEquipmentType : public StateObject<AEquipmentType>
 	// properly
 	bool launcher = false;
 
-	// Alien artifact flag (does not show in economy unless you own it)
+	// UFO2P aequip_alien_artifact_data @ 0x1422A8. Hidden from economy until the
+	// same-name type-1 research completes (FUN_000aac88) or manufacture
+	// itemIndex is produced (FUN_000ab440 case 1 @ file 0x10DC3C / 4-build
+	// 0x10E4AE: DAT_00183b3b[itemIndex] = 0).
 	bool artifact = false;
+	bool artifactUnhidden = false;
+	// TACP AgentEquipmentData.unknown01 — fire/hazard item resist (0..200).
+	int hazardResist = 0;
+	static int fireHazardDamage(int powerByte, int resist);
+	int fireHazardDamage(int powerByte) const;
 
 	// Armor only
 	sp<Image> body_sprite;
@@ -187,6 +196,14 @@ class AEquipmentType : public StateObject<AEquipmentType>
 	/// </summary>
 	/// <returns>Returns if type is already researched.</returns>
 	bool isResearched() const;
+	// FUN_000ab440 case 1 @ file 0x10DC3C: DAT_00183b3b[itemIndex] = 0.
+	void clearEconomyHide();
+	// FUN_000811fc / FUN_0008c860: artifacts stay hidden until named topic
+	// completes or manufacture clears the flag. No satisfied() fallback.
+	bool isEconomyVisible() const;
+	// FUN_000811fc @ file 0xE3971: shop hide is DAT_00183b3b only. week==0
+	// is not a hide bit (AG 19/23, destab 37, pod 57).
+	bool isMarketListed(const GameState &state) const;
 };
 
 class EquipmentSet : public StateObject<EquipmentSet>
