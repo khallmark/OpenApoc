@@ -1309,25 +1309,37 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
         except (ValueError, IndexError):
             return -1
 
-    # Address the rows by name before resorting to pixels. AGENT_SELECT_BOX is a MultilistBox
-    # whose entries are themselves list controls -- agents on the left, craft on the right
-    # (agentassignment.cpp:345-361) -- so the nested "item N item M" form reaches a row directly,
-    # and does not care where the screen happens to draw it. The measured offsets were taken on
-    # AlertScreen and simply miss here.
-    for depth in (2, 1, 3):
-        for i in range(4):
-            for j in range(6):
-                path = "item 0 " * (depth - 2) + f"item {i} item {j}"
-                try:
-                    d.h.send(f"control AGENT_SELECT_BOX {path} click")
-                except (HarnessError, OSError):
-                    continue
-                time.sleep(0.08)
-            if selected_count() > 0:
-                d.say(f"  [raid] rows select via AGENT_SELECT_BOX item {i} item N (depth {depth})")
+    # Do not search a building that has no aliens in it. BuildingScreen reports the crew it can
+    # see, and searching an empty building costs the owner -5-difficulty relation every time
+    # (buildingscreen.cpp:154-166) -- caught doing exactly that at "Warehouse_Nine crew=0". The
+    # crew can move on between spotting it and arriving, which is the game working as intended;
+    # the answer is to check on arrival and walk away, not to search anyway.
+    detail_now = d.status().detail or ""
+    if "crew=" in detail_now:
+        try:
+            here = int(detail_now.split("crew=", 1)[1].split("_")[0].split()[0])
+        except (ValueError, IndexError):
+            here = -1
+        if here == 0:
+            d.say("  [raid] no aliens here any more; leaving rather than paying for a search")
+            return_to_city(d)
+            return "already-clear"
+
+    # AGENT_LIST is the addressable agent list. Read from the live screen rather than guessed at:
+    # AGENT_SELECT_BOX holds a single Control per base ("Base_1"), and the agents sit in an
+    # AGENT_LIST inside it -- which is why both the AlertScreen pixel offsets and the nested
+    # item-addressing on AGENT_SELECT_BOX selected nobody here.
+    for i in range(8):
+        try:
+            if not d.h.send(f"control AGENT_LIST item {i} click").startswith("OK"):
                 break
-        if selected_count() > 0:
+        except (HarnessError, OSError):
             break
+        time.sleep(0.1)
+        if selected_count() >= 4:
+            break
+    if selected_count() > 0:
+        d.say(f"  [raid] {selected_count()} agent(s) selected via AGENT_LIST")
 
     if selected_count() == 0:
         d.select_assignment_rows(d.status())
