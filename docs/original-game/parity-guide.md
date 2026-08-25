@@ -74,11 +74,33 @@ R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/)
    **deleting the one-line hook in `start()` would not fail any test.** The helper's contract is
    locked; the wiring is not. Covering it needs a test that drives pathfinding, which was
    deliberately avoided for determinism. Declared, not discovered.
+1b. **A fifth potential deviation was checked and is NOT one.** The byte-exact re-disassembly of the
+   write site shows the whole mission-counter block is guarded on `+0x16C == -1` — a vehicle that has
+   a follow type never decrements its counter at all. OpenApoc's `advanceMissionCounterOnArrival`
+   has no such guard, which looks like an undeclared divergence until you check the data: of the 45
+   `UFO_mission_data` records, **zero non-Escort slots carry a `follow_slot`**, and OpenApoc only
+   wires `followVehicleType` for escorts, which are issued `arriveFromDimensionGate` +
+   `FollowVehicle` and never an `AttackBuilding` mission — so they never reach the hook. The guard is
+   satisfied structurally in both directions. Recorded so the next reader does not "fix" it.
+   *(25 Escort slots do carry a nonzero `mission_counter`; in the original that byte is dead data,
+   because the guard skips them. OpenApoc never applies it either.)*
 2. **U1(a) has three further declared deviations**: an off-by-one on first entry (a counter of N
    yields N−1 arrivals, mirroring `Patrol`'s existing shipped convention); no counter reset after
    retargeting (the bound-only choice — no writer resets `+0x171` after the spawn-time copy); and
    an unreachable-in-practice edge case shared with `Patrol`. The sibling "latch an arrived flag"
-   branch was **deliberately not implemented** because its gating field's semantics are NOT BOUND.
+   branch is **still not implemented, but the reason has changed and narrowed.** It is no longer
+   "the gating field's semantics are NOT BOUND" — that referred to `+0x16C`, which is now bound (it
+   is `followVehicleType`, already extracted) and to a supposed missing destination catalog, which
+   does not exist: the branch's destination is a **dimension gate**, and OpenApoc already has
+   `City::portals` / `MissionType::GotoPortal` / `Vehicle::leaveDimensionGate`. The mechanism is
+   fully bound and the seams exist.
+   What blocks it now is one field: `+0x12C`, the discriminator that decides *which* UFOs leave
+   (`== 1`) rather than retarget (anything else). Its **values** have never been traced to a writer
+   — "order-type" is a label inherited from an earlier write-up in this project, not a bound
+   meaning, and this project has already had one inherited label (`building_function` for `+0x1B`)
+   turn out to be flatly wrong. Implementing the split without binding it would mean guessing which
+   UFOs leave the map, which is exactly the invention §0 prohibits. Binding `+0x12C`'s writers is
+   the single remaining prerequisite.
 
 **A second category error, mine: "inert" ≠ "unimplemented".** I briefed the Disruptor Shield as a
 missing mechanic on the strength of `useItem` returning `false` for it. That was wrong, and the
