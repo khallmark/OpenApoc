@@ -671,6 +671,21 @@ class Driver:
             return 0
         ROW_H, FIRST_ROW = 26, 63
         AGENT_DX, VEHICLE_DX = 103, 383
+
+        def confirmed() -> int:
+            """How many agents the screen says are selected, or -1 where it does not report."""
+            detail = self.status().detail or ""
+            if "selected_agents=" not in detail:
+                return -1
+            try:
+                return int(detail.split("selected_agents=", 1)[1].split("_")[0].split()[0])
+            except (ValueError, IndexError):
+                return -1
+
+        # Stop as soon as a squad is selected rather than firing every click blind. On screens
+        # that report the count -- BuildingScreen does -- this turns seven speculative clicks into
+        # however few actually land, which is both faster and stops the driver looking like it is
+        # fumbling around the assignment widget for something to drag.
         picked = 0
         for dx, rows in ((AGENT_DX, 6), (VEHICLE_DX, 1)):
             for r in range(rows):
@@ -680,6 +695,8 @@ class Driver:
                 self.h.click_xy(box.x + dx, y)
                 picked += 1
                 time.sleep(0.12)
+                if dx == AGENT_DX and confirmed() >= 4:
+                    break
         return picked
 
     def note_alert(self, st: Status) -> None:
@@ -699,6 +716,10 @@ class Driver:
         name = name.rstrip("_")
         if name and name not in ("none", "-") and name not in self.alerted_buildings:
             self.alerted_buildings.append(name)
+            # Keep the queue short. An address noted many alerts ago has almost certainly been
+            # cleared or its crew has moved on, and a queue that only grows holds the campaign at
+            # walking pace for ever.
+            del self.alerted_buildings[:-6]
             self.say(f"  [alert] aliens reported in {name}; noted for a sweep")
 
     def respond_to_event(self, st: Status) -> bool:
@@ -1324,8 +1345,12 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
         bx, by = (int(v) for v in at.split(",")[:2])
     except ValueError:
         return "bad-coords"
-    d.say(f"  [raid] clearing {info.get('building')} ({info.get('crew')} aliens, "
-          f"owner {info.get('owner')})")
+    # centre_on_message reports a location rather than a building record, so those fields are
+    # absent on that path -- printing them as "None" made a working raid look broken.
+    where = info.get("building") or info.get("text", "a reported sighting")[:40]
+    crew_here = info.get("crew")
+    d.say(f"  [raid] clearing {where}"
+          + (f" ({crew_here} aliens)" if crew_here else ""))
 
     d.h.ok(f"click {bx} {by} right")
     time.sleep(1.0)
