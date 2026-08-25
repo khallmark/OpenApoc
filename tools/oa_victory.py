@@ -133,6 +133,7 @@ class Victory:
         self.last_vequip = 0.0
         self.last_loot_sale = 0.0
         self.last_infil_raid = 0.0
+        self.turbo_held = 0
         self.last_vequip_outcome = ""
         self.last_defer_log = 0.0
         self.caps_checked = False
@@ -471,8 +472,12 @@ class Victory:
         # had taken losses: observed at 4 armed of 11 soldiers with eight buildings infiltrated
         # and the government relation falling. Three is enough to clear a small crew, and letting
         # the infiltration stand is what actually ends campaigns.
+        # No cooldown while buildings are known to be waiting. The cooldown exists to stop the
+        # driver trekking to the city screen for nothing; when there is a confirmed address it is
+        # just delay, and delay is what loses the infiltration race.
         armed_now = int(self.d.h.gs("agents").get("armed", "0") or 0)
-        if armed_now >= 3 and time.time() - self.last_infil_raid > INFIL_COOLDOWN_S:
+        due = INFIL_COOLDOWN_S if not self.d.alerted_buildings else 0.0
+        if armed_now >= 3 and time.time() - self.last_infil_raid >= due:
             self.last_infil_raid = time.time()
             outcome = raid_infiltrated_building(self.d)
             if outcome != "nothing-reported":
@@ -680,7 +685,23 @@ class Victory:
             # the clock stops on any stage that is not CityView, and an undismissed AlertScreen
             # had appeared during the measurement. Turbo only pays while the city is actually the
             # current stage, which is the same reason loitering on sub-screens is expensive.
-            self.d.h.key("5" if self.d.h.gs("turbo").get("can_turbo") == "1" else "4")
+            # Do not fast-forward through an invasion. Turbo advances five game-minutes per
+            # frame, and measured here it put TWO GAME-DAYS between one raid and the next -- that
+            # is roughly fifty hourly ticks of alien growth and spreading (City::updateInfiltration
+            # -> alienGrowth -> alienMovement) for every building we cleared. No response rate can
+            # win that race. A player does not accelerate time while aliens are loose in the city,
+            # and neither should this: when something is known to need clearing, run at ordinary
+            # speed so the response keeps pace with the threat.
+            pending = len(self.d.alerted_buildings)
+            if pending:
+                if self.turbo_held != pending:
+                    self.say(f"{pending} building(s) awaiting a sweep - holding normal speed "
+                             f"rather than fast-forwarding through the invasion")
+                    self.turbo_held = pending
+                self.d.h.key("3")
+            else:
+                self.turbo_held = 0
+                self.d.h.key("5" if self.d.h.gs("turbo").get("can_turbo") == "1" else "4")
         else:
             # No live UFO left in the city, so anything still holding an attack order is just
             # pinning canTurbo() false and freezing the clock.
