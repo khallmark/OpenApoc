@@ -2683,7 +2683,7 @@ def verify_battle_capabilities(d: Driver) -> dict:
     return results
 
 
-def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
+def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) -> str:
     """Fight a tactical mission to a win, without cheats.
 
     Units default to FirePermissionMode::AtWill (battleunit.h:271) and UnitAIDefault makes any
@@ -2735,6 +2735,22 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
 
         if not entered:
             entered = True
+            # Apply the tactical policy once, on entry. Defaults to None so every existing caller
+            # keeps the behaviour it had; the arena (tools/oa_arena.py) passes a policy so that
+            # what the squad does is a *variable* rather than a hardcoded habit. Units default to
+            # FirePermissionMode::AtWill, so fire mode and stance are the two levers that change
+            # how the engine resolves the shooting it is already doing on our behalf.
+            if policy:
+                fm = policy.get("fire_mode")
+                if fm:
+                    set_fire_mode(d, fm)
+                    time.sleep(0.15)
+                stance = policy.get("stance")
+                if stance:
+                    set_stance(d, stance)
+                    time.sleep(0.15)
+                d.say(f"[battle] policy {policy.get('name','?')}: "
+                      f"fire={fm} stance={stance}")
             b = d.h.gs("battle")
             if b.get("mode") != "rt":
                 d.say(f"[battle] ABORT: mode is {b.get('mode')}, not real-time")

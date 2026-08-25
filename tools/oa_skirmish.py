@@ -102,7 +102,7 @@ def pick_map(d: Driver, row: int = 0) -> bool:
 
 
 def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
-                    budget_s: float = 300.0) -> str:
+                    budget_s: float = 300.0, policy: dict | None = None) -> str:
     """Configure a force via SelectForces and fight it. Returns win_battle's outcome string.
 
     aliens: {short name from ALIEN_SLIDERS: count}. Anything not named is left at zero by
@@ -178,18 +178,19 @@ def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
         d.say(f"  [skirmish] did not reach a battle stage (at {d.status().stage})")
         return "setup-failed"
 
-    return win_battle(d, budget_s=budget_s)
+    return win_battle(d, budget_s=budget_s, policy=policy)
 
 
 def run_one(d: Driver, aliens: dict, map_row: int = 0, real_time: bool = True,
-            budget_s: float = 300.0) -> dict:
+            budget_s: float = 300.0, policy: dict | None = None) -> dict:
     """One full cycle: open skirmish, pick a map, fight, return a result summary."""
     if not open_skirmish(d):
         return {"outcome": "could-not-open-skirmish"}
     if not pick_map(d, map_row):
         d.say("  [skirmish] map selection failed; using whatever was already chosen")
     battle_before = d.h.gs("battle")
-    outcome = fight_skirmish(d, aliens, real_time=real_time, budget_s=budget_s)
+    outcome = fight_skirmish(d, aliens, real_time=real_time, budget_s=budget_s,
+                             policy=policy)
     return {
         "outcome": outcome,
         "aliens": aliens,
