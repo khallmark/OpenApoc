@@ -1,5 +1,7 @@
 #pragma once
 
+#include "framework/harness.h"
+
 #include "forms/listbox.h"
 #include "framework/stage.h"
 #include "game/state/rules/city/vequipmenttype.h"
@@ -31,6 +33,10 @@ class VEquipScreen : public Stage
 	sp<ListBox> vehicleSelectBox;
 
 	sp<Vehicle> selected;
+	// Harness introspection: the inventory item rects live only in this screen, computed per
+	// frame, so a driver cannot find a weapon to fit without asking the screen itself.
+	HarnessQueryFunction previousHarnessHandler;
+	void registerVEquipIntrospection();
 	EquipmentSlotType selectionType;
 	sp<Palette> pal;
 	sp<BitmapFont> labelFont;

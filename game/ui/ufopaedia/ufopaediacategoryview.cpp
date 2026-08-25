@@ -10,7 +10,9 @@
 #include "framework/font.h"
 #include "framework/framework.h"
 #include "framework/keycodes.h"
+#include "game/state/city/building.h"
 #include "game/state/gamestate.h"
+#include "game/state/rules/agenttype.h"
 #include "game/state/rules/battle/damage.h"
 #include "game/state/rules/city/facilitytype.h"
 #include "game/state/rules/city/ufopaedia.h"
@@ -60,7 +62,7 @@ void UfopaediaCategoryView::begin()
 	for (auto &entryRef : this->category->entries)
 	{
 		// Skip non-visible entries
-		if (!entryRef->isVisible())
+		if (!entryRef->isVisible(*state))
 		{
 			continue;
 		}
@@ -303,7 +305,8 @@ void UfopaediaCategoryView::setFormStats()
 							}
 							orgLabels[0]->setText(relation);
 							orgLabels[3]->setText(tr("Alien Infiltration"));
-							orgValues[3]->setText(format("{0}%", ref->infiltrationValue / 2));
+							orgValues[3]->setText(
+							    format("{0}%", ref->getInfiltrationDisplayPercent()));
 						}
 					}
 					break;
@@ -503,7 +506,34 @@ void UfopaediaCategoryView::setFormStats()
 					}
 					else if (ref->type == AEquipmentType::Type::Armor)
 					{
-						// FIXME: Not implemented
+						statsLabels[row]->setText(tr("Armor"));
+						statsValues[row++]->setText(Strings::fromInteger(ref->armor));
+						statsLabels[row]->setText(tr("Body Part"));
+						UString bodyPartName;
+						switch (ref->body_part)
+						{
+							case BodyPart::Body:
+								bodyPartName = tr("Body");
+								break;
+							case BodyPart::Legs:
+								bodyPartName = tr("Legs");
+								break;
+							case BodyPart::Helmet:
+								bodyPartName = tr("Helmet");
+								break;
+							case BodyPart::LeftArm:
+								bodyPartName = tr("Left Arm");
+								break;
+							case BodyPart::RightArm:
+								bodyPartName = tr("Right Arm");
+								break;
+						}
+						statsValues[row++]->setText(bodyPartName);
+						if (ref->provides_flight)
+						{
+							statsLabels[row]->setText(tr("Provides Flight"));
+							statsValues[row++]->setText(tr("Yes"));
+						}
 					}
 					break;
 				}
@@ -527,8 +557,38 @@ void UfopaediaCategoryView::setFormStats()
 				}
 				case UfopaediaEntry::Data::Building:
 				{
-					LogError("Building not implemented yet");
-					// FIXME: Not implemented yet
+					StateRef<BuildingFunction> ref = {state.get(), data_id};
+					if (ref)
+					{
+						if (ref->baseCost > 0)
+						{
+							statsLabels[row]->setText(tr("Base Cost"));
+							statsValues[row++]->setText(
+							    format("${0}", Strings::fromInteger(ref->baseCost)));
+						}
+						if (ref->baseIncome > 0)
+						{
+							statsLabels[row]->setText(tr("Base Income"));
+							statsValues[row++]->setText(
+							    format("${0}", Strings::fromInteger(ref->baseIncome)));
+						}
+						if (ref->investmentValue > 0)
+						{
+							statsLabels[row]->setText(tr("Investment"));
+							statsValues[row++]->setText(Strings::fromInteger(ref->investmentValue));
+						}
+						if (ref->prestige != 0)
+						{
+							statsLabels[row]->setText(tr("Prestige"));
+							statsValues[row++]->setText(Strings::fromInteger(ref->prestige));
+						}
+						if (ref->infiltrationSpeed > 0)
+						{
+							statsLabels[row]->setText(tr("Infiltration"));
+							statsValues[row++]->setText(
+							    Strings::fromInteger(ref->infiltrationSpeed));
+						}
+					}
 					break;
 				}
 				default:
@@ -570,7 +630,7 @@ void UfopaediaCategoryView::setNextTopic()
 		// Loop until we find the end (which shows the category intro screen)
 		// or a visible entry
 	} while (this->position_iterator != this->category->entries.end() &&
-	         !(*this->position_iterator)->isVisible());
+	         !(*this->position_iterator)->isVisible(*state));
 	this->setFormData();
 	return;
 }
@@ -590,7 +650,7 @@ void UfopaediaCategoryView::setPreviousTopic()
 		// Loop until we find the end (which shows the category intro screen)
 		// or a visible entry
 	} while (this->position_iterator != this->category->entries.end() &&
-	         !(*this->position_iterator)->isVisible());
+	         !(*this->position_iterator)->isVisible(*state));
 	this->setFormData();
 	return;
 }

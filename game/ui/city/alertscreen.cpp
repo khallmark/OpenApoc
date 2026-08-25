@@ -1,4 +1,5 @@
 #include "game/ui/city/alertscreen.h"
+#include <algorithm>
 #include "forms/form.h"
 #include "forms/graphic.h"
 #include "forms/label.h"
@@ -32,6 +33,31 @@ AlertScreen::AlertScreen(sp<GameState> state, sp<Building> building)
 }
 
 AlertScreen::~AlertScreen() = default;
+
+UString AlertScreen::harnessDetail() const
+{
+	// Answering an alert for a building whose aliens have already moved on costs the owner
+	// -5 - difficulty relation (buildingscreen.cpp:154-166), and alien crews relocate on a timer.
+	// Thirty-nine such investigations drove the government from +85 to -100 -- Hostile -- which
+	// latches fundingTerminated permanently and ends the campaign. A driver needs to know whether
+	// this particular alert is still worth answering.
+	if (!building)
+	{
+		return "alert_building=none";
+	}
+	size_t crew = 0;
+	for (const auto &c : building->current_crew)
+	{
+		crew += c.second;
+	}
+	UString owner = building->owner ? building->owner.id : UString("-");
+	std::replace(owner.begin(), owner.end(), ' ', '_');
+	// Building has no id member; its name is what identifies it here.
+	UString name = building->name;
+	std::replace(name.begin(), name.end(), ' ', '_');
+	return format("alert_building={0} crew={1} owner={2}", name.empty() ? UString("-") : name,
+	              crew, owner);
+}
 
 void AlertScreen::begin()
 {

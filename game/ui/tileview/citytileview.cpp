@@ -365,6 +365,15 @@ void CityTileView::render()
 				}
 			}
 
+			// minX/maxX/minY/maxY box the visible diamond across every z level, so well
+			// over a third of the tiles they cover project off screen. Without this they
+			// still reach the renderer as draw calls.
+			const float cullMargin = 256.0f;
+			const float cullMinX = -cullMargin;
+			const float cullMaxX = (float)dpySize.x + cullMargin;
+			const float cullMinY = -cullMargin;
+			const float cullMaxY = (float)dpySize.y + cullMargin;
+
 			for (int z = 0; z < maxZDraw; z++)
 			{
 				for (unsigned int layer = 0; layer < map.getLayerCount(); layer++)
@@ -379,6 +388,11 @@ void CityTileView::render()
 							{
 								auto &obj = tile->drawnObjects[layer][obj_id];
 								Vec2<float> pos = tileToOffsetScreenCoords(obj->getCenter());
+								if (pos.x < cullMinX || pos.x > cullMaxX || pos.y < cullMinY ||
+								    pos.y > cullMaxY)
+								{
+									continue;
+								}
 								bool visible = true;
 
 								switch (obj->getType())

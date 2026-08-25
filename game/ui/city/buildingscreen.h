@@ -23,6 +23,14 @@ class BuildingScreen : public Stage
 	BuildingScreen(sp<GameState> state, sp<Building> building);
 	~BuildingScreen() override;
 	// Stage control
+	// Report how many agents the assignment widget actually has selected. EXTERMINATE refuses
+
+	// outright when that list is empty, and a driver clicking rows by measured pixel offsets
+
+	// has no other way to know whether its clicks landed.
+
+	UString harnessDetail() const override;
+
 	void begin() override;
 	void pause() override;
 	void resume() override;

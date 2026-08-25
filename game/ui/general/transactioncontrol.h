@@ -128,6 +128,13 @@ class TransactionControl : public Control
 	static bool resourcesInitialised;
 	static void initResources();
 
+  public:
+	// Same problem as ControlGenerator: these are static, so without an explicit release they are
+	// destroyed at process exit, after the renderer, leaving their GL textures undeleted.
+	static void releaseCachedImages();
+
+  private:
+
   protected:
 	// Link
 	sp<std::list<wp<TransactionControl>>> linked;

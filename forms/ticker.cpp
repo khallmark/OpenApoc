@@ -97,7 +97,13 @@ void Ticker::unloadResources() {}
 
 void Ticker::addMessage(const UString &Text)
 {
-	messages.emplace(Text);
+	// A ticker is a single scrolling line and BitmapFont::getString cannot render newlines -- it
+	// warns and drops them, which ran the headline and body of multi-paragraph event messages
+	// (e.g. "ALIEN TAKEOVER: <org>\n\n<body>") together into one unreadable string. Event
+	// messages keep their full text for the popup and the message log; the ticker takes the
+	// headline only.
+	const auto newline = Text.find('\n');
+	messages.emplace(newline == UString::npos ? Text : Text.substr(0, newline));
 	this->setDirty();
 }
 

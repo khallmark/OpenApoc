@@ -73,6 +73,12 @@ class Control : public std::enable_shared_from_this<Control>
 	bool Visible;
 	bool isClickable;
 	bool Removed;
+	bool alignedX;
+	bool alignedY;
+	HorizontalAlignment alignmentX;
+	VerticalAlignment alignmentY;
+
+	int uiScale() const;
 
   public:
 	UString Name;
@@ -142,7 +148,9 @@ class Control : public std::enable_shared_from_this<Control>
 	void setParent(sp<Control> Parent);
 	sp<Control> getAncestor(sp<Control> Parent);
 
-	Vec2<int> getLocationOnScreen() const { return resolvedLocation; }
+	Vec2<int> getLocationOnScreen() const;
+	Vec2<int> getLocationInUi() const { return resolvedLocation; }
+	Vec2<int> getSizeOnDisplay() const;
 
 	void setRelativeWidth(float widthPercent);
 	void setRelativeHeight(float widthPercent);

@@ -151,10 +151,55 @@ AEquipScreen::AEquipScreen(sp<GameState> state, sp<Agent> firstAgent)
 	                                         {327, 246}, {311, 231}, {332, 217}};
 }
 
-AEquipScreen::~AEquipScreen() = default;
+AEquipScreen::~AEquipScreen() { setHarnessQueryHandler(previousHarnessHandler); }
+
+void AEquipScreen::registerAEquipIntrospection()
+{
+	// The inventory rows are a per-frame list of screen rects with no control ids at all, so
+	// without this a driver has no way to arm an agent except the equipment-template mechanism --
+	// and that re-equips the template's EXACT types, which strips people when the named weapon
+	// cannot be re-bought. Shift+click on an inventory item puts it straight on the agent
+	// (aequipscreen.cpp:593-598), so knowing where the items are is the whole problem.
+	previousHarnessHandler = getHarnessQueryHandler();
+	auto previous = previousHarnessHandler;
+	AEquipScreen *screen = this;
+	setHarnessQueryHandler(
+	    [previous, screen](const UString &query) -> UString
+	    {
+		    const auto q = to_lower(query);
+		    if (q == "aequip_items")
+		    {
+			    UString out;
+			    int n = 0;
+			    for (const auto &tuple : screen->inventoryItems)
+			    {
+				    const auto &rect = std::get<0>(tuple);
+				    const auto &item = std::get<2>(tuple);
+				    if (!item || !item->type)
+				    {
+					    continue;
+				    }
+				    UString name = item->type->name;
+				    std::replace(name.begin(), name.end(), ' ', '_');
+				    if (n++ > 0)
+				    {
+					    out += "|";
+				    }
+				    out += format("{0}:at={1},{2}:size={3},{4}:weapon={5}:research={6}", name,
+				                   rect.p0.x, rect.p0.y, rect.p1.x - rect.p0.x,
+				                   rect.p1.y - rect.p0.y,
+				                   item->type->type == AEquipmentType::Type::Weapon ? 1 : 0,
+				                   item->type->research_dependency.satisfied() ? 1 : 0);
+			    }
+			    return format("count={0} detail={1}", n, out.empty() ? UString("-") : out);
+		    }
+		    return previous ? previous(query) : UString("");
+	    });
+}
 
 void AEquipScreen::begin()
 {
+	registerAEquipIntrospection();
 	if (state->current_battle)
 	{
 		formMain->findControlTyped<Graphic>("DOLLAR")->setVisible(false);
@@ -516,8 +561,9 @@ void AEquipScreen::render()
 			int wound = 0;
 			while (wound < ftw.second && wound < FATAL_WOUND_LOCATIONS[ftw.first].size())
 			{
-				fw().renderer->draw(woundImage,
-				                    formMain->Location + FATAL_WOUND_LOCATIONS[ftw.first][wound]);
+				fw().renderer->draw(
+				    woundImage, formMain->getLocationOnScreen() +
+				                    FATAL_WOUND_LOCATIONS[ftw.first][wound] * fw().uiGetScale());
 				wound++;
 			}
 		}
@@ -529,7 +575,8 @@ void AEquipScreen::render()
 		Vec2<int> equipmentPos = fw().getCursor().getPosition() + this->draggedEquipmentOffset;
 		// If this is within the grid try to snap it
 		Vec2<int> equipmentGridPos = equipmentPos - equipOffset;
-		equipmentGridPos /= EQUIP_GRID_SLOT_SIZE;
+		const Vec2<int> slotPx = EQUIP_GRID_SLOT_SIZE * fw().uiGetScale();
+		equipmentGridPos /= slotPx;
 		if (equipmentGridPos.x < 0 || equipmentGridPos.x >= EQUIP_GRID_SLOTS.x ||
 		    equipmentGridPos.y < 0 || equipmentGridPos.y >= EQUIP_GRID_SLOTS.y)
 		{
@@ -538,7 +585,7 @@ void AEquipScreen::render()
 		else
 		{
 			// Inside the grid, snap
-			equipmentPos = equipmentGridPos * EQUIP_GRID_SLOT_SIZE;
+			equipmentPos = equipmentGridPos * slotPx;
 			equipmentPos += equipOffset;
 		}
 		fw().renderer->draw(this->draggedEquipment->type->equipscreen_sprite, equipmentPos);
@@ -640,11 +687,11 @@ void AEquipScreen::handleItemPlacement(Vec2<int> mousePos)
 
 	// Are we over the grid? If so try to place it on the agent.
 	auto paperDollControl = paperDoll;
-	Vec2<int> equipOffset = paperDollControl->Location + formMain->Location;
+	Vec2<int> equipOffset = paperDollControl->getLocationOnScreen();
 	Vec2<int> equipmentPos = mousePos + draggedEquipmentOffset;
 	// If this is within the grid try to snap it
 	Vec2<int> equipmentGridPos = equipmentPos - equipOffset;
-	equipmentGridPos /= EQUIP_GRID_SLOT_SIZE;
+	equipmentGridPos /= (EQUIP_GRID_SLOT_SIZE * fw().uiGetScale());
 
 	auto draggedFrom = draggedEquipmentOrigin;
 	auto draggedType =

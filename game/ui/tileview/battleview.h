@@ -1,5 +1,6 @@
 #pragma once
 
+#include "framework/harness.h"
 #include "game/state/battle/battleunit.h"
 #include "game/ui/general/notificationscreen.h"
 #include "game/ui/tileview/battletileview.h"
@@ -236,6 +237,10 @@ class BattleView : public BattleTileView
 	void refresh();
 	void resume() override;
 	void update() override;
+	// Installs a harness query handler answering view-space battle questions (where hostile and
+	// friendly units are on screen). Only the view can project tile coords to the screen.
+	void registerBattleViewIntrospection();
+	HarnessQueryFunction previousHarnessHandler;
 	void render() override;
 	void finish() override;
 	void eventOccurred(Event *e) override;

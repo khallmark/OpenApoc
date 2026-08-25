@@ -1,8 +1,10 @@
 #pragma once
 
+#include "framework/harness.h"
 #include "game/state/stateobject.h"
 #include "game/ui/tileview/citytileview.h"
 #include "library/sp.h"
+#include <set>
 #include <vector>
 
 namespace OpenApoc
@@ -54,6 +56,10 @@ class CityView : public CityTileView
 	std::vector<sp<Form>> uiTabs;
 	sp<Form> overlayTab, debugOverlay;
 	std::vector<sp<GraphicButton>> miniViews;
+	// Layout hash per entry in miniViews, so an unchanged base is not redrawn.
+	std::vector<size_t> miniViewSignatures;
+	// Click handlers are permanent, so never register one on the same button twice.
+	std::set<sp<GraphicButton>> miniViewsWithCallback;
 	CityUpdateSpeed updateSpeed;
 	CityUpdateSpeed lastSpeed;
 
@@ -83,9 +89,12 @@ class CityView : public CityTileView
 	bool modifierRCtrl = false;
 
 	bool vanillaControls = false;
+	bool skipSpeed1Tick = false;
 
-	bool drawCity = true;
 	sp<Surface> surface;
+
+	void renderCityScene();
+	void snapshotCity();
 
 	std::vector<sp<Image>> debugLabelsOK;
 	std::vector<sp<Image>> debugLabelsDead;
@@ -129,9 +138,18 @@ class CityView : public CityTileView
 	                             std::list<StateRef<Agent>> agents);
 
 	void begin() override;
+	void pause() override;
 	void resume() override;
 	void refreshBaseView();
 	void update() override;
+	// Installs a harness query handler that can answer view-space questions (where a UFO is on
+	// screen), which the GameState-only handler cannot: the projection lives on the view.
+	void registerCityViewIntrospection();
+	// Name of the selected base, or empty when the player has no bases left.
+	UString currentBaseName() const;
+	// Handler that was installed before ours, restored on destruction so the global harness hook
+	// never keeps calling into a CityView that no longer exists.
+	HarnessQueryFunction previousHarnessHandler;
 	void render() override;
 	void eventOccurred(Event *e) override;
 	bool handleKeyDown(Event *e);

@@ -27,6 +27,8 @@
 #include "game/state/battle/battleunit.h"
 #include "game/state/gameevent.h"
 #include "game/state/gamestate.h"
+#include "framework/harness.h"
+#include "game/state/gamestateintrospect.h"
 #include "game/state/message.h"
 #include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/battle/battlemapparttype.h"
@@ -82,6 +84,8 @@ BattleView::BattleView(sp<GameState> gameState)
       battle(*state->current_battle), followAgent(false),
       selectionState(BattleSelectionState::Normal)
 {
+	registerGameStateIntrospection(gameState);
+	registerBattleViewIntrospection();
 	motionScannerDirectionIcons.push_back(
 	    fw().data->loadImage(format("PCK:xcom3/tacdata/icons.pck:xcom3/tacdata/"
 	                                "icons.tab:{0}:xcom3/tacdata/tactical.pal",
@@ -343,7 +347,8 @@ BattleView::BattleView(sp<GameState> gameState)
 
 	baseForm->findControl("BUTTON_FOLLOW_AGENT")
 	    ->addCallback(FormEventType::CheckBoxChange,
-	                  [this](FormsEvent *e) {
+	                  [this](FormsEvent *e)
+	                  {
 		                  this->followAgent =
 		                      std::dynamic_pointer_cast<CheckBox>(e->forms().RaisedBy)->isChecked();
 	                  });
@@ -966,7 +971,8 @@ BattleView::BattleView(sp<GameState> gameState)
 	                  });
 	this->baseForm->findControl("BUTTON_SHOW_LOG")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *) {
+	                  [this](Event *)
+	                  {
 		                  fw().stageQueueCommand({StageCmd::Command::PUSH,
 		                                          mksp<MessageLogScreen>(this->state, *this)});
 	                  });
@@ -1288,7 +1294,15 @@ BattleView::BattleView(sp<GameState> gameState)
 	updateLayerButtons();
 }
 
-BattleView::~BattleView() = default;
+BattleView::~BattleView()
+{
+	// Our harness handler captured a raw `this`. Nothing re-registers between the battle ending
+	// and BattleDebriefing being shown, and the handler's own guard (current_battle) stays true
+	// for that whole screen -- Battle::exitBattle clears it later -- so a `gs` query arriving in
+	// that window dereferences a destroyed BattleView. CityView has had this restoration since
+	// the same hazard was found there; BattleView was missed.
+	setHarnessQueryHandler(previousHarnessHandler);
+}
 
 void BattleView::begin()
 {
@@ -1423,6 +1437,240 @@ void BattleView::setSelectedTab(sp<Form> tabPtr)
 	this->activeTab = tabPtr;
 }
 
+void BattleView::registerBattleViewIntrospection()
+{
+	// Chain in front of the GameState-only handler: projecting a unit's tile position to the
+	// screen needs the view, which the game-state handler cannot see.
+	previousHarnessHandler = getHarnessQueryHandler();
+	auto stateHandler = previousHarnessHandler;
+	std::weak_ptr<GameState> weakState = state;
+	BattleView *view = this;
+	setHarnessQueryHandler(
+	    [stateHandler, weakState, view](const UString &query) -> UString
+	    {
+		    const auto q = to_lower(query);
+		    auto gameState = weakState.lock();
+		    // Bring the next live hostile into view. enemies_screen only reports units already
+		    // on screen, so a mission with survivors scattered across the map looked, to the
+		    // driver, exactly like a mission with one unreachable alien: it would sit clicking
+		    // at the same visible foe while six others waited off-camera and the clock burned.
+		    // Keep the camera on our own squad. The driver moves units by clicking their screen
+		    // positions, so anything off-camera is both unwatchable and unclickable -- and a
+		    // human wanting to watch the AI play needs the view to follow the action rather than
+		    // sit wherever the last order left it.
+		    if (gameState && gameState->current_battle && q == "centre_on_friends")
+		    {
+			    const auto player = gameState->getPlayer();
+			    Vec3<float> sum{0.0f, 0.0f, 0.0f};
+			    int n = 0;
+			    for (const auto &u : gameState->current_battle->units)
+			    {
+				    const auto &unit = u.second;
+				    if (!unit || !unit->owner || !unit->tileObject || !unit->isConscious() ||
+				        unit->owner.id != player.id)
+				    {
+					    continue;
+				    }
+				    sum += unit->position;
+				    n++;
+			    }
+			    if (n == 0)
+			    {
+				    return UString("centred=0");
+			    }
+			    const Vec3<float> mid{sum.x / n, sum.y / n, sum.z / n};
+			    view->setScreenCenterTile(mid);
+			    return format("centred=1 units={0} at={1},{2},{3}", n, (int)mid.x, (int)mid.y,
+			                  (int)mid.z);
+		    }
+		    if (gameState && gameState->current_battle && q == "centre_on_enemy")
+		    {
+			    const auto player = gameState->getPlayer();
+			    const auto size = fw().displayGetSize();
+			    sp<BattleUnit> best;
+			    for (const auto &u : gameState->current_battle->units)
+			    {
+				    const auto &unit = u.second;
+				    // Same fog-of-war and bystander rules as enemies_screen: this must not walk
+				    // the camera to a hostile nobody has spotted, nor frame a civilian as if it
+				    // were a target.
+				    const bool hostile =
+				        unit && unit->owner &&
+				        unit->owner->isRelatedTo(player) == Organisation::Relation::Hostile;
+				    const bool spotted =
+				        unit && gameState->current_battle->visibleUnits[player].find(
+				                    {&*gameState, unit->id}) !=
+				                    gameState->current_battle->visibleUnits[player].end();
+				    if (!unit || !unit->owner || !unit->tileObject || !unit->isConscious() ||
+				        unit->owner.id == player.id || !hostile || !spotted)
+				    {
+					    continue;
+				    }
+				    const auto screen = view->tileToOffsetScreenCoords<float>(unit->position);
+				    const bool onScreen = screen.x >= 0 && screen.y >= 0 && screen.x < size.x &&
+				                          screen.y < size.y;
+				    // Prefer a hostile that is not already framed, so repeated calls walk the
+				    // map instead of re-centring on the same alien for ever. Take the first
+				    // off-screen one immediately; otherwise keep the first seen as a fallback.
+				    if (!onScreen)
+				    {
+					    best = unit;
+					    break;
+				    }
+				    if (!best)
+				    {
+					    best = unit;
+				    }
+			    }
+			    if (!best)
+			    {
+				    return UString("centred=0");
+			    }
+			    view->setScreenCenterTile(best->position);
+			    const auto screen = view->tileToOffsetScreenCoords<float>(best->position);
+			    return format("centred=1 at={0},{1},0 z={2}", (int)screen.x, (int)screen.y,
+			                  (int)best->position.z);
+		    }
+		    if (gameState && gameState->current_battle && q == "battle_positions")
+		    {
+			    // Diagnostic for the "one unreachable hostile" deadlock. Screen coordinates alone
+			    // cannot explain it -- a unit two floors up is drawn in plain sight and still
+			    // cannot be walked to. Report tile positions, so the z gap between the squad and
+			    // the survivor is visible, along with whether each unit can actually move.
+			    const auto player = gameState->getPlayer();
+			    UString foes, mine;
+			    int foeCount = 0, mineCount = 0;
+			    for (const auto &u : gameState->current_battle->units)
+			    {
+				    const auto &unit = u.second;
+				    if (!unit || !unit->owner || !unit->tileObject || !unit->isConscious())
+				    {
+					    continue;
+				    }
+				    const auto p = unit->position;
+				    const bool isMine = unit->owner.id == player.id;
+				    const auto entry =
+				        format("{0},{1},{2}", (int)p.x, (int)p.y, (int)p.z);
+				    if (isMine)
+				    {
+					    if (mineCount++ > 0)
+					    {
+						    mine += ";";
+					    }
+					    mine += entry;
+				    }
+				    else
+				    {
+					    if (foeCount++ > 0)
+					    {
+						    foes += ";";
+					    }
+					    foes += format("{0}:large={1}:flying={2}", entry,
+					                   unit->isLarge() ? 1 : 0,
+					                   unit->canFly() ? 1 : 0);
+				    }
+			    }
+			    return format("foes={0} mine={1} view_z={4} foe_at={2} mine_at={3}", foeCount,
+			                  mineCount, foes.empty() ? UString("-") : foes,
+			                  mine.empty() ? UString("-") : mine, view->getZLevel());
+		    }
+		    if (gameState && gameState->current_battle &&
+		        (q == "enemies_screen" || q == "friends_screen"))
+		    {
+			    const bool wantFoes = (q == "enemies_screen");
+			    const auto player = gameState->getPlayer();
+			    const auto size = fw().displayGetSize();
+			    UString out;
+			    int count = 0;
+			    int unarmed = 0;
+			    int bystanders = 0;
+			    int unseen = 0;
+			    for (const auto &u : gameState->current_battle->units)
+			    {
+				    const auto &unit = u.second;
+				    if (!unit || !unit->owner || !unit->tileObject || !unit->isConscious())
+				    {
+					    continue;
+				    }
+				    const bool mine = unit->owner.id == player.id;
+				    if (wantFoes == mine)
+				    {
+					    continue;
+				    }
+				    // "Not ours" is not the same as "hostile". A building raid is full of
+				    // civilians and the owner's security, and shooting them is ruinous: killing a
+				    // unit whose organisation is NOT hostile to us costs 30 relation with that
+				    // organisation, against 5 for a genuine enemy
+				    // (battleunit.cpp:4802-4813). Most buildings are the government's, and
+				    // government relation below -50 terminates funding outright. Reporting every
+				    // non-player unit as a target had the driver gunning down bystanders at -30
+				    // each and wondering why its funding kept being cut.
+				    if (wantFoes && unit->owner &&
+				        unit->owner->isRelatedTo(player) != Organisation::Relation::Hostile)
+				    {
+					    bystanders++;
+					    continue;
+				    }
+				    // Fog of war. Battle::visibleUnits is what each organisation can actually
+				    // see, and reporting hostiles the squad has not spotted would hand a driver
+				    // knowledge no player has -- it could walk straight to an alien nobody has
+				    // laid eyes on. Report only what we can see, and count the rest so the
+				    // difference is visible rather than silent.
+				    if (wantFoes)
+				    {
+					    const auto &seen = gameState->current_battle->visibleUnits[player];
+					    if (seen.find({&*gameState, unit->id}) == seen.end())
+					    {
+						    unseen++;
+						    continue;
+					    }
+				    }
+				    const auto screen = view->tileToOffsetScreenCoords<float>(unit->position);
+				    if (screen.x < 0 || screen.y < 0 || screen.x >= size.x || screen.y >= size.y)
+				    {
+					    continue;
+				    }
+				    // A base defence fields everyone in the building, scientists and engineers
+				    // included, and they carry nothing. Selecting whoever happened to be on
+				    // screen therefore often selected someone who cannot shoot, and the squad
+				    // stood next to the last alien without killing it. Report whether this unit
+				    // is actually holding a weapon so the driver can pick fighters.
+				    if (!wantFoes)
+				    {
+					    const bool holdsWeapon =
+					        unit->agent &&
+					        ((unit->agent->getFirstItemInSlot(EquipmentSlotType::RightHand) &&
+					          unit->agent->getFirstItemInSlot(EquipmentSlotType::RightHand)
+					              ->getPayloadType()) ||
+					         (unit->agent->getFirstItemInSlot(EquipmentSlotType::LeftHand) &&
+					          unit->agent->getFirstItemInSlot(EquipmentSlotType::LeftHand)
+					              ->getPayloadType()));
+					    if (!holdsWeapon)
+					    {
+						    unarmed++;
+						    continue;
+					    }
+				    }
+				    if (count++ > 0)
+				    {
+					    out += ";";
+				    }
+				    // Third field is the unit's tile z, not a constant. It used to be a
+				    // hardcoded 0 -- a leftover slot from the vehicle-crash query format -- which
+				    // meant a driver could see WHERE a hostile was drawn but not which floor it
+				    // stood on. Orders only reach the displayed level, so without this there is
+				    // no way to align the view to the specific unit being fired at, and a single
+				    // survivor one floor up stalls the whole battle.
+				    out += format("{0},{1},{2}", (int)screen.x, (int)screen.y,
+				                  (int)unit->position.z);
+			    }
+			    return format("count={0} unarmed={2} bystanders={3} unseen={4} at={1}", count,
+			                  out.empty() ? UString("-") : out, unarmed, bystanders, unseen);
+		    }
+		    return stateHandler ? stateHandler(query) : UString("");
+	    });
+}
+
 void BattleView::update()
 {
 	bool realTime = battle.mode == Battle::Mode::RealTime;
@@ -1457,7 +1705,8 @@ void BattleView::update()
 				         format("{0}, it is your turn!",
 				                state->current_battle->currentActiveOrganisation->name),
 				         MessageBox::ButtonOptions::Ok,
-				         [this] {
+				         [this]
+				         {
 					         state->current_battle->currentPlayer =
 					             state->current_battle->currentActiveOrganisation;
 				         })});
@@ -1571,6 +1820,14 @@ void BattleView::update()
 				break;
 			}
 		}
+	}
+
+	if (config().getBool("Options.Misc.ActionMusic"))
+	{
+		const auto seen = battle.ticksWithoutSeenAction.find(battle.currentPlayer);
+		const bool actionHeard =
+		    seen != battle.ticksWithoutSeenAction.end() && seen->second < TICKS_END_TURN;
+		fw().jukebox->play(actionHeard ? JukeBox::PlayList::Action : JukeBox::PlayList::Tactical);
 	}
 
 	updateSelectedUnits();
@@ -2516,8 +2773,8 @@ void BattleView::orderMove(Vec3<int> target, bool strafe, bool demandGiveWay)
 
 	if (battle.battleViewGroupMove && battle.battleViewSelectedUnits.size() > 1 && !runAway)
 	{
-		battle.groupMove(*state, battle.battleViewSelectedUnits, target, facingDelta,
-		                 demandGiveWay);
+		battle.groupMove(*state, battle.battleViewSelectedUnits, target, facingDelta, demandGiveWay,
+		                 true);
 	}
 	else
 	{
@@ -2681,6 +2938,7 @@ void BattleView::orderUse(bool right, bool automatic)
 		// Usable items that have no automatic mode
 		case AEquipmentType::Type::MotionScanner:
 		case AEquipmentType::Type::MediKit:
+		case AEquipmentType::Type::MindShield:
 			if (automatic)
 			{
 				break;
@@ -2701,7 +2959,6 @@ void BattleView::orderUse(bool right, bool automatic)
 		case AEquipmentType::Type::DimensionForceField:
 		case AEquipmentType::Type::DisruptorShield:
 		case AEquipmentType::Type::Loot:
-		case AEquipmentType::Type::MindShield:
 		case AEquipmentType::Type::MultiTracker:
 		case AEquipmentType::Type::StructureProbe:
 		case AEquipmentType::Type::VortexAnalyzer:
@@ -2826,6 +3083,12 @@ void BattleView::orderTeleport(Vec3<int> target, bool right)
 {
 	if (battle.battleViewSelectedUnits.empty())
 	{
+		return;
+	}
+	if (battle.battleViewSelectedUnits.size() > 1)
+	{
+		battle.groupMove(*state, battle.battleViewSelectedUnits, target, 0, false, true);
+		selectionState = BattleSelectionState::Normal;
 		return;
 	}
 	auto unit = battle.battleViewSelectedUnits.front();
@@ -3696,7 +3959,7 @@ bool BattleView::handleMouseDown(Event *e)
 			}
 		}
 		// Determine course of action
-		LogWarning("Click at tile {0}, {1}, {2}", t.x, t.y, t.z);
+		LogInfo("Click at tile {0}, {1}, {2}", t.x, t.y, t.z);
 		switch (selectionState)
 		{
 			case BattleSelectionState::Normal:

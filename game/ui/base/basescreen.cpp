@@ -524,7 +524,8 @@ void BaseScreen::renderBase()
 	if (selection != NO_SELECTION)
 	{
 		Vec2<int> pos = selection;
-		Vec2<int> size = {BaseGraphics::TILE_SIZE, BaseGraphics::TILE_SIZE};
+		const int tilePx = BaseGraphics::TILE_SIZE * fw().uiGetScale();
+		Vec2<int> size = {tilePx, tilePx};
 		if (drag && dragFacility)
 		{
 			size *= dragFacility->size;
@@ -534,25 +535,33 @@ void BaseScreen::renderBase()
 			pos = selFacility->pos;
 			size *= selFacility->type->size;
 		}
-		pos = BASE_POS + pos * BaseGraphics::TILE_SIZE;
+		pos = BASE_POS + pos * tilePx;
 		fw().renderer->drawRect(pos, size, Colour{255, 255, 255});
 	}
 
 	// Draw dragged facility
 	if (drag && dragFacility)
 	{
+		const int tilePx = BaseGraphics::TILE_SIZE * fw().uiGetScale();
 		sp<Image> facility = dragFacility->sprite;
 		Vec2<int> pos;
 		if (selection == NO_SELECTION)
 		{
-			pos = mousePos - Vec2<int>{BaseGraphics::TILE_SIZE, BaseGraphics::TILE_SIZE} / 2 *
-			                     dragFacility->size;
+			pos = mousePos - Vec2<int>{tilePx, tilePx} / 2 * dragFacility->size;
 		}
 		else
 		{
-			pos = BASE_POS + selection * BaseGraphics::TILE_SIZE;
+			pos = BASE_POS + selection * tilePx;
 		}
-		fw().renderer->draw(facility, pos);
+		const Vec2<int> drawSize{tilePx * dragFacility->size, tilePx * dragFacility->size};
+		if (tilePx == BaseGraphics::TILE_SIZE)
+		{
+			fw().renderer->draw(facility, pos);
+		}
+		else
+		{
+			fw().renderer->drawScaled(facility, pos, drawSize);
+		}
 	}
 }
 
