@@ -4413,6 +4413,46 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
             outcome = win_battle(d)
             battles += 1
             d.checks[f"battle_{battles}"] = outcome
+
+        # Per-leg upkeep. Without this the campaign loop was only ever "advance the clock, and
+        # fight if something forces you to" -- which is exactly what the measurements showed:
+        # tactical=0 across every run, and the only battles ever fought were base defences,
+        # i.e. the aliens arriving at OUR door. A base defence is the failure, not the game.
+        if not d.game_over() and d.status().stage == "CityView":
+            # 1. Keep the labs busy. assign_research() ran once at campaign start and never
+            #    again, so a project finishing left its lab idle for the rest of the run --
+            #    observed as labs_busy=0 with three built labs on day 15.
+            try:
+                assign_research(d)
+            except Exception as exc:
+                d.say(f"  [leg] research pass failed: {type(exc).__name__}: {exc}")
+
+            # 2. Take the ground game to them. raid_infiltrated_building() was written,
+            #    documented at length, and never called from anywhere -- the def was its only
+            #    occurrence in the file. Alien crews left in a building raise their owner's
+            #    infiltrationValue every hour and spread to neighbours, and most buildings are
+            #    government-owned, so this is the mechanism that was quietly ending campaigns
+            #    while the driver watched the number climb.
+            try:
+                outcome = raid_infiltrated_building(d)
+                if outcome not in ("nothing-reported", "bad-coords") \
+                        and not outcome.startswith("not-in-city"):
+                    battles += 1
+                    d.checks[f"raid_{battles}"] = outcome
+                    d.say(f"  [leg] raid -> {outcome}")
+                else:
+                    d.say(f"  [leg] no raid this leg ({outcome})")
+            except Exception as exc:
+                d.say(f"  [leg] raid failed: {type(exc).__name__}: {exc}")
+
+            # Whatever the raid left us in, get back to the city before the next leg.
+            for _ in range(8):
+                if d.status().stage == "CityView":
+                    break
+                if not d.dismiss_modal(d.status()):
+                    d.h.key("Escape")
+                time.sleep(0.5)
+
         snapshot(d, f"day~{elapsed:.0f}")
 
     d.checks["battles_played"] = battles
