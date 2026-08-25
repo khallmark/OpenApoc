@@ -100,31 +100,37 @@ reaches zero**, not on every decrement. This matches the raw HIT listing indepen
 
 ### 1.2 The full guard and the two outcomes
 
+All offsets below are relative to the vehicle-struct base `DAT_00160fd8` (the same 0x276-byte,
+80-entry array used throughout this subsystem), computed directly from the global-symbol deltas in
+the decompile — e.g. `DAT_00161102 − DAT_00160fd8 = 0x12A`, and the decompile reads that symbol
+`+2`, so the field is `+0x12C`; `DAT_00161148 − DAT_00160fd8 = 0x170`, read `+1` = the already-bound
+`+0x171` counter byte. `(&DAT_001610a8)[iVar13*0x13b]` and `(&DAT_00161134)[iVar13*0x13b]` use a
+`short`-typed index scaled by `0x13b` (×2 = `0x276`) — the *same* struct, not a separate array;
+their plain field offsets are `+0x1D0` and `+0x15C` respectively.
+
 ```c
-sVar6 = (&DAT_00161134)[iVar13 * 0x13b];      // field +0x15C of the SAME 0x276-byte vehicle
-                                               // record (0x13b shorts == 0x276 bytes — not a
-                                               // separate array; verified by stride arithmetic)
-if ((sVar6 != 2 && sVar6 != 3 && sVar6 != 5) &&
-    (((sVar2 = *(short *)(vehicle + 0x104), sVar2 == 1) ||
-      (sVar6 == 1 && sVar2 != 0)) && DAT_000d5060 == 0) &&
-    ((&DAT_00161142)[vehicle] == -1 &&                 // "no pending message" latch
-     (cVar12 = --(vehicle+0x171)) == 0))
+sVar6 = vehicle[+0x15C];                  // role/order-state (short)
+if (sVar6 != 2 && sVar6 != 3 && sVar6 != 5 &&
+    ((vehicle[+0x12C] == 1) || (sVar6 == 1 && vehicle[+0x12C] != 0)) &&
+    DAT_000d5060 == 0 &&
+    vehicle[+0x16A] == -1 &&              // read as a dword, upper word == -1 ("unset" sentinel)
+    --vehicle[+0x171] == 0)
 {
-    if (*(short *)(vehicle + 0x104) == 1) {
-        (&DAT_00161142)[vehicle] = 1;    // just latch an "arrived" flag; no new target search
+    if (vehicle[+0x12C] == 1) {
+        vehicle[+0x16A] = 1;              // just latch a flag; no new target search
     } else {
-        uVar7 = FUN_00091f70(category);          // pick a target building of a given category
-        *(short *)(dest + 0x14) = uVar7;
-        if (dest_x_field == -1) {                // FUN_00091f70 returned "no match" (-1)
-            (&DAT_00161134)[vehicle role-state] = 0;         // clear order/role state
-            *(byte *)(vehicle + 0x1610a4 field + 3) = 0xFF;  // mark "no destination"
+        target = FUN_00091f70(/* argument not traced at this call site */);
+        stash.buildingIndex = target;
+        if (stash.someField >> 0x10 == -1) {   // FUN_00091f70 returned -1 (no match)
+            vehicle[+0x15C] = 0;                 // clear role/order state
+            vehicle[+0x1CF] = 0xFF;              // mark "no destination"
         } else {
             FUN_0004db84();                       // resolve target -> nearby site (x/y, valid?)
-            if (valid) {
-                *(byte *)(… + 3) = 0;
-                (&DAT_001610a8)[vehicle] = new_target_building;
-                FUN_0004e0d4(vehicle, x, y);       // commit new destination waypoint
-                (&DAT_0016113e)[vehicle] = 0;
+            if (stash.validFlag != 0) {
+                vehicle[+0x1CF] = 0;
+                vehicle[+0x1D0] = stash.buildingIndex;
+                FUN_0004e0d4(vehicle, stash.x, stash.y);  // commit new destination waypoint
+                vehicle[+0x166] = 0;
                 FUN_0005df1c();
             }
         }
@@ -133,13 +139,16 @@ if ((sVar6 != 2 && sVar6 != 3 && sVar6 != 5) &&
 ```
 
 **This is the transition.** Reaching mission-counter zero causes the UFO to search for and commit
-to a new destination via `FUN_00091f70` → `FUN_0004db84` → `FUN_0004e0d4`, unless a specific
-order-type value (`+0x104 == 1`) just latches an "arrived" flag instead, or no matching building
-exists (role/order state is cleared to 0 and the vehicle is marked target-less).
+to a new destination via `FUN_00091f70` → `FUN_0004db84` → `FUN_0004e0d4`, unless the order-type
+field at `+0x12C` reads `1` (just latches an "arrived" flag instead), or no matching target is
+found (role/order state at `+0x15C` is cleared to 0 and the vehicle is marked target-less at
+`+0x1CF`). Note `+0x12C` is the *same* field independently checked (as `== 0`, not `== 1`) in
+`FUN_0004dd14`/`FUN_0004e0d4`'s `+0x168` clamp (§2.3) — one more small confirmation that these
+functions are all reading the same struct layout consistently.
 
-**Deliberately unnamed:** `sVar6`'s role/order-state values (2/3/5 excluded from re-triggering;
-1 special-cased), the field compared to `1` at `+0x104`, and `DAT_000d5060` (a global 0/nonzero
-flag read throughout this subsystem, likely a side/turn discriminant but not independently
+**Deliberately unnamed:** `sVar6`'s role/order-state values at `+0x15C` (2/3/5 excluded from
+re-triggering; 1 special-cased), the order-type field at `+0x12C`, `DAT_000d5060` (a global
+0/nonzero flag read throughout this subsystem, likely a side/turn discriminant but not independently
 confirmed here). These gate *whether* the transition fires, not *what it does* once it fires; naming
 them would be exactly the kind of invented-filter move the task explicitly prohibits, so they're
 left as raw offsets.
@@ -153,7 +162,10 @@ primitive used for scatter spawn XY elsewhere in this subsystem) to pick the Nth
 alternate-priority byte at `+0xC9` gated by `DAT_001277E8`; returns that record's index, or `-1` if
 none matched. **This is not named a "building" search and no name filter is added** — it is reported
 purely as "counts and randomly selects a record whose `+0xC8` byte equals the argument," per the
-task's explicit prohibition on inventing an `acquireTargetBuilding` filter.
+task's explicit prohibition on inventing an `acquireTargetBuilding` filter. (The specific value
+passed as that argument from the `FUN_0003a910` call site in §1.2 was not resolved by the
+decompiler in this session — Ghidra shows the call with no visible operand there — so even the
+category value itself is not asserted, only the function's generic behavior.)
 
 **`FUN_0004db84`** (VA `0x4DB84`, object-page file `0x3DB83`, bound-file `0xB0228`) — a nested
 loop bounded at 10 (`while (… < 10)`) over what appears to be a 2-D search grid, calling
@@ -186,8 +198,10 @@ brief exactly). Raw disassembly (not the decompiler, which mis-renders this func
 ```
 
 `EBP` is proven to be the vehicle-array pointer for the argument index by the preceding six
-instructions (`(EAX*4+EAX)*10 << 6, then -EAX`, i.e. `EBP = index*0x276 + 0x160FD8` — the same
-0x276-byte-stride array used everywhere else in this subsystem). So the gate is precisely: **if
+instructions (`LEA EBP,[EAX*4]; ADD EBP,EAX` → `EAX×5`; `ADD EBP,EBP` → `×10`; `SHL EBP,0x6` →
+`×640`; `SUB EBP,EAX` → `×640 − ×10 = ×630 = ×0x276`; `ADD EBP,0x160FD8`), i.e.
+`EBP = index*0x276 + 0x160FD8` — the same 0x276-byte-stride array used everywhere else in this
+subsystem. So the gate is precisely: **if
 `+0x168 ≤ +0x12e` (constitution), return early; only when `+0x168` exceeds constitution does the
 function build and dispatch a formatted UI message** (calls `FUN_00063A00` — a name/string fetch
 with a byte-reversal copy pattern typical of building a two-part sentence — then `FUN_0002AE1C`, a
@@ -336,10 +350,17 @@ Both call sites (VA `0xB34C1`, `0xB3792`) are `FUN_0006f738`'s only two callers 
 `FUN_0006f738` itself (VA `0x6F738`, bound-file `0xD1DDC`) transfers a 14-byte per-species
 population array from the event's source org record (`param_1 + 0xD4`) to a destination org record
 one byte-index over, rolling `FUN_0005D1D8` per unit moved and setting a base-slot "known" flag
-(`DAT_000d96ea[slot]`, confirmed to sit exactly at `DAT_000d942c + 0x2BE` — i.e. the same
-already-documented `+0x2BC`-adjacent field of the 16×`0x2BE` base array, not a separate parallel
-table as an earlier pass over this data suspected) when the per-unit roll is `< moved_count × 5` —
-the same `moved_count × 5` exposure formula already bound for `FUN_0006f7f8`.
+(`DAT_000d96ea[slot]`) when the per-unit roll is `< moved_count × 5` — the same `moved_count × 5`
+exposure formula already bound for `FUN_0006f7f8`. `DAT_000d96ea`'s stride is `0x15f`, which is
+half of `0x2BE` — an earlier pass over this data read that as a mismatch implying a separate,
+distinctly-strided array. It isn't: `FUN_000705a8`'s raw disassembly (§3.1) independently derives
+`DAT_000d96ea = DAT_000d942c + 0x2BE` via short-typed pointer arithmetic (`0x15f shorts = 0x2BE
+bytes`), i.e. `DAT_000d96ea[slot]` under 2-byte-element indexing steps by one full `0x2BE`-byte base
+record per slot — the same 16-record family, not a parallel table with a different stride. What's
+*not* resolved this session is whether slot 0 lands on record 0's own terminal field or one byte
+short of it into record 1 (the `psVar1 = base+2` starting offset in `FUN_000705a8` makes this a
+genuine two-byte alignment question, not just a stride one) — that finer point is left open rather
+than asserted.
 
 ### 4.2 The source: `FUN_000aff9c` is the type field's sole writer
 
@@ -432,9 +453,9 @@ table data anywhere in this build, this search would have found it; it did not.
 `loftemps_index` at vehicle-data `+0x28` is confirmed (independently, again) to be exactly what the
 task says it is and nothing else — the extractor's own consumer (`extract_vehicles.cpp`) uses it for
 voxelmap misalignment, not dodge. No other runtime field was identified in this session's traversal
-of the vehicle instance struct (`+0x104`, `+0x108`, `+0x12c`, `+0x12e`, `+0x168`, `+0x171`, all
-touched in §§1–2 above) that reads as a 4-valued attack-mode/behavior enum, so there is no field to
-pivot a reader-search from either.
+of the vehicle instance struct (`+0x108`, `+0x12C`, `+0x12E`, `+0x168`, `+0x171`, all touched in
+§§1–2 above) that reads as a 4-valued attack-mode/behavior enum, so there is no field to pivot a
+reader-search from either.
 
 **Verdict: NOT BOUND. No engagement table, no dodge-percentage table, and no consumer for any
 engagement-related UI string exists anywhere in UFO2P.EXE that this session could find, despite an

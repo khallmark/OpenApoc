@@ -17,7 +17,11 @@ damage-type catalog index. Do not guess 1 vs. 3.
 
 **K1 Personal Cloaking Field — NOT BOUND.** Every printable copy of the string (both UI-pool and
 internal-asset-table copies) has zero xrefs. The agent_general_data catalog's runtime VA was
-recovered, but no reader of its `type` field (row+10, values 0..19 checked) was found. The
+recovered, and real consumers of its `type` field do exist (25 references across 21 functions, via
+loop-computed indexing that only exposes element `[0]`'s address statically) — but the strongest
+candidate by reference count, decompiled in full, shows no `type == 0x0A` comparison in its
+(truncated) visible body, and reads more like inventory/shop code than a per-tick accumulator. No
+reader that reaches a tick-path comparison was confirmed. The
 "Mind Shield @ 0x9B780" address cited elsewhere in this tree does not resolve to a function start
 in the bound project — it lands mid-function inside `FUN_0009b058` — confirming that address comes
 from a different, non-bound disassembly pass and should not be reused as a cloak search anchor
@@ -51,7 +55,7 @@ demonstration of why no delta should be assumed global.
 
 | Memory class | Delta (file offset − VA) | Confirmed via |
 |---|---|---|
-| `.object1` code | `+0x5AAA4` | Ghidra's own raw-byte signature match (`Memory.findBytes` against the `.image` overlay), independently unique for 11 different functions this session (table below) |
+| `.object1` code | `+0x5AAA4` | Ghidra's own raw-byte signature match (`Memory.findBytes` against the `.image` overlay), independently unique for 12 different functions this session (table below) |
 | `.object2` data | `+0x4FAA4` | Confirmed for two tables: `fire_hazard_power_table` (already bound, `labels/tacp_rebase.csv`) and `agent_general_data` (recovered this session, §4.1) |
 
 The two deltas differ by exactly `0xB000`, consistent with code and data living in separate LE
@@ -74,8 +78,9 @@ Signature-confirmed `.object1` file offsets this session (via `QueryFunctions.ja
 | `FUN_0007b610` | `0x7B610` | `0xD60B4` | signature-unique |
 | `FUN_0007d67c` | `0x7D67C` | `0xD8120` | signature-unique |
 | `FUN_0009b058` | `0x9B058` | `0xF5AFC` | signature-unique |
+| `FUN_0008a524` | `0x8A524` | `0xE4FC8` | signature-unique |
 
-All eleven match `VA + 0x5AAA4` exactly. The following returned **no unique signature match**
+All twelve match `VA + 0x5AAA4` exactly. The following returned **no unique signature match**
 (`bound_file = -1`, byte pattern not unique enough, or `-2`, duplicate match) — their file offsets
 below are **derived** from the confirmed delta, not independently signature-confirmed, and are
 labelled as such everywhere they appear in this document:
@@ -216,72 +221,74 @@ A future session wiring this up needs those table contents, not just the formula
 
 ### 2.3 Neighbour table dump — the exact ordering
 
-Raw dump, VA `0x293050`–`0x2930F0` (`.object2`), read as `int32[]` starting at index 0 =
-`0x293050`. The relevant range for `FUN_0007b0d0` starts at index 5 (`0x293068`):
+**Correction to an earlier draft of this document**: the first pass at this table applied the
+`iVar6*4` byte offset to the *wrong* base pair while reconstructing outcome 0, which shifted every
+row by one triple. The corrected table below was re-derived directly from the raw instruction
+operands (unambiguous — no decompiler pointer-arithmetic involved) and cross-checked by an
+independent script, not by hand a second time.
 
-| index | VA | value | used by |
-|---|---|---|---|
-| 5 (X₀) | `0x293068` | `1` | fire, outcome 0 |
-| 6 (Y₀) | `0x29306C` | `0` | fire, outcome 0 |
-| 7 (Z₀) | `0x293070` | `0` | fire, outcome 0 |
-| 8 (X₁) | `0x293074` | `0` | fire, outcome 1 |
-| 9 (Y₁) | `0x293078` | `0` | fire, outcome 1 |
-| 10 (Z₁) | `0x29307C` | `1` | fire, outcome 1 |
-| 11 (X₂) | `0x293080` | `0` | fire, outcome 2 |
-| 12 (Y₂) | `0x293084` | `-1` | fire, outcome 2 |
-| 13 (Z₂) | `0x293088` | `0` | fire, outcome 2 |
-| 14 (X₃) | `0x29308C` | `0` | fire, outcome 3 |
-| 15 (Y₃) | `0x293090` | `0` | fire, outcome 3 |
-| 16 (Z₃) | `0x293094` | `-1` | fire, outcome 3 |
-| 17 (X₄) | `0x293098` | `0` | fire, outcome 4 |
-| 18 (Y₄) | `0x29309C` | `0` | fire, outcome 4 |
-| 19 (Z₄) | `0x2930A0` | `0` | fire, outcome 4 |
+Raw listing, `FUN_0007b0d0` (VA `0x7B0D0`):
 
-Re-deriving the field roles from the consuming code (§2.2): the first element of each triple is
-added **directly** as a flat X-offset; the second is used as an **index** into a Y-row-stride table
-(`DAT_001C6F1C`); the third is used as an index into a Z-plane-stride table (`DAT_001C6F18`).
-Reading the table this way (the index arithmetic in §2.2 is `iVar6 = uVar9*3+1`, i.e. row *N*
-starts at flat index `3N+1`, not `3N` — index 0..2, `(1, 0, 0)` at row 0's *predecessor* slot, is
-unused padding, consistent with every fire row starting one element later):
+```
+MOV ESI,dword ptr [ECX*0x4 + 0x293068]   ; X = *(int32*)(0x293068 + iVar6*4)
+MOV EDI,dword ptr [ECX*0x4 + 0x29306C]   ; Y = *(int32*)(0x29306C + iVar6*4)
+MOV EAX,dword ptr [ECX*0x4 + 0x293070]   ; Z = *(int32*)(0x293070 + iVar6*4)   (before += unaff_EBX)
+```
+where `iVar6 = outcome*3 + 1`, `outcome = RNG(0..4)` (`FUN_0001eee8(4)`). Raw dump of
+`0x293068`–`0x2930F0` (`.object2`, read as `int32[]`) plugged into this formula for each outcome:
 
-| outcome (`uVar9`) | (X, Y, Z) | direction |
-|---|---|---|
-| 0 | `(1, 0, 0)` | **East** (+X) |
-| 1 | `(0, 1, 0)` | **South** (+Y) |
-| 2 | `(-1, 0, 0)` | **West** (−X) |
-| 3 | `(0, -1, 0)` | **North** (−Y) |
-| 4 | `(0, 0, 1)` | **Up** (+Z) |
+| outcome | `iVar6` | X @ VA (value) | Y @ VA (value) | Z @ VA (value) | (X, Y, Z) | direction |
+|---|---|---|---|---|---|---|
+| 0 | 1 | `0x29306C` (`0`) | `0x293070` (`0`) | `0x293074` (`0`) | `(0, 0, 0)` | **none — a "fizzle" outcome** |
+| 1 | 4 | `0x293078` (`0`) | `0x29307C` (`1`) | `0x293080` (`0`) | `(0, 1, 0)` | **South** (+Y) |
+| 2 | 7 | `0x293084` (`-1`) | `0x293088` (`0`) | `0x29308C` (`0`) | `(-1, 0, 0)` | **West** (−X) |
+| 3 | 10 | `0x293090` (`0`) | `0x293094` (`-1`) | `0x293098` (`0`) | `(0, -1, 0)` | **North** (−Y) |
+| 4 | 13 | `0x29309C` (`0`) | `0x2930A0` (`0`) | `0x2930A4` (`1`) | `(0, 0, 1)` | **Up** (+Z) |
 
-Fire spreads to one of these five candidates, chosen uniformly at random (`RNG(0,4)`), gated by the
-resistance roll in §2.2. **Fire never spreads downward** — there is no `(0,0,-1)` candidate in its
-5-outcome set.
+**Fire's 5-outcome roll (`RNG(0,4)`) covers only 4 real directions — South, West, North, Up — plus
+one dead outcome (`0,0,0`) that resolves to no movement at all.** East and Down are never reachable
+by this function. The unused entry at the table's true base, `0x293068` (value `1`), is never read
+by `FUN_0007b0d0` at all — the minimum address it reads is `0x293068 + 1*4 = 0x29306C` (`iVar6`'s
+minimum value is `1`, not `0`) — so `0x293068` is a genuinely unaddressed leading slot for this
+function, not part of any outcome's triple. Whether that slot (or the `(0,0,0)` fizzle outcome) is
+read/used by something else (e.g. the type-0 handler `FUN_0007b228`, not decompiled this session)
+was not determined.
+
+This means fire's spread roll has an **inherent ~20% chance of doing nothing**, independent of and
+prior to the resistance-gated chance roll in §2.2 — the two are stacked, not alternatives. That is
+itself real, recovered behaviour, not a guess, and is a second (structural, not percentage-shaped)
+sense in which the original's fire spread is less aggressive than a naive port would assume.
 
 ### 2.4 `FUN_0007ae78` — the generalized (parameterized-type) placement/spread engine
 
 VA `0x7AE78` / file `0xD591C` (signature-confirmed). Structurally identical to `FUN_0007b0d0` but
 parameterized by hazard `type` (a `byte` argument) instead of hardcoding `2`, and drawing **one more
-outcome** from the RNG: `FUN_0001eee8(5)` (6 outcomes, `0..5`) instead of `FUN_0001eee8(4)`. It
-reads the **same contiguous neighbour table**, continuing past fire's five entries:
+outcome** from the RNG: `FUN_0001eee8(5)` (6 outcomes, `0..5`) instead of `FUN_0001eee8(4)`. Same
+addressing shape, different base triple:
 
-| outcome | flat index (X) | (X, Y, Z) | direction |
-|---|---|---|---|
-| 0 | 16 (`0x2930A8`) | `(1, 0, 0)` | East |
-| 1 | 19 (`0x2930B4`) | `(0, 1, 0)` | South |
-| 2 | 22 (`0x2930C0`) | `(-1, 0, 0)` | West |
-| 3 | 25 (`0x2930CC`) | `(0, -1, 0)` | North |
-| 4 | 28 (`0x2930D8`) | `(0, 0, 1)` | Up |
-| 5 | 31 (`0x2930E4`) | `(0, 0, -1)` | **Down** |
+```
+X = *(int32*)(0x2930A4 + iVar7*4);  Y = *(int32*)(0x2930A8 + iVar7*4);  Z = *(int32*)(0x2930AC + iVar7*4);
+```
+where `iVar7 = outcome*3 + 1`, `outcome = RNG(0..5)`:
 
-(Verified against the same raw dump, `0x2930A8`→`1`, `0x2930AC`→`0`, `0x2930B0`→`0`; `0x2930B4`→`0`,
-`0x2930B8`→`1`, `0x2930BC`→`0`; `0x2930C0`→`-1`, `0x2930C4`→`0`, `0x2930C8`→`0`; `0x2930CC`→`0`,
-`0x2930D0`→`-1`, `0x2930D4`→`0`; `0x2930D8`→`0`, `0x2930DC`→`0`, `0x2930E0`→`1`; `0x2930E4`→`0`,
-`0x2930E8`→`0`, `0x2930EC`→`-1`.)
+| outcome | `iVar7` | X @ VA (value) | Y @ VA (value) | Z @ VA (value) | (X, Y, Z) | direction |
+|---|---|---|---|---|---|---|
+| 0 | 1 | `0x2930A8` (`1`) | `0x2930AC` (`0`) | `0x2930B0` (`0`) | `(1, 0, 0)` | **East** |
+| 1 | 4 | `0x2930B4` (`0`) | `0x2930B8` (`1`) | `0x2930BC` (`0`) | `(0, 1, 0)` | **South** |
+| 2 | 7 | `0x2930C0` (`-1`) | `0x2930C4` (`0`) | `0x2930C8` (`0`) | `(-1, 0, 0)` | **West** |
+| 3 | 10 | `0x2930CC` (`0`) | `0x2930D0` (`-1`) | `0x2930D4` (`0`) | `(0, -1, 0)` | **North** |
+| 4 | 13 | `0x2930D8` (`0`) | `0x2930DC` (`0`) | `0x2930E0` (`1`) | `(0, 0, 1)` | **Up** |
+| 5 | 16 | `0x2930E4` (`0`) | `0x2930E8` (`0`) | `0x2930EC` (`-1`) | `(0, 0, -1)` | **Down** |
 
-Confirms the earlier ambiguity cleanly: this is **one 32-entry `int32[]` table**, not two
-unrelated ones — the `DAT_002930A4` name Ghidra assigned to the "generic" base is simply the byte
-address 15 elements into the same array `DAT_00293068` starts. **Fire gets the first five rows
-(no Down); the generic engine (any type) gets all six, adding Down.** This is a clean, internally
-consistent, fully-verified result — not an inference from table size or "duration".
+Since `0x2930A4` is exactly `0x293068 + 0x3C` (60 bytes = 15 `int32`s past fire's table base), this
+is the **same contiguous `int32[]` region** fire's table lives in, continuing right where fire's
+own addressing tops out (fire's highest read is `0x2930A4`, generic's lowest read is `0x2930A8` —
+adjacent, not overlapping) — confirming the earlier ambiguity about "one table vs. two" cleanly:
+one underlying array, two different base-triple views into it. **The generic engine's six outcomes
+are a clean, full compass + up/down set (East/South/West/North/Up/Down) with no dead outcome** —
+unlike fire, which wastes one of its five outcomes on `(0,0,0)` (§2.3). This is a genuine,
+fully-verified structural difference between fire and the generic (1/3) engine, not an inference
+from table size or duration.
 
 The rest of `FUN_0007ae78`'s body mirrors `FUN_0007b0d0`'s resistance-roll-then-write structure,
 except the final overlay write dispatches through **one of three type-specific encoders** based on
@@ -401,7 +408,8 @@ pass — see §5 for the closest candidates, which are damage-application, not a
 overlay's 2-bit type field supports three live hazard types (1, 2=fire, 3), sharing one decode
 family, one encode family, and (for 1/3) one generic placement/spread engine
 (`FUN_0007ae78`) that is a strict generalization of fire's spread function
-(`FUN_0007b0d0`) — six neighbour candidates including Down, vs. fire's five. **Not bound**: which
+(`FUN_0007b0d0`) — six live candidates (full compass + up/down, §2.4) vs. fire's four real
+candidates plus one dead outcome (§2.3). **Not bound**: which
 of type 1 / type 3 is Enzyme (the dispatch variable has no traceable static writer), the armour
 damage formula, and `TICKS_PER_ENZYME_EFFECT`. Do not replace `TICKS_PER_ENZYME_EFFECT =
 TICKS_PER_SECOND/9` with anything from this session — no tick cadence was recovered for either
@@ -446,9 +454,27 @@ reference row 0's `type` field" almost certainly means "21 functions iterate the
 row (if any) they compare against `0x0A` cannot be determined by xref location alone; it requires
 decompiling the candidate functions and checking for a `CMP` against `0xA` inside the loop body.
 The strongest candidate by reference count, `FUN_0008A524` (four separate references to the
-type-field address, more than any other function in the set — VA `0x8A524`, file `0xE4FC8`
-derived, `VA + 0x5AAA4`), was decompiled as a follow-up (§4.2b) once the shared project lock
-cleared.
+type-field address, more than any other function in the set — VA `0x8A524`, file `0xE4FC8`,
+**signature-confirmed** this run), was decompiled as a follow-up.
+
+### 4.2b `FUN_0008A524` — inconclusive (truncated, no direct `==0x0A` branch visible)
+
+7,355 bytes — the decompiled C output was cut off at the tool's 30,000-character limit
+(`/* truncated */`) before reaching the fourth of four type-field references. In the visible
+portion, the type field (row pointer `+10`) is read and checked only as `!= 0` (a "does this row
+have an equipment sub-type at all" guard, not a specific value match) and cross-checked against a
+value from a **different**, `0x30`-stride table at `DAT_000EA2C8` — ten bytes into the same item
+array base (`0xEA2BE`) that the already-bound fire item-contact dispatcher `FUN_0007C1A4` walks
+(§ task context; that function reads the item's *material* type at `+2`, not `+0xA`, so
+`DAT_000EA2C8` is a different field of the same array, not yet identified). No `CMP` against
+`0x0A` was found in the visible portion. Given the size and truncation, this function was **not**
+exhaustively checked, and its overall purpose (large size, heavy use of the same item-array base as
+known shop/UI-adjacent functions in this address neighbourhood, per `next-implementation.md`'s
+notes on `0x08xxxx`-region functions being aequip shop/layout code) is more consistent with an
+inventory/shop listing pass than a per-tick combat accumulator. This candidate is recorded as
+**inconclusive, not binding** — a full pass would need either a wider decompile limit or a
+targeted disassembly-listing read around each of the four reference addresses
+(`0x8A9EA`, `0x8B030`, `0x8B0CE`, `0x8BCA7`), not completed this session.
 
 ### 4.3 The "flat disassembly" trap, independently reproduced
 
@@ -464,11 +490,14 @@ cloak (or anything else) in the bound project — they will not resolve to the s
 
 ### K1 verdict
 
-**NOT BOUND.** No consumer of `Personal Cloaking Field` (either string region) or of
-`agent_general_data`'s `type` field (table base or first 20 rows) was found via structural entry.
-`CLOAK_TICKS_REQUIRED_UNIT = TICKS_PER_SECOND * 2` stays exactly as documented — a forum-sourced
-constant, not a binary-recovered one — and the comment attributing it to "Yatoka Shimaoka on
-forums" should **not** be deleted, since nothing here replaces it.
+**NOT BOUND.** No consumer of `Personal Cloaking Field` (either string region) was found. Real
+consumers of `agent_general_data`'s `type` field do exist (§4.2), but the strongest candidate by
+reference count (`FUN_0008A524`) does not visibly branch on `0x0A` specifically, and no other
+candidate among the remaining 20 functions in the xref set was decompiled this session — this is a
+genuine open lead, not a closed negative, but it does not rise to "bound." `CLOAK_TICKS_REQUIRED_UNIT
+= TICKS_PER_SECOND * 2` stays exactly as documented — a forum-sourced constant, not a
+binary-recovered one — and the comment attributing it to "Yatoka Shimaoka on forums" should **not**
+be deleted, since nothing here replaces it.
 
 **One behavioural note worth recording regardless of the RE result**: the parity guide's text
 ("OpenApoc currently breaks it only on unequip") is **stale relative to the current tree**.
@@ -554,12 +583,14 @@ semantics were confirmed.
   3,972 bytes; only the switch dispatch and case 2's unit loop were read closely). A parallel unit
   loop may exist in case 1 or case 3 and was not ruled out — if it exists and differs from case 2's
   in a way that reads an armour field, that would resolve §3.4's open question.
-  wire it from a table-size or duration guess.
 - `FUN_0007aa8c`'s two resistance tables (`DAT_000F9CDB`, `DAT_000FF2DB`) were located but their
   contents were not dumped or decoded.
-- A numeric (non-string-anchored) scan for the `agent_general_data` catalog-row → runtime-instance
-  copy site (cloak's most likely remaining path) was not attempted — flagged in §4.2 as the
-  concrete next step, distinct from a blind `CMP reg, 0xA` sweep (rejected as too unconstrained).
+- `FUN_0008A524` (§4.2b), the top candidate consumer of `agent_general_data.type`, was only
+  partially read (decompile truncated at 30,000 characters, before the fourth of four type-field
+  reference sites). The remaining 20 functions that reference the same field via loop-start
+  addressing (§4.2's list) were not decompiled at all — this is the concrete next step for K1,
+  and is a **much narrower** search than a blind `CMP reg, 0xA` sweep (rejected as too
+  unconstrained on its own): 21 named functions, not the whole binary.
 
 ## Artifacts (lab only — not copied into this tree)
 
@@ -576,9 +607,21 @@ semantics were confirmed.
   the successful re-run after the project lock cleared), `export/query_overlay_type_dispatch.log`,
   `export/query_overlay_type_siblings1.log`, `export/query_hazard_dispatcher.log`,
   `export/query_enzyme_encoders_and_mindshield.log`, `export/query_fun_7d67c.log`,
-  `export/query_hazard_deep_dive.log`, `export/query_enzyme_cloak_strings.log`.
+  `export/query_hazard_deep_dive.log`, `export/query_enzyme_cloak_strings.log`,
+  `export/query_cloak_type0a.log`, `export/query_cloak_candidate_8a524.log`.
 
-Note: this session hit a `LockException` against the shared `OpenApocOG_TACP` Ghidra project from
-a concurrent peer session (independently working B1, cover-tile scoring, against the same
-project). Waited for the lock rather than forcing; coordinated over `SendMessage`; no destructive
-action was taken on the shared project.
+## Coordination note
+
+This session ran concurrently with a peer session (`RE-cover`) independently working B1
+(cover-tile scoring) against the same shared `OpenApocOG_TACP` Ghidra project. Three
+`LockException`s were hit; each was resolved by waiting for the project lock to clear (via a
+polling `Monitor`) rather than forcing or retrying blindly, and coordinated over `SendMessage`. No
+destructive action was taken on the shared project. Mid-session, a methodological correction
+arrived (via the session coordinator) about TACP's two distinct string-region types (a packed,
+index-addressed UI/message pool with no direct xrefs by design, vs. a fixed-stride `0x2E`-byte
+internal-asset-name table). Its specific factual claims (exact offsets for `Medi-kit`, `senator`,
+`ToxiGun`, `legs1`, and the `0x2E`-byte stride) were independently verified against this session's
+own strings dump before being relied on (§1) — all checked out. Its general prediction that
+fixed-stride-table entries are reliably referenced did **not** hold for this session's four
+specific targets (`VisibilityDisruptionField`, `EntropyPod`, `FireGrenade`, `EnergyPod` — all zero
+xrefs, §1), which is itself recorded as a genuine (not tooling-artifact) negative result.

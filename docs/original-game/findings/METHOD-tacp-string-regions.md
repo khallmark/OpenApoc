@@ -79,6 +79,48 @@ A `NOT BOUND` verdict must state **which structural method** was exhausted:
 `NOT BOUND` remains a successful outcome — but only when reached by a method capable of finding a
 positive.
 
+## Four methods exhausted — the access is almost certainly token-based
+
+The B3 investigation went well past xrefs and still found nothing, on TACP:
+
+1. `getReferencesTo` on the pool address and a ±0x100 window — **0**.
+2. Raw 4-byte pointer scan across **all** memory for that address and for every mapped copy — **0**.
+3. Full executable-code scalar-operand scan for **any** instruction whose immediate lands anywhere
+   in `[0x28E000, 0x292000]` — the ~16 KB span covering all three parallel pools. **6 hits, all in
+   an unrelated preceding data blob, none inside the pools.**
+4. All 128 `SCASB`/`REPNE SCASB` sites (48 functions) cross-referenced against functions touching
+   the pool window — 2 candidates, both decompiled, both reading a *different* table.
+
+That is not "the xref was empty". That is four independent methods converging on zero, which
+means **the string address is never formed as an immediate anywhere in the binary.**
+
+The investigator's own caveat names the mechanism: *"accessed through a register-relative
+computation whose base is built at runtime rather than as a single scalar immediate — that would
+evade all four of my methods."*
+
+**Working hypothesis: display text is addressed by token/ordinal and resolved through a table at
+runtime.** Under it, every scan above is guaranteed to return zero, and every per-row `NOT BOUND`
+reached by string anchoring is uninformative rather than conclusive.
+
+### Why this is the highest-leverage target in the backlog
+
+One resolver sits between the project and **B1 cover, B3 wounded penalty, K1 cloak, G1 gadgets and
+B5 enzyme**. Binding it once unblocks all five. Nothing else in this backlog has that fan-out.
+
+Angles not yet exhausted:
+
+- **The scans may have used the wrong base.** They centred on `0x2DFE0E` (`Cautious mode`), which
+  is *mid-pool*. A resolver holds the pool's **true start** — loaded once at init into a global.
+  One immediate, stored once, is all there would be.
+- **Ordinal-first, not address-first.** Count NUL-terminated entries from the true base to get a
+  message's ordinal, then look for an emitter called with small integer constants.
+  `Unit injured` / `Unit badly injured` / `Unit critically wounded` are consecutive in the pool, so
+  a call site passing N, N+1, N+2 on three severity branches is an unmistakable signature —
+  searchable with no address involved.
+- **Anchor on a message with a findable trigger.** `Deployment Failed` fires on spawn-placement
+  failure, which is structurally locatable without any string. However that path names its message
+  **is** the resolver protocol.
+
 ## The same pattern exists in UFO2P
 
 The B1 investigation found this in TACP; the O1 investigation independently hit it in UFO2P. All
