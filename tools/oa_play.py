@@ -779,7 +779,14 @@ class Driver:
                     self.responses[f"{st.stage}:{k}"] = self.responses.get(f"{st.stage}:{k}", 0) + 1
                     self.say(f"  [event] {st.stage} -> KEY {k}")
                     return True
-            return True
+            # Every key was tried and the stage did not budge. This used to `return True`, which
+            # told the caller "handled" and sent it straight back round its loop -- and because
+            # the say() above only fires on a stage CHANGE, the driver then hammered a key that
+            # does nothing, forever, printing not one line. A run was killed by hand after
+            # sitting like that; the log simply stopped mid-campaign with no error and the game's
+            # own log had zero warnings. Report it as unhandled so callers fall through to their
+            # own stall handling instead of spinning in silence.
+            return False
 
         policy = RESPONSES.get(st.stage)
         if not policy:
@@ -925,9 +932,22 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
     stalls = 0
     blocked_s = 0.0
     last_intercept = 0.0
+    parked_stage = ""
+    parked_rounds = 0
     while time.time() < deadline:
         st = d.status()
         if st.stage != "CityView":
+            # The clock stall detector further down only runs on the CityView branch, so any
+            # screen we cannot dismiss used to spin here reporting nothing at all until the whole
+            # leg budget expired. Count it and say so: a run that is parked off CityView is not
+            # advancing the campaign, and the stage name is the entire diagnosis.
+            if st.stage == parked_stage:
+                parked_rounds += 1
+            else:
+                parked_stage, parked_rounds = st.stage, 0
+            if parked_rounds and parked_rounds % 20 == 0:
+                d.say(f"  [stall] parked on {st.stage} for ~{parked_rounds // 2}s; "
+                      f"nothing is dismissing it")
             if d.dismiss_modal(st):
                 continue
             # Some other screen (battle, base, ufopaedia) is in charge; let its own driver run.
@@ -935,6 +955,7 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
                 return d.h.gs("time")
             time.sleep(0.5)
             continue
+        parked_stage, parked_rounds = "", 0
 
         turbo = d.h.gs("turbo")
         if turbo.get("can_turbo") == "1":
