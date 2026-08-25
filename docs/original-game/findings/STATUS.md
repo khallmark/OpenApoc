@@ -7,76 +7,50 @@ Branch: `khallmark/parity-implementation`, cut from `develop` @ `26a72467`.
 - `cmake --build build -j` — **green**, extract-data ran clean.
 - `ctest --test-dir build` — **30/30 passed, 12.97 s.**
 
-## Current — 20 commits in
+## Final — 28 commits, suite 36/36 (baseline was 30/30)
 
-**`ctest` 35/35 passing.** Five new test executables plus new cases inside `test_city_rules`.
+### Implemented, each with a lock test verified to fail before the change
 
-| Landed | |
+| Row | |
 |---|---|
-| `fix(city)` | ground vehicles no longer destroyed for merely failing to reach a target |
-| `feat(battle)` | ten alien-building briefings extracted and shown pre-battle |
-| `feat(city)` | UFO mission-counter zero-transition, live in real incursion spawns |
-| `fix(battle)` | large-unit occupancy and line-of-sight geometry |
-| `test(parity)` | psionics, TU reservation and AI weapon priority frozen |
-| `docs(parity)` | all R&D verdicts, two methodology notes, four Class C rows closed |
+| **V2** | ground vehicles no longer destroyed for merely failing to reach a target |
+| **A1** | large-unit occupancy and line-of-sight geometry |
+| **C2** | ten alien-building briefings extracted and shown pre-battle |
+| **U1(a)** | UFO mission-counter zero-transition, live in real incursion spawns |
+| **G1** | Disruptor Shield absorption corrected (was infinite, never overflowed) |
+| **F1** | recovered hazard-spread primitives; `HAZARD_SPREAD_CHANCE` macro and FIXME gone |
+| **A2/A3/A4** | psionics, TU reservation and AI weapon priority frozen |
 
-In flight: Disruptor Shield implementation, hazard-spread RNG implementation, and an A4 upgrade
-from a contract test to one that drives the real private AI decision path.
+### Closed as genuine negatives — evidence absent, not effort
 
-Any parity change must keep all 30 green. A new lock test must **fail before** its change and
-**pass after**; a lock test that passes on arrival proves nothing (see
-[../parity-guide.md](../parity-guide.md#1-workflow-a--closing-a-code-only-gap)).
+B1 cover · B3 wounded penalty · O1 bribe/rift · M1 city music · V1 engagement table ·
+U2(a) `DAT_000e0cc0` · C1 umbilical · C3 late bombing · C4 Apocalypse attack ·
+Vortex Analyzer, Structure Probe, Alien Detector (dead in the original too)
 
-## In flight
+### Attempted and correctly abandoned
 
-**R&D / decompilation** — writes to `findings/`, no `game/` edits:
+**U2(b)** — bound in the binary's control flow, but no honest seam in OpenApoc: the formula is
+already shipped, the moved-count source has no counterpart in our data model, and the trigger point
+was never traced. No code written.
 
-| Agent | Items | Deliverable |
-|---|---|---|
-| RE-cover | B1 cover metric | `B1-cover-metric.md` |
-| RE-hazard | B5 enzyme, F1 fire remainder, K1 cloak | `B5-F1-K1-hazards.md` |
-| RE-wounds | B3 wounded penalty, G1 dead gadgets | `B3-G1-wounds-gadgets.md` |
-| RE-city | O1 bribe/rift, O2 cargo seize, M1 city music | `O1-O2-M1-city.md` |
-| RE-incursion | U1 mission counter, U2 base exposure, V1 vehicle dodge | `U1-U2-V1-incursion.md` |
+### Still open, honestly
 
-**Code** — isolated worktrees, merged back after review:
+B5 type 1-vs-3 · K1 (20 candidate functions unexamined) · U1(b) field semantics ·
+B2/B4 (depend on B1) · MultiTracker's downstream meaning
 
-| Agent | Items | Deliverable |
-|---|---|---|
-| Code-locks | A2 psionics, A3 TU reservation, A4 attack priority | three lock tests |
-| Code-largeunits | A1 multi-tile units | breakage list + fixes + `test_battle_large_unit` |
-| Code-groundveh | V2 ground-vehicle order defect | `test_ground_vehicle_path` |
-| Code-briefings | **New row** — ten TACP alien-building briefings unextracted | extractor + `test_city_rules` cases |
+## Six claims overturned by measurement during this run
 
-## Method correction issued mid-run
+Four of them mine.
 
-A `NOT BOUND` verdict on **B1 (cover metric)** rested on zero xrefs for `Cautious mode` et al,
-validated against `senator` as a known-positive control. **The control was invalid** — `senator` is
-in TACP's asset-name table (fixed 0x2E stride, directly referenced); every B1 anchor is in the
-packed message pool (`0x2DE000`–`0x2E2FFF`), whose entries are reached by index and can never carry
-a direct xref. See [METHOD-tacp-string-regions.md](METHOD-tacp-string-regions.md).
+| Claim | Reality |
+|---|---|
+| "Pool strings can never carry a direct xref" *(mine)* | Falsified by a live pointer table serving ~30 pool strings |
+| "BOUND means implementable" *(mine)* | U2(b) was bound and had no seam here |
+| "The Disruptor Shield is inert" *(mine)* | Wired since 2016, and wrong — infinite absorption |
+| "Preserve the dead `(0,0,0)` outcome" *(mine)* | The byte reads `1`. The guard was protecting a typo |
+| "Mind Shield's citation doesn't resolve" | Sound binding; `FUN_*` addresses drift between imports |
+| "The RNG is a precomputed table" | Reads as static zero, BSS-shaped, filled at runtime |
 
-All three TACP agents were sent the correction and told to enter structurally instead. **RE-cover
-was resumed** rather than accepted. New rule for negatives: a `NOT BOUND` must name the structural
-method exhausted, not cite absent xrefs.
+Every one was caught by an agent checking rather than building to the brief. That is the only
+reason this branch is worth merging.
 
-Unchased lead surfaced by the mapping: **`TU cost per wound: ` @ `0x2E0204`** — direct evidence the
-original modelled a per-wound TU cost (parity item B3), handed to RE-wounds.
-
-## Done in this run
-
-- **C1 umbilical — closed.** `umbilical` is absent from *both* binaries, not just UFO2P.
-- **C4 city-wide Apocalypse attack — closed.** All 8 `apocalypse` hits across both binaries are UI
-  or title copy; none names an event.
-- **C3 late-campaign bombing — closed** pending an incidental find. The escalation is already
-  explained by the weekly growth and mission-preference tables.
-- **C2 mushrooms — RECLASSIFIED Class C → Class B.** The matrix searched only UFO2P; TACP has the
-  string at file `0x2E1468`. It is a **battlescape objective**, not cityscape feedback, and the row
-  was filed under the wrong subsystem. See
-  [C1-C4-no-evidence-items.md](C1-C4-no-evidence-items.md).
-
-## Rule for integrating R&D
-
-A `findings/` verdict of `NOT BOUND` **closes** its parity row as a recorded negative result. It
-does **not** license implementing the feature from a plausible guess. Only `BOUND` verdicts may
-become constants in `game/`.
