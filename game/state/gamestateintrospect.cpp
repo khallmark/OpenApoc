@@ -821,10 +821,17 @@ UString introspectGameState(GameState &state, const UString &query)
 			// hasDimensionShifter is the sole gate on crossing into the alien city
 			// (vehiclemission.cpp GotoPortal: without it the craft is stranded or crashes on
 			// arrival), so the driver has to be able to tell which craft can make the trip.
+			// Passenger CAPACITY, not passengers aboard. crew= reports who is currently
+			// carried, which is a different question: an empty troop transport reports crew=0
+			// and looks indistinguishable from a pure fighter. A driver picking gate sentries on
+			// crew=0 will happily send the APC that carries the squad, and losing it is what
+			// left a whole campaign unable to fly a single ground mission.
+			const int pax = veh->getMaxPassengers();
 			out += (out.empty() ? "" : "|") +
-			       format("{0}:{1}:flying={2},armed={3},crew={4},shifter={5}", idx, safeName,
+			       format("{0}:{1}:flying={2},armed={3},crew={4},shifter={5},pax={6}", idx,
+			              safeName,
 			              flying ? 1 : 0, armed ? 1 : 0, crew,
-			              veh->hasDimensionShifter() ? 1 : 0);
+			              veh->hasDimensionShifter() ? 1 : 0, pax);
 			idx++;
 		}
 		return format("craft={0} interceptors={1} detail={2}", idx, usable,

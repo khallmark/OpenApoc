@@ -1595,9 +1595,15 @@ def station_at_gates(d: Driver) -> int:
         if len(bits) < 3 or not bits[0].isdigit():
             continue
         flags = bits[-1]
-        # crew=0 keeps the troop transport out of it: it carries the squad that wins ground
-        # missions, and this run lost every transport it had to exactly that mistake.
-        if "armed=1" not in flags or "crew=0" not in flags:
+        # pax=0, NOT crew=0. crew= is who is aboard RIGHT NOW, so an empty troop transport
+        # reports crew=0 and is indistinguishable from a pure fighter -- the first version of
+        # this filter cheerfully sent the Wolfhound APC and the Stormdog to hold a gate, which
+        # is precisely the mistake it was written to prevent. pax= is capacity, added to the
+        # interceptors introspection for this.
+        # flying=1 is a TYPE check (VehicleType::Type::Flying), not "currently airborne", so it
+        # correctly excludes road vehicles without excluding craft parked in the hangar -- and a
+        # hangar queen is exactly what should be sent to hold a gate.
+        if "armed=1" not in flags or "flying=1" not in flags or "pax=0" not in flags:
             continue
         fighters.append(int(bits[0]))
     if not fighters:
