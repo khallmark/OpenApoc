@@ -940,6 +940,7 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
     stalls = 0
     blocked_s = 0.0
     last_intercept = 0.0
+    last_station = 0.0
     parked_stage = ""
     parked_rounds = 0
     while time.time() < deadline:
@@ -964,6 +965,13 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
             time.sleep(0.5)
             continue
         parked_stage, parked_rounds = "", 0
+
+        # Hold the gates rather than waiting for something to break. Periodic rather than
+        # one-shot: craft finish missions, get shot down and get replaced, and the gates
+        # themselves move every week (City::weeklyLoop -> generatePortals).
+        if time.time() - last_station > 90:
+            last_station = time.time()
+            d.checks["stationed"] = d.checks.get("stationed", 0) + station_at_gates(d)
 
         turbo = d.h.gs("turbo")
         if turbo.get("can_turbo") == "1":
@@ -1551,6 +1559,77 @@ def raid_alien_building(d: Driver) -> str:
         return f"no-battle ({st.stage})"
 
     return win_battle(d, budget_s=2400)
+
+
+def station_at_gates(d: Driver) -> int:
+    """Hold armed craft on the dimension gates instead of waiting for alerts.
+
+    campaign-plan.md already prescribes this and the driver never did it: "Do not wait for alerts.
+    Detection is throttled and lossy; active patrolling beats it." What the driver did instead was
+    react to hostiles ALREADY in the city, which means every interception is a dogfight over
+    occupied buildings.
+
+    That is expensive in a way the score sheet makes explicit. Scenery::die debits cityDamage for
+    a destroyed tile regardless of who destroyed it (game/state/city/scenery.cpp:1338) -- our own
+    missiles and the wrecks of the UFOs we shoot down are charged to us exactly like alien
+    bombardment. Measured over one run to day 15: ufos_downed +300 against city_damage -1134, with
+    three of five craft lost and no crewed transport left, so ZERO ground missions were ever flown
+    while 73 hostiles walked the city and infiltration climbed to 1240. Winning the air war over
+    the rooftops cost more than losing it would have.
+
+    Gates are where UFOs arrive, so a craft holding station there engages before the UFO reaches
+    anything breakable. Issued the way a player does it: select the craft, centre the view on a
+    portal, LEFT-click it. Right-click is "fly through the gate" and belongs to goto_portal().
+
+    Craft parked in the base are deliberately NOT filtered out -- a hangar queen is exactly what
+    should be sent to hold a gate, and the move order takes it off by itself
+    (VehicleMission::takeOffCheck).
+    """
+    st = d.status()
+    if st.stage != "CityView":
+        return 0
+
+    fighters = []
+    for part in d.h.gs("interceptors").get("detail", "").split("|"):
+        bits = part.split(":")
+        if len(bits) < 3 or not bits[0].isdigit():
+            continue
+        flags = bits[-1]
+        # crew=0 keeps the troop transport out of it: it carries the squad that wins ground
+        # missions, and this run lost every transport it had to exactly that mistake.
+        if "armed=1" not in flags or "crew=0" not in flags:
+            continue
+        fighters.append(int(bits[0]))
+    if not fighters:
+        return 0
+
+    if not d.click_id("BUTTON_TAB_2", st):
+        return 0
+    time.sleep(0.35)
+    lst = d.controls(d.status()).get("OWNED_VEHICLE_LIST")
+    if lst is None or lst.w <= 0:
+        return 0
+
+    sent = 0
+    for idx in fighters:
+        d.h.click_xy(lst.x + 16 + idx * 36, lst.y + lst.h // 2)
+        time.sleep(0.25)
+        # Re-centre per craft: selecting a vehicle can move the camera, which would leave stale
+        # screen coordinates pointing at whatever now occupies that pixel.
+        info = d.h.gs("centre_on_portal")
+        if info.get("centred") != "1":
+            continue
+        time.sleep(0.4)
+        try:
+            px, py = (int(v) for v in info["at"].split(",")[:2])
+        except (KeyError, ValueError):
+            continue
+        d.h.ok(f"click {px} {py}")
+        time.sleep(0.4)
+        sent += 1
+    if sent:
+        d.say(f"  [gates] {sent} armed craft ordered to hold station on a dimension gate")
+    return sent
 
 
 def goto_portal(d: Driver) -> bool:
