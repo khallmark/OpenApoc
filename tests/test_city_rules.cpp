@@ -796,6 +796,50 @@ static bool test_ufo_mission_counter_zero_sends_aliens_to_a_portal()
 	return true;
 }
 
+// U1(b): a damaged UFO breaks off and leaves through the nearest dimension gate.
+//
+// UFO2P FUN_000588f8 compares current constitution against a role-derived fraction of the type's
+// ceiling and, inside that band, sets the same +0x16A "arrived" flag U1(a) uses -- whose reader
+// (FUN_00059148) flies the craft to the nearest gate. See
+// docs/original-game/findings/U1b-gate-consumer.md.
+//
+// The percent is role-indexed and NOT uniform. An earlier pass asserted a flat 75%; that figure
+// holds only at a call site this population structurally never reaches, and was corrected by
+// raw-verifying FUN_0006da88's only two callers. The table is UFO_WITHDRAW_HEALTH_PERCENT_BY_ROLE.
+static bool test_ufo_withdraw_band()
+{
+	// Recovered table, spot-checked at the roles the incursion data actually uses.
+	TEST_REQUIRE(UFO_WITHDRAW_HEALTH_PERCENT_BY_ROLE[7] == 30, "role 7 (Infiltration) is 30%");
+	TEST_REQUIRE(UFO_WITHDRAW_HEALTH_PERCENT_BY_ROLE[8] == 20, "role 8 (Subversion) is 20%");
+	TEST_REQUIRE(UFO_WITHDRAW_HEALTH_PERCENT_BY_ROLE[10] == 25, "role 10 (Overspawn) is 25%");
+	TEST_REQUIRE(UFO_WITHDRAW_HEALTH_PERCENT_BY_ROLE[11] == 10, "role 11 (Escort) is 10%");
+	TEST_REQUIRE(UFO_WITHDRAW_HEALTH_PERCENT_BY_ROLE[15] == 0, "role 15 is 0 (never withdraws)");
+
+	// Band is [crashHealth, maxHealth*percent/100): still flying, but below the threshold.
+	TEST_REQUIRE(Vehicle::withdrawBandEntered(/*health*/ 25, /*max*/ 100, /*crash*/ 10, 30),
+	             "health 25 with a 30% threshold on a 100-hull is inside the band");
+	TEST_REQUIRE(!Vehicle::withdrawBandEntered(35, 100, 10, 30),
+	             "health above the threshold must not withdraw");
+	TEST_REQUIRE(!Vehicle::withdrawBandEntered(30, 100, 10, 30),
+	             "exactly at the threshold is not below it");
+	TEST_REQUIRE(!Vehicle::withdrawBandEntered(10, 100, 10, 30),
+	             "at crash health the craft is already going down, not withdrawing");
+	TEST_REQUIRE(!Vehicle::withdrawBandEntered(5, 100, 10, 30),
+	             "below crash health is not a withdrawal either");
+	TEST_REQUIRE(!Vehicle::withdrawBandEntered(25, 100, 10, 0),
+	             "a zero percent never withdraws (anything not incursion-spawned)");
+
+	// Escort's 10% is provably below crash_health on every hull, so its band is EMPTY. This is
+	// recovered behaviour, not an off-by-one to round away: at 10% of 100 the threshold is 10,
+	// which is exactly crash_health, and the band [10, 10) contains nothing.
+	for (int h = 0; h <= 100; h++)
+	{
+		TEST_REQUIRE(!Vehicle::withdrawBandEntered(h, 100, 10, 10),
+		             "Escort's band must be empty at health {0}", h);
+	}
+	return true;
+}
+
 // U1(a) call-site lock. The three tests above drive
 // VehicleMission::advanceMissionCounterOnArrival() directly, which leaves the *hook* untested --
 // the call inside VehicleMission::start()'s MissionType::AttackBuilding re-plan branch. Delete
@@ -3031,6 +3075,7 @@ int main(int argc, char **argv)
 	    {"ufo_mission_counter_zero_picks_new_target", test_ufo_mission_counter_zero_picks_new_target},
 	    {"ufo_mission_counter_zero_without_building_clears_target",
 	     test_ufo_mission_counter_zero_without_building_clears_target},
+	    {"ufo_withdraw_band", test_ufo_withdraw_band},
 	    {"ufo_mission_counter_zero_sends_aliens_to_a_portal",
 	     test_ufo_mission_counter_zero_sends_aliens_to_a_portal},
 	    {"ufo_mission_counter_decrements_from_mission_start",

@@ -212,6 +212,14 @@ class Vehicle : public StateObject<Vehicle>,
 	// Current shadow direction, updated every time vehicle changes facing
 	VehicleType::Direction shadowDirection = VehicleType::Direction::N;
 	int health = 0;
+	// Damaged-withdrawal threshold, as a percent of VehicleType::health, seeded at incursion
+	// spawn from the UFO's mission role. Zero means "never withdraws" (the default for anything
+	// not spawned by an incursion). UFO2P FUN_000588f8 gates on the band
+	// [crash_health, health*percent/100) and, inside that band, sets the same "arrived" flag
+	// U1(a) uses -- whose reader flies the craft to the nearest dimension gate. The percent is
+	// NOT uniform and is NOT 75%: it comes from a fixed 16-entry role-indexed table.
+	// See docs/original-game/findings/U1b-gate-consumer.md.
+	int withdrawHealthPercent = 0;
 	int shield = 0;
 	unsigned int shieldRecharge = 0;
 	int stunTicksRemaining = 0;
@@ -354,6 +362,11 @@ class Vehicle : public StateObject<Vehicle>,
 	int getMaxFuel() const;
 	int getFuel() const;
 	int getMaxPassengers() const;
+	// UFO2P FUN_000588f8's damaged-withdrawal band, as a pure decision so it can be locked by a
+	// test without a battle or a city. True when constitution has fallen into
+	// [crashHealth, maxHealth*percent/100) -- at or below crashHealth the craft is already
+	// crashing and this is moot, and a percent of 0 never withdraws.
+	static bool withdrawBandEntered(int health, int maxHealth, int crashHealth, int percent);
 	int getPassengers() const;
 	int getMaxCargo() const;
 	int getCargo() const;

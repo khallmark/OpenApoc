@@ -466,6 +466,7 @@
     <member>direction</member>
     <member>shadowDirection</member>
     <member>health</member>
+    <member>withdrawHealthPercent</member>
     <member>shield</member>
     <member>shieldRecharge</member>
     <member>stunTicksRemaining</member>
@@ -1138,6 +1139,7 @@
     <member>missionCounter</member>
     <member>scatter</member>
     <member>typePercent</member>
+    <member>role</member>
   </object>
   <object>
     <name>UFOIncursion</name>

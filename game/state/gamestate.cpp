@@ -1001,9 +1001,11 @@ void GameState::invasion()
 		int zoneMode = -1;
 		int scatter = 0;
 		unsigned int missionCounter = 0;
+		int withdrawPercent = 0;
 		if (primaryIdx < currentIncursion->primarySlots.size())
 		{
 			const auto &slot = currentIncursion->primarySlots[primaryIdx];
+			withdrawPercent = UFO_WITHDRAW_HEALTH_PERCENT_BY_ROLE[slot.role & 0xF];
 			zoneMode = slot.zoneMode;
 			scatter = VehicleMission::clampIncursionScatter(slot.scatter, slot.typePercent);
 			missionCounter = slot.missionCounter;
@@ -1013,6 +1015,7 @@ void GameState::invasion()
 			auto invader = invaders[v.first].front();
 			invaders[v.first].pop_front();
 
+			invader->withdrawHealthPercent = withdrawPercent;
 			invader->enterDimensionGate(*this);
 			invader->equipDefaultEquipment(*this);
 			invader->city = invadedCity;
@@ -1064,11 +1067,13 @@ void GameState::invasion()
 	{
 		auto &v = currentIncursion->escortList[escortIdx];
 		UString followType;
+		int withdrawPercent = 0;
 		int zoneMode = -1;
 		int scatter = 0;
 		if (escortIdx < currentIncursion->escortSlots.size())
 		{
 			const auto &slot = currentIncursion->escortSlots[escortIdx];
+			withdrawPercent = UFO_WITHDRAW_HEALTH_PERCENT_BY_ROLE[slot.role & 0xF];
 			followType = slot.followVehicleType;
 			zoneMode = slot.zoneMode;
 			scatter = VehicleMission::clampIncursionScatter(slot.scatter, slot.typePercent);
@@ -1078,6 +1083,7 @@ void GameState::invasion()
 			auto invader = invaders[v.first].front();
 			invaders[v.first].pop_front();
 
+			invader->withdrawHealthPercent = withdrawPercent;
 			invader->enterDimensionGate(*this);
 			invader->city = invadedCity;
 			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader, 0,
@@ -1116,9 +1122,11 @@ void GameState::invasion()
 		int zoneMode = -1;
 		int scatter = 0;
 		unsigned int missionCounter = 0;
+		int withdrawPercent = 0;
 		if (attackIdx < currentIncursion->attackSlots.size())
 		{
 			const auto &slot = currentIncursion->attackSlots[attackIdx];
+			withdrawPercent = UFO_WITHDRAW_HEALTH_PERCENT_BY_ROLE[slot.role & 0xF];
 			zoneMode = slot.zoneMode;
 			scatter = VehicleMission::clampIncursionScatter(slot.scatter, slot.typePercent);
 			missionCounter = slot.missionCounter;
@@ -1128,6 +1136,7 @@ void GameState::invasion()
 			auto invader = invaders[v.first].front();
 			invaders[v.first].pop_front();
 
+			invader->withdrawHealthPercent = withdrawPercent;
 			invader->enterDimensionGate(*this);
 			invader->city = invadedCity;
 			invader->setMission(*this, VehicleMission::arriveFromDimensionGate(*this, *invader, 0,

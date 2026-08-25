@@ -15,6 +15,7 @@ static UFOIncursionSlot slotFromRecord(const UfoMissionData &rec, int slot, cons
 	out.missionCounter = rec.mission_counter[slot];
 	out.scatter = rec.scatter[slot];
 	out.typePercent = rec.type_percent[slot];
+	out.role = rec.role[slot];
 	const auto follow = rec.follow_slot[slot];
 	if (follow >= 0 && follow < UFO_MISSION_SLOT_COUNT && rec.craft[follow] != 0xffff)
 	{

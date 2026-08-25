@@ -2163,8 +2163,47 @@ Vec3<float> Vehicle::getMuzzleLocation() const
 	                             (float)type->height / 16.0f);
 }
 
+bool Vehicle::withdrawBandEntered(int health, int maxHealth, int crashHealth, int percent)
+{
+	// Recovered from UFO2P FUN_000588f8 (docs/original-game/findings/U1b-gate-consumer.md): the
+	// gate compares current constitution against a role-derived fraction of the type's ceiling,
+	// and fires only while the craft is still flying. Two roles (Escort, and the unnamed role 9)
+	// sit at 10%, which is below crash_health on every hull, so their band is empty by
+	// construction -- that falls out of this comparison rather than needing a special case.
+	if (percent <= 0 || maxHealth <= 0)
+	{
+		return false;
+	}
+	const int threshold = maxHealth * percent / 100;
+	return health > crashHealth && health < threshold;
+}
+
 void Vehicle::update(GameState &state, unsigned int ticks)
 {
+	// Damaged UFOs break off and leave through the nearest dimension gate. The original runs this
+	// as a periodic, calendar-staggered sweep over all vehicle slots (FUN_0005760c, mod-18
+	// rotation) rather than as a reaction at the instant of a hit; checking it in the per-vehicle
+	// update is the same behaviour at a finer cadence, and the band test is idempotent so a
+	// craft already withdrawing is not re-ordered.
+	if (withdrawHealthPercent > 0 && type && !crashed && !falling && !isDead() &&
+	    owner == state.getAliens() &&
+	    withdrawBandEntered(health, type->health, type->crash_health, withdrawHealthPercent))
+	{
+		bool alreadyLeaving = false;
+		for (auto &m : missions)
+		{
+			if (m.type == VehicleMission::MissionType::GotoPortal)
+			{
+				alreadyLeaving = true;
+				break;
+			}
+		}
+		if (!alreadyLeaving && city && !city->portals.empty())
+		{
+			setMission(state, VehicleMission::gotoPortal(state, *this));
+		}
+	}
+
 	if (isDead() && status == VehicleStatus::Operational)
 	{
 		status = VehicleStatus::Destroyed;
