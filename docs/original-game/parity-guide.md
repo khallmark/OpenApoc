@@ -77,7 +77,13 @@ South/West/North/Up **plus one dead `(0,0,0)` outcome** — not a clean 5-direct
 is authored behaviour or an off-by-one in the original binary is **undetermined**. Preserve it
 exactly; do not tidy it into four directions or five. Tidying it would be inventing behaviour.
 
-Two audit items this run produced, both about **existing** claims rather than open rows:
+**A confidence upgrade, free.** Chasing the shield's damage-type modifier produced an independent
+**code-reader** confirmation of the table adjacent to `damage_modifier_data` (`0x30165C`). That
+entry is currently `near_first_of_2 / low` in the lab's `tacp_rebase.csv` — located by proximity
+heuristic, not by a consumer. A traced reader is stronger evidence than proximity, so **whoever
+owns that extractor can raise its confidence**, citing the shield investigation.
+
+Audit items this run produced, all about **existing** claims rather than open rows:
 
 1. **TACP string-anchoring gives false negatives.** `0x2DE000`–`0x2E2FFF` is a packed
    variable-length pool whose entries can never carry a direct xref; `0x2F2000`–`0x2F3400` is a
