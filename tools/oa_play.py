@@ -2296,6 +2296,38 @@ def battle_layout(d: Driver) -> dict:
     return {"foes": parse("foe_at"), "mine": parse("mine_at"), "view_z": view_z}
 
 
+def zoom_to_event(d: Driver) -> int:
+    """Jump the view to the engine's own last-event location. Returns the new level, or -1.
+
+    BattleView already does this job. Every event carrying a message is appended to
+    state->messages (gamestate.cpp:2023) and pushed to NEWS_TICKER *unconditionally*
+    (battleview.cpp:4355-4358) -- the Notifications.* options this driver disables at launch only
+    decide whether a blocking NotificationScreen pops up (battleview.cpp:4360-4372), NOT whether
+    the event is logged. So the event feed is live even with every notification switched off.
+
+    BUTTON_ZOOM_EVENT (also Home, battleview.cpp:3644) calls zoomLastEvent() -> zoomAt(), and
+    zoomAt() does setScreenCenterTile() *and* setZLevel(location.z + 1) (battleview.cpp:5005-5010).
+    The engine changes FLOOR for us, to the floor where something actually happened.
+
+    That is precisely what match_enemy_floor() below re-derives by hand: pulling every unit's raw
+    coordinates over the harness and computing a modal floor. Ask the engine first. The coordinate
+    scan stays as the fallback, because the button is guarded on Ticker::hasMessages(), which goes
+    false once the last message finishes scrolling (forms/ticker.h:43) -- in a quiet moment there
+    is no event to zoom to and the hand-rolled scan is still the only answer.
+    """
+    layout = battle_layout(d)
+    before = layout.get("view_z", -1) if layout else -1
+    if not _press(d, "BUTTON_ZOOM_EVENT"):
+        return -1
+    time.sleep(0.25)
+    layout = battle_layout(d)
+    after = layout.get("view_z", -1) if layout else -1
+    if after < 0 or after == before:
+        return -1
+    d.say(f"  [battle] zoom-to-event: view {before} -> {after} (engine's own last-event location)")
+    return after
+
+
 def match_enemy_floor(d: Driver, layout: dict) -> int:
     """Bring the view to the floor most hostiles are on. Returns the level moved to, or -1.
 
@@ -2609,10 +2641,13 @@ def win_battle(d: Driver, budget_s: float = 1800.0) -> str:
             time.sleep(0.12)
 
         # Put the camera on the hostiles' floor first: orders only reach the displayed level.
+        # Ask the engine before computing it ourselves -- see zoom_to_event() for why its answer
+        # is better than the coordinate scan, and why the scan still has to stay.
         if rounds % 3 == 0:
-            layout = battle_layout(d)
-            if layout:
-                match_enemy_floor(d, layout)
+            if zoom_to_event(d) < 0:
+                layout = battle_layout(d)
+                if layout:
+                    match_enemy_floor(d, layout)
 
         foes = d.h.screen_craft("enemies_screen")
         # enemies_screen only reports hostiles already on screen. Walking the camera only when
