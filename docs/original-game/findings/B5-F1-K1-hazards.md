@@ -416,6 +416,18 @@ large (3,972-byte) function that `switch`es on a global, `DAT_003009A0`, with (a
 opposed to `FUN_0007ae78`/the b2b4/b3dc/b348 family which is the **per-tick growth** of an
 already-placed hazard.
 
+> **CORRECTION — this paragraph's conclusion is FALSE. Do not act on it.**
+> `DAT_003009a0` *is* a true fixed-address global with six references (three writers, three
+> readers) in four functions. The "zero hits" result came from a scan that **structurally cannot
+> see** the reference class involved: `QueryDataRange.java` guards its match loop with
+> `instanceof Scalar`, and an x86 direct absolute-memory operand (`MOV byte ptr [0x3009a0],CH`) is
+> an `Address`-typed operand object in Ghidra's model, not a `Scalar`. The mis-resolved-register
+> theory below was invented to explain an artefact of the tool. It is also not the overlay's 2-bit
+> type field at all — it is a 7-way blast/effect-kind selector. See
+> [B5-enzyme-overlay-type.md](B5-enzyme-overlay-type.md) sections 1 and 2. Every "zero
+> literal-operand hits" negative anywhere in this folder that came from that script is suspect for
+> the same reason; use `getReferencesTo(Address)`.
+
 **The type discriminator was not traceable.** A full-executable scan for any instruction with
 `0x3009A0` as a literal operand returned **zero hits** (`QueryDataRange`-style scan, `Scalar`
 operand match across every instruction in `.object1`). Since the decompiler nonetheless renders
