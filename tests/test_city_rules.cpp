@@ -603,6 +603,117 @@ static bool test_overspawn_invasion()
 	return true;
 }
 
+// U1(a): UFO2P FUN_0003a910 @ object-page file 0x2A90F decrements vehicle +0x171
+// (UFO_mission_data +0x1B) whenever a UFO reaches a mission destination, and at
+// zero either retargets or clears the target. See
+// docs/original-game/findings/U1-U2-V1-incursion.md U1(a) and
+// VehicleMission::advanceMissionCounterOnArrival().
+static bool test_ufo_mission_counter_decrements_on_arrival()
+{
+	auto &state = *g_state;
+
+	StateRef<Building> target;
+	for (auto &b : state.buildings)
+	{
+		if (b.second && b.second->isAlive())
+		{
+			target = {&state, b.first};
+			break;
+		}
+	}
+	TEST_REQUIRE(!!target, "no alive building available to seed the mission target");
+
+	Vehicle v;
+	v.city = {&state, "CITYMAP_HUMAN"};
+
+	VehicleMission mission;
+	mission.type = VehicleMission::MissionType::AttackBuilding;
+	mission.targetBuilding = target;
+	mission.missionCounter = 3;
+
+	const bool result = mission.advanceMissionCounterOnArrival(state, v);
+	TEST_REQUIRE(result, "a non-zero decrement must not cancel the mission");
+	TEST_REQUIRE(mission.missionCounter == 2, "missionCounter should be 2, got {0}",
+	             mission.missionCounter);
+	TEST_REQUIRE(mission.targetBuilding == target, "target building must be unchanged {0}",
+	             mission.targetBuilding.id);
+	TEST_REQUIRE(!mission.cancelled, "mission must not be cancelled");
+	return true;
+}
+
+static bool test_ufo_mission_counter_zero_picks_new_target()
+{
+	auto &state = *g_state;
+
+	StateRef<Building> nearby;
+	for (auto &b : state.buildings)
+	{
+		if (b.second && b.second->isAlive() && b.second->city.id == "CITYMAP_HUMAN")
+		{
+			nearby = {&state, b.first};
+			break;
+		}
+	}
+	TEST_REQUIRE(!!nearby, "no alive CITYMAP_HUMAN building available");
+
+	Vehicle v;
+	v.city = {&state, "CITYMAP_HUMAN"};
+	// Stand right on top of the building so acquireTargetBuilding()'s distance
+	// check (TARGET_BUILDING_DISTANCE_LIMIT) finds it.
+	v.position = {(float)((nearby->bounds.p0.x + nearby->bounds.p1.x) / 2),
+	             (float)((nearby->bounds.p0.y + nearby->bounds.p1.y) / 2), 0.0f};
+
+	VehicleMission mission;
+	mission.type = VehicleMission::MissionType::AttackBuilding;
+	mission.targetBuilding = nearby;
+	mission.missionCounter = 1;
+
+	const bool result = mission.advanceMissionCounterOnArrival(state, v);
+	TEST_REQUIRE(result, "reaching zero with an available building must not cancel");
+	TEST_REQUIRE(mission.missionCounter == 0, "missionCounter should reach 0, got {0}",
+	             mission.missionCounter);
+	TEST_REQUIRE(!!mission.targetBuilding, "a new target building should have been acquired");
+	TEST_REQUIRE(!mission.cancelled, "mission must not be cancelled when a target is found");
+	return true;
+}
+
+static bool test_ufo_mission_counter_zero_without_building_clears_target()
+{
+	auto &state = *g_state;
+
+	// An isolated city with no buildings guarantees acquireTargetBuilding() fails,
+	// exercising the "no building found" branch without depending on real map
+	// layout / distance assumptions.
+	state.cities["CITYMAP_TEST_UFO_MISSION_COUNTER_EMPTY"] = mksp<City>();
+
+	StateRef<Building> priorTarget;
+	for (auto &b : state.buildings)
+	{
+		if (b.second && b.second->isAlive())
+		{
+			priorTarget = {&state, b.first};
+			break;
+		}
+	}
+	TEST_REQUIRE(!!priorTarget, "no alive building available to seed the prior target");
+
+	Vehicle v;
+	v.city = {&state, "CITYMAP_TEST_UFO_MISSION_COUNTER_EMPTY"};
+
+	VehicleMission mission;
+	mission.type = VehicleMission::MissionType::AttackBuilding;
+	mission.targetBuilding = priorTarget;
+	mission.missionCounter = 1;
+
+	const bool result = mission.advanceMissionCounterOnArrival(state, v);
+	TEST_REQUIRE(!result, "reaching zero with no building available must signal cancellation");
+	TEST_REQUIRE(mission.missionCounter == 0, "missionCounter should reach 0, got {0}",
+	             mission.missionCounter);
+	TEST_REQUIRE(!mission.targetBuilding, "target building should be cleared when none is found");
+	TEST_REQUIRE(mission.cancelled, "mission should be cancelled when no target is found");
+	return true;
+}
+
 static int growthCount(const UFOGrowth &growth, const UString &typeId)
 {
 	for (auto &entry : growth.vehicleTypeList)
@@ -2766,6 +2877,11 @@ int main(int argc, char **argv)
 	    {"goto_building_fallback", test_goto_building_fallback},
 	    {"destination_gate", test_destination_gate},
 	    {"overspawn_invasion", test_overspawn_invasion},
+	    {"ufo_mission_counter_decrements_on_arrival",
+	     test_ufo_mission_counter_decrements_on_arrival},
+	    {"ufo_mission_counter_zero_picks_new_target", test_ufo_mission_counter_zero_picks_new_target},
+	    {"ufo_mission_counter_zero_without_building_clears_target",
+	     test_ufo_mission_counter_zero_without_building_clears_target},
 	    {"infiltration_display_percent", test_infiltration_display_percent},
 	    {"ufo_growth_rates_match_exe", test_ufo_growth_rates_match_exe},
 	    {"manufacture_dimension_probe", test_manufacture_dimension_probe},

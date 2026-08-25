@@ -198,6 +198,12 @@ class VehicleMission
 	int getDefaultIterationCount(Vehicle &v);
 	static Vec3<float> getRandomMapEdgeCoordinates(GameState &state, StateRef<City> city);
 	bool acquireTargetBuilding(GameState &state, Vehicle &v);
+	// UFO2P FUN_0003a910 @ object-page file 0x2A90F: vehicle +0x171 decrements every
+	// time the UFO reaches a mission destination and, at zero, either retargets or
+	// clears the target. See docs/original-game/findings/U1-U2-V1-incursion.md U1(a).
+	// Returns false if the mission was cancelled for lack of a new target (the
+	// caller should stop without pathing further).
+	bool advanceMissionCounterOnArrival(GameState &state, Vehicle &v);
 	void updateTimer(unsigned ticks);
 	void takePositionNearPortal(GameState &state, Vehicle &v);
 	// UFO2P FUN_0003b724 @ VA 0x3B724 / file 0x2B723: zone_mode + scatter → tile XY.
@@ -226,8 +232,11 @@ class VehicleMission
 	                                                  bool subvert = false,
 	                                                  StateRef<Building> target = nullptr);
 	static VehicleMission attackVehicle(GameState &state, Vehicle &v, StateRef<Vehicle> target);
+	// missionCounter: UFO_mission_data +0x1B, copied to vehicle +0x171 by FUN_0006da88.
+	// See advanceMissionCounterOnArrival() for the zero-transition it drives.
 	static VehicleMission attackBuilding(GameState &state, Vehicle &v,
-	                                     StateRef<Building> target = nullptr);
+	                                     StateRef<Building> target = nullptr,
+	                                     unsigned int missionCounter = 0);
 	static VehicleMission followVehicle(GameState &state, Vehicle &v, StateRef<Vehicle> target);
 	static VehicleMission followVehicle(GameState &state, Vehicle &v,
 	                                    std::list<StateRef<Vehicle>> &targets);
@@ -298,6 +307,9 @@ class VehicleMission
 	// Snooze, SelfDestruct
 	unsigned int timeToSnooze = 0;
 	// RecoverVehicle, InfiltrateSubvert, Patrol: waypoints
+	// AttackBuilding: UFO_mission_data +0x1B / vehicle +0x171 (see attackBuilding()
+	// and advanceMissionCounterOnArrival()); 0 keeps the pre-existing unlimited
+	// behavior at the current target.
 	unsigned int missionCounter = 0;
 	// InfiltrateSubvert: mode
 	bool subvert = false;

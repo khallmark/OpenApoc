@@ -1000,11 +1000,13 @@ void GameState::invasion()
 		auto &v = currentIncursion->primaryList[primaryIdx];
 		int zoneMode = -1;
 		int scatter = 0;
+		unsigned int missionCounter = 0;
 		if (primaryIdx < currentIncursion->primarySlots.size())
 		{
 			const auto &slot = currentIncursion->primarySlots[primaryIdx];
 			zoneMode = slot.zoneMode;
 			scatter = VehicleMission::clampIncursionScatter(slot.scatter, slot.typePercent);
+			missionCounter = slot.missionCounter;
 		}
 		for (int i = 0; i < v.second; i++)
 		{
@@ -1019,7 +1021,9 @@ void GameState::invasion()
 			switch (missionType)
 			{
 				case UFOIncursion::PrimaryMission::Attack:
-					invader->addMission(*this, VehicleMission::attackBuilding(*this, *invader),
+					invader->addMission(*this,
+					                    VehicleMission::attackBuilding(*this, *invader, nullptr,
+					                                                    missionCounter),
 					                    true);
 					break;
 				case UFOIncursion::PrimaryMission::Infiltration:
@@ -1111,11 +1115,13 @@ void GameState::invasion()
 		auto &v = currentIncursion->attackList[attackIdx];
 		int zoneMode = -1;
 		int scatter = 0;
+		unsigned int missionCounter = 0;
 		if (attackIdx < currentIncursion->attackSlots.size())
 		{
 			const auto &slot = currentIncursion->attackSlots[attackIdx];
 			zoneMode = slot.zoneMode;
 			scatter = VehicleMission::clampIncursionScatter(slot.scatter, slot.typePercent);
+			missionCounter = slot.missionCounter;
 		}
 		for (int i = 0; i < v.second; i++)
 		{
@@ -1134,7 +1140,10 @@ void GameState::invasion()
 			}
 			else
 			{
-				invader->addMission(*this, VehicleMission::attackBuilding(*this, *invader), true);
+				invader->addMission(*this,
+				                    VehicleMission::attackBuilding(*this, *invader, nullptr,
+				                                                    missionCounter),
+				                    true);
 			}
 		}
 	}

@@ -450,11 +450,13 @@ VehicleMission VehicleMission::attackVehicle(GameState &, Vehicle &, StateRef<Ve
 
 VehicleMission VehicleMission::attackBuilding(GameState &state [[maybe_unused]],
                                               Vehicle &v [[maybe_unused]],
-                                              StateRef<Building> target)
+                                              StateRef<Building> target,
+                                              unsigned int missionCounter)
 {
 	VehicleMission mission;
 	mission.type = MissionType::AttackBuilding;
 	mission.targetBuilding = target;
+	mission.missionCounter = missionCounter;
 	return mission;
 }
 
@@ -2034,6 +2036,11 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 
 			if (this->currentPlannedPath.empty())
 			{
+				if (!advanceMissionCounterOnArrival(state, v))
+				{
+					return;
+				}
+
 				std::uniform_int_distribution<int> xPos(targetBuilding->bounds.p0.x - 5,
 				                                        targetBuilding->bounds.p1.x + 5);
 				std::uniform_int_distribution<int> yPos(targetBuilding->bounds.p0.y - 5,
@@ -3108,6 +3115,40 @@ bool VehicleMission::acquireTargetBuilding(GameState &state, Vehicle &v)
 	}
 
 	return (bool)targetBuilding;
+}
+
+// UFO2P FUN_0003a910 @ object-page file 0x2A90F: vehicle +0x171 (UFO_mission_data
+// +0x1B, copied at spawn by FUN_0006da88) decrements every time the UFO reaches a
+// mission destination and, at zero, either picks a new target building
+// (FUN_00091f70 -> FUN_0004db84 -> FUN_0004e0d4, mapped here onto the existing
+// acquireTargetBuilding()/setPathTo() machinery) or, if none is found, resets to
+// target-less. See docs/original-game/findings/U1-U2-V1-incursion.md U1(a).
+//
+// The original's sibling outcome -- just latch an "arrived" flag with no new
+// search -- is gated by an order-type field (vehicle +0x104) whose semantics are
+// NOT BOUND, so it is deliberately not implemented here: guessing at that gate
+// would be exactly the kind of invented filter this project's parity work
+// prohibits. A missionCounter of 0 (the default for missions that don't opt in)
+// keeps this mission's pre-existing unlimited behavior at the current target
+// instead of retargeting every arrival.
+//
+// Returns false if the mission was cancelled for lack of a new target; the caller
+// should stop immediately without pathing further.
+bool VehicleMission::advanceMissionCounterOnArrival(GameState &state, Vehicle &v)
+{
+	if (missionCounter == 0 || --missionCounter != 0)
+	{
+		return true;
+	}
+	// Cleared first: acquireTargetBuilding() only assigns targetBuilding when it
+	// finds a match, so a failed search leaves it in the "target-less" state.
+	targetBuilding.clear();
+	if (!acquireTargetBuilding(state, v))
+	{
+		cancelled = true;
+		return false;
+	}
+	return true;
 }
 
 void VehicleMission::updateTimer(unsigned ticks)
