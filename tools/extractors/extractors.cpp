@@ -131,6 +131,21 @@ const std::map<OpenApoc::UString, std::set<int>> InitialGameStateExtractor::miss
 	{ "48gate"  ,{ 71,73,74,75,76,77,78,79,80,81,82,83,84,85} },
 };
 
+// TACP 0x2E0C09-0x2E1C98: ten destroy-objective briefings, packed pool, one per alien map in
+// this order (verified byte-identical on TACP4 at the -0x2200 slide).
+const std::map<OpenApoc::UString, int> InitialGameStateExtractor::alienBuildingBriefingIndex = {
+	{ "39incub" , 0 },
+	{ "40spawn" , 1 },
+	{ "41food"  , 2 },
+	{ "42megapd", 3 },
+	{ "43sleep" , 4 },
+	{ "44organ" , 5 },
+	{ "45farm"  , 6 },
+	{ "46contrl", 7 },
+	{ "47maint" , 8 },
+	{ "48gate"  , 9 },
+};
+
 const std::map<OpenApoc::UString, std::vector<int>> InitialGameStateExtractor::tubes = {
 	/*{ "CITYTILE_CITYMAP_63",{ 0,1,0,1 } },
 	{ "CITYTILE_CITYMAP_64",{ 1,0,1,0 } },
@@ -304,20 +319,12 @@ const std::map<OpenApoc::UString, OpenApoc::UString> InitialGameStateExtractor::
 	{ "civ",		"civ/anim" },
 };
 
-const std::vector<int> InitialGameStateExtractor::buildingFunctionDetectionWeights = {
-//	0	 1	  2	   3    4    5    6    7    8    9
-	100, 155, 135, 110, 115, 80,  120, 130, 120, 90,  
-	80,  80,  130, 100, 130, 130, 100, 70,  70,  70,  
-	70,  90,  110, 90,  90,  90,  90,  90,  95,  100, 
-	90,  100, 75,  85,  100, 100, 0,   0,   100, 100, 
-	100, 100, 100, 100, 100, 100, 100, 100, 100
-};
-
 // clang-format on
 
 void InitialGameStateExtractor::extractCommon(GameState &state) const
 {
 	this->extractResearch(state);
+	this->extractManufacturing(state);
 	this->extractOrganisations(state);
 	this->extractVehicleEquipment(state);
 	this->extractAgentBodyTypes(state);
@@ -329,6 +336,11 @@ void InitialGameStateExtractor::extractCommon(GameState &state) const
 	this->extractDoodads(state);
 	this->extractBuildingFunctions(state);
 	this->extractEconomy(state);
+	this->extractUfoGrowth(state);
+	this->extractUfoIncursions(state);
+	this->extractUfoMissionPreference(state);
+	this->extractVehicleParkSpawnTable(state);
+	this->extractFireHazardPowerTable(state);
 
 	// The alien map doesn't change
 	UString alienMapId = City::getPrefix() + "ALIEN";
@@ -344,6 +356,15 @@ void InitialGameStateExtractor::extractCommon(GameState &state) const
 	this->extractBattlescapeMap(state, battleMapPaths);
 	this->extractSharedBattleResources(state);
 	this->extractSharedCityResources(state);
+}
+
+void InitialGameStateExtractor::reapplyExeListTables(GameState &state) const
+{
+	this->extractUfoGrowth(state);
+	this->extractUfoIncursions(state);
+	this->extractUfoMissionPreference(state);
+	this->extractVehicleParkSpawnTable(state);
+	this->extractFireHazardPowerTable(state);
 }
 
 void InitialGameStateExtractor::extract(GameState &state, Difficulty difficulty) const

@@ -2,6 +2,7 @@
 #include "framework/framework.h"
 #include "game/state/gamestate.h"
 #include "game/state/rules/city/ufopaedia.h"
+#include "game/state/shared/organisation.h"
 #include "library/strings_format.h"
 #include "tools/extractors/common/ufo2p.h"
 #include "tools/extractors/extractors.h"
@@ -10,9 +11,6 @@
 #define ORG_ALIENS 1
 #define ORG_MEGAPOL 3
 #define ORG_TRANSTELLAR 9
-#define ORG_PSYKE 20
-#define ORG_DIABLO 21
-#define ORG_OSIRON 22
 #define ORG_CIVILIAN 27
 
 namespace OpenApoc
@@ -37,6 +35,11 @@ void InitialGameStateExtractor::extractOrganisations(GameState &state) const
 
 		o->name = data.organisation_names->get(i);
 		o->id = id;
+		o->exeOrgIndex = static_cast<int>(i);
+		if (data.vehicle_park && i < data.vehicle_park->count())
+		{
+			o->parkBudgetWeight = static_cast<int>(data.vehicle_park->get(i).vehiclePark);
+		}
 
 		auto ped = format("{0}{1}", UfopaediaEntry::getPrefix(),
 		                  canon_string(data.organisation_names->get(i)));
@@ -125,11 +128,9 @@ void InitialGameStateExtractor::extractOrganisations(GameState &state) const
 			o->long_term_relations[o2] = (float)rdata.relationships[j];
 		}
 
-		// Following organizations use special table when determining raids
-		if (i == ORG_MEGAPOL || i == ORG_PSYKE || i == ORG_DIABLO || i == ORG_OSIRON)
-		{
-			o->militarized = true;
-		}
+		o->organizationType = odata.organization_type;
+		o->raidingStrength = static_cast<int>(odata.raiding_strength);
+		o->militarized = Organisation::militarizedFromType(odata.organization_type);
 
 		// Done in common xml patch
 		/*if (i == ORG_CIVILIAN)
@@ -400,6 +401,44 @@ void InitialGameStateExtractor::extractOrganisations(GameState &state) const
 	    {&state, "VEHICLETYPE_HOVERBIKE"},
 	    {&state, "VEHICLETYPE_VALKYRIE_INTERCEPTOR"},
 	    {&state, "VEHICLETYPE_HAWK_AIR_WARRIOR"}};
+}
+
+void InitialGameStateExtractor::extractVehicleParkSpawnTable(GameState &state) const
+{
+	auto &data = this->ufo2p;
+	// Do not keep a copy under common_patch/gamestate/ — loadGame appends vectors.
+	state.vehicleParkSpawnTable.clear();
+	state.vehicleParkSpawnCap.clear();
+	if (!data.vehicle_park_spawn_table ||
+	    data.vehicle_park_spawn_table->count() !=
+	        (VEHICLE_PARK_SPAWN_TABLE_OFFSET_END - VEHICLE_PARK_SPAWN_TABLE_OFFSET_START) / 4)
+	{
+		LogError("vehicle_park_spawn_table count {0}",
+		         data.vehicle_park_spawn_table ? data.vehicle_park_spawn_table->count() : 0);
+		return;
+	}
+	for (unsigned i = 0; i < data.vehicle_park_spawn_table->count(); i++)
+	{
+		const auto vid = data.vehicle_park_spawn_table->get(i);
+		if (vid >= data.vehicle_names->count())
+		{
+			LogError("park spawn index {0} vehicle {1} out of range", i, vid);
+			state.vehicleParkSpawnTable.emplace_back();
+			continue;
+		}
+		state.vehicleParkSpawnTable.emplace_back(&state, data.getVehicleId(static_cast<int>(vid)));
+	}
+	if (!data.vehicle_park_spawn_cap || data.vehicle_park_spawn_cap->count() != VEHICLE_TYPE_COUNT)
+	{
+		LogError("vehicle_park_spawn_cap count {0}",
+		         data.vehicle_park_spawn_cap ? data.vehicle_park_spawn_cap->count() : 0);
+		return;
+	}
+	for (unsigned i = 0; i < data.vehicle_park_spawn_cap->count(); i++)
+	{
+		state.vehicleParkSpawnCap[data.getVehicleId(static_cast<int>(i))] =
+		    static_cast<int>(data.vehicle_park_spawn_cap->get(i));
+	}
 }
 
 } // namespace OpenApoc

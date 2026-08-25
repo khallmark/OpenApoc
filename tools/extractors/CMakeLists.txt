@@ -26,6 +26,10 @@ set (DATAEXTRACTOR_SOURCE_FILES
 	extract_bulletsprites.cpp
 	extractors.cpp
 	extract_research.cpp
+	extract_manufacturing.cpp
+	extract_ufo_growth.cpp
+	extract_ufo_incursions.cpp
+	extract_ufo_mission_preference.cpp
 	extract_unit_image_packs.cpp
 	extract_unit_animation_packs.cpp
 	extract_unit_animation_pack_unit.cpp
@@ -52,6 +56,7 @@ set (DATAEXTRACTOR_HEADER_FILES
 	common/baselayout.h
 	common/doodads.h
 	common/economy.h
+	common/exe_slide.h
 	common/facilities.h
 	common/organisations.h
 	common/ufopaedia.h
@@ -63,6 +68,9 @@ set (DATAEXTRACTOR_HEADER_FILES
 	common/scenerytile.h
 	common/vehicle.h
 	common/research.h
+	common/ufogrowth.h
+	common/ufoincursion.h
+	common/ufomissionpattern.h
 	common/bulletsprite.h
 	common/building.h
 	common/battlemap.h
@@ -114,6 +122,11 @@ else()
 add_custom_target(extract-data DEPENDS ${EXTRACTOR_TARGET_LIST})
 endif()
 
-if (APPLE)
-add_custom_command(TARGET extract-data POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/data ${CMAKE_BINARY_DIR}/bin/OpenApoc.app/Contents/Resources/data)
+if (APPLE AND NOT IOS)
+	add_custom_command(TARGET extract-data POST_BUILD
+		COMMAND ${CMAKE_COMMAND}
+			-D "SRC=${CMAKE_SOURCE_DIR}/data"
+			-D "DST=${CMAKE_BINARY_DIR}/bin/OpenApoc.app/Contents/Resources/data"
+			-P "${CMAKE_SOURCE_DIR}/cmake/apple/copy_bundle_data.cmake"
+		COMMENT "Copying OpenApoc data into app bundle (excluding ISO)")
 endif()

@@ -85,6 +85,12 @@ std::map<UString, std::function<void(const InitialGameStateExtractor &e)>> thing
 	     GameState s;
 	     e.extractCommon(s);
 	     s.loadGame("data/common_patch");
+	     e.applyCraftAmmoManufacturers(s);
+	     e.applyVehicleEquipmentAmmoTypes(s);
+	     e.applyVehicleEquipmentSplitWeapons(s);
+	     e.applyUfopaediaStartVisible(s);
+	     e.applyAa7a8HardcodedGates(s);
+	     e.reapplyExeListTables(s);
 	     s.saveGame(outputPath.get() + "/mods/base/base_gamestate");
 	     ModInfo info;
 	     info.setName("OpenApoc base game");

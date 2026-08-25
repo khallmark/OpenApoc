@@ -20,11 +20,13 @@ class TACP
 
 	std::unique_ptr<StrTab> damage_modifier_names;
 	std::unique_ptr<StrTab> damage_type_names;
+	std::unique_ptr<StrTab> alien_building_briefings;
 
 	std::unique_ptr<DataChunk<DamageTypeData>> damage_types;
 	std::unique_ptr<DataChunk<DamageModifierData>> damage_modifiers;
 
 	std::unique_ptr<DataChunk<AgentEquipmentData>> agent_equipment;
+	std::unique_ptr<DataChunk<uint8_t>> fire_hazard_power_table;
 	std::unique_ptr<DataChunk<AgentArmorData>> agent_armor;
 	std::unique_ptr<DataChunk<AgentWeaponData>> agent_weapons;
 	std::unique_ptr<DataChunk<AgentGeneralData>> agent_general;

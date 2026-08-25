@@ -1,6 +1,8 @@
 #pragma once
 
+#include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/city/facilitytype.h"
+#include "game/state/rules/city/vammotype.h"
 #include "game/state/rules/city/vehicletype.h"
 #include "game/state/rules/city/vequipmenttype.h"
 #include "game/state/shared/organisation.h"
@@ -19,6 +21,9 @@
 #include "tools/extractors/common/research.h"
 #include "tools/extractors/common/scenerytile.h"
 #include "tools/extractors/common/strtab.h"
+#include "tools/extractors/common/ufogrowth.h"
+#include "tools/extractors/common/ufoincursion.h"
+#include "tools/extractors/common/ufomissionpattern.h"
 #include "tools/extractors/common/ufopaedia.h"
 #include "tools/extractors/common/vehicle.h"
 #include "tools/extractors/common/vequipment.h"
@@ -52,8 +57,16 @@ class UFO2P
 	std::unique_ptr<DataChunk<OrgStartingRelationshipsData>>
 	    organisation_starting_relationships_data;
 	std::unique_ptr<DataChunk<OrgVehicleParkData>> vehicle_park;
+	std::unique_ptr<DataChunk<uint32_t>> vehicle_park_spawn_table;
+	std::unique_ptr<DataChunk<uint32_t>> vehicle_park_spawn_cap;
+	std::unique_ptr<DataChunk<uint8_t>> aequip_alien_artifact;
 
 	std::unique_ptr<StrTab> ufopaedia_group;
+	std::unique_ptr<DataChunk<UfopaediaCatalogRow>> ufopaedia_catalog;
+	std::unique_ptr<DataChunk<uint8_t>> ufopaedia_start_visible;
+	std::unique_ptr<StrTab> ufopaedia_pcx_names;
+	std::unique_ptr<DataChunk<ManufacturingData>> manufacturing_data;
+	std::unique_ptr<StrTab> manufacturing_names;
 
 	std::unique_ptr<DataChunk<RawSoundData>> rawsound;
 	std::unique_ptr<DataChunk<BaseLayoutData>> baselayouts;
@@ -71,6 +84,7 @@ class UFO2P
 	std::unique_ptr<DataChunk<VehicleWeaponData>> vehicle_weapons;
 	std::unique_ptr<DataChunk<VehicleEngineData>> vehicle_engines;
 	std::unique_ptr<DataChunk<VehicleGeneralEquipmentData>> vehicle_general_equipment;
+	std::unique_ptr<DataChunk<CequipScoreReqData>> cequip_score_req;
 
 	std::unique_ptr<DataChunk<VehicleEquipmentLayout>> vehicle_equipment_layouts;
 
@@ -80,6 +94,8 @@ class UFO2P
 	std::unique_ptr<DataChunk<EconomyData>> economy_data1;
 	std::unique_ptr<DataChunk<EconomyData>> economy_data2;
 	std::unique_ptr<DataChunk<EconomyData>> economy_data3;
+	std::unique_ptr<StrTab> craft_ammo_names;
+	std::unique_ptr<DataChunk<uint16_t>> craft_ammo_manufacturers;
 
 	std::unique_ptr<DataChunk<SceneryMinimapColour>> scenery_minimap_colour;
 
@@ -94,6 +110,12 @@ class UFO2P
 	std::unique_ptr<DataChunk<OrgInfiltrationSpeed>> infiltration_speed_org;
 	std::unique_ptr<DataChunk<AgentInfiltrationSpeed>> infiltration_speed_agent;
 	std::unique_ptr<DataChunk<BuildingInfiltrationSpeed>> infiltration_speed_building;
+	std::unique_ptr<DataChunk<uint32_t>> building_detection_weight;
+	std::unique_ptr<DataChunk<uint32_t>> alien_detection_weight;
+	std::unique_ptr<DataChunk<uint32_t>> alien_movement_percent;
+	std::unique_ptr<DataChunk<UfoGrowthRates>> ufo_growth_rates;
+	std::unique_ptr<DataChunk<UfoMissionData>> ufo_mission_data;
+	std::unique_ptr<DataChunk<UfoMissionPatterns>> ufo_mission_patterns;
 
 	UString getOrgId(int idx) const
 	{
@@ -103,9 +125,17 @@ class UFO2P
 	{
 		return FacilityType::getPrefix() + canon_string(this->facility_names->get(idx));
 	}
+	UString getAEquipmentId(int idx) const
+	{
+		return AEquipmentType::getPrefix() + canon_string(this->agent_equipment_names->get(idx));
+	}
 	UString getVequipmentId(int idx) const
 	{
 		return VEquipmentType::getPrefix() + canon_string(this->vehicle_equipment_names->get(idx));
+	}
+	UString getVAmmoId(int idx) const
+	{
+		return VAmmoType::getPrefix() + canon_string(this->craft_ammo_names->get(idx));
 	}
 	UString getVehicleId(int idx) const
 	{
