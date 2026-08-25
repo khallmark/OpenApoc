@@ -316,6 +316,29 @@ Multiworm are `bodyType->large`, and the code paths that handle them are marked 
 **Do not** invent a TACP "large unit table". None is recovered, and none is needed — this is engine
 geometry, not a game-balance constant.
 
+**Step 5 (draw order) — probed and left open, deliberately.** A second pass tried to close this and
+concluded it cannot be, for a better reason than "no rendering harness".
+
+The tile *selection* that feeds the sort is already block-aware:
+`TileObjectBattleUnit::setPosition()` sets bounds from `bodyType->size`, `TileObject::setPosition()`
+derives `intersectingTiles` from those bounds plus `centerOffset`, and
+`TileObjectBattleUnit::addToDrawnTiles()` picks the topmost of them ("units are drawn in the topmost
+tile their head pops into") rather than defaulting to the origin corner.
+
+What is missing is not a large-unit property at all: `TileObject::addToDrawnTiles()` gives **every**
+object a single `drawOnTile`, so no object of any type is sorted per occupied tile. Splitting one
+unit's sprite across the sort orders of four ground tiles is a change to the isometric renderer for
+every object type — out of scope for this row, and not a defect in it.
+
+A candidate lock test was written for the block-confinement invariant and then **discarded**,
+because two independent control mutations — collapsing the large-unit bounds to `{1,1}`, and
+changing its `centerOffset.z` from `1.0` to `0.5` — both left it green. At integer positions the
+half-extent straddles the tile boundary either way, so the intersecting-tile span is identical for
+bounds 1 and 2; and the "exactly one draw tile, inside the block" invariant is structural, since
+`addToDrawnTiles()` can only ever choose from `intersectingTiles`. No realistic regression fails it.
+Per §0 that is not a lock test, so it was not committed. This row stays **UNVERIFIED**, and the
+above is why.
+
 ### A2 · Psionics timing parity
 
 *Gap matrix: "implemented (parity unverified), medium."*
