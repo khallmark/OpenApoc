@@ -7,7 +7,7 @@ Branch: `khallmark/parity-implementation`, cut from `develop` @ `26a72467`.
 - `cmake --build build -j` — **green**, extract-data ran clean.
 - `ctest --test-dir build` — **30/30 passed, 12.97 s.**
 
-## Final — 28 commits, suite 36/36 (baseline was 30/30)
+## Final — 48 commits, suite 36/36 (baseline was 30/30)
 
 ### Implemented, each with a lock test verified to fail before the change
 
@@ -37,6 +37,69 @@ was never traced. No code written.
 
 B5 type 1-vs-3 · K1 (20 candidate functions unexamined) · U1(b) field semantics ·
 B2/B4 (depend on B1) · MultiTracker's downstream meaning
+
+## Third pass — the RE that was still open
+
+Six agents were sent at the rows the second pass left blocked. Five returned negatives, and the
+negatives were the point: they close rows that would otherwise be re-opened blind, and two of them
+overturned claims this project had already committed.
+
+| Row | Outcome |
+|---|---|
+| **K1** cloak | **CLOSED — negative.** All 19 readers of `agent_general_data`'s type field enumerated. Three recognise `0x0a`; none implements concealment. Decisive: `FUN_00066474`, the tick dispatcher hosting Mind Shield and Disruptor Shield cadences, has **no `0x0a` case at either hand slot** — there is no tick site to host a threshold. `CLOAK_TICKS_REQUIRED_UNIT` is forum folklore, now labelled as such at the constant. |
+| **C2** secondary objectives | **CLOSED — triple negative.** Queen live capture is generic (all 13 species share the pair). Sectoid rescue → Mutant alliance has no consumer: `Sectoid` appears exactly once in all of TACP, in the briefing prose. The evacuation phase does not exist — the "units will be lost" string's pool neighbours are `Abort mission?` / `Yes` / `No`. |
+| **B5** enzyme | **NOT BOUND, but properly.** Types 1 and 3 are treated identically by every consumer in the binary — 11 functions, 17 call sites. The armour-vs-health asymmetry that would discriminate them does not exist anywhere in the overlay code. |
+| **A2** psi upkeep | **CLOSED — negative.** No literal table in 3.17 MB, all 24 permutations. Strings unreachable four independent ways, validated against a live control. Panic stays at `3`; locking the test to the code was right. |
+| **U1(b)** | **OVERTURNED.** The earlier "gate can never fire" reading was wrong on both halves — constitution does take damage and is repaired, and `+0x168` is recomputed at runtime. |
+| **U1(a)** arrived flag | **IMPLEMENTED.** See below. |
+
+## The one that changed shipped behaviour
+
+`+0x12C == 1` is a **structural invariant** for incursion-spawned UFOs: `FUN_0006da88` reclobbers `BX`
+with a literal `1` immediately before the writer, and two independent exhaustive censuses found nothing
+that touches the field on an already-spawned vehicle. The retarget branch is therefore *unreachable*
+for that population — they always leave via the nearest dimension gate. OpenApoc retargeted them
+unconditionally.
+
+Two prior findings disagreed about this and **both were partly wrong**; it was settled by a referee
+working inside the Ghidra project, not by preferring one document. The retarget branch is real code
+in the original, for a different population entirely (a periodic scheduler unrelated to the incursion
+system). So the fix is a **split, not a replacement**: gated on owner, with the three existing retarget
+tests left exactly as they were. `OrganisationRaid::UnauthorizedVehicle` is deliberately untouched —
+whether it is that second population is not established, and guessing is the failure this row already
+made once.
+
+## An eighth claim overturned, and a method retired
+
+Attempting to arbitrate that reversal by reading raw bytes at a cited file offset produced "no match".
+Running the same check against a **control** — a known-good, already-committed citation from a
+different agent — *also* produced "no match", with the real encoding sitting `0x726A5` bytes away.
+
+These are bound Linear Executables behind the LX loader; object pages are not contiguous in the file,
+so `VA − 0x10001` is a within-page convention, not a file-wide map. **The method yields confident
+false negatives on correct citations.** Had the control been skipped, two agents would have been
+"caught" in errors they did not make. Arbitration happens inside the Ghidra project or not at all.
+
+## The harness, and what four campaign runs actually proved
+
+The visual campaign driver was run against this branch. Every failure was **driver-side**; the engine
+itself did not misbehave once across four launches. Three harness defects fixed:
+
+- `respond_to_event()` returned `True` after trying every key whether or not the stage moved, so a
+  dead key looked like success and the caller spun forever — silently, because the log line only fires
+  on a stage *change*.
+- `run_clock()`'s stall detector lived on the CityView branch only, so anything it could not dismiss
+  spun mutely until the leg budget expired.
+- Two screens (`UfopaediaCategoryView`, `ResearchScreen`) had no dismissal policy while sitting in
+  `WORKING_STAGES`, which is right for a deliberate visit and wrong for an accidental arrival.
+
+The second fix immediately corrected the first diagnosis: the strand was `ResearchScreen`, not the
+UFOpaedia, which had been fixed and credited on no evidence.
+
+Also found live: the driver hand-rolls three mechanisms to locate the action, while `BUTTON_ZOOM_EVENT`
+→ `zoomAt()` does `setZLevel(location.z + 1)` — the engine changes floor for you. And the
+`Notifications.*` flags the driver disables only gate the blocking popup; `logEvent` and the ticker
+fire unconditionally, so it had switched off the alarm and then gone looking for the fire.
 
 ## Second pass — the loose ends
 
