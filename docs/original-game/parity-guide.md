@@ -55,7 +55,7 @@ R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/)
 | **U1(a)** mission-counter zero-transition | **BOUND** | `FUN_0003a910` branches on the post-decrement value: one path sets an arrived flag, the other picks a new target building (`FUN_00091f70` → `FUN_0004db84` → `FUN_0004e0d4`), or resets role/order state when none is found. Implementable. |
 | **U1(b)** `+0x168` vs constitution gate | **MECHANISM BOUND, SEMANTICS NOT** | Three spawn-time writers traced; the `FUN_0006da88` formula resolves to `constitution × percent / 100`, so `+0x168` is a **fixed fraction of constitution that nothing ever raises**. The gate can therefore only fire if constitution itself later falls. No name asserted for the field. *(Corrected mid-run from a "regenerating stat" reading caused by a misread multiplicand.)* |
 | **U2(a)** `DAT_000e0cc0` override | **CLOSED** | Reads and clear sites bound; **no set site exists anywhere in the binary** — all six xrefs enumerated exhaustively. The override is never activated in the original, so OpenApoc needs nothing here. |
-| **U2(b)** exposure event types 1 & 4 | **BOUND** | Sole writer of the discriminant is `FUN_000aff9c`, via the fully-verified single-caller chain `FUN_0003a910 → FUN_000ac08c → FUN_000ac348 → FUN_000aff9c`. Branch logic recovered. Implementable. |
+| **U2(b)** exposure event types 1 & 4 | **BOUND in the binary, NOT MAPPABLE here** | The dispatch and branch logic are genuinely recovered — but that is a claim about the *original's control flow*, not about OpenApoc having a seam to receive it. Attempted and **stopped without writing code**: of the three pieces needed, the ×5 formula is **already shipped and locked** (`Base::alienExposureRollSucceeds`, locked by `alien_exposure_threshold`); the moved-count source is unbound (`Organisation` has no species/population field — only `Building::current_crew` does, and building↔building transfer is a *different* original function, already implemented as `Building::alienMovement`); and the trigger point is unbound (who calls the dispatcher was never traced — the link to the discriminant is a shared global, not a call edge). Two of three missing. |
 | **V1** vehicle attack-mode dodge | **NOT BOUND — definitively** | All ten engagement/dodge UI strings reverified at zero bound xrefs, **and** a full-binary byte-pattern search for a `{10,50,80,100}` table across 8 pattern variants found **zero matches**. There is no engagement table. OpenApoc's hardcoded ladder is an invention with no original counterpart — leave it, and label it as such. |
 | **B1** cover metric | **RE-OPENED** | First verdict rested on an invalid control; see below. Agent resumed with structural entry. |
 | **C1** umbilical · **C4** Apocalypse attack | **CLOSED** | Confirmed absent from *both* binaries. |
@@ -75,6 +75,17 @@ R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/)
    retargeting (the bound-only choice — no writer resets `+0x171` after the spawn-time copy); and
    an unreachable-in-practice edge case shared with `Patrol`. The sibling "latch an arrived flag"
    branch was **deliberately not implemented** because its gating field's semantics are NOT BOUND.
+
+**A category error worth naming: "BOUND" ≠ "implementable".** U2(b) went into implementation on
+the strength of a `BOUND` verdict and came back with no code, correctly. A findings verdict of
+`BOUND` means *the original's behaviour has been recovered*. It does **not** imply OpenApoc has a
+seam to receive it, that the surrounding data model exists, or that the recovered piece is not
+already shipped. All three failed here.
+
+Before queueing a `BOUND` row for implementation, check three things: **is the formula already
+implemented?** **does the data it reads exist in our model?** **is the trigger point traced, or only
+the thing that sets a flag it shares?** Answering those costs minutes; skipping them cost an
+implementation attempt.
 
 **A decompiler trap worth generalising.** The Disruptor Shield's overflow behaviour was first
 written up as "partial absorb, remainder passes through" — the natural reading, and **wrong**. It
