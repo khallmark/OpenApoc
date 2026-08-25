@@ -4219,8 +4219,15 @@ void Cargo::seize(GameState &state, StateRef<Organisation> org [[maybe_unused]])
 			break;
 	}
 	int worth = cost * count / divisor;
-	// FIXME: Adjust relationship accordingly to seized cargo's worth
-	LogWarning("Adjust relationship accordingly to worth: {0}", worth);
+	// No relationship adjustment: this was chased twice and closed as a negative, not left open.
+	// The candidate mechanism was UFO2P's four-way event dispatcher FUN_000b32ac, but its own
+	// `worth` traces to a hardcoded zero (two independent writers, both storing a just-zeroed
+	// register), and the global gating half its case bodies has the identical always-zero shape --
+	// so those branches are dead code, including the one an earlier pass read as an infiltration
+	// walk. None of the live tails references an item id, cost, count or destination building,
+	// which is the defining shape of Cargo. Do not wire this from that dispatcher.
+	// See docs/original-game/findings/O2-cargo-seize-pass2.md.
+	LogInfo("Cargo seized, worth {0}; no relationship change (bound negative, O2)", worth);
 	if (destination->owner == state.getPlayer())
 	{
 		fw().pushEvent(

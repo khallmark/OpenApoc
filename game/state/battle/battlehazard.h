@@ -92,6 +92,25 @@ class BattleHazard : public std::enable_shared_from_this<BattleHazard>
 	// onto OpenApoc's fire_resist/block fields. Callers must supply
 	// resistance/baseline explicitly; nothing here reads a BattleMapPart.
 	//
+	// UPDATE -- two of those three blockers are now BOUND, and both resolve to
+	// data this engine ALREADY has:
+	//   * the per-terrain resistance operand (FUN_0007aa8c) is
+	//     BattleMapPartType::block[DamageType::BlockType::Fire]. Its tables are
+	//     catalog_base + 0xB into the four 256x86 map-part catalogs, with five
+	//     independently-checked struct offsets landing on named fields with zero
+	//     adjustment; the catalogs are BSS-shaped and filled at battle load from
+	//     the tileset .dat files, so there is no static constant to recover.
+	//   * fire's inherited baseline is DAT_00293050[stage], whose file offset is
+	//     an exact match for the already-extracted fire_hazard_power_table that
+	//     BattleHazard::fireOverlayPower() already reads.
+	// See docs/original-game/findings/F1-fire-remainder.md.
+	//
+	// They STILL stay uncalled. The third blocker -- the invocation cadence
+	// (FUN_0007b7f8) -- is what sets the aggregate spread RATE, and wiring
+	// geometry and thresholds under an unbound rate would change how fast fire
+	// spreads while looking like a faithful port. Closing cadence is the
+	// remaining prerequisite, and it is the whole of it.
+	//
 	// These are therefore DELIBERATELY UNCALLED by gameplay today, and the
 	// obvious way to "finish" them is wrong. BattleHazard::grow() sweeps the
 	// full 3x3 in XY plus the Z column, calls expand() up to a dozen times
