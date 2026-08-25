@@ -30,6 +30,38 @@ So each gap is classified by **what is actually blocking it**:
 **Do not promote a Class B row to Class A by picking a number that looks right.** If the binding
 work fails, the correct outcome is that the row stays open.
 
+### Run results — `khallmark/parity-implementation`
+
+R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/); run log in
+[findings/STATUS.md](findings/STATUS.md).
+
+| Item | Verdict | Outcome |
+|---|---|---|
+| **V2** ground-vehicle order defect | **FIXED** | Root cause found in `VehicleMission::setPathTo`: a severed road yields a *non-empty but short* path that fell through both give-up branches — near targets crashed an undamaged vehicle, far targets looped forever. Lock test on the real extracted city. Suite 31/31. |
+| **F1** hazard spread RNG | **BOUND** | `FUN_0001eee8` + `FUN_0007b0d0` decompiled, neighbour offset table recovered. `HAZARD_SPREAD_CHANCE` is **not a percent** — it is `RNG(0..10) + inherited baseline` vs a per-map-part resistance byte. Resistance values not yet decoded, so the constant cannot be deleted yet. |
+| **B5** enzyme | **PARTIAL** | Structural hypothesis **confirmed**: the tile overlay byte carries ≥3 parallel hazard types over one structure with a shared placement engine. Fire is type 2. Type 1 vs 3 (Enzyme vs Gas/Smoke) not recoverable — dispatch variable has zero static xrefs. **Not guessed.** |
+| **K1** cloak | **NOT BOUND** | No reader of the `agent_general_data` type field found. Raised a separate audit item — see below. |
+| **O1** bribe / rift | **NOT BOUND** | The binary's one relation-adjustment primitive `FUN_0005faf0` was walked to its roots; none touch an org funds field. Stays prior-art. |
+| **O2** cargo seize | **PARTIAL** | Org `+8` **confirmed a funds field, not relation**. Event-type → cargo mapping still unbound; there is no path from `Building::updateCargo`'s seize check into any of the four event types. `Cargo::seize` still must not be wired from it. |
+| **M1** city music | **CONSUMER BOUND, TRIGGER NOT** | A real traced path reaches the tension-tier state machine from city-side mission completion — but that machine already runs every tick, so the call may be a redundant re-evaluate, and tier 3 (which holds `ACTION.RAW`) has no bound driver. **Not wired.** |
+| **B1** cover metric | **RE-OPENED** | First verdict rested on an invalid control; see below. Agent resumed with structural entry. |
+| **C1** umbilical · **C4** Apocalypse attack | **CLOSED** | Confirmed absent from *both* binaries. |
+| **C3** late-campaign bombing | **CLOSED** | No trigger; escalation already explained by the weekly growth and preference tables. |
+| **C2** mushrooms | **RECLASSIFIED** | Objective *mechanic* already works. Residual: ten TACP briefings unextracted. |
+
+Two audit items this run produced, both about **existing** claims rather than open rows:
+
+1. **TACP string-anchoring gives false negatives.** `0x2DE000`–`0x2E2FFF` is a packed
+   variable-length pool whose entries can never carry a direct xref; `0x2F2000`–`0x2F3400` is a
+   fixed-stride asset-name table whose entries can. Using one as a control for the other produced a
+   wrong `NOT BOUND`. See [findings/METHOD-tacp-string-regions.md](findings/METHOD-tacp-string-regions.md).
+   **Every future TACP negative must name the structural method exhausted, not cite absent xrefs.**
+2. **The Mind Shield citation does not resolve.** The gap matrix records Mind Shield as
+   `implemented / high` on `TACP FUN_0009b780 @ 0x9B780`. That cites a **Ghidra VA twice** rather
+   than a file offset, contrary to this folder's own rule, and `0x9B780` lands mid-function inside
+   `FUN_0009b058` in the bound project. The *behaviour* (+30, cap 200) is not disputed here — the
+   *evidence* is unverifiable as written. **Re-verify and restate the citation as a file offset.**
+
 ### Status at a glance
 
 The gap matrix has **52 rows; 32 are clean**. The 20 open rows expand to **23 work items** here,

@@ -432,22 +432,23 @@ confirmed independently for `fire_hazard_power_table` (§0), a second independen
 that delta.
 
 `AgentGeneralData` is a 12-byte struct (`tools/extractors/common/aequipment.h:118`) with `type` at
-struct offset `+10`. Direct Ghidra xrefs to the table base (`0x2B2E70`) and to the `type` field
-address of the first 20 rows (`0x2B2E70 + row*12 + 10`, rows 0..19) were checked: **zero hits at
-every address checked.** No instruction anywhere in `.object1`/`.object2` holds a Ghidra-recognised
-reference to the catalog's `type` field for any of the first 20 rows (which covers row `0x0A` if
-row order matches `AGENT_GENERAL_TYPE_*` ordinal order — not confirmed, since there was no reader
-to inspect).
-
-This is consistent with (and was anticipated as likely by) the standard pattern seen everywhere
-else in this catalog family: a **catalog row gets copied into a per-item runtime instance at spawn
-time**, and gameplay code reads the runtime instance's copy of `type`, not the catalog row
-directly. Finding that copy site — and then the accumulator/comparison it feeds — would require
-either (a) locating the item-spawn/equip constructor (a much larger search, not attempted this
-session) or (b) a numeric scan for `CMP reg, 0xA` clustered near other equipment-dispatch code,
-which was judged too unconstrained to produce a reliable positive (TACP's code has many unrelated
-`CMP reg, 0xA` instructions; without a narrower anchor this would only produce noise, the exact
-failure mode the parity guide warns against).
+struct offset `+10`. **Correction to an earlier draft of this document**: a direct Ghidra xref
+check on the table base (`0x2B2E70`) and on `0x2B2E70 + row*12 + 10` for rows 0..19 does find real
+references — **25 distinct `type=DATA` references from 21 different functions** land on
+`0x2B2E7A` (row 0's `type` field address) specifically, a strict subset of a larger set (~30
+references, more functions) landing on the bare table base. Rows 1–19 show **zero** additional
+hits each. This is the expected signature of **loop-computed indexing**: code that walks the whole
+catalog (`for (i=0;i<N;i++) row[i].type`) compiles to one static reference to element `[0]`'s
+address plus a register that strides by `12` at runtime — Ghidra's static reference table
+necessarily only sees the literal `[0]` address, never the runtime-computed ones. So "21 functions
+reference row 0's `type` field" almost certainly means "21 functions iterate the whole
+`agent_general_data` catalog and read `.type` inside the loop" — real consumers exist, but *which*
+row (if any) they compare against `0x0A` cannot be determined by xref location alone; it requires
+decompiling the candidate functions and checking for a `CMP` against `0xA` inside the loop body.
+The strongest candidate by reference count, `FUN_0008A524` (four separate references to the
+type-field address, more than any other function in the set — VA `0x8A524`, file `0xE4FC8`
+derived, `VA + 0x5AAA4`), was decompiled as a follow-up (§4.2b) once the shared project lock
+cleared.
 
 ### 4.3 The "flat disassembly" trap, independently reproduced
 
