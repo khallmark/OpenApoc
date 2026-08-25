@@ -1,0 +1,43 @@
+# Copy OpenApoc data/ into an .app, excluding original-game images and symlinks.
+#   cmake -D SRC=... -D DST=... -P cmake/apple/copy_bundle_data.cmake
+
+if(NOT DEFINED SRC OR NOT DEFINED DST)
+	message(FATAL_ERROR "copy_bundle_data.cmake requires SRC and DST")
+endif()
+
+if(NOT EXISTS "${SRC}")
+	message(FATAL_ERROR "data source does not exist: ${SRC}")
+endif()
+
+if(EXISTS "${DST}")
+	file(REMOVE_RECURSE "${DST}")
+endif()
+file(MAKE_DIRECTORY "${DST}")
+
+file(GLOB_RECURSE _entries RELATIVE "${SRC}" "${SRC}/*")
+foreach(_rel ${_entries})
+	if(_rel MATCHES "\\.(iso|cue|bin)$")
+		continue()
+	endif()
+	if(_rel STREQUAL "cd.iso" OR _rel MATCHES "(^|/)cd\\.iso$")
+		continue()
+	endif()
+	set(_from "${SRC}/${_rel}")
+	if(IS_SYMLINK "${_from}")
+		continue()
+	endif()
+	if(IS_DIRECTORY "${_from}")
+		continue()
+	endif()
+	get_filename_component(_dir "${DST}/${_rel}" DIRECTORY)
+	file(MAKE_DIRECTORY "${_dir}")
+	file(COPY "${_from}" DESTINATION "${_dir}")
+endforeach()
+
+if(EXISTS "${DST}/cd.iso")
+	message(FATAL_ERROR "Refusing to ship ${DST}/cd.iso (original game image)")
+endif()
+file(GLOB _isos "${DST}/*.iso" "${DST}/**/*.iso")
+if(_isos)
+	message(FATAL_ERROR "Refusing to ship ISO files in app data: ${_isos}")
+endif()

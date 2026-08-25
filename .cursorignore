@@ -1,0 +1,10 @@
+# Steam ISO and original EXEs stay out of the editor index.
+# Analysis notes are gitignored; the negations below un-hide them for Cursor.
+depot_7661/cd.iso
+depot_7661/**/*.iso
+depot_7661/**/*.EXE
+depot_7661/**/*.exe
+depot_7661/XCOMA/
+!depot_7661/analysis/
+!depot_7661/analysis/**
+docs/original-game/.local/
