@@ -85,3 +85,6 @@ add_openapoc_test(test_tu_reservation ARGS
 add_openapoc_test(test_unit_ai_priority ARGS
 		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
 		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
+add_openapoc_test(test_battle_disruptor_shield ARGS
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)

@@ -131,6 +131,17 @@ void Battle::initBattle(GameState &state, bool first)
 		o.second->genericHitSounds = state.battle_common_sample_list->genericHitSounds;
 		o.second->psiSuccessSounds = state.battle_common_sample_list->psiSuccessSounds;
 		o.second->psiFailSounds = state.battle_common_sample_list->psiFailSounds;
+		// Disruptor Shield full recharge: docs/original-game/findings/B3-G1-wounds-gadgets.md,
+		// "Follow-up 1(a)-continued" - bound as battle load only (both fresh start and resume),
+		// not periodic. Reset the item's own charge here; BattleUnit::updateDisruptorShield
+		// picks up the unit-level capacity/current buffer from it on the next tick.
+		for (auto &item : o.second->agent->equipment)
+		{
+			if (item->type->type == AEquipmentType::Type::DisruptorShield)
+			{
+				item->ammo = DISRUPTOR_SHIELD_MAX_CHARGE;
+			}
+		}
 	}
 	if (forces.empty())
 	{
@@ -509,7 +520,7 @@ void Battle::initialMapPartLinkUp()
 		{
 			auto pos = mp->tileObject->getOwningTile()->position;
 			LogDebug("MP {0} SBT {1} at {2} is UNLINKED before final attach pass", mp->type.id,
-			           (int)mp->type->getVanillaSupportedById(), pos);
+			         (int)mp->type->getVanillaSupportedById(), pos);
 		}
 	}
 

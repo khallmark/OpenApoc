@@ -62,6 +62,16 @@ static const int BRAINSUCK_CHANCE = 66;
 static const unsigned TICKS_SUPPRESS_SPOTTED_MESSAGES = TICKS_PER_TURN;
 // As per Yataka Shimaoka on forums, cloaking effect returns after 2 seconds of inaction
 static const unsigned CLOAK_TICKS_REQUIRED_UNIT = TICKS_PER_SECOND * 2;
+// docs/original-game/findings/B3-G1-wounds-gadgets.md "Disruptor Shield", FUN_00057A04
+// (bound-file 0xB24A8): while worn, grants unit+0x256 (capacity) a flat +100.
+static const int DISRUPTOR_SHIELD_CAPACITY_BONUS = 100;
+// Same finding, FUN_0005797C/FUN_00012D3C: the item's own charge field is reset to 100 on a
+// full recharge (bound: battle load only, see Battle::initBattle - not periodic).
+static const int DISRUPTOR_SHIELD_MAX_CHARGE = 100;
+// Same finding, "Follow-up 1(a)": FUN_0006511C/FUN_00066474 regenerate the shield by +1 every
+// 36 vanilla ticks, i.e. once per real-time second - bound to the same 36/sec vanilla clock the
+// fire scheduler (F1) uses.
+static const unsigned TICKS_PER_DISRUPTOR_SHIELD_REGEN = TICKS_PER_SECOND;
 
 class TileObjectBattleUnit;
 class TileObjectShadow;
@@ -263,6 +273,14 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	unsigned int cloakTicksAccumulated = 0;
 	// Ticks until sound is emitted
 	int ticksUntillNextCry = 0;
+	// Disruptor Shield damage-absorption buffer (TACP unit+0x256, "capacity"). 0 when no shield
+	// is worn/effective. See docs/original-game/findings/B3-G1-wounds-gadgets.md.
+	int disruptorShieldCapacity = 0;
+	// Disruptor Shield damage-absorption buffer (TACP unit+0x254, "current"/available charge).
+	int disruptorShieldCurrent = 0;
+	// Ticks accumulated towards the Disruptor Shield's next +1 regen
+	// (TICKS_PER_DISRUPTOR_SHIELD_REGEN)
+	unsigned int disruptorShieldRegenTicksAccumulated = 0;
 
 	// User set modes
 
@@ -417,6 +435,19 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	// Psi
 	// TACP non-4 flat FUN_0009b780 @ 0x9B780: add 30, cap 200
 	static int applyMindShieldIncrement(int currentBonus);
+
+	// Disruptor Shield
+	struct DisruptorShieldHitResult
+	{
+		// True if the hit is fully absorbed (no damage reaches health).
+		bool absorbed;
+		// Buffer's current value after the hit (0 if the buffer broke).
+		int remainingCurrent;
+	};
+	// docs/original-game/findings/B3-G1-wounds-gadgets.md, "Disruptor Shield": pure decision for
+	// a single hit against the unit-level buffer - see the .cpp definition for the bound
+	// all-or-nothing semantics this locks.
+	static DisruptorShieldHitResult resolveDisruptorShieldHit(int current, int typeModifiedDamage);
 	int getEffectivePsiDefence() const;
 	// Get chance of psi attack to succeed
 	int getPsiChanceForEquipment(StateRef<BattleUnit> target, PsiStatus status,
@@ -740,6 +771,9 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	void updateTB(GameState &state);
 	// Updates unit's cloak status
 	void updateCloak(GameState &state, unsigned int ticks);
+	// Updates the Disruptor Shield's unit-level capacity/current buffer: grants/clears the
+	// worn-shield capacity bonus and regenerates current at TICKS_PER_DISRUPTOR_SHIELD_REGEN
+	void updateDisruptorShield(GameState &state, unsigned int ticks);
 	// Updates unit bleeding, debuffs and morale states
 	void updateStateAndStats(GameState &state, unsigned int ticks);
 	// Updates unit's morale

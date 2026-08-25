@@ -866,6 +866,9 @@
     <member>reserveShotCost</member>
     <member>cloakTicksAccumulated</member>
     <member>ticksUntillNextCry</member>
+    <member>disruptorShieldCapacity</member>
+    <member>disruptorShieldCurrent</member>
+    <member>disruptorShieldRegenTicksAccumulated</member>
     <member>behavior_mode</member>
     <member>fire_aiming_mode</member>
     <member>fire_permission_mode</member>

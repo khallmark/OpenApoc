@@ -82,6 +82,26 @@ int BattleUnit::applyMindShieldIncrement(int currentBonus)
 	return std::min(200, currentBonus + 30);
 }
 
+// docs/original-game/findings/B3-G1-wounds-gadgets.md, "Disruptor Shield", "Follow-up -
+// overflow/passthrough" (bound, read from the raw instruction listing - an earlier
+// decompiler-misled reading described this as partial absorption, which is wrong): the buffer is
+// ALL-OR-NOTHING. `current > typeModifiedDamage` fully absorbs the hit; `current <=
+// typeModifiedDamage` (including exact equality) breaks the buffer and every point of the
+// incoming damage passes through untouched - the buffer's pre-hit value never partially offsets
+// it. Extracted as a pure, static, directly-testable step (mirroring
+// TacticalAIVanilla::retreatChancePercent()) because BattleUnit::applyDamage() itself needs a
+// live tileObject/TileMap to reach past the shield check, which no lock test in this suite
+// constructs (see tests/test_unit_ai_priority.cpp).
+BattleUnit::DisruptorShieldHitResult BattleUnit::resolveDisruptorShieldHit(int current,
+                                                                           int typeModifiedDamage)
+{
+	if (current > typeModifiedDamage)
+	{
+		return {true, current - typeModifiedDamage};
+	}
+	return {false, 0};
+}
+
 int BattleUnit::getEffectivePsiDefence() const
 {
 	if (!agent)
@@ -1773,34 +1793,10 @@ bool BattleUnit::applyDamage(GameState &state, int power, StateRef<DamageType> d
 		damage = randDamage050150(state.rng, power);
 	}
 
-	// Hit shield if present
-	if (!damageType->ignore_shield)
-	{
-		auto shield = agent->getFirstShield(state);
-		if (shield)
-		{
-			damage = damageType->dealDamage(damage, shield->type->damage_modifier);
-			shield->ammo -= damage;
-			// Shield destroyed
-			if (shield->ammo <= 0)
-			{
-				agent->removeEquipment(state, shield);
-			}
-			state.current_battle->placeDoodad(shield->type->shield_graphic,
-			                                  tileObject->getCenter());
-			return true;
-		}
-	}
-
-	// Apply enzyme if penetrated shields
-	if (damageType->effectType == DamageType::EffectType::Enzyme)
-	{
-		enzymeDebuffIntensity += power * 2;
-		enzymeDebuffTicksAccumulated = 0;
-		applyEnzymeEffect(state);
-	}
-
 	// Find out armor type
+	// (Computed here, ahead of the Disruptor Shield check below, because the shield's
+	// absorption buffer compares against the same general type-modified damage value armor
+	// does - see the "Hit shield if present" comment.)
 	auto armor = agent->getArmor(bodyPart);
 	int armorValue = 0;
 	StateRef<DamageModifier> damageModifier;
@@ -1813,6 +1809,59 @@ bool BattleUnit::applyDamage(GameState &state, int power, StateRef<DamageType> d
 	{
 		armorValue = agent->type->armor.at(bodyPart);
 		damageModifier = agent->type->damage_modifier;
+	}
+
+	// Hit shield if present
+	//
+	// docs/original-game/findings/B3-G1-wounds-gadgets.md, "Disruptor Shield": FUN_0005F860 (the
+	// general damage-application function) compares the unit-level buffer (disruptorShieldCurrent,
+	// TACP unit+0x254) against damage already run through the same general damage-type
+	// resist/modifier pipeline every hit uses (bound "Follow-up 1(b)": not a shield-specific
+	// resistance table - do not use shield->type->damage_modifier here).
+	//
+	// This is an ALL-OR-NOTHING shield (bound "Follow-up - overflow/passthrough", read from the
+	// raw instruction listing - an earlier partial-absorption reading was wrong):
+	//   - current > type-modified damage: fully absorbed, nothing reaches health.
+	//   - current <= type-modified damage (including equality): the buffer breaks (zeroed) and
+	//     the FULL incoming damage continues on unmodified-by-the-shield, exactly as an
+	//     unshielded hit would (i.e. `damage` here is left untouched for the rest of this
+	//     function to process normally).
+	if (!damageType->ignore_shield && disruptorShieldCurrent > 0)
+	{
+		auto shield = agent->getFirstShield(state);
+		if (shield)
+		{
+			int shieldModifiedDamage = damageType->dealDamage(damage, damageModifier);
+			auto shieldResult =
+			    resolveDisruptorShieldHit(disruptorShieldCurrent, shieldModifiedDamage);
+			if (shieldResult.absorbed)
+			{
+				// Fully absorbed.
+				int absorbedAmount = disruptorShieldCurrent - shieldResult.remainingCurrent;
+				disruptorShieldCurrent = shieldResult.remainingCurrent;
+				// Sync the item's own charge counter in step with the buffer. FUN_0006508C's
+				// exact arithmetic here is not confirmed, but the doc notes it doesn't affect
+				// observable behaviour, since the unit-level buffer is what absorption depends
+				// on - this just keeps the item's displayed charge from drifting from it.
+				shield->ammo = std::max(0, shield->ammo - absorbedAmount);
+				return true;
+			}
+			// Depleted: buffer breaks (both fields zeroed, per FUN_00064FFC), visual cue fires,
+			// full damage passes through untouched.
+			disruptorShieldCurrent = 0;
+			disruptorShieldCapacity = 0;
+			state.current_battle->placeDoodad(shield->type->shield_graphic,
+			                                  tileObject->getCenter());
+			// Fall through with `damage` unmodified.
+		}
+	}
+
+	// Apply enzyme if penetrated shields
+	if (damageType->effectType == DamageType::EffectType::Enzyme)
+	{
+		enzymeDebuffIntensity += power * 2;
+		enzymeDebuffTicksAccumulated = 0;
+		applyEnzymeEffect(state);
 	}
 
 	if (damageType->effectType == DamageType::EffectType::Psionic)
@@ -2036,6 +2085,8 @@ void BattleUnit::update(GameState &state, unsigned int ticks)
 	}
 	// Unit cloak - even in TB unit returns to cloaked after firing based on time
 	updateCloak(state, ticks);
+	// Disruptor Shield capacity/current buffer
+	updateDisruptorShield(state, ticks);
 	// Unit events - was under fire, was requested to give way etc.
 	updateEvents(state);
 	// Idling: Auto-movement, auto-body change when idling
@@ -2124,6 +2175,7 @@ void BattleUnit::updateTB(GameState &state)
 
 	// Miscellaneous state updates, as well as unit's stats
 	updateCloak(state, TICKS_PER_TURN);
+	updateDisruptorShield(state, TICKS_PER_TURN);
 	updateStateAndStats(state, TICKS_PER_TURN);
 	updateRegen(state, TICKS_REGEN_PER_TURN);
 }
@@ -2144,6 +2196,52 @@ void BattleUnit::updateCloak(GameState &state [[maybe_unused]], unsigned int tic
 		{
 			cloakTicksAccumulated = 0;
 		}
+	}
+}
+
+void BattleUnit::updateDisruptorShield(GameState &state, unsigned int ticks)
+{
+	// docs/original-game/findings/B3-G1-wounds-gadgets.md, "Disruptor Shield":
+	// FUN_00057A04 grants unit+0x256 (capacity) a flat +100 while a Disruptor Shield is worn and
+	// equipped, and tops unit+0x254 (current) up from the item's own charge, clamped to
+	// capacity. Calling this every tick would runaway capacity if applied additively each time,
+	// so it is treated here as a one-time grant on the rising edge of "a shield became
+	// available" (capacity was 0), which the bound "+100" flat bonus (not "+=100 forever") and
+	// the doc's own callout of a fresh equip-transfer support. Ongoing regen after that is the
+	// separate, explicitly bound +1/TICKS_PER_DISRUPTOR_SHIELD_REGEN below.
+	auto shield = agent->getFirstShield(state);
+	if (shield)
+	{
+		if (disruptorShieldCapacity == 0)
+		{
+			disruptorShieldCapacity = DISRUPTOR_SHIELD_CAPACITY_BONUS;
+			disruptorShieldCurrent =
+			    std::min(disruptorShieldCurrent + shield->ammo, disruptorShieldCapacity);
+		}
+		if (disruptorShieldCurrent < disruptorShieldCapacity)
+		{
+			disruptorShieldRegenTicksAccumulated += ticks;
+			while (disruptorShieldRegenTicksAccumulated >= TICKS_PER_DISRUPTOR_SHIELD_REGEN)
+			{
+				disruptorShieldRegenTicksAccumulated -= TICKS_PER_DISRUPTOR_SHIELD_REGEN;
+				disruptorShieldCurrent =
+				    std::min(disruptorShieldCurrent + 1, disruptorShieldCapacity);
+			}
+		}
+		else
+		{
+			disruptorShieldRegenTicksAccumulated = 0;
+		}
+	}
+	else if (disruptorShieldCapacity != 0 || disruptorShieldCurrent != 0)
+	{
+		// No worn/usable shield left to back the buffer - it has no source, so it collapses.
+		// FUN_00064FFC zeroes both fields on shield loss (bound structurally, exact removal
+		// trigger not confirmed); derived here from "no shield present" each tick rather than a
+		// specific unequip event hook.
+		disruptorShieldCapacity = 0;
+		disruptorShieldCurrent = 0;
+		disruptorShieldRegenTicksAccumulated = 0;
 	}
 }
 
@@ -5161,7 +5259,11 @@ bool BattleUnit::useItem(GameState &state, sp<AEquipment> item)
 		case AEquipmentType::Type::MindBender:
 		case AEquipmentType::Type::Teleporter:
 			return false;
-		// Items that do nothing
+		// Items that do nothing via an explicit "use" action.
+		// CloakingField and DisruptorShield are passive: both are bound (docs/original-game/
+		// findings/B3-G1-wounds-gadgets.md) as per-tick effects driven off simply being worn
+		// (see BattleUnit::updateCloak / BattleUnit::updateDisruptorShield), not a triggered
+		// action, so returning false here is correct rather than "not yet implemented".
 		case AEquipmentType::Type::AlienDetector:
 		case AEquipmentType::Type::Ammo:
 		case AEquipmentType::Type::Armor:
