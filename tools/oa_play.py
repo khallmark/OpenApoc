@@ -289,7 +289,11 @@ PAUSE_NOTIFICATION_FLAGS = [
             "--Notifications.Battle.HostileDied=0",
             "--Notifications.Battle.HostileSpotted=0",
             "--Notifications.Battle.UnknownDied=0",
-            "--Notifications.City.AgentArrived=0",
+            # Leave AgentArrived ON. It is the notification that says a squad has reached the
+            # building it was sent to, which is exactly the cue to act -- and switching it off
+            # meant the driver had no idea when its agents had got anywhere, so it fell back to
+            # opening the building screen over and over and finding nobody there to select.
+            # Waiting to be told costs nothing; polling costs a trip to the city screen each time.
             "--Notifications.City.AgentDiedCity=0",
             "--Notifications.City.BaseDestroyed=0",
             "--Notifications.City.CargoArrived=0",
