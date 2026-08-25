@@ -241,9 +241,26 @@ sp<AIMovement> UnitAIHelper::getTakeCoverMovement(GameState &state, BattleUnit &
 	}
 	auto result = mksp<AIMovement>();
 	result->type = AIMovement::Type::Advance;
-	result->movementMode = MovementMode::Running;
-	result->kneelingMode = KneelingMode::None;
 	result->targetLocation = best;
+	// B2 (PRIOR-ART, not recovered). ai.txt distinguishes the two cover modes only by what they
+	// do when no better cover exists -- Normal kneels, Cautious prones -- and there is no
+	// printable `evasive` in TACP, so even the mode name is prior art. Nothing in the recovered
+	// FUN_0008c1fc/FUN_0007e600 chain says what stance a unit adopts on ARRIVAL at cover.
+	//
+	// Extending the same distinction to the approach is the smallest consistent reading: a unit
+	// that would go prone rather than kneel when caught in the open is not one that sprints
+	// upright across it. Labelled prior-art at the point of use so nobody later cites this as
+	// recovered behaviour.
+	if (forced && u.canProne(u.position, u.facing))
+	{
+		result->movementMode = MovementMode::Prone;
+		result->kneelingMode = KneelingMode::None;
+	}
+	else
+	{
+		result->movementMode = MovementMode::Running;
+		result->kneelingMode = forced ? KneelingMode::Kneeling : KneelingMode::None;
+	}
 	return result;
 }
 
