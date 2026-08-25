@@ -119,6 +119,17 @@ void InitialGameStateExtractor::extractCityMap(GameState &state, UString fileNam
 		city->initial_tiles[Vec3<int>{95, 68, 2}] = {&state, "CITYTILE_CITYMAP_92"};
 		city->initial_tiles[Vec3<int>{95, 72, 2}] = {&state, "CITYTILE_CITYMAP_92"};
 	}
+	if (fileName == "alienmap")
+	{
+		// Column (77,38) runs z=1..3 and then jumps to z=7,8 with nothing in between, so those two
+		// tiles hang unsupported: initialSceneryLinkUp reports them and Scenery::collapse drops
+		// them on the first tick, every single game. Upstream already hand-patches this class of
+		// dangling-scenery data for citymap1/2/3/5 just below; alienmap never got the same pass.
+		// Erase them rather than invent three supporting tiles the original game never drew --
+		// that matches what the player actually sees a tick after the map loads.
+		city->initial_tiles.erase(Vec3<int>{77, 38, 7});
+		city->initial_tiles.erase(Vec3<int>{77, 38, 8});
+	}
 	if (fileName == "citymap5")
 	{
 		// Support hanging road

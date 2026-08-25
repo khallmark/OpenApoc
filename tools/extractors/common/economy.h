@@ -24,3 +24,16 @@ static_assert(sizeof(struct EconomyData) == 22, "Invalid EconomyData size");
 
 #define ECONOMY_DATA3_OFFSET_START 1632232
 #define ECONOMY_DATA3_OFFSET_END 1634146
+
+// UFO2P non-4 craft_ammo_names. 15 null-terminated market names starting
+// "Fusion Powerfuel" and ending "Air Defense Missile" (last NUL at 0x14B29A).
+// Type-02 manufacturing_data.itemIndex indexes this table, not manufacturing_items.
+#define CRAFT_AMMO_NAME_STRTAB_OFFSET_START 0x14B18E
+#define CRAFT_AMMO_NAME_STRTAB_OFFSET_END 0x14B29A
+#define CRAFT_AMMO_NAME_COUNT 15
+
+// UFO2P non-4 craft_ammo_manufacturers_data. hexa 1305450–1305478 names the
+// table; last uint16 starts at 0x13EB86 (15 × 2). Parallel org index into
+// organisation_names (0 = X-COM).
+#define CRAFT_AMMO_MANUFACTURERS_OFFSET_START 0x13EB6A
+#define CRAFT_AMMO_MANUFACTURERS_OFFSET_END 0x13EB88

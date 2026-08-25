@@ -161,6 +161,13 @@ void InitialGameStateExtractor::extractBattlescapeMapFromPath(GameState &state,
 		m->reinforcementsInterval = reinforcementTimers.at(dirName);
 	}
 
+	if (alienBuildingBriefingIndex.find(dirName) != alienBuildingBriefingIndex.end())
+	{
+		// Display text, not an identifier - do not canon_string() this.
+		m->briefing =
+		    this->tacp.alien_building_briefings->get(alienBuildingBriefingIndex.at(dirName));
+	}
+
 	// Trying all possible names, because game actually has some maps missing sectors in the middle
 	// (like, 05RESCUE has no SEC04 but has SEC05 and on)
 	auto sdtFiles = fw().data->fs.enumerateDirectory(map_prefix + "/" + dirName, ".sdt");

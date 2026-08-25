@@ -1,6 +1,7 @@
 #include "tacp.h"
 #include "framework/data.h"
 #include "framework/framework.h"
+#include "tools/extractors/common/exe_slide.h"
 
 #include <boost/crc.hpp>
 #include <iomanip>
@@ -8,13 +9,6 @@
 
 namespace OpenApoc
 {
-
-/* This is the crc32 of the tacp.exe found on my steam version of apoc
- * It's likely there are other executables around with different CRCs, but we
- * need to make sure the offsets are the same, then we can add them to an
- * 'allowed' list, or have a map of 'known' CRCs with offsets of the various
- * tables */
-uint32_t expected_tacp_crc32 = 0xfebbe39e;
 
 TACP::TACP(std::string file_name)
 {
@@ -31,12 +25,13 @@ TACP::TACP(std::string file_name)
 	crc.process_bytes(data.get(), file.size());
 
 	auto crc32 = crc.checksum();
-
-	if (crc32 != expected_tacp_crc32)
+	int32_t slide = 0;
+	if (!tacpFileSlide(crc32, slide))
 	{
-		LogError("File \"{0}\"\" has an unknown crc32 value of {1:08x} - expected {2:08x}",
-		         file_name.c_str(), crc32, expected_tacp_crc32);
+		LogError("File \"{0}\" has unknown crc32 {1:08x} (known non-4 {2:08x}, 4-build {3:08x})",
+		         file_name.c_str(), crc32, TACP_CRC_NON4, TACP_CRC_4);
 	}
+	const auto at = [slide](off_t off) -> off_t { return off + slide; };
 
 	file.seekg(0, std::ios::beg);
 	file.clear();
@@ -70,51 +65,58 @@ TACP::TACP(std::string file_name)
 		this->damage_modifier_names.reset(new StrTab(vec));
 	}
 
-	this->damage_type_names.reset(
-	    new StrTab(file, DAMAGE_TYPE_NAMES_OFFSET_START, DAMAGE_TYPE_NAMES_OFFSET_END, true));
+	this->damage_type_names.reset(new StrTab(file, at(DAMAGE_TYPE_NAMES_OFFSET_START),
+	                                         at(DAMAGE_TYPE_NAMES_OFFSET_END), true));
 
-	this->damage_types.reset(new DataChunk<DamageTypeData>(file, DAMAGE_TYPE_DATA_OFFSET_START,
-	                                                       DAMAGE_TYPE_DATA_OFFSET_END));
+	this->alien_building_briefings.reset(new StrTab(file,
+	                                                at(ALIEN_BUILDING_BRIEFING_STRTAB_OFFSET_START),
+	                                                at(ALIEN_BUILDING_BRIEFING_STRTAB_OFFSET_END)));
+
+	this->damage_types.reset(new DataChunk<DamageTypeData>(file, at(DAMAGE_TYPE_DATA_OFFSET_START),
+	                                                       at(DAMAGE_TYPE_DATA_OFFSET_END)));
 
 	this->damage_modifiers.reset(new DataChunk<DamageModifierData>(
-	    file, DAMAGE_MODIFIER_DATA_OFFSET_START, DAMAGE_MODIFIER_DATA_OFFSET_END));
+	    file, at(DAMAGE_MODIFIER_DATA_OFFSET_START), at(DAMAGE_MODIFIER_DATA_OFFSET_END)));
 
 	this->agent_equipment.reset(new DataChunk<AgentEquipmentData>(
-	    file, AGENT_EQUIPMENT_DATA_OFFSET_START, AGENT_EQUIPMENT_DATA_OFFSET_END));
+	    file, at(AGENT_EQUIPMENT_DATA_OFFSET_START), at(AGENT_EQUIPMENT_DATA_OFFSET_END)));
+	this->fire_hazard_power_table.reset(new DataChunk<uint8_t>(
+	    file, at(FIRE_HAZARD_POWER_TABLE_OFFSET_START), at(FIRE_HAZARD_POWER_TABLE_OFFSET_END)));
 
-	this->agent_armor.reset(new DataChunk<AgentArmorData>(file, AGENT_ARMOR_DATA_OFFSET_START,
-	                                                      AGENT_ARMOR_DATA_OFFSET_END));
+	this->agent_armor.reset(new DataChunk<AgentArmorData>(file, at(AGENT_ARMOR_DATA_OFFSET_START),
+	                                                      at(AGENT_ARMOR_DATA_OFFSET_END)));
 
-	this->agent_weapons.reset(new DataChunk<AgentWeaponData>(file, AGENT_WEAPON_DATA_OFFSET_START,
-	                                                         AGENT_WEAPON_DATA_OFFSET_END));
+	this->agent_weapons.reset(new DataChunk<AgentWeaponData>(
+	    file, at(AGENT_WEAPON_DATA_OFFSET_START), at(AGENT_WEAPON_DATA_OFFSET_END)));
 
-	this->agent_general.reset(new DataChunk<AgentGeneralData>(file, AGENT_GENERAL_DATA_OFFSET_START,
-	                                                          AGENT_GENERAL_DATA_OFFSET_END));
+	this->agent_general.reset(new DataChunk<AgentGeneralData>(
+	    file, at(AGENT_GENERAL_DATA_OFFSET_START), at(AGENT_GENERAL_DATA_OFFSET_END)));
 
-	this->agent_payload.reset(new DataChunk<AgentPayloadData>(file, AGENT_PAYLOAD_DATA_OFFSET_START,
-	                                                          AGENT_PAYLOAD_DATA_OFFSET_END));
+	this->agent_payload.reset(new DataChunk<AgentPayloadData>(
+	    file, at(AGENT_PAYLOAD_DATA_OFFSET_START), at(AGENT_PAYLOAD_DATA_OFFSET_END)));
 
 	this->agent_equipment_set_built_in.reset(new DataChunk<AgentEquipmentSetBuiltInData>(
-	    file, AGENT_EQUIPMENT_SET_BUILTIN_DATA_OFFSET_START,
-	    AGENT_EQUIPMENT_SET_BUILTIN_DATA_OFFSET_END));
+	    file, at(AGENT_EQUIPMENT_SET_BUILTIN_DATA_OFFSET_START),
+	    at(AGENT_EQUIPMENT_SET_BUILTIN_DATA_OFFSET_END)));
 
 	this->agent_equipment_set_score_alien.reset(new DataChunk<AgentEquipmentSetScoreDataAlien>(
-	    file, AGENT_EQUIPMENT_SET_SCORE_ALIEN_DATA_OFFSET_START,
-	    AGENT_EQUIPMENT_SET_SCORE_ALIEN_DATA_OFFSET_END));
+	    file, at(AGENT_EQUIPMENT_SET_SCORE_ALIEN_DATA_OFFSET_START),
+	    at(AGENT_EQUIPMENT_SET_SCORE_ALIEN_DATA_OFFSET_END)));
 
 	this->agent_equipment_set_score_human.reset(new DataChunk<AgentEquipmentSetScoreDataHuman>(
-	    file, AGENT_EQUIPMENT_SET_SCORE_HUMAN_DATA_OFFSET_START,
-	    AGENT_EQUIPMENT_SET_SCORE_HUMAN_DATA_OFFSET_END));
+	    file, at(AGENT_EQUIPMENT_SET_SCORE_HUMAN_DATA_OFFSET_START),
+	    at(AGENT_EQUIPMENT_SET_SCORE_HUMAN_DATA_OFFSET_END)));
 
 	this->agent_equipment_set_score_requirement.reset(
 	    new DataChunk<AgentEquipmentSetScoreRequirement>(
-	        file, AGENT_EQUIPMENT_SET_SCORE_REQUIREMENT_DATA_OFFSET_START,
-	        AGENT_EQUIPMENT_SET_SCORE_REQUIREMENT_DATA_OFFSET_END));
+	        file, at(AGENT_EQUIPMENT_SET_SCORE_REQUIREMENT_DATA_OFFSET_START),
+	        at(AGENT_EQUIPMENT_SET_SCORE_REQUIREMENT_DATA_OFFSET_END)));
 
 	this->bullet_sprites.reset(new DataChunk<BulletSprite>(
-	    file, BULLETSPRITE_DATA_TACP_OFFSET_START, BULLETSPRITE_DATA_TACP_OFFSET_END));
-	this->projectile_sprites.reset(new DataChunk<ProjectileSprites>(
-	    file, PROJECTILESPRITES_DATA_TACP_OFFSET_START, PROJECTILESPRITES_DATA_TACP_OFFSET_END));
+	    file, at(BULLETSPRITE_DATA_TACP_OFFSET_START), at(BULLETSPRITE_DATA_TACP_OFFSET_END)));
+	this->projectile_sprites.reset(
+	    new DataChunk<ProjectileSprites>(file, at(PROJECTILESPRITES_DATA_TACP_OFFSET_START),
+	                                     at(PROJECTILESPRITES_DATA_TACP_OFFSET_END)));
 }
 
 } // namespace OpenApoc

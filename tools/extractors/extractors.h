@@ -49,6 +49,23 @@ class InitialGameStateExtractor
 	InitialGameStateExtractor() = default;
 	void extractCommon(GameState &state) const;
 	void extract(GameState &state, Difficulty difficulty) const;
+	// After common_patch: overlay EXE org indices onto existing VAmmoType keys
+	// and move economy_data2 onto those IDs (patch may fold '-' to '_').
+	void applyCraftAmmoManufacturers(GameState &state) const;
+	// After common_patch: vehicle_equipment.ammo_type → craft_ammo_names.
+	void applyVehicleEquipmentAmmoTypes(GameState &state) const;
+	// After common_patch: overlay vehicle_weapons[split_idx] onto fragment types.
+	void applyVehicleEquipmentSplitWeapons(GameState &state) const;
+	// After common_patch: catalog @ 0x1910A2 + start bytes @ 0x19196A → startVisible.
+	void applyUfopaediaStartVisible(GameState &state) const;
+	// After common_patch: FUN_000aa7a8 hardcoded topic loops (records 37 / 38 / 44).
+	void applyAa7a8HardcodedGates(GameState &state) const;
+	// Re-write list tables after loadGame so a leftover section file cannot append.
+	void reapplyExeListTables(GameState &state) const;
+	// Re-extract EXE list tables after loadGame (serialize appends vectors / lists).
+	void applyUfoGrowth(GameState &state) const { extractUfoGrowth(state); }
+	void applyUfoIncursions(GameState &state) const { extractUfoIncursions(state); }
+	void applyUfoMissionPreference(GameState &state) const { extractUfoMissionPreference(state); }
 	/* extractBulletSprites() returns a list of images, so doesn't affect a GameState */
 	std::map<UString, sp<Image>> extractBulletSpritesCity() const;
 	std::map<UString, sp<Image>> extractBulletSpritesBattle() const;
@@ -76,14 +93,15 @@ class InitialGameStateExtractor
 	static const std::map<OpenApoc::UString, int> reinforcementTimers;
 	// Lookup table for battlemap path -> id of feature that is a mission objective (to destroy)
 	static const std::map<OpenApoc::UString, std::set<int>> missionObjectives;
+	// Lookup table for alien-building battlemap path -> index into TACP's packed briefing pool
+	// (0x2E0C09-0x2E1C98, ALIEN_BUILDING_BRIEFING_STRTAB_OFFSET_*), in briefing order.
+	static const std::map<OpenApoc::UString, int> alienBuildingBriefingIndex;
 	// List of paths and names for unit image packs
 	static const std::map<OpenApoc::UString, OpenApoc::UString> unitImagePackPaths;
 	// List of paths and names for unit shadow packs
 	static const std::map<OpenApoc::UString, OpenApoc::UString> unitShadowPackPaths;
 	// List of paths and names for animation packs
 	static const std::map<OpenApoc::UString, OpenApoc::UString> unitAnimationPackPaths;
-	// Detection weights for building functions
-	static const std::vector<int> buildingFunctionDetectionWeights;
 	// Lookup value for tube NESW orientation
 	static const std::map<OpenApoc::UString, std::vector<int>> tubes;
 
@@ -97,9 +115,15 @@ class InitialGameStateExtractor
 	void extractBaseLayouts(GameState &state) const;
 	void extractVehicleEquipment(GameState &state) const;
 	void extractResearch(GameState &state) const;
+	void extractManufacturing(GameState &state) const;
 	void extractAgentEquipment(GameState &state) const;
 	void extractDoodads(GameState &state) const;
 	void extractEconomy(GameState &state) const;
+	void extractUfoGrowth(GameState &state) const;
+	void extractUfoIncursions(GameState &state) const;
+	void extractUfoMissionPreference(GameState &state) const;
+	void extractVehicleParkSpawnTable(GameState &state) const;
+	void extractFireHazardPowerTable(GameState &state) const;
 
 	void extractBattlescapeMap(GameState &state, const std::vector<OpenApoc::UString> &paths) const;
 	void extractBattlescapeMapFromPath(GameState &state, const UString dirName,

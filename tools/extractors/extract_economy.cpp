@@ -2,34 +2,14 @@
 #include "framework/framework.h"
 #include "game/state/city/economyinfo.h"
 #include "game/state/gamestate.h"
+#include "game/state/rules/city/vammotype.h"
 #include "library/strings_format.h"
 #include "tools/extractors/common/ufo2p.h"
 #include "tools/extractors/extractors.h"
+#include <utility>
 
 namespace OpenApoc
 {
-
-namespace
-{
-static std::vector<UString> vehicleAmmoNames = {
-
-    {"VEQUIPMENTAMMOTYPE_FUSION_POWERFUEL"},
-    {"VEQUIPMENTAMMOTYPE_ELERIUM_115"},
-    {"VEQUIPMENTAMMOTYPE_ZORIUM"},
-    {"VEQUIPMENTAMMOTYPE_MULTI_CANNON_ROUND"},
-    {"VEQUIPMENTAMMOTYPE_JANITOR_MISSILE"},
-    {"VEQUIPMENTAMMOTYPE_JUSTICE_MISSILE"},
-    {"VEQUIPMENTAMMOTYPE_PROPHET_MISSILE"},
-    {"VEQUIPMENTAMMOTYPE_RETRIBUTION_MISSILE"},
-    {"VEQUIPMENTAMMOTYPE_DISRUPTOR_BOMB"},
-    {"VEQUIPMENTAMMOTYPE_STASIS_BOMB"},
-    {"VEQUIPMENTAMMOTYPE_DISRUPTOR_MULTI-BOMB"},
-    {"VEQUIPMENTAMMOTYPE_REPEATER_40MM_CANNON_ROUND"},
-    {"VEQUIPMENTAMMOTYPE_AIRGUARD_52MM_CANNON_ROUND"},
-    {"VEQUIPMENTAMMOTYPE_GROUND_LAUNCHED_MISSILE"},
-    {"VEQUIPMENTAMMOTYPE_AIR_DEFENSE_MISSILE"},
-};
-}
 
 void InitialGameStateExtractor::extractEconomy(GameState &state) const
 {
@@ -76,6 +56,18 @@ void InitialGameStateExtractor::extractEconomy(GameState &state) const
 		}
 		state.economy[id] = economyInfo;
 	}
+	if (!data.craft_ammo_names || data.craft_ammo_names->count() != CRAFT_AMMO_NAME_COUNT)
+	{
+		LogError("craft_ammo_names count {0} expected {1}",
+		         data.craft_ammo_names ? data.craft_ammo_names->count() : 0, CRAFT_AMMO_NAME_COUNT);
+	}
+	if (!data.craft_ammo_manufacturers ||
+	    data.craft_ammo_manufacturers->count() != CRAFT_AMMO_NAME_COUNT)
+	{
+		LogError("craft_ammo_manufacturers count {0} expected {1}",
+		         data.craft_ammo_manufacturers ? data.craft_ammo_manufacturers->count() : 0,
+		         CRAFT_AMMO_NAME_COUNT);
+	}
 	for (unsigned idx = 0; idx < data.economy_data2->count(); idx++)
 	{
 		int i = idx;
@@ -91,9 +83,9 @@ void InitialGameStateExtractor::extractEconomy(GameState &state) const
 		economyInfo.minStock = e.minStock;
 
 		UString id = "";
-		if (i < 15)
+		if (i < CRAFT_AMMO_NAME_COUNT && data.craft_ammo_names)
 		{
-			id = vehicleAmmoNames[i];
+			id = data.getVAmmoId(i);
 		}
 		else
 		{
@@ -126,6 +118,52 @@ void InitialGameStateExtractor::extractEconomy(GameState &state) const
 			LogError("Unexpected data in economy data pack 3!");
 		}
 		state.economy[id] = economyInfo;
+	}
+}
+
+void InitialGameStateExtractor::applyCraftAmmoManufacturers(GameState &state) const
+{
+	auto &data = this->ufo2p;
+	if (!data.craft_ammo_names || data.craft_ammo_names->count() != CRAFT_AMMO_NAME_COUNT ||
+	    !data.craft_ammo_manufacturers ||
+	    data.craft_ammo_manufacturers->count() != CRAFT_AMMO_NAME_COUNT)
+	{
+		return;
+	}
+	// Patch IDs can fold '-' to '_' (Elerium-115). Match by ammo_id or EXE name;
+	// do not insert a second key.
+	for (unsigned i = 0; i < CRAFT_AMMO_NAME_COUNT; i++)
+	{
+		const auto name = data.craft_ammo_names->get(i);
+		const auto orgId = data.getOrgId(data.craft_ammo_manufacturers->get(i));
+		sp<VAmmoType> ammo;
+		for (auto &pair : state.vehicle_ammo)
+		{
+			if (pair.second && pair.second->name == name)
+			{
+				ammo = pair.second;
+				break;
+			}
+		}
+		if (!ammo)
+		{
+			LogError("No vehicle_ammo entry for craft ammo {0} ({1})", i, name);
+			continue;
+		}
+		ammo->manufacturer = {&state, orgId};
+		// extractEconomy keys economy_data2 with getVAmmoId (keeps '-').
+		// Patch VAmmoType IDs can fold that hyphen. purchase() / reload
+		// look up economy[vehicle_ammo.id].
+		const auto exeId = data.getVAmmoId(static_cast<int>(i));
+		if (exeId != ammo->id)
+		{
+			auto it = state.economy.find(exeId);
+			if (it != state.economy.end())
+			{
+				state.economy[ammo->id] = std::move(it->second);
+				state.economy.erase(it);
+			}
+		}
 	}
 }
 
