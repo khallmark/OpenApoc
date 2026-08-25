@@ -1,0 +1,28 @@
+---
+description: Fork policy — Ghidra allowed; do not commit game binaries or Ghidra databases
+alwaysApply: true
+---
+
+# OpenApoc fork
+
+This is a fork. Ghidra and decompiler output are allowed in the same session as
+`game/` edits. Use original-behavior evidence. Do not invent constants.
+
+```text
+# Allowed
+Read sibling-lab decompiles; cite FUN_* with file offset + binary generation
+Implement from TACP/UFO2P listings in this session
+
+# Not allowed
+git add depot_7661/  data/cd.iso  *.rep  *.gpr  original EXEs
+Use depot_7661/XCOMA/ as Framework.CD
+Index Ghidra C in codebase-memory-mcp
+```
+
+Lab: `/Users/khallmark/Desktop/Code/OpenSource/OpenApoc-og-research`
+
+Parity / Ghidra work: load `.cursor/skills/openapoc-parity/SKILL.md`.
+
+Game-logic change → `openapoc: test` or `ctest --test-dir build --output-on-failure`
+(reconfigure with `-DENABLE_TESTS=ON` first). Docs/ignore changes →
+`./tools/check_ignored_binaries.sh`.

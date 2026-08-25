@@ -1,0 +1,233 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "openapoc: init submodules",
+      "type": "shell",
+      "command": "git submodule update --init --recursive",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: link game data",
+      "type": "shell",
+      "command": "ln -sfn \"${workspaceFolder}/depot_7661/cd.iso\" \"${workspaceFolder}/data/cd.iso\" && test -f \"${workspaceFolder}/data/cd.iso\"",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: configure",
+      "type": "shell",
+      "command": "mkdir -p build && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_PREFIX_PATH=\"$(brew --prefix qt@6);$(brew --prefix boost);/opt/homebrew\" -DENABLE_TESTS=OFF -DBUILD_IMAGEDUMP=OFF -DBUILD_SERIALIZATIONTOOL=OFF -S . -B build",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: configure tests",
+      "type": "shell",
+      "command": "mkdir -p build && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_PREFIX_PATH=\"$(brew --prefix qt@6);$(brew --prefix boost);/opt/homebrew\" -DENABLE_TESTS=ON -DBUILD_IMAGEDUMP=OFF -DBUILD_SERIALIZATIONTOOL=OFF -S . -B build",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: build",
+      "type": "shell",
+      "command": "cmake --build build -j$(sysctl -n hw.ncpu)",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "openapoc: ctest",
+      "type": "shell",
+      "command": "ctest --test-dir build --output-on-failure",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: extract data",
+      "type": "shell",
+      "command": "cmake --build build --target extract-data",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: regen compare report",
+      "type": "shell",
+      "command": "python3 tools/regen_compare_report.py",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: check ignored binaries",
+      "type": "shell",
+      "command": "./tools/check_ignored_binaries.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: configure and build",
+      "dependsOn": [
+        "openapoc: configure",
+        "openapoc: build"
+      ],
+      "dependsOrder": "sequence",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: test",
+      "dependsOn": [
+        "openapoc: configure tests",
+        "openapoc: build",
+        "openapoc: ctest"
+      ],
+      "dependsOrder": "sequence",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: clean runtime",
+      "type": "shell",
+      "command": "pkill -x OpenApoc 2>/dev/null || true; rm -f log.txt openapoc_log.txt OpenApoc_settings.conf save.zip; rm -rf saves/",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: launch",
+      "type": "shell",
+      "command": "./build/bin/OpenApoc.app/Contents/MacOS/OpenApoc --Framework.Data=\"${workspaceFolder}/data\" --Framework.CD=\"${workspaceFolder}/data/cd.iso\"",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: run",
+      "dependsOn": [
+        "openapoc: clean runtime",
+        "openapoc: build",
+        "openapoc: launch"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: run (open .app)",
+      "dependsOn": [
+        "openapoc: clean runtime",
+        "openapoc: build",
+        "openapoc: open .app"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: open .app",
+      "type": "shell",
+      "command": "open \"${workspaceFolder}/build/bin/OpenApoc.app\"",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: launch only",
+      "dependsOn": [
+        "openapoc: launch"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "openapoc: launch harness",
+      "type": "shell",
+      "command": "./build/bin/OpenApoc.app/Contents/MacOS/OpenApoc --Framework.Data=\"${workspaceFolder}/data\" --Framework.CD=\"${workspaceFolder}/data/cd.iso\" --Framework.Harness.Enable=1 --Framework.Harness.Port=17321 --Game.SkipIntro=1 --Config.Save=0 --Config.Read=0 --Framework.AudioBackends=null",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "OpenApoc (lldb)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/bin/OpenApoc.app/Contents/MacOS/OpenApoc",
+      "args": [
+        "--Framework.Data=${workspaceFolder}/data",
+        "--Framework.CD=${workspaceFolder}/data/cd.iso"
+      ],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
