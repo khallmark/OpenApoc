@@ -1353,6 +1353,18 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
                     d.say(f"  [raid] agent rows select at x+{dx}, not the AlertScreen offset")
                     break
     if selected_count() == 0:
+        # Say what the state was, rather than leaving the cause a guess. A building raid needs a
+        # craft free to carry the squad, so the likely reason is transport rather than the click
+        # missing -- but "likely" is not a finding, and the numbers settle it either way.
+        try:
+            ic = d.h.gs("interceptors")
+            ag = d.h.gs("agents")
+            free = sum(1 for part in (ic.get("detail", "") or "").split("|")
+                       if "flying=1" in part and "crew=0" in part)
+            d.say(f"  [raid] nobody selectable: {ag.get('soldiers_fit')} fit soldier(s), "
+                  f"{ic.get('craft')} craft, {free} of them empty and flying")
+        except (HarnessError, OSError):
+            pass
         return_to_city(d)
         return "no-agents-selectable"
 
