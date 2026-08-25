@@ -58,6 +58,11 @@ class BattleMap : public StateObject<BattleMap>
 
 	int reinforcementsInterval = 0;
 
+	// TACP mission briefing shown before the battle starts. Currently only extracted for the
+	// ten alien-dimension buildings (see
+	// docs/original-game/findings/C2-organic-factory-objectives.md); empty otherwise.
+	UString briefing;
+
 	std::list<UString> tilesets;
 	StateRef<BattleMapPartType> destroyed_ground_tile;
 	std::vector<StateRef<BattleMapPartType>> rubble_left_wall;

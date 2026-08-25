@@ -59,7 +59,21 @@ R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/)
 | **B1** cover metric | **RE-OPENED** | First verdict rested on an invalid control; see below. Agent resumed with structural entry. |
 | **C1** umbilical · **C4** Apocalypse attack | **CLOSED** | Confirmed absent from *both* binaries. |
 | **C3** late-campaign bombing | **CLOSED** | No trigger; escalation already explained by the weekly growth and preference tables. |
-| **C2** mushrooms | **RECLASSIFIED** | Objective *mechanic* already works. Residual: ten TACP briefings unextracted. |
+| **C2** mushrooms / briefings | **IMPLEMENTED** | Objective *mechanic* already worked. The residual — ten unextracted TACP briefings — is now extracted and shown pre-battle. Offsets read from the binary rather than trusted, both CRC32s matched, and the −0x2200 4-build slide was **measured byte-for-byte**, not assumed. |
+| **U1(a)** mission counter | **IMPLEMENTED — with named deviations** | `advanceMissionCounterOnArrival` wired into `AttackBuilding`'s per-arrival re-entry, with the incursion spawn sites passing the extracted `+0x1B`. Four parity deviations declared rather than hidden — see below. |
+
+**Two honesty notes carried from the implementations, neither a blocker:**
+
+1. **U1(a) leaves its production call site untested.** The three lock tests call
+   `advanceMissionCounterOnArrival` directly — deterministic, no pathfinding dependency — so
+   **deleting the one-line hook in `start()` would not fail any test.** The helper's contract is
+   locked; the wiring is not. Covering it needs a test that drives pathfinding, which was
+   deliberately avoided for determinism. Declared, not discovered.
+2. **U1(a) has three further declared deviations**: an off-by-one on first entry (a counter of N
+   yields N−1 arrivals, mirroring `Patrol`'s existing shipped convention); no counter reset after
+   retargeting (the bound-only choice — no writer resets `+0x171` after the spawn-time copy); and
+   an unreachable-in-practice edge case shared with `Patrol`. The sibling "latch an arrived flag"
+   branch was **deliberately not implemented** because its gating field's semantics are NOT BOUND.
 
 **A decompiler trap worth generalising.** The Disruptor Shield's overflow behaviour was first
 written up as "partial absorb, remainder passes through" — the natural reading, and **wrong**. It

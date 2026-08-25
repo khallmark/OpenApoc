@@ -13,6 +13,9 @@
 #include "game/state/gamestate.h"
 #include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/agenttype.h"
+#include "game/state/rules/battle/battlemap.h"
+#include "game/state/rules/battle/battlemapparttype.h"
+#include "game/state/rules/battle/battlemaptileset.h"
 #include "game/state/rules/city/ufogrowth.h"
 #include "game/state/rules/city/ufoincursion.h"
 #include "game/state/rules/city/ufomissionpreference.h"
@@ -2659,6 +2662,76 @@ static bool test_base_destroy_facility_errors()
 	return true;
 }
 
+// The ten alien-dimension endgame maps, in InitialGameStateExtractor::battleMapPaths /
+// missionObjectives order. TACP 0x2E0C09-0x2E1C98 packs one briefing per map in this order.
+static const char *const ALIEN_BUILDING_MAPS[] = {
+    "39incub", "40spawn", "41food",   "42megapd", "43sleep",
+    "44organ", "45farm",  "46contrl", "47maint",  "48gate",
+};
+
+static bool test_alien_building_briefings_extracted()
+{
+	auto &state = *g_state;
+	for (const auto *mapName : ALIEN_BUILDING_MAPS)
+	{
+		UString id = BattleMap::getPrefix() + mapName;
+		auto it = state.battle_maps.find(id);
+		TEST_REQUIRE(it != state.battle_maps.end() && it->second, "{0} battle map missing", id);
+		TEST_REQUIRE(!it->second->briefing.empty(), "{0} has no briefing text extracted", id);
+	}
+	return true;
+}
+
+// Guards the destroy-objective mechanic (Battle::tryDisableBuilding /
+// extract_battlescape_map_parts.cpp's missionObjective flag) against a future extractor edit
+// silently dropping a building's objective set. The mechanic itself is not new: this is a
+// freeze, matching A2/A3 in the parity guide - it is expected to pass both before and after
+// the briefing-text change, and its teeth were confirmed by temporarily emptying one entry of
+// InitialGameStateExtractor::missionObjectives and re-running extraction (see report).
+static bool test_alien_building_objectives_present()
+{
+	auto &state = *g_state;
+
+	// 40spawn's objective is the Queenspawn unit, not scenery: it ships an empty map-part
+	// objective set by design (extract_agent_types.cpp sets AgentType::missionObjective on
+	// AGENTTYPE_QUEENSPAWN instead).
+	auto queen = state.agent_types.find("AGENTTYPE_QUEENSPAWN");
+	TEST_REQUIRE(queen != state.agent_types.end() && queen->second, "AGENTTYPE_QUEENSPAWN missing");
+	TEST_REQUIRE(queen->second->missionObjective, "40spawn objective (Queenspawn unit) missing");
+
+	for (const auto *mapName : ALIEN_BUILDING_MAPS)
+	{
+		UString id = BattleMap::getPrefix() + mapName;
+		auto it = state.battle_maps.find(id);
+		TEST_REQUIRE(it != state.battle_maps.end() && it->second, "{0} battle map missing", id);
+
+		if (UString(mapName) == "40spawn")
+		{
+			continue;
+		}
+
+		// Read the tileset directly (BattleMapTileset::loadTileset is a plain deserialize of
+		// tileset.xml - it does not touch state.battleMapTiles or battle_common_sample_list,
+		// unlike BattleMap::loadTilesets, which is private/friend-Battle-only and does more
+		// than this check needs).
+		BattleMapTileset tileset;
+		UString tilesetPath = BattleMapTileset::getTilesetPath() + "/" + mapName;
+		TEST_REQUIRE(tileset.loadTileset(state, tilesetPath), "{0} tileset failed to load",
+		             mapName);
+		bool hasObjective = false;
+		for (auto &tile : tileset.map_part_types)
+		{
+			if (tile.second->missionObjective)
+			{
+				hasObjective = true;
+				break;
+			}
+		}
+		TEST_REQUIRE(hasObjective, "{0} has no objective map parts", mapName);
+	}
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	config().addPositionalArgument("common", "Common gamestate to load");
@@ -2731,5 +2804,7 @@ int main(int argc, char **argv)
 	    {"org_raid_loot_table", test_org_raid_loot_table},
 	    {"org_extracted_scalars", test_org_extracted_scalars},
 	    {"base_destroy_facility_errors", test_base_destroy_facility_errors},
+	    {"alien_building_briefings_extracted", test_alien_building_briefings_extracted},
+	    {"alien_building_objectives_present", test_alien_building_objectives_present},
 	});
 }

@@ -68,6 +68,10 @@ TACP::TACP(std::string file_name)
 	this->damage_type_names.reset(new StrTab(file, at(DAMAGE_TYPE_NAMES_OFFSET_START),
 	                                         at(DAMAGE_TYPE_NAMES_OFFSET_END), true));
 
+	this->alien_building_briefings.reset(new StrTab(file,
+	                                                at(ALIEN_BUILDING_BRIEFING_STRTAB_OFFSET_START),
+	                                                at(ALIEN_BUILDING_BRIEFING_STRTAB_OFFSET_END)));
+
 	this->damage_types.reset(new DataChunk<DamageTypeData>(file, at(DAMAGE_TYPE_DATA_OFFSET_START),
 	                                                       at(DAMAGE_TYPE_DATA_OFFSET_END)));
 

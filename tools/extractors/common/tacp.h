@@ -20,6 +20,7 @@ class TACP
 
 	std::unique_ptr<StrTab> damage_modifier_names;
 	std::unique_ptr<StrTab> damage_type_names;
+	std::unique_ptr<StrTab> alien_building_briefings;
 
 	std::unique_ptr<DataChunk<DamageTypeData>> damage_types;
 	std::unique_ptr<DataChunk<DamageModifierData>> damage_modifiers;

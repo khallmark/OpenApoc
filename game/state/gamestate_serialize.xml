@@ -712,6 +712,7 @@
     <member>exitsX</member>
     <member>exitsY</member>
     <member>reinforcementsInterval</member>
+    <member>briefing</member>
     <member>tilesets</member>
     <member>destroyed_ground_tile</member>
     <member>rubble_left_wall</member>

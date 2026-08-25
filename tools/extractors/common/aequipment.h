@@ -83,6 +83,14 @@ static_assert(sizeof(struct AgentEquipmentData) == 18, "Invalid agent_equipment_
 #define FIRE_HAZARD_POWER_TABLE_OFFSET_START 0x2E2AF4
 #define FIRE_HAZARD_POWER_TABLE_OFFSET_END 0x2E2B0F
 
+// Ten alien-building destroy-objective mission briefings, packed pool, one entry per alien
+// map in InitialGameStateExtractor::battleMapPaths order (39incub..48gate). Byte-verified
+// against both TACP CRCs: non-4 0xfebbe39e at these file offsets, 4-build 0x3ec9c268 at the
+// same offsets slid by tacpFileSlide() (-0x2200) - see docs/original-game/findings/
+// C2-organic-factory-objectives.md.
+#define ALIEN_BUILDING_BRIEFING_STRTAB_OFFSET_START 0x2E0C09
+#define ALIEN_BUILDING_BRIEFING_STRTAB_OFFSET_END 0x2E1C98
+
 struct AgentArmorData
 {
 	uint8_t unknown01;

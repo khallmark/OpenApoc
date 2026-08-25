@@ -93,6 +93,9 @@ class InitialGameStateExtractor
 	static const std::map<OpenApoc::UString, int> reinforcementTimers;
 	// Lookup table for battlemap path -> id of feature that is a mission objective (to destroy)
 	static const std::map<OpenApoc::UString, std::set<int>> missionObjectives;
+	// Lookup table for alien-building battlemap path -> index into TACP's packed briefing pool
+	// (0x2E0C09-0x2E1C98, ALIEN_BUILDING_BRIEFING_STRTAB_OFFSET_*), in briefing order.
+	static const std::map<OpenApoc::UString, int> alienBuildingBriefingIndex;
 	// List of paths and names for unit image packs
 	static const std::map<OpenApoc::UString, OpenApoc::UString> unitImagePackPaths;
 	// List of paths and names for unit shadow packs

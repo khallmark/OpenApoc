@@ -131,6 +131,21 @@ const std::map<OpenApoc::UString, std::set<int>> InitialGameStateExtractor::miss
 	{ "48gate"  ,{ 71,73,74,75,76,77,78,79,80,81,82,83,84,85} },
 };
 
+// TACP 0x2E0C09-0x2E1C98: ten destroy-objective briefings, packed pool, one per alien map in
+// this order (verified byte-identical on TACP4 at the -0x2200 slide).
+const std::map<OpenApoc::UString, int> InitialGameStateExtractor::alienBuildingBriefingIndex = {
+	{ "39incub" , 0 },
+	{ "40spawn" , 1 },
+	{ "41food"  , 2 },
+	{ "42megapd", 3 },
+	{ "43sleep" , 4 },
+	{ "44organ" , 5 },
+	{ "45farm"  , 6 },
+	{ "46contrl", 7 },
+	{ "47maint" , 8 },
+	{ "48gate"  , 9 },
+};
+
 const std::map<OpenApoc::UString, std::vector<int>> InitialGameStateExtractor::tubes = {
 	/*{ "CITYTILE_CITYMAP_63",{ 0,1,0,1 } },
 	{ "CITYTILE_CITYMAP_64",{ 1,0,1,0 } },
