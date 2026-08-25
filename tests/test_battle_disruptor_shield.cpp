@@ -273,6 +273,79 @@ static bool test_disruptor_shield_regenerates()
 	return true;
 }
 
+// docs/original-game/findings/B3-G1-wounds-gadgets.md binds TWO writers of the shield's charge,
+// and OpenApoc only implemented one of them:
+//   - FUN_0006511C "regenerates the shield item's own charge field (equipment-instance-table +10,
+//     a 16-bit value) by 1 per call, gated < 100", driven from the same per-unit tick dispatcher
+//     and the same cadence gate (unit+0x254 < unit+0x256) as the buffer regen.
+//   - FUN_0006508C decrements that same field on the fully-absorbed path (already implemented in
+//     BattleUnit::applyDamage()).
+// So absorption used to lower the item charge while regen raised only the unit-level buffer, and
+// the two drifted apart - visible the moment FUN_00057A04's equip transfer re-reads the item
+// charge (unequip/re-equip would snap a fully regenerated shield back down to its drained value).
+//
+// The second half of this test covers the other side of the same field: AEquipment::updateInner()
+// applies a generic recharge to every item with recharge > 0, at TICKS_PER_RECHARGE
+// (= TICKS_PER_TURN, one per four seconds) in real time and rechargeTB per turn - values
+// hardcoded for the Disruptor Shield in tools/extractors/extract_agent_equipment.cpp since 2016.
+// The shield's charge has exactly one bound regen, +1 per real-time second via the unit
+// dispatcher, so the generic path is a second regen of the same field at a rate nothing supports,
+// and "Follow-up 1(a)-continued" additionally binds the only full recharge to battle load.
+static bool test_disruptor_shield_item_charge_tracks_the_buffer()
+{
+	auto &state = *g_state;
+	auto owner = state.getCivilian();
+	auto agentType = findSoldierTypeWithGeneralSlot(state);
+	TEST_REQUIRE((bool)agentType, "no soldier agent type with a General slot in loaded gamestate");
+
+	auto battle = mksp<Battle>();
+	battle->mode = Battle::Mode::RealTime;
+	battle->currentActiveOrganisation = owner;
+	state.current_battle = battle;
+
+	auto unit = makeUnit(state, battle, owner, agentType);
+	auto shield = equipFirstWorkingDisruptorShield(state, unit->agent);
+	TEST_REQUIRE((bool)shield, "could not equip any Disruptor Shield-type item");
+	shield->ammo = 40;
+
+	unit->updateDisruptorShield(state, 0);
+	TEST_REQUIRE(unit->disruptorShieldCurrent == 40,
+	             "current {0} != transferred item charge (40) right after equipping",
+	             unit->disruptorShieldCurrent);
+
+	unit->updateDisruptorShield(state, TICKS_PER_DISRUPTOR_SHIELD_REGEN);
+	TEST_REQUIRE(unit->disruptorShieldCurrent == 41, "buffer is {0} after one regen tick, expected 41",
+	             unit->disruptorShieldCurrent);
+	TEST_REQUIRE(shield->ammo == 41,
+	             "item charge is {0} after one regen tick but the buffer is {1} - FUN_0006511C "
+	             "regenerates the item's charge field too, not just the unit-level buffer",
+	             shield->ammo, unit->disruptorShieldCurrent);
+
+	// Unequip/re-equip must round-trip the charge rather than snapping it to the item's stale
+	// value: FUN_00057A04's transfer reads the item charge, so the two must already agree.
+	unit->agent->removeEquipment(state, shield);
+	unit->updateDisruptorShield(state, 1);
+	TEST_REQUIRE(unit->disruptorShieldCapacity == 0 && unit->disruptorShieldCurrent == 0,
+	             "buffer should collapse with no shield worn, got capacity {0} current {1}",
+	             unit->disruptorShieldCapacity, unit->disruptorShieldCurrent);
+	unit->agent->addEquipment(state, shield, EquipmentSlotType::General);
+	unit->updateDisruptorShield(state, 0);
+	TEST_REQUIRE(unit->disruptorShieldCurrent == 41,
+	             "re-equipping restored the buffer to {0}, expected the 41 it was carrying",
+	             unit->disruptorShieldCurrent);
+
+	// The generic AEquipment recharge must not act as a second, faster regen of the same field.
+	const int chargeBefore = shield->ammo;
+	shield->updateInner(state, TICKS_PER_TURN + 1);
+	TEST_REQUIRE(shield->ammo == chargeBefore,
+	             "AEquipment::updateInner() raised the shield charge {0} -> {1}; the shield's only "
+	             "bound regen is +1 per real-time second through BattleUnit::updateDisruptorShield",
+	             chargeBefore, shield->ammo);
+
+	state.current_battle = nullptr;
+	return true;
+}
+
 // Freezes the bound cadence constant itself: if a future TPS refactor changes TICKS_PER_SECOND
 // without updating TICKS_PER_DISRUPTOR_SHIELD_REGEN to match, this fails loudly instead of
 // silently drifting the regen rate the findings doc bound to "once per real-time second".
@@ -368,6 +441,8 @@ int main(int argc, char **argv)
 	     test_disruptor_shield_overflow_is_all_or_nothing},
 	    {"disruptor_shield_absorbs_before_health", test_disruptor_shield_absorbs_before_health},
 	    {"disruptor_shield_regenerates", test_disruptor_shield_regenerates},
+	    {"disruptor_shield_item_charge_tracks_the_buffer",
+	     test_disruptor_shield_item_charge_tracks_the_buffer},
 	    {"disruptor_shield_regen_cadence_is_one_second",
 	     test_disruptor_shield_regen_cadence_is_one_second},
 	    {"disruptor_shield_serializes_roundtrip", test_disruptor_shield_serializes_roundtrip},

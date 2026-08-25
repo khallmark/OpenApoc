@@ -2227,6 +2227,16 @@ void BattleUnit::updateDisruptorShield(GameState &state, unsigned int ticks)
 				disruptorShieldRegenTicksAccumulated -= TICKS_PER_DISRUPTOR_SHIELD_REGEN;
 				disruptorShieldCurrent =
 				    std::min(disruptorShieldCurrent + 1, disruptorShieldCapacity);
+				// FUN_0006511C: the same dispatcher call that steps the unit-level buffer also
+				// "regenerates the shield item's own charge field (equipment-instance-table +10)
+				// by 1 per call, gated < 100" - the extracted max_ammo is that 100. Absorption
+				// already decrements this field (FUN_0006508C, in applyDamage), so regenerating
+				// only the buffer would let the two drift apart until FUN_00057A04's equip
+				// transfer re-read the stale item charge.
+				if (shield->ammo < shield->type->max_ammo)
+				{
+					shield->ammo++;
+				}
 			}
 		}
 		else
