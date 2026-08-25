@@ -1,5 +1,32 @@
 # B5 · Entropy Enzyme / F1 · Fire remainder / K1 · Personal Cloaking Field
 
+> ## Corrections from the F1 implementation run — read before using this file
+>
+> Two claims below were **falsified** during implementation, both re-verified twice against the
+> same bound `OpenApocOG_TACP` project this file was produced from (`canonical/TACP.EXE`,
+> CRC32 `0xfebbe39e`):
+>
+> **1. The RNG table is NOT a precomputed table baked into the binary.** `DAT_001B2D70`
+> (VA `0x1B2D70`, 10,013 × 2 bytes) reads as **static zero**. The containing `.object2` block *is*
+> file-backed and initialised — embedded strings sit 64 bytes below it, and the neighbour table
+> nearby is non-zero — so this is not a block-mapping artefact. The table is **BSS-shaped, filled
+> at runtime by a routine nobody has located.** There is nothing to embed, and the concern that
+> "its index is game state" dissolves: there is no static index-able data. The implementation ports
+> the primitive's *contract* (inclusive uniform draw on `[0,max]`) over `state.rng`, labelled in
+> code as a declared substitution rather than the original sequence.
+>
+> **2. Fire's neighbour table has NO dead `(0,0,0)` outcome.** §2.3's transcription of the byte at
+> `0x29306C` is wrong: it reads **`1`, not `0`**. Base addresses `0x293068` / `0x29306C` /
+> `0x293070` were reconfirmed from `FUN_0007b0d0`'s live disassembly, and **all 19 other int32
+> reads across both tables matched this file exactly** — an isolated transcription error, not a
+> methodology or build problem. **Fire's real table is East / South / West / North / Up — a clean
+> five-direction set.**
+>
+> Consequence: the guard test originally specified as `fire_neighbour_table_preserves_dead_outcome`
+> was protecting a typo. It is implemented as `fire_neighbour_table_matches_recovered_bytes`,
+> asserting the actual bytes.
+
+
 **F1 hazard RNG — BOUND:** `FUN_0001eee8` (generic bounded RNG) and `FUN_0007b0d0` (fire-specific
 neighbour-pick + resistance-gated spread roll) are both fully decompiled, with the exact neighbour
 offset table recovered. `HAZARD_SPREAD_CHANCE 10` can be deleted — the real mechanism is

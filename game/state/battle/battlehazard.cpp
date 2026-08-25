@@ -19,6 +19,105 @@
 
 namespace OpenApoc
 {
+
+namespace
+{
+// Legacy, NOT-recovered spread-chance value (formerly the invented macro
+// HAZARD_SPREAD_CHANCE, deleted per docs/original-game/findings/B5-F1-K1-hazards.md
+// F1 §2.2). This governs two things the F1 finding does NOT cover:
+//
+//   1. Smoke spreading from an already-burning fire hazard, in the legacy
+//      age-based grow() below. TACP's FUN_0007b0d0 is fire's *ignition*
+//      spread roll (fire catching neighbouring terrain), which OpenApoc
+//      already implements as the unconditional 8-neighbour expand() loop
+//      above this comparison -- it says nothing about smoke.
+//   2. Non-fire hazard (smoke/gas) spread. The generalized engine that would
+//      cover this, FUN_0007ae78, draws its resistance-gate threshold from a
+//      caller-supplied parameter whose source was never traced (§2.4) -- no
+//      recovered replacement value exists.
+//
+// Both call sites are legacy-path only: they run through updateInner()/grow(),
+// which real-time fire never reaches once it has a recovered overlay (see
+// BattleHazard::update()'s early return when fireOverlayStage(fireOverlay) >= 0,
+// and battlehazard.h's fireOverlay comment) -- Battle::updateFireScheduler and
+// the recovered overlay path do not call this at all.
+//
+// Value preserved unchanged from the deleted macro so behaviour does not
+// regress while these two sites stay open. Per the parity guide's prime
+// directive, this is deliberately NOT promoted to a "bound" constant.
+constexpr int LEGACY_HAZARD_SPREAD_CHANCE_PERCENT = 10; // out of 100, not recovered
+} // namespace
+
+int BattleHazard::hazardRoll(Xorshift128Plus<uint32_t> &rng, int max)
+{
+	if (max < 0)
+	{
+		max = 0;
+	}
+	return randBoundsInclusive(rng, 0, max);
+}
+
+bool BattleHazard::fireSpreadResistanceGate(int resistanceValue, int rolledThreshold)
+{
+	return resistanceValue < rolledThreshold;
+}
+
+Vec3<int> BattleHazard::fireSpreadNeighbourDelta(int outcome)
+{
+	// TACP FUN_0007b0d0 (§2.2/§2.3), corrected -- see the header declaration
+	// comment for the full re-verification (addressing formula re-confirmed
+	// against the live listing; outcome 0's bytes re-read twice independently
+	// as (1,0,0), not the finding document's transcribed (0,0,0)).
+	static const Vec3<int> table[5] = {
+	    {1, 0, 0},  // outcome 0: East -- NOT dead, see header comment
+	    {0, 1, 0},  // outcome 1: South
+	    {-1, 0, 0}, // outcome 2: West
+	    {0, -1, 0}, // outcome 3: North
+	    {0, 0, 1},  // outcome 4: Up
+	};
+	if (outcome < 0 || outcome > 4)
+	{
+		return {0, 0, 0};
+	}
+	return table[outcome];
+}
+
+Vec3<int> BattleHazard::genericSpreadNeighbourDelta(int outcome)
+{
+	// TACP FUN_0007ae78 (§2.4): same underlying table, all six outcomes live.
+	static const Vec3<int> table[6] = {
+	    {1, 0, 0},  // outcome 0: East
+	    {0, 1, 0},  // outcome 1: South
+	    {-1, 0, 0}, // outcome 2: West
+	    {0, -1, 0}, // outcome 3: North
+	    {0, 0, 1},  // outcome 4: Up
+	    {0, 0, -1}, // outcome 5: Down
+	};
+	if (outcome < 0 || outcome > 5)
+	{
+		return {0, 0, 0};
+	}
+	return table[outcome];
+}
+
+Vec3<int> BattleHazard::rollFireSpreadNeighbour(Xorshift128Plus<uint32_t> &rng, int baseline,
+                                                int resistance, bool &spreads)
+{
+	// TACP FUN_0007b0d0 (§2.2): threshold roll first, then neighbour pick --
+	// matches the recovered call-site order (0x7B0E1 then 0x7B0F3).
+	const int threshold = hazardRoll(rng, FIRE_SPREAD_THRESHOLD_RNG_SPAN) + baseline;
+	const int outcome = hazardRoll(rng, FIRE_SPREAD_NEIGHBOUR_RNG_SPAN);
+	spreads = fireSpreadResistanceGate(resistance, threshold);
+	return fireSpreadNeighbourDelta(outcome);
+}
+
+Vec3<int> BattleHazard::rollGenericSpreadNeighbour(Xorshift128Plus<uint32_t> &rng)
+{
+	// TACP FUN_0007ae78 (§2.4 correction): exactly one draw.
+	const int outcome = hazardRoll(rng, GENERIC_SPREAD_NEIGHBOUR_RNG_SPAN);
+	return genericSpreadNeighbourDelta(outcome);
+}
+
 uint8_t BattleHazard::encodeFireOverlay(unsigned stage)
 {
 	return FIRE_OVERLAY_TYPE | (stage & FIRE_OVERLAY_INDEX_MASK);
@@ -393,7 +492,7 @@ void BattleHazard::grow(GameState &state)
 
 		// Now spread smoke
 
-		if (randBoundsExclusive(state.rng, 0, 100) >= HAZARD_SPREAD_CHANCE)
+		if (randBoundsExclusive(state.rng, 0, 100) >= LEGACY_HAZARD_SPREAD_CHANCE_PERCENT)
 		{
 			return;
 		}
@@ -422,7 +521,7 @@ void BattleHazard::grow(GameState &state)
 		{
 			return;
 		}
-		if (randBoundsExclusive(state.rng, 0, 100) >= HAZARD_SPREAD_CHANCE)
+		if (randBoundsExclusive(state.rng, 0, 100) >= LEGACY_HAZARD_SPREAD_CHANCE_PERCENT)
 		{
 			return;
 		}

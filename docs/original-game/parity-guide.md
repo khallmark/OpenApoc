@@ -39,7 +39,7 @@ R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/)
 |---|---|---|
 | **A1** multi-tile units | **FIXED — and the FIXME was mostly stale** | Enumerating breakage first paid off: pathfinding across a 1-tile gap, doors, occupancy at rest and projectile collision **already worked**. Four real bugs, all one geometric mistake — probing the block's degenerate shared-corner point instead of its occupied tiles. Fixed: missing goal-block tile during movement; `getEyeLocation` putting a large unit's eyes half a tile off its own muzzle; and `calculateVisionToUnit`/`hasLineToUnit` replaced with genuine any-occupied-tile checks, deleting the 0.75-tile "caught up in ground" nudges. Draw-order sorting is **reported unverified**, not claimed fixed — no rendering harness exists. |
 | **V2** ground-vehicle order defect | **FIXED** | Root cause found in `VehicleMission::setPathTo`: a severed road yields a *non-empty but short* path that fell through both give-up branches — near targets crashed an undamaged vehicle, far targets looped forever. Lock test on the real extracted city. Suite 31/31. |
-| **F1** hazard spread RNG | **BOUND — ready to implement** | `FUN_0001eee8` (VA `0x1EEE8`, file `0x7998C`) is a **precomputed 10,013-entry lookup table, not an LCG**. `FUN_0007B0D0` (file `0xD5B74`) decompiled: fire spread is `RNG(0..10) + inherited baseline` vs a per-terrain resistance byte from `FUN_0007AA8C`, behind two veto lookups, neighbour direction drawn `RNG(0,4)` from a table at `0x293068`. **`HAZARD_SPREAD_CHANCE` can be deleted on this evidence.** One open question — see below. |
+| **F1** hazard spread RNG | **IMPLEMENTED — with the finding corrected twice** | `FUN_0001eee8` (VA `0x1EEE8`, file `0x7998C`) is a **precomputed 10,013-entry lookup table, not an LCG**. `FUN_0007B0D0` (file `0xD5B74`) decompiled: fire spread is `RNG(0..10) + inherited baseline` vs a per-terrain resistance byte from `FUN_0007AA8C`, behind two veto lookups, neighbour direction drawn `RNG(0,4)` from a table at `0x293068`. **`HAZARD_SPREAD_CHANCE` can be deleted on this evidence.** One open question — see below. |
 | **B5** enzyme | **PARTIAL** | Confirmed: a real **4-way jump table** (`FUN_0007B610`) dispatches overlay type 1 / 2 (fire) / 3 to peer stage-advance functions sharing one decode triplet, one encode triplet, and a generalized placement engine (`FUN_0007AE78`) of which fire's is a special case. Not bound: which of type 1/3 is Enzyme (dispatch variable has zero static xrefs), and the armour-damage formula. **Not guessed.** |
 | **G1 · Disruptor Shield (0x08)** | **FIXED — and the premise was wrong** | *Not* a missing feature. `useItem` returning `false` is **correct** — the shield is passive, like `CloakingField`. A shield-absorption path has existed since 2016 (`Agent::getFirstShield`, and the "Hit shield if present" block at `battleunit.cpp:1776`); it was simply **wrong**: it always returned true after any hit (infinite absorption, no overflow), used the item's own `damage_modifier` instead of the general pipeline, and destroyed the item on depletion despite the shield being rechargeable. Chain traced to the general damage-application function by caller trace. All four numbers now bound: regen **+1 per 36 vanilla ticks (once per real-time second)**; full recharge **at battle load only, not periodic**; damage-type modifier is **not shield-specific** (existing `damage_type_data` + a table adjacent to `damage_modifier_data`, applied upstream); and absorption is **all-or-nothing** — see the trap below. |
 | **G1 · MultiTracker (0x04)** | **BOUND** *(upgraded from inconclusive)* | Traced one hop past the local cluster to a builder with six live call sites across five functions, invoked in the same init block as the confirmed-live Motion Scanner chain and behind the same feature flag. A real shared subsystem, not dead code. |
@@ -75,6 +75,55 @@ R&D and implementation run of 2026-08-24. Raw verdicts in [findings/](findings/)
    retargeting (the bound-only choice — no writer resets `+0x171` after the spawn-time copy); and
    an unreachable-in-practice edge case shared with `Patrol`. The sibling "latch an arrived flag"
    branch was **deliberately not implemented** because its gating field's semantics are NOT BOUND.
+
+**A second category error, mine: "inert" ≠ "unimplemented".** I briefed the Disruptor Shield as a
+missing mechanic on the strength of `useItem` returning `false` for it. That was wrong, and the
+implementer said so rather than building to the brief. `useItem` returning `false` is *correct* for
+a passive item; the absorption path was elsewhere and had been for years, quietly doing the wrong
+thing — **infinite absorption**, which is a considerably worse bug than a missing feature and would
+never have been found by looking where I pointed.
+
+Checking one entry point is not checking a feature. Grep for the *type*, not the *verb*.
+
+**A category error worth naming: "BOUND" ≠ "implementable".** U2(b) went into implementation on
+the strength of a `BOUND` verdict and came back with no code, correctly. A findings verdict of
+`BOUND` means *the original's behaviour has been recovered*. It does **not** imply OpenApoc has a
+seam to receive it, that the surrounding data model exists, or that the recovered piece is not
+already shipped. All three failed here.
+
+Before queueing a `BOUND` row for implementation, check three things: **is the formula already
+implemented?** **does the data it reads exist in our model?** **is the trigger point traced, or only
+the thing that sets a flag it shares?** Answering those costs minutes; skipping them cost an
+implementation attempt.
+
+**A decompiler trap worth generalising.** The Disruptor Shield's overflow behaviour was first
+written up as "partial absorb, remainder passes through" — the natural reading, and **wrong**. It
+is **all-or-nothing**: full absorb if `shield > damage`, otherwise the shield is zeroed *and the
+entire damage passes through unreduced*. The decompiler's C **reorders the zeroing ahead of the
+subtraction that reads it**, which inverts the semantics. Only the raw instruction listing shows
+the real order.
+
+Generalise this: **for anything where ordering carries meaning — absorption, clamping,
+accumulate-then-test — read the listing, not the decompiled C.** This is the second semantic
+inversion caught this run by re-reading raw output (the other was U1(b)'s multiplicand).
+
+**F1's "open question" turned out to be a typo — and the guard I demanded was protecting it.**
+I insisted the dead `(0,0,0)` neighbour outcome be reproduced exactly and guarded by a lock test
+named `fire_neighbour_table_preserves_dead_outcome`, on the reasoning that it looks like a bug and
+someone would tidy it. The byte at `0x29306C` reads **`1`, not `0`**. Fire's table is
+**East/South/West/North/Up — a clean five-direction set with no dead slot.** All 19 other values in
+both tables matched the finding exactly, so this was one transcription error, not a bad method.
+
+The implementer re-read the bytes, re-confirmed the base addresses from live disassembly, corrected
+it, and **renamed the test to `fire_neighbour_table_matches_recovered_bytes`** — asserting the real
+bytes rather than a defect that does not exist. Had it built to my brief, the codebase would now
+carry a deliberately-wrong neighbour table with a test cementing it in place.
+
+The same run also falsified the finding's core characterisation: **the RNG is not a precomputed
+table baked into the binary.** `DAT_001B2D70` reads as static zero and is BSS-shaped, filled at
+runtime by a routine nobody has located. There is nothing to embed and no index to serialize, so
+the implementation ports the primitive's *contract* over `state.rng`, declared in code as a
+substitution rather than the original sequence.
 
 **A second category error, mine: "inert" ≠ "unimplemented".** I briefed the Disruptor Shield as a
 missing mechanic on the strength of `useItem` returning `false` for it. That was wrong, and the

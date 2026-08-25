@@ -13,8 +13,9 @@ using namespace OpenApoc::TestHelpers;
 
 static bool test_made_up_and_tick_derived_constants()
 {
-	TEST_REQUIRE(HAZARD_SPREAD_CHANCE == 10, "HAZARD_SPREAD_CHANCE is {0} (made-up lock)",
-	             HAZARD_SPREAD_CHANCE);
+	// HAZARD_SPREAD_CHANCE was deleted: F1's hazard spread RNG is now recovered
+	// (docs/original-game/findings/B5-F1-K1-hazards.md F1 §2), see
+	// hazard_spread_uses_recovered_rng / fire_neighbour_table_matches_recovered_bytes below.
 	TEST_REQUIRE(TICKS_PER_TURN == TICKS_PER_SECOND * 4, "TICKS_PER_TURN {0} != 4*TPS",
 	             TICKS_PER_TURN);
 	TEST_REQUIRE(TICKS_PER_HAZARD_UPDATE == TICKS_PER_TURN / 2, "TICKS_PER_HAZARD_UPDATE {0}",
@@ -82,6 +83,156 @@ static bool test_fire_overlay_terrain_threshold()
 	TEST_REQUIRE(BattleMapPart::fireStageBurns(26, 5), "late stage burns");
 	TEST_REQUIRE(!BattleMapPart::fireStageBurns(26, 255), "255 remains immune");
 	TEST_REQUIRE(!BattleMapPart::fireStageBurns(-1, 0), "non-fire overlay cannot burn");
+	return true;
+}
+
+static bool test_fire_neighbour_table_matches_recovered_bytes()
+{
+	// NOTE: the task that produced this test asked for
+	// "fire_neighbour_table_preserves_dead_outcome", guarding fire's neighbour
+	// table against ever tidying away a documented dead (0,0,0) outcome at
+	// index 0 (docs/original-game/findings/B5-F1-K1-hazards.md F1 §2.3,
+	// parity-guide.md's "F1's open question"). While implementing this, that
+	// documented (0,0,0) value was re-checked directly against the bound
+	// `OpenApocOG_TACP` Ghidra project (QueryNeighbourTableFull.java) and does
+	// NOT match the binary: byte 0x29306C reads 1, not 0, twice independently
+	// re-read, with the addressing formula separately re-confirmed against the
+	// live disassembly listing (see the comment on
+	// BattleHazard::fireSpreadNeighbourDelta). Outcome 0 is East, not dead --
+	// there is no dead outcome in fire's table. A test presupposing one would
+	// itself be the invented behaviour this fork's prime directive forbids, so
+	// this test asserts the corrected bytes and is named for what it actually
+	// guards: fire's table matching the re-verified binary content, not a
+	// specific hypothesis about which outcome is "the" dead one. Report this
+	// naming deviation and the underlying correction to the finding's owner.
+	TEST_REQUIRE(BattleHazard::fireSpreadNeighbourDelta(0) == (Vec3<int>{1, 0, 0}),
+	             "outcome 0 is East (1,0,0), re-verified from the binary -- NOT dead");
+	TEST_REQUIRE(BattleHazard::fireSpreadNeighbourDelta(1) == (Vec3<int>{0, 1, 0}),
+	             "outcome 1 is South");
+	TEST_REQUIRE(BattleHazard::fireSpreadNeighbourDelta(2) == (Vec3<int>{-1, 0, 0}),
+	             "outcome 2 is West");
+	TEST_REQUIRE(BattleHazard::fireSpreadNeighbourDelta(3) == (Vec3<int>{0, -1, 0}),
+	             "outcome 3 is North");
+	TEST_REQUIRE(BattleHazard::fireSpreadNeighbourDelta(4) == (Vec3<int>{0, 0, 1}),
+	             "outcome 4 is Up");
+	// Exactly 5 reachable outcomes (0..4), all live -- the RNG span constant
+	// is the source of truth for the roll's actual range; assert it directly
+	// so a future edit narrowing/widening the roll is caught here too.
+	TEST_REQUIRE(BattleHazard::FIRE_SPREAD_NEIGHBOUR_RNG_SPAN == 4,
+	             "fire's neighbour roll is RNG(0..4) inclusive -- 5 outcomes, span {0}",
+	             BattleHazard::FIRE_SPREAD_NEIGHBOUR_RNG_SPAN);
+	// Down is never reached by fire's table -- it is the one direction fire's
+	// five outcomes omit from the generic engine's six (§2.3 vs §2.4). None of
+	// fire's five outcomes should ever be a dead (0,0,0) either -- that guard
+	// stays valuable even though the *specific* index the finding predicted no
+	// longer applies.
+	bool sawDeadOutcome = false;
+	for (int outcome = 0; outcome <= BattleHazard::FIRE_SPREAD_NEIGHBOUR_RNG_SPAN; outcome++)
+	{
+		const auto delta = BattleHazard::fireSpreadNeighbourDelta(outcome);
+		TEST_REQUIRE(delta != (Vec3<int>{0, 0, -1}), "Down is unreachable from fire's table");
+		if (delta == (Vec3<int>{0, 0, 0}))
+		{
+			sawDeadOutcome = true;
+		}
+	}
+	TEST_REQUIRE(!sawDeadOutcome, "fire's table has no dead outcome -- all five entries are live");
+
+	// The generalized engine's table (FUN_0007ae78, §2.4) is a clean 6-outcome
+	// compass+up/down set with NO dead slot -- this table's bytes matched the
+	// finding document exactly on re-read (unlike fire's, above).
+	TEST_REQUIRE(BattleHazard::GENERIC_SPREAD_NEIGHBOUR_RNG_SPAN == 5,
+	             "generic neighbour roll is RNG(0..5) inclusive -- 6 outcomes, span {0}",
+	             BattleHazard::GENERIC_SPREAD_NEIGHBOUR_RNG_SPAN);
+	TEST_REQUIRE(BattleHazard::genericSpreadNeighbourDelta(0) == (Vec3<int>{1, 0, 0}),
+	             "generic outcome 0 is East");
+	TEST_REQUIRE(BattleHazard::genericSpreadNeighbourDelta(1) == (Vec3<int>{0, 1, 0}),
+	             "generic outcome 1 is South");
+	TEST_REQUIRE(BattleHazard::genericSpreadNeighbourDelta(2) == (Vec3<int>{-1, 0, 0}),
+	             "generic outcome 2 is West");
+	TEST_REQUIRE(BattleHazard::genericSpreadNeighbourDelta(3) == (Vec3<int>{0, -1, 0}),
+	             "generic outcome 3 is North");
+	TEST_REQUIRE(BattleHazard::genericSpreadNeighbourDelta(4) == (Vec3<int>{0, 0, 1}),
+	             "generic outcome 4 is Up");
+	TEST_REQUIRE(BattleHazard::genericSpreadNeighbourDelta(5) == (Vec3<int>{0, 0, -1}),
+	             "generic outcome 5 is Down");
+	for (int outcome = 0; outcome <= BattleHazard::GENERIC_SPREAD_NEIGHBOUR_RNG_SPAN; outcome++)
+	{
+		TEST_REQUIRE(BattleHazard::genericSpreadNeighbourDelta(outcome) != (Vec3<int>{0, 0, 0}),
+		             "generic engine has no dead outcome at {0}", outcome);
+	}
+	return true;
+}
+
+static bool test_hazard_spread_uses_recovered_rng()
+{
+	// docs/original-game/findings/B5-F1-K1-hazards.md F1 §2.1/§2.2/§2.4: spread
+	// decisions are RNG(0..10) inclusive + baseline compared against a
+	// per-terrain resistance value -- never a flat 10%-of-100 roll.
+
+	// The roll span is 11 outcomes (0..10 inclusive), not a percentage out of 100.
+	TEST_REQUIRE(BattleHazard::FIRE_SPREAD_THRESHOLD_RNG_SPAN == 10,
+	             "fire's threshold roll is RNG(0..10) inclusive -- 11 outcomes, span {0}",
+	             BattleHazard::FIRE_SPREAD_THRESHOLD_RNG_SPAN);
+
+	// hazardRoll is an inclusive uniform draw on [0, max]: never exceeds max,
+	// and (across enough deterministic seeds) actually reaches the max value --
+	// distinguishing it from an off-by-one exclusive roll.
+	bool sawMax = false;
+	for (uint32_t seed = 1; seed <= 200; seed++)
+	{
+		Xorshift128Plus<uint32_t> rng(seed);
+		const int v = BattleHazard::hazardRoll(rng, 10);
+		TEST_REQUIRE(v >= 0 && v <= 10, "hazardRoll({0}) in range, got {1}", seed, v);
+		if (v == 10)
+		{
+			sawMax = true;
+		}
+	}
+	TEST_REQUIRE(sawMax, "hazardRoll(10) reaches the inclusive upper bound across seeds");
+
+	// Comparison direction: spread iff resistance is strictly less than the
+	// rolled threshold (JNC = no-spread when resistance >= threshold). The
+	// boundary case (resistance == threshold) must NOT spread.
+	TEST_REQUIRE(BattleHazard::fireSpreadResistanceGate(3, 5),
+	             "resistance below threshold spreads");
+	TEST_REQUIRE(!BattleHazard::fireSpreadResistanceGate(5, 5),
+	             "resistance == threshold does not spread (boundary)");
+	TEST_REQUIRE(!BattleHazard::fireSpreadResistanceGate(7, 5),
+	             "resistance above threshold does not spread");
+	TEST_REQUIRE(!BattleHazard::fireSpreadResistanceGate(0, 0),
+	             "zero resistance vs zero threshold does not spread (boundary)");
+
+	// Fire's spread roll draws the shared RNG TWICE per invocation (threshold,
+	// then neighbour) -- the generic engine's draws it ONCE. This asymmetry is
+	// the §2.4 correction: FUN_0007ae78 is not "fire but generic", it takes its
+	// threshold as a caller-supplied parameter instead of rolling one.
+	{
+		Xorshift128Plus<uint32_t> rngViaFn(4242);
+		Xorshift128Plus<uint32_t> rngViaManualDraws(4242);
+		bool spreads = false;
+		BattleHazard::rollFireSpreadNeighbour(rngViaFn, /*baseline=*/0, /*resistance=*/0, spreads);
+		BattleHazard::hazardRoll(rngViaManualDraws, BattleHazard::FIRE_SPREAD_THRESHOLD_RNG_SPAN);
+		BattleHazard::hazardRoll(rngViaManualDraws, BattleHazard::FIRE_SPREAD_NEIGHBOUR_RNG_SPAN);
+		uint64_t sFn[2];
+		uint64_t sManual[2];
+		rngViaFn.getState(sFn);
+		rngViaManualDraws.getState(sManual);
+		TEST_REQUIRE(sFn[0] == sManual[0] && sFn[1] == sManual[1],
+		             "fire spread consumes exactly two draws, threshold then neighbour");
+	}
+	{
+		Xorshift128Plus<uint32_t> rngViaFn(4242);
+		Xorshift128Plus<uint32_t> rngViaManualDraw(4242);
+		BattleHazard::rollGenericSpreadNeighbour(rngViaFn);
+		BattleHazard::hazardRoll(rngViaManualDraw, BattleHazard::GENERIC_SPREAD_NEIGHBOUR_RNG_SPAN);
+		uint64_t sFn[2];
+		uint64_t sManual[2];
+		rngViaFn.getState(sFn);
+		rngViaManualDraw.getState(sManual);
+		TEST_REQUIRE(sFn[0] == sManual[0] && sFn[1] == sManual[1],
+		             "generic spread consumes exactly one draw -- no internal threshold roll");
+	}
 	return true;
 }
 
@@ -185,6 +336,9 @@ int main(int argc, char **argv)
 	    {"fire_hazard_item_resist", test_fire_hazard_item_resist},
 	    {"fire_overlay_power_progression", test_fire_overlay_power_progression},
 	    {"fire_overlay_terrain_threshold", test_fire_overlay_terrain_threshold},
+	    {"fire_neighbour_table_matches_recovered_bytes",
+	     test_fire_neighbour_table_matches_recovered_bytes},
+	    {"hazard_spread_uses_recovered_rng", test_hazard_spread_uses_recovered_rng},
 	    {"fire_scheduler_state_machine", test_fire_scheduler_state_machine},
 	});
 }
