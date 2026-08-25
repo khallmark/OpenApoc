@@ -1315,8 +1315,12 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
         bx, by = (int(v) for v in at.split(",")[:2])
     except ValueError:
         return "bad-coords"
-    d.say(f"  [raid] clearing {info.get('building')} ({info.get('crew')} aliens, "
-          f"owner {info.get('owner')})")
+    # centre_on_message reports a location rather than a building record, so those fields are
+    # absent on that path -- printing them as "None" made a working raid look broken.
+    where = info.get("building") or info.get("text", "a reported sighting")[:40]
+    crew_here = info.get("crew")
+    d.say(f"  [raid] clearing {where}"
+          + (f" ({crew_here} aliens)" if crew_here else ""))
 
     d.h.ok(f"click {bx} {by} right")
     time.sleep(1.0)
