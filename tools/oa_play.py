@@ -110,6 +110,14 @@ RESPONSES = {
     # so the driver lands here by accident. play_battle drives it deliberately (Exit Battle) in
     # one synchronous block of its own, so simply closing it here is safe.
     "InGameOptions":          {"ack": "BUTTON_OK"},
+    # Same accidental-arrival problem as the UFOpaedia stages, and the one that actually stranded
+    # two runs. manage_research() drives this screen deliberately via wait_for(), which returns as
+    # soon as the stage matches and so never routes through respond_to_event() -- but when the
+    # driver ends up here any OTHER way (a completed project raising it, or a research pass that
+    # left it open), run_clock() parks off CityView with nothing able to dismiss it. RESPONSES is
+    # consulted before the WORKING_STAGES guard, so an ack policy here closes the accidental case
+    # without disturbing the deliberate one.
+    "ResearchScreen":         {"ack": "BUTTON_OK"},
 }
 
 # Stages constructed in code rather than from a .form, so there are no control ids to resolve.
