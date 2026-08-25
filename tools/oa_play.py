@@ -3376,11 +3376,20 @@ def arm_agents_directly(d: Driver, agents: int = 24) -> int:
         st = d.status()
         if st.stage != "AEquipScreen":
             break
-        try:
-            if not d.h.send(f"control AGENT_SELECT_BOX set {row}").startswith("OK"):
-                break
-        except (HarnessError, OSError):
+        # A real pixel click, not a ListBox set. AEquipScreen's portrait callback branches on
+        # e->forms().MouseInfo.Button (aequipscreen.cpp:85-87), which Control::click() never sets
+        # -- so "control AGENT_SELECT_BOX set N" highlights the row and never runs selectAgent.
+        # With selectedAgents empty, getMode() populates no inventory at all
+        # (aequipscreen.cpp:912), which is why the equip screen reported an empty warehouse while
+        # twenty-seven weapons sat in stores and two soldiers of thirteen carried anything.
+        box = d.controls(d.status()).get("AGENT_SELECT_BOX")
+        if box is None or box.w <= 0:
             break
+        row_h = 36
+        y = box.y + 18 + row * row_h
+        if y >= box.y + box.h - 6:
+            break
+        d.h.click_xy(box.x + box.w // 2, y)
         time.sleep(0.3)
         # The list is rebuilt as the screen renders, so give it a frame before reading.
         items = {}
