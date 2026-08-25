@@ -14,6 +14,7 @@ Stage in this engine -- are detected and dismissed automatically instead of dead
 from __future__ import annotations
 
 import argparse
+import json
 import socket
 import sys
 import time
@@ -25,6 +26,9 @@ import shutil
 import subprocess
 
 from oa_forms import FormLibrary
+
+# Durable, append-only run ledger. One JSON record per leg per run.
+LEDGER = Path(__file__).resolve().parent.parent / "build" / "campaign-ledger.jsonl"
 
 # Stage class name (as reported by STATUS) -> form key used by that stage.
 STAGE_FORMS = {
@@ -4392,9 +4396,53 @@ def recover_crash_sites(d: Driver) -> int:
     d.say(f"  [recover] refused at {cx},{cy} (mission={mission})")
     return 0
 
+def log_leg(d: Driver, run_id: str, day: float, phase: str, extra: dict) -> None:
+    """Append one durable, machine-readable record per leg.
+
+    Runs are otherwise only comparable by scrolling two console logs side by side, which is how a
+    whole evening got spent concluding things about score components that were really measuring
+    which run happened to be quieter. A JSONL ledger makes "improve on all metrics" checkable
+    instead of asserted: same fields every leg, every run, appended not overwritten.
+
+    Everything here comes from `gs` queries the driver already makes -- the same numbers a player
+    reads off the score screen, the base screen and the vehicle list. Nothing is sourced from
+    anywhere a human could not look.
+    """
+    rec = {"run": run_id, "day": round(day, 1), "phase": phase}
+    for q in ("funds", "time", "vehicles", "agents", "turbo"):
+        try:
+            for k, v in (d.h.gs(q) or {}).items():
+                if k not in rec:
+                    rec[k] = v
+        except Exception:
+            pass
+    rec.update(extra)
+    try:
+        with LEDGER.open("a") as fh:
+            fh.write(json.dumps(rec) + "\n")
+    except Exception as exc:
+        d.say(f"  [ledger] could not write: {type(exc).__name__}: {exc}")
+
+
 def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float = 7.0) -> dict:
+    run_id = f"r{int(time.time())}"
+    d.say(f"[run] {run_id}; ledger {LEDGER}")
     new_game(d, difficulty)
     t0 = snapshot(d, "t0")
+
+    # Campaign-plan opening (docs/campaign-plan.md, Day 0). These four were all written and never
+    # called from anywhere -- the same dead-code shape as raid_infiltrated_building. Selling the
+    # ground fleet funds the hoverbikes; without buy_interceptor a lost craft was never replaced,
+    # which is why every run's fleet decayed monotonically to nothing.
+    try:
+        d.checks["sold_ground"] = sell_ground_fleet(d)
+    except Exception as exc:
+        d.say(f"  [open] sell_ground_fleet failed: {type(exc).__name__}: {exc}")
+    try:
+        d.checks["bought_craft"] = buy_interceptor(d, want=2)
+    except Exception as exc:
+        d.say(f"  [open] buy_interceptor failed: {type(exc).__name__}: {exc}")
+    log_leg(d, run_id, 0.0, "opening", dict(d.checks))
 
     d.checks["research_started"] = assign_research(d)
     d.checks["ufopaedia_opened"] = visit_ufopaedia(d)
@@ -4445,7 +4493,32 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
             except Exception as exc:
                 d.say(f"  [leg] raid failed: {type(exc).__name__}: {exc}")
 
-            # Whatever the raid left us in, get back to the city before the next leg.
+            # 3. Replace losses. Attrition was the binding constraint on every run measured:
+            #    agents 25->16 and the fleet 5->1 flyer inside ten days, after which EXTERMINATE
+            #    is refused for want of a transport and the raid loop that earns the score stops.
+            #    buy_interceptor and sell_surplus_loot were both written and never called.
+            try:
+                sold = sell_surplus_loot(d)
+                if sold:
+                    d.checks["loot_sold"] = d.checks.get("loot_sold", 0) + sold
+            except Exception as exc:
+                d.say(f"  [leg] loot sale failed: {type(exc).__name__}: {exc}")
+            try:
+                bought = buy_interceptor(d, want=2)
+                if bought:
+                    d.checks["craft_bought"] = d.checks.get("craft_bought", 0) + bought
+                    d.say(f"  [leg] replaced {bought} craft")
+            except Exception as exc:
+                d.say(f"  [leg] craft purchase failed: {type(exc).__name__}: {exc}")
+            try:
+                hired = hire_staff(d, want=6)
+                if hired:
+                    d.checks["agents_hired"] = d.checks.get("agents_hired", 0) + hired
+                    d.say(f"  [leg] hired {hired} agent(s)")
+            except Exception as exc:
+                d.say(f"  [leg] hiring failed: {type(exc).__name__}: {exc}")
+
+            # Whatever all that left us in, get back to the city before the next leg.
             for _ in range(8):
                 if d.status().stage == "CityView":
                     break
@@ -4453,9 +4526,11 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
                     d.h.key("Escape")
                 time.sleep(0.5)
 
+        log_leg(d, run_id, elapsed, "leg", {"battles": battles, **d.checks})
         snapshot(d, f"day~{elapsed:.0f}")
 
     d.checks["battles_played"] = battles
+    log_leg(d, run_id, elapsed, "final", {"battles": battles, **d.checks})
     return snapshot(d, "final")
 
 
