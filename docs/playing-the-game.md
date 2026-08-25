@@ -24,6 +24,35 @@ real press raises. Two tempting shortcuts are deliberately refused:
 Read-only `GS` queries are not cheating — they are how the driver checks its own work. Every one
 of them exists because some action reported success while changing nothing.
 
+## The trap that has cost the most time: handlers that read the mouse button
+
+Three separate features were "unreachable" for the same reason, and it is worth stating as a rule
+rather than rediscovering a fourth time.
+
+`Control::click()` -- what `CONTROL <id> click` and `CONTROL <id> set <n>` go through -- raises a
+synthetic `MouseClick` whose `MouseInfo.Button` is never populated (forms/control.cpp:1255-1268).
+Any handler that branches on *which* button was pressed therefore never runs, and the harness
+reports `OK` because the click itself was dispatched successfully. It fails silently, and it looks
+exactly like a click that landed.
+
+Confirmed instances:
+
+* **Hand icons** on VEquipScreen (`clickedRightHand` / `clickedLeftHand`, battleview.cpp:993-1007)
+  -- the gateway to fire-hand selection, item priming and the psi tab.
+* **Agent portraits** on AEquipScreen (aequipscreen.cpp:85-87). Selecting a row by name highlighted
+  it but never ran `selectAgent`, so `selectedAgents` stayed empty and `getMode()` populated no
+  inventory at all -- the equip screen reported an empty warehouse while 27 weapons sat in stores
+  and two soldiers of thirteen carried anything.
+* **Assignment rows** in AgentAssignment (agentassignment.cpp:92-138), used by both AlertScreen and
+  BuildingScreen.
+
+What *is* safe by name: `CheckBox`, `RadioButton` and `TriStateBox`, whose handlers ignore the
+button entirely, and any callback that takes no notice of `MouseInfo`.
+
+So: if a control refuses to respond to a named click, read its handler before trying a different
+id. If it touches `MouseInfo.Button`, only a genuine pixel click at its rect will do.
+
+
 ## The rule that matters most
 
 **A command returning `OK` means the command was delivered, not that the game did anything.**
