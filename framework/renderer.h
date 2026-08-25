@@ -17,6 +17,7 @@ class RendererImageData
 {
   public:
 	virtual sp<Image> readBack();
+	virtual void resize(Vec2<unsigned int> newSize);
 	virtual ~RendererImageData();
 };
 
@@ -37,12 +38,14 @@ class Renderer
 	virtual void clear(Colour c = Colour{0, 0, 0, 0}) = 0;
 	virtual void setPalette(sp<Palette> p) = 0;
 	virtual sp<Palette> getPalette() = 0;
-	virtual void draw(sp<Image> i, Vec2<float> position) = 0;
-	virtual void drawRotated(sp<Image> i, Vec2<float> center, Vec2<float> position,
+	// Taken by reference: these run once per sprite, and copying the shared_ptr costs a
+	// pair of atomics each time for a pointer the caller already owns.
+	virtual void draw(const sp<Image> &i, Vec2<float> position) = 0;
+	virtual void drawRotated(const sp<Image> &i, Vec2<float> center, Vec2<float> position,
 	                         float angle) = 0;
-	virtual void drawScaled(sp<Image> i, Vec2<float> position, Vec2<float> size,
+	virtual void drawScaled(const sp<Image> &i, Vec2<float> position, Vec2<float> size,
 	                        Scaler scaler = Scaler::Linear) = 0;
-	virtual void drawTinted(sp<Image> i, Vec2<float> position, Colour tint) = 0;
+	virtual void drawTinted(const sp<Image> &i, Vec2<float> position, Colour tint) = 0;
 	virtual void drawFilledRect(Vec2<float> position, Vec2<float> size, Colour c) = 0;
 	// drawRect() is expected to grow inwards, so {position, position + size} specifies the bounds
 	// of the rect no matter the thickness
@@ -53,6 +56,12 @@ class Renderer
 	virtual UString getName() = 0;
 
 	virtual void newFrame() {};
+
+	// GPU draw calls issued since the last call, for the frame profiler. 0 if the
+	// backend does not track them.
+	virtual uint64_t takeDrawCallCount() { return 0; }
+	// Sprites submitted since the last call, batched or not.
+	virtual uint64_t takeSpriteCount() { return 0; }
 
 	virtual sp<Surface> getDefaultSurface() = 0;
 };

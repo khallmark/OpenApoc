@@ -11,17 +11,17 @@ namespace OpenApoc
 
 Image::~Image() = default;
 
-Image::Image(Vec2<unsigned int> size)
-    : size(size), dirty(true), bounds(0, 0, size.x, size.y), indexInSet(0)
+Image::Image(Vec2<unsigned int> size, ImageType imageType)
+    : size(size), imageType(imageType), dirty(true), bounds(0, 0, size.x, size.y), indexInSet(0)
 {
 }
 
-Surface::Surface(Vec2<unsigned int> size) : Image(size) {}
+Surface::Surface(Vec2<unsigned int> size) : Image(size, ImageType::Surface) {}
 
 Surface::~Surface() = default;
 
 PaletteImage::PaletteImage(Vec2<unsigned int> size, uint8_t initialIndex)
-    : Image(size), indices(new uint8_t[size.x * size.y])
+    : Image(size, ImageType::Palette), indices(new uint8_t[size.x * size.y])
 {
 	for (unsigned int i = 0; i < size.x * size.y; i++)
 		this->indices[i] = initialIndex;
@@ -67,7 +67,7 @@ void PaletteImage::blit(sp<PaletteImage> src, sp<PaletteImage> dst, Vec2<unsigne
 }
 
 RGBImage::RGBImage(Vec2<unsigned int> size, Colour initialColour)
-    : Image(size),
+    : Image(size, ImageType::RGB),
       pixels(reinterpret_cast<Colour *>(operator new[](size.x * size.y * sizeof(Colour))))
 {
 	if (initialColour.r == initialColour.g && initialColour.r == initialColour.b &&
@@ -150,7 +150,7 @@ void PaletteImage::calculateBounds()
 	this->bounds = {minX, minY, maxX, maxY};
 }
 
-LazyImage::LazyImage() : Image({0, 0}) {}
+LazyImage::LazyImage() : Image({0, 0}, ImageType::Lazy) {}
 
 sp<Image> &LazyImage::getRealImage()
 {

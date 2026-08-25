@@ -29,6 +29,8 @@ class ConfigFile
 	UString getString(const UString &key);
 	float getFloat(const UString &key);
 	bool get(const UString &key); // returns true if the option was specified
+	// True if the key came from the command line or settings.conf, not the compiled default.
+	bool optionOverridden(const UString &key) const;
 	UString describe(const UString &section, const UString &name);
 
 	void set(const UString &key, const bool value);
