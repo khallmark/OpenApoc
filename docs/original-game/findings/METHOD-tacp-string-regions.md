@@ -116,14 +116,22 @@ The investigator's own caveat names the mechanism: *"accessed through a register
 computation whose base is built at runtime rather than as a single scalar immediate — that would
 evade all four of my methods."*
 
-**Working hypothesis: display text is addressed by token/ordinal and resolved through a table at
-runtime.** Under it, every scan above is guaranteed to return zero, and every per-row `NOT BOUND`
-reached by string anchoring is uninformative rather than conclusive.
+**Hypothesis, now only partly supported:** display text is addressed by token/ordinal and resolved
+at runtime. It survives for the *specific* strings above, but it is **not** a blanket property of
+the pool — the B1 correction found a live pointer table serving ~30 pool strings, including
+combat-message siblings of these very targets. A simpler competing explanation is now equally
+live: **these particular strings are unused in the shipped build.**
 
-### Why this is the highest-leverage target in the backlog
+The discriminator is cheap: take a **category-matched sibling in the same pool** and check whether
+*it* is referenced. If the sibling is and the target is not, the target is dead rather than
+indirected, and a `NOT BOUND` is properly grounded.
 
-One resolver sits between the project and **B1 cover, B3 wounded penalty, K1 cloak, G1 gadgets and
-B5 enzyme**. Binding it once unblocks all five. Nothing else in this backlog has that fan-out.
+### Leverage, revised
+
+A resolver, *if one exists*, would sit between the project and **B1, B3, K1, G1 and B5**. That
+fan-out is still the argument for chasing it — but the pointer-table counter-example means it may
+not exist at all, and "these strings are dead in the shipped build" would explain every negative
+just as well. **Run the sibling-control check per row before investing in the general hunt.**
 
 Angles not yet exhausted:
 

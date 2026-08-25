@@ -239,25 +239,34 @@ where `iVar6 = outcome*3 + 1`, `outcome = RNG(0..4)` (`FUN_0001eee8(4)`). Raw du
 
 | outcome | `iVar6` | X @ VA (value) | Y @ VA (value) | Z @ VA (value) | (X, Y, Z) | direction |
 |---|---|---|---|---|---|---|
-| 0 | 1 | `0x29306C` (`0`) | `0x293070` (`0`) | `0x293074` (`0`) | `(0, 0, 0)` | **none — a "fizzle" outcome** |
+| 0 | 1 | `0x29306C` (`0`) | `0x293070` (`0`) | `0x293074` (`0`) | `(0, 0, 0)` | **none — see caveat below** |
 | 1 | 4 | `0x293078` (`0`) | `0x29307C` (`1`) | `0x293080` (`0`) | `(0, 1, 0)` | **South** (+Y) |
 | 2 | 7 | `0x293084` (`-1`) | `0x293088` (`0`) | `0x29308C` (`0`) | `(-1, 0, 0)` | **West** (−X) |
 | 3 | 10 | `0x293090` (`0`) | `0x293094` (`-1`) | `0x293098` (`0`) | `(0, -1, 0)` | **North** (−Y) |
 | 4 | 13 | `0x29309C` (`0`) | `0x2930A0` (`0`) | `0x2930A4` (`1`) | `(0, 0, 1)` | **Up** (+Z) |
 
-**Fire's 5-outcome roll (`RNG(0,4)`) covers only 4 real directions — South, West, North, Up — plus
-one dead outcome (`0,0,0`) that resolves to no movement at all.** East and Down are never reachable
-by this function. The unused entry at the table's true base, `0x293068` (value `1`), is never read
-by `FUN_0007b0d0` at all — the minimum address it reads is `0x293068 + 1*4 = 0x29306C` (`iVar6`'s
-minimum value is `1`, not `0`) — so `0x293068` is a genuinely unaddressed leading slot for this
-function, not part of any outcome's triple. Whether that slot (or the `(0,0,0)` fizzle outcome) is
-read/used by something else (e.g. the type-0 handler `FUN_0007b228`, not decompiled this session)
-was not determined.
+**Fire's 5-outcome roll (`RNG(0,4)`) reads only 4 real directions — South, West, North, Up — plus
+one `(0,0,0)` outcome that resolves to no movement.** East and Down are never reached by this
+function's addressing. The unused entry at the table's true base, `0x293068` (value `1`), is never
+read by `FUN_0007b0d0` at all — the minimum address it reads is `0x293068 + 1*4 = 0x29306C`
+(`iVar6`'s minimum value is `1`, not `0`, since `outcome*3+1` with `outcome>=0`) — so `0x293068` is
+a genuinely unaddressed leading slot for this function, not part of any outcome's triple. Whether
+that slot (or the `(0,0,0)` outcome) is read/used by something else (e.g. the type-0 handler
+`FUN_0007b228`, not decompiled this session) was not determined.
 
-This means fire's spread roll has an **inherent ~20% chance of doing nothing**, independent of and
-prior to the resistance-gated chance roll in §2.2 — the two are stacked, not alternatives. That is
-itself real, recovered behaviour, not a guess, and is a second (structural, not percentage-shaped)
-sense in which the original's fire spread is less aggressive than a naive port would assume.
+**Caveat — mechanical result is solid, semantic interpretation is not.** The addressing formula,
+the raw bytes, and the resulting `(0,0,0)`/no-East/no-Down outcome set for `FUN_0007b0d0` are all
+directly recovered from instruction operands and script-verified — that part is not in question.
+What is **not determined** is *why* the table is laid out this way. Two readings are equally
+consistent with the same bytes: (a) fire is authored to have an inherent ~20% "nothing happens"
+chance and a genuinely restricted direction set, as a deliberate design choice; or (b) fire's base
+triple (`0x293068`) sits one `int32` element low relative to the array's real per-direction
+boundaries — note `0x293068`..`0x2930A4` spans 16 `int32` elements, not a multiple of 3 — making
+`0x293068` a leading stray element and the `(0,0,0)`/no-East result an **off-by-one in the original
+binary's own code**, not an intentional restriction. Nothing recovered this session distinguishes
+these two readings. A port must not assume either one; state the addresses and the formula, not a
+claim about original intent, and do not describe fire's spread as "less aggressive" than a full
+compass set — that framing asserts design intent this session did not establish.
 
 ### 2.4 `FUN_0007ae78` — the generalized (parameterized-type) placement/spread engine
 
@@ -414,8 +423,17 @@ of type 1 / type 3 is Enzyme (the dispatch variable has no traceable static writ
 damage formula, and `TICKS_PER_ENZYME_EFFECT`. Do not replace `TICKS_PER_ENZYME_EFFECT =
 TICKS_PER_SECOND/9` with anything from this session — no tick cadence was recovered for either
 type 1 or type 3. `HAZARD_SPREAD_CHANCE` should still be deleted per F1's finding (§2.2) — that
-part applies to the shared engine as much as to fire specifically, since `FUN_0007ae78` uses the
-identical `RNG(0..10)+baseline vs. resistance` mechanism, just parameterized.
+finding stands on fire's own evidence alone and does not need the generic engine's support. **On
+the generic engine specifically: correction.** `FUN_0007ae78` calls `FUN_0001eee8` exactly **once**
+(at `0x7AE90`, `MOV EAX,0x5` → the 6-outcome neighbour pick, §2.4) — not twice like fire's
+`FUN_0007b0d0` (`0x7B0E1` `MOV EAX,0xa` for the resistance-gate roll, `0x7B0F3` `MOV EAX,0x4` for
+the neighbour pick; call-site addresses confirmed via `FUN_0001eee8`'s caller list,
+`export/query_hazard_rng.log:182-184`). `FUN_0007ae78` still runs the same resistance-gated
+comparison shape against `FUN_0007aa8c`'s return, but the threshold value it compares against
+(`local_20[4]`) arrives as a **caller-supplied parameter**, not from an internal `RNG(0..10)` roll.
+Where that threshold value comes from (a caller-side RNG(10) call, a fixed per-type constant, or
+something else) was **not traced** this session — do not port fire's `RNG(0..10)+baseline` formula
+onto the type 1/3 spread chance.
 
 ---
 
