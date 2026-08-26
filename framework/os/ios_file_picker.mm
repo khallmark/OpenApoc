@@ -5,6 +5,7 @@
 #import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #include <atomic>
+#include <memory>
 #include <unistd.h>
 
 @interface OpenApocCdPickerDelegate : NSObject <UIDocumentPickerDelegate>
@@ -141,14 +142,17 @@ UString pickCdPath()
 	}
 
 	__block UString result;
-	__block std::atomic<bool> done{false};
+	// A __block variable has to be copy-constructible and std::atomic is not, so
+	// share one atomic through a copyable handle. It does need to be atomic: the
+	// flag is set on the main thread and polled from the calling one.
+	auto done = std::make_shared<std::atomic<bool>>(false);
 	__block OpenApocCdPickerDelegate *delegate = [[OpenApocCdPickerDelegate alloc] init];
 	delegate.onPicked = ^(NSString *path) {
 		if (path)
 		{
 			result = [path UTF8String];
 		}
-		done.store(true);
+		done->store(true);
 	};
 
 	auto present = ^{
@@ -181,7 +185,7 @@ UString pickCdPath()
 			if (!host)
 			{
 				LogError("No view controller available for CD picker");
-				done.store(true);
+				done->store(true);
 				return;
 			}
 			[host presentViewController:picker animated:YES completion:nil];
@@ -191,7 +195,7 @@ UString pickCdPath()
 	if ([NSThread isMainThread])
 	{
 		present();
-		while (!done.load())
+		while (!done->load())
 		{
 			[[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
 			                         beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
@@ -200,7 +204,7 @@ UString pickCdPath()
 	else
 	{
 		dispatch_sync(dispatch_get_main_queue(), present);
-		while (!done.load())
+		while (!done->load())
 		{
 			usleep(50000);
 		}

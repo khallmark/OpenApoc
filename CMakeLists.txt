@@ -126,6 +126,8 @@ add_subdirectory(framework)
 add_subdirectory(forms)
 add_subdirectory(game/state)
 add_subdirectory(game/ui)
+set(OPENAPOC_SERIALIZE_GEN "" CACHE FILEPATH
+	"Host-built OpenApoc_GamestateSerializeGen, required when cross-compiling")
 if(NOT IOS)
 	add_subdirectory(tools)
 endif()
