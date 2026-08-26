@@ -1458,6 +1458,22 @@ void BattleView::registerBattleViewIntrospection()
 		    // positions, so anything off-camera is both unwatchable and unclickable -- and a
 		    // human wanting to watch the AI play needs the view to follow the action rather than
 		    // sit wherever the last order left it.
+		    // A battle can end between any two polls -- Battle::checkMissionEnd tears
+		    // current_battle down the instant the last hostile dies. Every battle-scoped query
+		    // below therefore answers "nothing" rather than falling through to
+		    // "ERR unknown query", which the driver raises on and which has already cost two
+		    // missions that had just been WON. centred=0 is the same answer these give when
+		    // there is simply nothing to centre on, so no caller needs a new case.
+		    if (q == "centre_on_friends" || q == "centre_on_enemy" || q == "battle_positions")
+		    {
+			    if (!gameState || !gameState->current_battle)
+			    {
+				    return q == "battle_positions"
+				               ? UString("foes=0 mine=0 view_z=0 foes_unseen=0 "
+				                         "foes_bystanders=0 foe_at=- mine_at=-")
+				               : UString("centred=0");
+			    }
+		    }
 		    if (gameState && gameState->current_battle && q == "centre_on_friends")
 		    {
 			    const auto player = gameState->getPlayer();

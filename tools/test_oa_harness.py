@@ -83,6 +83,38 @@ check(inspect.getsource(oa_play.Driver.escape_key).count('self.h.key("Escape")')
       "escape_key must press the key itself exactly once -- it recursed into itself when a "
       "blanket replace rewrote its own body, and every guarded call then blew the stack")
 
+# --- battle-scoped queries must tolerate the battle ending -------------------
+# Battle::checkMissionEnd tears current_battle down the instant the last hostile dies, so a query
+# already in flight comes back an error. Twice now that raised out of win_battle and threw away a
+# mission that had just been WON -- first enemies_screen, then centre_on_enemy, because the first
+# fix patched the instance rather than the class.
+class DyingHarness(FakeHarness):
+    def gs(self, q):
+        raise oa_play.HarnessError(f'gs {q} -> ERR unknown query "{q}"')
+
+    def screen_craft(self, q):
+        raise oa_play.HarnessError(f'gs {q} -> ERR unknown query "{q}"')
+
+
+dead = FakeDriver("BattleView")
+dead.h = DyingHarness()
+for q in ("centre_on_enemy", "centre_on_friends", "battle_positions", "battle"):
+    check(oa_play.battle_gs(dead, q) == {},
+          f"battle_gs must return {{}} when the battle has gone, for {q}")
+for q in ("enemies_screen", "friends_screen"):
+    check(oa_play.on_screen(dead, q) == [],
+          f"on_screen must return [] when the battle has gone, for {q}")
+
+# No battle-scoped query in the battle loop may still call gs directly -- that is precisely how
+# the second one was missed.
+whole = inspect.getsource(oa_play)
+for q in ("centre_on_enemy", "centre_on_friends"):
+    check(f'd.h.gs("{q}")' not in whole,
+          f"{q} must go through battle_gs, not raw gs")
+for q in ("enemies_screen", "friends_screen"):
+    check(f'd.h.screen_craft("{q}")' not in whole,
+          f"{q} must go through on_screen, not raw screen_craft")
+
 if FAILED:
     print(f"FAILED {len(FAILED)}:")
     for m in FAILED:

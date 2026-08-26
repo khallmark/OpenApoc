@@ -2859,6 +2859,21 @@ def build_battle_ai(policy: dict):
     return make_ai(name, **kw), Capabilities
 
 
+def battle_gs(d: Driver, query: str) -> dict:
+    """gs() for a battle-scoped query, tolerating the battle ending underneath it.
+
+    Same fault as on_screen(), and the reason this is a HELPER rather than another guarded call
+    site: the first fix covered enemies_screen and friends_screen only, and centre_on_enemy went
+    on to throw away a second won mission days-of-debugging later. Battle-scoped queries are a
+    CLASS -- fixing them one at a time is how the second one got missed.
+    """
+    try:
+        return d.h.gs(query) or {}
+    except (HarnessError, OSError):
+        return {}
+
+
+
 def on_screen(d: Driver, which: str) -> list:
     """screen_craft that tolerates the battle ending underneath it.
 
@@ -3006,7 +3021,7 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
         # Keep the camera on the squad. Units are moved by clicking their screen positions, so
         # anything off-camera is neither watchable nor clickable.
         if rounds % 4 == 0:
-            d.h.gs("centre_on_friends")
+            battle_gs(d, "centre_on_friends")
             time.sleep(0.15)
         friends = on_screen(d, "friends_screen")
 
@@ -3065,7 +3080,7 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
         # squad grinding against it while the rest of the map goes unexplored, which is the same
         # stall in a new costume. So also walk on once progress dries up.
         if not foes or stalls > 4:
-            info = d.h.gs("centre_on_enemy")
+            info = battle_gs(d, "centre_on_enemy")
             if info.get("centred") == "1":
                 time.sleep(0.4)
                 found = on_screen(d, "enemies_screen")
@@ -3135,7 +3150,7 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
             # explain an unreachable hostile -- a unit two floors up is drawn in plain sight and
             # still cannot be walked to -- so log tile positions and let the z gap speak.
             try:
-                pos = d.h.gs("battle_positions")
+                pos = battle_gs(d, "battle_positions")
                 d.say(f"  [battle] positions: foe_at={pos.get('foe_at')} "
                       f"mine_at={pos.get('mine_at')}")
             except (HarnessError, OSError):
