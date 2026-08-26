@@ -1573,9 +1573,26 @@ void BattleMap::loadTilesets(GameState &state) const
 			// Assign sounds
 			if (tile->sfxIndex != -1)
 			{
-				tile->walkSounds = state.battle_common_sample_list->walkSounds.at(tile->sfxIndex);
-				tile->objectDropSound =
-				    state.battle_common_sample_list->objectDropSounds.at(tile->sfxIndex);
+				// Bounds-checked rather than vector::at(). This runs on a threadpool worker
+				// during battlemap generation, where an escaping exception is caught far away
+				// and logged only as its what() string - and libc++'s what() for vector::at is
+				// the bare word "vector", which is why a Skirmish battle failed to start with
+				// nothing in the log but "Exception occurred in threadpool: vector". A missing
+				// footstep sound is not a reason to abort map generation.
+				const auto &walk = state.battle_common_sample_list->walkSounds;
+				const auto &drop = state.battle_common_sample_list->objectDropSounds;
+				const size_t idx = static_cast<size_t>(tile->sfxIndex);
+				if (idx < walk.size() && idx < drop.size())
+				{
+					tile->walkSounds = walk[idx];
+					tile->objectDropSound = drop[idx];
+				}
+				else
+				{
+					LogWarning("Tileset {0} tile {1} wants sfxIndex {2} but the common sample "
+					           "list holds {3} walk / {4} drop entries - leaving it silent",
+					           tilesetName, tileName, tile->sfxIndex, walk.size(), drop.size());
+				}
 			}
 			// Assign map marts
 			switch (tile->type)
