@@ -37,8 +37,8 @@ from pathlib import Path
 from oa_adversarial import Arena, Evaluator, Policy, new_arena, train
 from oa_play import (
     TICKS_PER_DAY, Driver, GameProcess, Harness, advance, assign_research, buy_interceptor,
-    hire_staff, new_game, raid_infiltrated_building, recover_crash_sites, return_to_city,
-    sell_ground_fleet, sell_surplus_loot, win_battle,
+    _flying_crewed, crew_transport, hire_staff, new_game, raid_infiltrated_building,
+    recover_crash_sites, return_to_city, sell_ground_fleet, sell_surplus_loot, win_battle,
 )
 
 
@@ -132,8 +132,13 @@ class CampaignEvaluator(Evaluator):
 
             # Campaign opening, same as play_campaign: without craft the raids cannot fly, and
             # without research the campaign stalls out well before it would have run out of time.
+            # crew_transport before anything flies: the transfer requires the craft to be
+            # parked in the same building as the agent (agentassignment.cpp:527-536). With crew=0
+            # the game refuses every recovery and every ground mission, which is exactly the
+            # "no battle happened" this whole investigation started from.
             for label, fn in (("sell_ground", lambda: sell_ground_fleet(d)),
                               ("buy_craft", lambda: buy_interceptor(d, want=2)),
+                              ("crew", lambda: crew_transport(d)),
                               ("research", lambda: assign_research(d))):
                 try:
                     rec[f"open_{label}"] = fn()
@@ -205,9 +210,11 @@ class CampaignEvaluator(Evaluator):
                     except Exception as exc:
                         rec.setdefault("recover_errors", []).append(f"{type(exc).__name__}: {exc}")
 
-                    # Nothing to raid: keep the base able to mount the next one.
+                    # Nothing to raid: keep the base able to mount the next one. A transport
+                    # that lost its crew fails every recovery silently, so re-crew when empty.
                     for fn in (lambda: sell_surplus_loot(d), lambda: buy_interceptor(d, want=2),
-                               lambda: hire_staff(d, want=6)):
+                               lambda: hire_staff(d, want=6),
+                               lambda: crew_transport(d) if _flying_crewed(d) == 0 else 0):
                         try:
                             fn()
                         except Exception:
@@ -222,6 +229,13 @@ class CampaignEvaluator(Evaluator):
                         return_to_city(d)
 
             rec["days_advanced"] = round((self._ticks(d) - t0) / TICKS_PER_DAY, 2)
+            # Without a crewed flyer no ground mission is possible at all, so a no-contest with
+            # crewed=0 is a harness failure and a no-contest with crewed>0 is a quiet campaign.
+            # Those are different diagnoses and the ledger must be able to tell them apart.
+            try:
+                rec["flying_crewed_at_end"] = _flying_crewed(d)
+            except Exception:
+                pass
 
             if outcome is None:
                 rec["reason"] = rec["reason"] or "budget expired with no battle"

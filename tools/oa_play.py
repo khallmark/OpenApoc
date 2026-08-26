@@ -4564,6 +4564,17 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
         d.checks["bought_craft"] = buy_interceptor(d, want=2)
     except Exception as exc:
         d.say(f"  [open] buy_interceptor failed: {type(exc).__name__}: {exc}")
+    # Put a squad aboard. crew_transport was written, documented at length, and called from
+    # NOWHERE -- the def was its only occurrence, the same dead-code shape raid_infiltrated_building
+    # had. The consequence is total: the game hands you a Valkyrie with pax=12, and with crew=0 on
+    # every craft, VehicleMission::recoverVehicle refuses every downed UFO (cityview.cpp:1069-1090)
+    # and no ground mission can be flown at all. Measured directly -- "[select] no flying craft with
+    # troops aboard" on every attempt, across every run, from a fleet that had the transport parked
+    # in the hangar the whole time.
+    try:
+        d.checks["crewed"] = crew_transport(d)
+    except Exception as exc:
+        d.say(f"  [open] crew_transport failed: {type(exc).__name__}: {exc}")
     log_leg(d, run_id, 0.0, "opening", dict(d.checks))
 
     d.checks["research_started"] = assign_research(d)
@@ -4639,6 +4650,17 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
                     d.say(f"  [leg] hired {hired} agent(s)")
             except Exception as exc:
                 d.say(f"  [leg] hiring failed: {type(exc).__name__}: {exc}")
+
+            # 4. Keep a squad aboard. Not a one-off: soldiers die, craft are shot down and
+            #    replaced, and a transport that lost its crew fails recovery silently.
+            try:
+                if _flying_crewed(d) == 0:
+                    got = crew_transport(d)
+                    if got:
+                        d.checks["crewed"] = d.checks.get("crewed", 0) + got
+                        d.say(f"  [leg] put a squad aboard ({got} craft crewed)")
+            except Exception as exc:
+                d.say(f"  [leg] crewing failed: {type(exc).__name__}: {exc}")
 
             # Whatever all that left us in, get back to the city before the next leg.
             for _ in range(8):
