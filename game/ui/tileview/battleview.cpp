@@ -983,7 +983,13 @@ BattleView::BattleView(sp<GameState> gameState)
 	                  {
 		                  if (baseForm->findControlTyped<Ticker>("NEWS_TICKER")->hasMessages())
 		                  {
-			                  LogWarning("Has Messages!");
+			                  // Was LogWarning("Has Messages!") -- a leftover debug print with no
+			                  // information in it, on a button an automated driver presses every
+			                  // few seconds. It became the most frequent line in the log by a wide
+			                  // margin, so it was almost always the LAST line, and it repeatedly
+			                  // crowded out the lines that actually said what the engine was doing
+			                  // when a run failed. A log whose tail is dominated by one contentless
+			                  // message is a log that cannot diagnose anything.
 			                  this->zoomLastEvent();
 		                  }
 	                  });
