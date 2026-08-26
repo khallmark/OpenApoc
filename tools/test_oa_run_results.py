@@ -197,11 +197,6 @@ reconciled = oa_play.reconcile_validation_process_exit(
 check_equal(reconciled[0], "process_error",
             "a pre-stop engine exit must override nominal validation success")
 check_equal(reconciled[2], 1, "an unclean validation shutdown must be nonzero")
-check_equal(
-    oa_play.reconcile_validation_process_exit(False, "victory", "won", 0, forced_exit),
-    ("victory", "won", 0),
-    "interactive runs may report shutdown truth without changing their result",
-)
 
 
 class FakeManagedProcess:

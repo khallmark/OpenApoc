@@ -41,7 +41,7 @@ from oa_play import (
     classify_connection_failure,
     create_run_directory,
     new_game,
-    reconcile_validation_process_exit,
+    require_clean_process_exit,
     require_positive,
     require_validation_seed,
     run_provenance,
@@ -507,9 +507,10 @@ def main() -> int:
             except Exception:
                 pass
         process_exit = game.stop()
-        outcome, detail, exit_code = reconcile_validation_process_exit(
-            args.validation, outcome, detail, exit_code, process_exit
-        )
+        try:
+            require_clean_process_exit(process_exit, "skirmish engine")
+        except RuntimeError as exc:
+            outcome, detail, exit_code = "process_error", str(exc), 1
         if receipt and not receipt.finished:
             receipt.finish(
                 outcome,

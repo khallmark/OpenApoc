@@ -28,14 +28,14 @@ already had -- it does not grant the aliens information either.
 from __future__ import annotations
 
 import argparse
-import json
 import random
 import sys
 import time
 from pathlib import Path
 
 from oa_adversarial import (
-    Arena, Evaluator, IncompleteGenerationError, Policy, new_arena, train,
+    Arena, Evaluator, EvidenceWriteError, IncompleteGenerationError, Policy,
+    append_evidence_record, new_arena, train,
 )
 from oa_play import (
     AdvanceOutcome, BattleResult, TICKS_PER_DAY, Driver, GameProcess, Harness, advance,
@@ -382,11 +382,7 @@ class CampaignEvaluator(Evaluator):
         there was no way to tell a campaign that never advanced from one that advanced and stayed
         quiet. That distinction is the whole diagnosis.
         """
-        try:
-            with (self.out / "battles.jsonl").open("a") as fh:
-                fh.write(json.dumps(rec) + "\n")
-        except Exception as exc:
-            print(f"    [adv] battle ledger write failed: {type(exc).__name__}: {exc}", flush=True)
+        append_evidence_record(self.out / "battles.jsonl", rec, "battle")
 
 
 def main() -> int:
@@ -424,8 +420,8 @@ def main() -> int:
     try:
         train(arena, ev, args.generations, args.battles_per_gen,
               ledger=out / "generations.jsonl", base_seed=args.seed * 1000)
-    except IncompleteGenerationError as exc:
-        print(f"[adv] FAILED: {exc}. No partial generation was evolved.", flush=True)
+    except (EvidenceWriteError, IncompleteGenerationError) as exc:
+        print(f"[adv] FAILED: {exc}. No unpersisted generation was evolved.", flush=True)
         return 1
 
     print(f"\n[adv] {arena.total_plays} battles fought, {arena.no_contests} no-contests "

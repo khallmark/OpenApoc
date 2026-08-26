@@ -8,11 +8,13 @@ whose correct answer is known in advance, and check the search actually finds it
 """
 import random
 import sys
+import tempfile
+from pathlib import Path
 
 from oa_adversarial import (
-    ALIEN_EFFECTIVE, Arena, IncompleteGenerationError, Policy, ReplayEvaluator, XCOM_EFFECTIVE,
-    XCOM_GENES, ALIEN_GENES, crossover, effective_genes, expected, mutate, new_arena,
-    random_policy, train, update_elo,
+    ALIEN_EFFECTIVE, Arena, EvidenceWriteError, IncompleteGenerationError, Policy,
+    ReplayEvaluator, XCOM_EFFECTIVE, XCOM_GENES, ALIEN_GENES, crossover, effective_genes,
+    expected, mutate, new_arena, random_policy, train, update_elo,
 )
 
 FAILED = []
@@ -229,6 +231,36 @@ for label, kwargs in (
         ),
         f"{label} must be positive",
     )
+
+# Evolution is a commit after the generation record is durable, never before. A path that cannot
+# accept generations.jsonl must leave generation/Hall-of-Fame state untouched and emit no summary.
+with tempfile.TemporaryDirectory() as tmp:
+    blocked_ledger = Path(tmp) / "generations.jsonl"
+    blocked_ledger.mkdir()
+    ar_blocked = new_arena(seed=10, pop=3)
+    blocked_messages = []
+    check_raises(
+        EvidenceWriteError,
+        lambda: train(
+            ar_blocked,
+            ReplayEvaluator(rps),
+            generations=1,
+            battles_per_gen=3,
+            ledger=blocked_ledger,
+            say=blocked_messages.append,
+        ),
+        "an unwritable generation ledger must fail before evolution",
+    )
+    check(ar_blocked.generation == 0,
+          "an unwritable generation ledger must not advance generation state")
+    check(ar_blocked.total_plays == 0,
+          "an unwritable generation ledger must not retain uncommitted scores")
+    check(all(policy.battles == 0 for policy in ar_blocked.xcom + ar_blocked.alien),
+          "an unwritable generation ledger must roll back policy score counts")
+    check(not ar_blocked.xcom_hof and not ar_blocked.alien_hof,
+          "an unwritable generation ledger must not select Hall-of-Fame champions")
+    check(not any(message.startswith("[adv] gen") for message in blocked_messages),
+          "an unwritable generation ledger must not emit a successful summary")
 
 # None is the ordinary no-contest signal; a mix of None and real scores records only the reals.
 seen_seeds = []

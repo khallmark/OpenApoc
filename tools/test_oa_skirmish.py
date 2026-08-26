@@ -138,6 +138,123 @@ check_equal(invalid_run_driver.clicked, [],
             "invalid direct forces must not click into skirmish setup")
 
 
+class SkirmishMainGame:
+    process_exit = None
+
+    def __init__(self, *_args, **_kwargs):
+        self._run_binary = Path("unused-openapoc")
+        self.argv = []
+
+    def start(self, **_kwargs):
+        pass
+
+    def stop(self):
+        return self.process_exit
+
+
+class SkirmishMainHarness:
+    def __init__(self, *_args, **_kwargs):
+        pass
+
+
+class SkirmishMainDriver:
+    def __init__(self, *_args, **_kwargs):
+        self.checks = {}
+
+    def say(self, _message: str):
+        pass
+
+    def status(self):
+        return oa_play.Status("CityView", 1280, 720, "")
+
+
+class SkirmishMainReceipt:
+    last_finish = None
+
+    def __init__(self, *_args, **_kwargs):
+        self.finished = False
+
+    def record_binary_snapshot(self, *_args, **_kwargs):
+        pass
+
+    def event(self, *_args, **_kwargs):
+        pass
+
+    def finish(self, outcome, exit_code, **detail):
+        self.finished = True
+        self.__class__.last_finish = {
+            "outcome": outcome, "exit_code": exit_code, **detail,
+        }
+
+
+def skirmish_main_for(process_exit: oa_play.ProcessExitResult,
+                      validation: bool) -> tuple[int, dict | None]:
+    patch_names = (
+        "GameProcess", "Harness", "Driver", "RunReceipt", "create_run_directory",
+        "run_provenance", "new_game", "run_one",
+    )
+    originals = {name: getattr(oa_skirmish, name) for name in patch_names}
+    original_argv = sys.argv
+    try:
+        SkirmishMainGame.process_exit = process_exit
+        SkirmishMainReceipt.last_finish = None
+        oa_skirmish.GameProcess = SkirmishMainGame
+        oa_skirmish.Harness = SkirmishMainHarness
+        oa_skirmish.Driver = SkirmishMainDriver
+        oa_skirmish.RunReceipt = SkirmishMainReceipt
+        oa_skirmish.create_run_directory = lambda root, *_args, **_kwargs: Path(root)
+        oa_skirmish.run_provenance = lambda *_args, **_kwargs: {}
+        oa_skirmish.new_game = lambda *_args, **_kwargs: None
+        oa_skirmish.run_one = lambda *_args, **_kwargs: {
+            "result_kind": "gameplay",
+            "outcome": "resolved",
+            "decided": True,
+            "won": True,
+            "stage": "BattleView",
+            "reason": "",
+            "battle": {},
+            "aliens": {"anthropod": 1},
+            "map_row": 0,
+            "before": {},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            sys.argv = [
+                "oa_skirmish.py", "--repo", tmp, "--out", tmp,
+                "--rounds", "1", "--alien", "anthropod=1", "--seed", "17",
+            ] + (["--validation"] if validation else [])
+            result_code = oa_skirmish.main()
+            return result_code, SkirmishMainReceipt.last_finish
+    finally:
+        sys.argv = original_argv
+        for name, original in originals.items():
+            setattr(oa_skirmish, name, original)
+
+
+skirmish_unclean_exits = (
+    oa_play.ProcessExitResult(True, 0, False, False, 0, "exited rc=0 before stop"),
+    oa_play.ProcessExitResult(True, 7, False, False, 7, "exited rc=7"),
+    oa_play.ProcessExitResult(True, None, True, True, -9, "killed by signal 9"),
+)
+for validation in (False, True):
+    mode = "validation" if validation else "ordinary finite"
+    result_code, receipt_finish = skirmish_main_for(
+        oa_play.ProcessExitResult(True, None, True, False, 0, "exited rc=0"), validation
+    )
+    check_equal(result_code, 0, f"{mode} Skirmish must accept a clean engine shutdown")
+    if validation:
+        check_equal(receipt_finish.get("engine_exit", {}).get("clean_shutdown"), True,
+                    "validation receipt must record the clean Skirmish shutdown")
+    for process_exit in skirmish_unclean_exits:
+        result_code, receipt_finish = skirmish_main_for(process_exit, validation)
+        check_equal(result_code, 1,
+                    f"{mode} Skirmish must reject {process_exit.status!r}")
+        if validation:
+            check_equal(receipt_finish.get("outcome"), "process_error",
+                        "validation receipt must classify a dirty Skirmish exit")
+            check_equal(receipt_finish.get("engine_exit", {}).get("clean_shutdown"), False,
+                        "validation receipt must preserve the dirty Skirmish exit")
+
+
 setup = oa_skirmish.SkirmishAttempt.setup_failure(
     stage="SelectForces",
     reason="select_forces_resume_pop_not_applied",
@@ -537,7 +654,8 @@ class EvaluatorDriver:
         return oa_play.Status("BattleView", 1280, 720, "")
 
 
-def adversarial_score_for(process_exit: oa_play.ProcessExitResult) -> tuple[float | None, dict]:
+def adversarial_score_for(process_exit: oa_play.ProcessExitResult,
+                          block_ledger: bool = False) -> tuple[float | None, dict]:
     patch_names = (
         "GameProcess", "Harness", "Driver", "new_game", "sell_ground_fleet",
         "buy_interceptor", "crew_transport", "assign_research", "win_battle",
@@ -559,6 +677,8 @@ def adversarial_score_for(process_exit: oa_play.ProcessExitResult) -> tuple[floa
             oa_play.BattleOutcome.RESOLVED, started_with=10, survivors=8, seconds=12.0
         )
         with tempfile.TemporaryDirectory() as tmp:
+            if block_ledger:
+                (Path(tmp) / "battles.jsonl").mkdir()
             arena = oa_adversarial_arena.new_arena(seed=3, pop=2)
             evaluator = oa_adversarial_arena.CampaignEvaluator(
                 Path(tmp), Path(tmp), 17960, budget_s=1.0, leg_days=1.0, verbose=False
@@ -577,6 +697,14 @@ clean_score, clean_record = adversarial_score_for(
 check(clean_score is not None, "a decided battle with a clean exit must remain scoreable")
 check_equal(clean_record.get("engine_exit", {}).get("clean_shutdown"), True,
             "adversarial evidence must preserve a clean typed process exit")
+check_raises(
+    oa_adversarial_arena.EvidenceWriteError,
+    lambda: adversarial_score_for(
+        oa_play.ProcessExitResult(True, None, True, False, 0, "exited rc=0"),
+        block_ledger=True,
+    ),
+    "an unwritable battle ledger must prevent an adversarial score from escaping",
+)
 
 unclean_adversarial_exits = (
     oa_play.ProcessExitResult(True, 0, False, False, 0, "exited rc=0 before stop"),
@@ -591,6 +719,75 @@ for process_exit in unclean_adversarial_exits:
                 "the adversarial ledger must not retain a score invalidated by shutdown")
     check_equal(invalid_record.get("engine_exit", {}).get("clean_shutdown"), False,
                 "the adversarial ledger must preserve unclean process-exit evidence")
+
+
+def adversarial_main_with_blocked_ledger(ledger_name: str) -> tuple[int, object]:
+    patch_names = (
+        "GameProcess", "Harness", "Driver", "new_game", "sell_ground_fleet",
+        "buy_interceptor", "crew_transport", "assign_research", "win_battle",
+        "_flying_crewed", "new_arena",
+    )
+    originals = {name: getattr(oa_adversarial_arena, name) for name in patch_names}
+    original_argv = sys.argv
+    captured = {}
+    try:
+        EvaluatorGame.process_exit = oa_play.ProcessExitResult(
+            True, None, True, False, 0, "exited rc=0"
+        )
+        oa_adversarial_arena.GameProcess = EvaluatorGame
+        oa_adversarial_arena.Harness = EvaluatorHarness
+        oa_adversarial_arena.Driver = EvaluatorDriver
+        oa_adversarial_arena.new_game = lambda *_args, **_kwargs: None
+        oa_adversarial_arena.sell_ground_fleet = lambda *_args, **_kwargs: 0
+        oa_adversarial_arena.buy_interceptor = lambda *_args, **_kwargs: 0
+        oa_adversarial_arena.crew_transport = lambda *_args, **_kwargs: 0
+        oa_adversarial_arena.assign_research = lambda *_args, **_kwargs: 0
+        oa_adversarial_arena._flying_crewed = lambda *_args, **_kwargs: 1
+        oa_adversarial_arena.win_battle = lambda *_args, **_kwargs: oa_play.BattleResult(
+            oa_play.BattleOutcome.RESOLVED, started_with=10, survivors=8, seconds=12.0
+        )
+
+        def capture_arena(*args, **kwargs):
+            arena = originals["new_arena"](*args, **kwargs)
+            captured["arena"] = arena
+            return arena
+
+        oa_adversarial_arena.new_arena = capture_arena
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / ledger_name).mkdir()
+            sys.argv = [
+                "oa_adversarial_arena.py", "--repo", tmp, "--out", tmp,
+                "--generations", "1", "--battles-per-gen", "1", "--pop", "2",
+                "--budget", "1", "--leg", "1", "--seed", "17", "--quiet",
+            ]
+            return oa_adversarial_arena.main(), captured["arena"]
+    finally:
+        sys.argv = original_argv
+        for name, original in originals.items():
+            setattr(oa_adversarial_arena, name, original)
+
+
+blocked_battle_rc, blocked_battle_arena = adversarial_main_with_blocked_ledger(
+    "battles.jsonl"
+)
+check_equal(blocked_battle_rc, 1,
+            "an unwritable battle ledger must prevent adversarial main success")
+check_equal(blocked_battle_arena.total_plays, 0,
+            "an unpersisted battle score must not enter the adversarial arena")
+check_equal(blocked_battle_arena.generation, 0,
+            "an unwritable battle ledger must not advance a generation")
+
+blocked_generation_rc, blocked_generation_arena = adversarial_main_with_blocked_ledger(
+    "generations.jsonl"
+)
+check_equal(blocked_generation_rc, 1,
+            "an unwritable generation ledger must prevent adversarial main success")
+check_equal(blocked_generation_arena.generation, 0,
+            "an unwritable generation ledger must fail before evolution")
+check_equal(blocked_generation_arena.total_plays, 0,
+            "an unwritable generation ledger must roll back uncommitted scores")
+check(not blocked_generation_arena.xcom_hof and not blocked_generation_arena.alien_hof,
+      "an unwritable generation ledger must not select champions")
 
 
 if FAILED:

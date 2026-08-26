@@ -45,6 +45,11 @@ from no-contests, but exhausting them fails the generation without evolving a pa
 population. Finally, any engine that exited before shutdown was requested, returned nonzero, or had
 to be killed invalidates the arena run or adversarial score even when the battle itself looked
 decided. The typed process-exit record remains in the ledger so that veto is auditable.
+Finite Skirmish runs enforce that shutdown contract in ordinary mode as well as validation mode;
+there is no interactive or unbounded Skirmish mode whose result may outlive a dirty engine exit.
+Adversarial battle and generation records are durably flushed before their score or population
+transition can escape. If either ledger cannot be written, the run exits nonzero and does not
+advance that generation.
 
 Each invocation creates a unique child directory beneath `--out`. It contains:
 
