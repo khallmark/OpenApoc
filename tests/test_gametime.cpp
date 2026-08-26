@@ -11,12 +11,30 @@ static bool test_tick_constants()
 {
 	TEST_REQUIRE(VANILLA_TICKS_PER_SECOND == 36, "VANILLA_TICKS_PER_SECOND is {0}",
 	             VANILLA_TICKS_PER_SECOND);
+	// These lock the selected 36-TPS interpretation to the recovered invasion
+	// coefficients. Their ratios corroborate, but do not prove, the absolute cadence.
+	TEST_REQUIRE(VANILLA_TICKS_PER_MINUTE == 0x870, "VANILLA_TICKS_PER_MINUTE is {0}",
+	             VANILLA_TICKS_PER_MINUTE);
+	TEST_REQUIRE(VANILLA_TICKS_PER_HOUR == VANILLA_TICKS_PER_MINUTE * 60,
+	             "VANILLA_TICKS_PER_HOUR is {0}", VANILLA_TICKS_PER_HOUR);
+	TEST_REQUIRE(VANILLA_TICKS_PER_DAY == 0x2F7600, "VANILLA_TICKS_PER_DAY is {0}",
+	             VANILLA_TICKS_PER_DAY);
+	// These are deliberate canaries: changing the configured resolution requires
+	// updating both expected values in the same reviewable change.
 	TEST_REQUIRE(TICKS_MULTIPLIER == 4, "TICKS_MULTIPLIER is {0}", TICKS_MULTIPLIER);
 	TEST_REQUIRE(TICKS_PER_SECOND == 144, "TICKS_PER_SECOND is {0}", TICKS_PER_SECOND);
 	TEST_REQUIRE(TICKS_PER_MINUTE == TICKS_PER_SECOND * 60, "TICKS_PER_MINUTE is {0}",
 	             TICKS_PER_MINUTE);
 	TEST_REQUIRE(TICKS_PER_HOUR == TICKS_PER_MINUTE * 60, "TICKS_PER_HOUR is {0}", TICKS_PER_HOUR);
 	TEST_REQUIRE(TICKS_PER_DAY == TICKS_PER_HOUR * 24, "TICKS_PER_DAY is {0}", TICKS_PER_DAY);
+	TEST_REQUIRE(TICKS_PER_SECOND == vanillaTicks(VANILLA_TICKS_PER_SECOND),
+	             "engine second does not scale from vanilla ticks");
+	TEST_REQUIRE(TICKS_PER_MINUTE == vanillaTicks(VANILLA_TICKS_PER_MINUTE),
+	             "engine minute does not scale from vanilla ticks");
+	TEST_REQUIRE(TICKS_PER_HOUR == vanillaTicks(VANILLA_TICKS_PER_HOUR),
+	             "engine hour does not scale from vanilla ticks");
+	TEST_REQUIRE(TICKS_PER_DAY == vanillaTicks(VANILLA_TICKS_PER_DAY),
+	             "engine day does not scale from vanilla ticks");
 	return true;
 }
 
@@ -84,13 +102,19 @@ static bool test_get_ticks_between_as_implemented()
 	return true;
 }
 
-static bool test_hardcoded_fuel_ticks_match_tps()
+static bool test_fuel_ticks_scale_with_multiplier()
 {
-	TEST_REQUIRE(FUEL_TICKS_PER_SECOND == 144, "FUEL_TICKS_PER_SECOND is {0}",
-	             FUEL_TICKS_PER_SECOND);
 	TEST_REQUIRE(FUEL_TICKS_PER_SECOND == static_cast<int>(TICKS_PER_SECOND),
 	             "FUEL_TICKS_PER_SECOND {0} != TICKS_PER_SECOND {1}", FUEL_TICKS_PER_SECOND,
 	             TICKS_PER_SECOND);
+	TEST_REQUIRE(FUEL_TICKS_PER_UNIT == 40000,
+	             "multiplier-4 strict fuel threshold changed from 40000 to {0}",
+	             FUEL_TICKS_PER_UNIT);
+	TEST_REQUIRE(
+	    FUEL_TICKS_PER_UNIT * static_cast<int>(FUEL_TICKS_PER_UNIT_CALIBRATED_MULTIPLIER) ==
+	        FUEL_TICKS_PER_UNIT_AT_CALIBRATED_MULTIPLIER * static_cast<int>(TICKS_MULTIPLIER),
+	    "FUEL_TICKS_PER_UNIT {0} did not scale with multiplier {1}", FUEL_TICKS_PER_UNIT,
+	    TICKS_MULTIPLIER);
 	return true;
 }
 
@@ -105,7 +129,8 @@ static bool test_hand_weapon_fire_priority_base()
 
 static bool test_invasion_delay_ticks()
 {
-	// FUN_0006d384 / FUN_000ad148: 24h + [0..2820] min + [0..3600] sec → 24h..72h.
+	// FUN_0006d384 / FUN_000ad148 binds a 1:60:86400 coefficient ratio. Under OpenApoc's
+	// selected observational 36-TPS canon: 24h + [0..2820] min + [0..3600] sec → 24h..72h.
 	TEST_REQUIRE(INVASION_DELAY_MINUTE_MAX == 2820, "minute max is {0}", INVASION_DELAY_MINUTE_MAX);
 	TEST_REQUIRE(INVASION_DELAY_SECOND_MAX == 3600, "second max is {0}", INVASION_DELAY_SECOND_MAX);
 	TEST_REQUIRE(vanillaInvasionDelayTicks(0, 0) == TICKS_PER_DAY,
@@ -150,7 +175,7 @@ int main(int argc, char **argv)
 	    {"midday", test_midday},
 	    {"add_ticks_flags", test_add_ticks_flags},
 	    {"get_ticks_between", test_get_ticks_between_as_implemented},
-	    {"hardcoded_fuel_ticks_match_tps", test_hardcoded_fuel_ticks_match_tps},
+	    {"fuel_ticks_scale_with_multiplier", test_fuel_ticks_scale_with_multiplier},
 	    {"hand_weapon_fire_priority_base", test_hand_weapon_fire_priority_base},
 	    {"vanilla_city_speed1_ticks", test_vanilla_city_speed1_ticks},
 	    {"invasion_delay_ticks", test_invasion_delay_ticks},

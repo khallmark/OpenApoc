@@ -80,8 +80,8 @@ static const int DISRUPTOR_SHIELD_CAPACITY_BONUS = 100;
 // full recharge (bound: battle load only, see Battle::initBattle - not periodic).
 static const int DISRUPTOR_SHIELD_MAX_CHARGE = 100;
 // Same finding, "Follow-up 1(a)": FUN_0006511C/FUN_00066474 regenerate the shield by +1 every
-// 36 vanilla ticks, i.e. once per real-time second - bound to the same 36/sec vanilla clock the
-// fire scheduler (F1) uses.
+// 36 vanilla ticks. Under OpenApoc's observational 36-TPS compatibility canon this is one
+// game-second; the recovered cadence gate binds the 36-tick interval, not an absolute second.
 static const unsigned TICKS_PER_DISRUPTOR_SHIELD_REGEN = TICKS_PER_SECOND;
 
 class TileObjectBattleUnit;

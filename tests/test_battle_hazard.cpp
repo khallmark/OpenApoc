@@ -26,8 +26,6 @@ static bool test_made_up_and_tick_derived_constants()
 	             TICKS_PER_ENZYME_EFFECT);
 	TEST_REQUIRE(TICKS_PER_FIRE_EFFECT == TICKS_PER_SECOND, "TICKS_PER_FIRE_EFFECT {0}",
 	             TICKS_PER_FIRE_EFFECT);
-	TEST_REQUIRE(FUEL_TICKS_PER_SECOND == 144, "FUEL_TICKS_PER_SECOND is {0}, should track TPS",
-	             FUEL_TICKS_PER_SECOND);
 	TEST_REQUIRE(FUEL_TICKS_PER_SECOND == static_cast<int>(TICKS_PER_SECOND),
 	             "FUEL_TICKS_PER_SECOND {0} drifted from TICKS_PER_SECOND {1}",
 	             FUEL_TICKS_PER_SECOND, TICKS_PER_SECOND);

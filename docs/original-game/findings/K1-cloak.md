@@ -20,12 +20,14 @@
 > original-game basis — say so in the parity guide rather than presenting it as recovered.
 >
 > This also directly answers the parity guide's framing of the blocker ("cloak tick thresholds
-> unbound"): `FUN_00066474` (candidate #17 below) **is** the per-unit tick dispatcher — driven at
-> 36 ticks/second from the same main-loop caller (`FUN_00011620`) that drives Mind Shield's and
-> Disruptor Shield's cadences, and the exact function where Mind Shield's `+30/cap 200` regen
-> lives. It has **no case for type `0x0a` at either hand-slot block**. There is no tick site in
-> the original that reads or compares a cloak-engage threshold, because the one function that
-> would host it doesn't have one.
+> unbound"): `FUN_00066474` (candidate #17 below) **is** the per-unit tick dispatcher — reached on
+> the 36-vanilla-tick cadence from the same main-loop caller (`FUN_00011620`) that drives Mind
+> Shield's and Disruptor Shield's cadences, and the exact function where Mind Shield's
+> `+30/cap 200` regen lives. Under the repository's observational 36-TPS compatibility canon that
+> interval is one game-second; the binary site itself binds the interval, not absolute cadence. It
+> has **no case for type `0x0a` at either hand-slot block**. There is no tick site in the original
+> that reads or compares a cloak-engage threshold, because the one function that would host it
+> doesn't have one.
 
 Agent: this session (K1 cloak lock-in). Lab: `OpenApoc-og-research`, project
 `ghidra_projects/OpenApocOG_TACP.rep`, program `TACP.EXE` (non-4), loader

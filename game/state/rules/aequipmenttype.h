@@ -149,9 +149,11 @@ class AEquipmentType : public StateObject<AEquipmentType>
 	 * Ingame Toxigun has 4.50r/s, in file it has 8, 36/8 = 4.5
 	 * Ingame Minigun has 3.00r/s, in file it has 12, 36/12 = 3
 	 *
-	 * Fire rate expects game ticks to be 36 per second
-	 * since we have 144 ticks per second, when using this multiply it by 4 to get actual amount
-	 * of ticks required to fire
+	 * The examples above are an observed catalog relationship: the displayed UFOPaedia rates
+	 * match 36/FEDL for those entries. This is not a recovered binary calculation and does not
+	 * bind the simulation loop's absolute wall-clock cadence. OpenApoc selects the observational
+	 * 36-TPS compatibility base and uses 144 internal ticks per game-second, so multiply FEDL by 4
+	 * to get the ticks required to fire.
 	 *
 	 * Since playable alpha 0.1 this is already in OpenApoc ticks
 	 */

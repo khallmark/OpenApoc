@@ -167,14 +167,16 @@ gated `×0xc` multiplier formula with Mind Shield (case `5`) and Cloaking Field 
 i.e. the AI treats these three as one "defensive shield" priority class when deciding what to
 equip.
 
-#### Follow-up 1(a) — regen cadence: BOUND, once per game-second
+#### Follow-up 1(a) — regen cadence: BOUND, every 36 vanilla ticks
 
 `FUN_0006511C` is only ever reached through `FUN_00066474`, which is driven from two callers, both
-gating on the identical `tick_counter % 0x24 == 0` test (`0x24` = 36, and the counter is built from
-the same minutes/seconds/subsecond fields already established elsewhere in this project as the
-36-per-second vanilla clock — see `VANILLA_TICKS_PER_SECOND = 36` in `game/state/gametime.h`):
+gating on the identical `tick_counter % 0x24 == 0` test (`0x24` = 36). This directly binds a
+36-vanilla-tick interval, not its absolute wall-clock duration. The counter's
+minutes/seconds/subsecond fields and the repository/community observation corroborate treating that
+interval as one game-second under OpenApoc's selected 36-TPS compatibility canon, but no recovered
+external-clock binding establishes that cadence:
 
-- **`FUN_000655D0`** (bound-file `0xC0074`), the real-time per-frame unit updater — called from
+- **`FUN_000655D0`** (bound-file `0xC0074`), the real-time-mode per-frame unit updater — called from
   `FUN_00011620` (page-file `0x161F`), the single caller, i.e. the main loop's per-frame tick. It
   additionally reads a `DAT_000e6c24` game-speed multiplier (values 1–4) to catch up 1–4 elapsed
   vanilla ticks per frame, staggering which of the 60 unit slots gets the `%36` hit on any given
@@ -187,16 +189,15 @@ the same minutes/seconds/subsecond fields already established elsewhere in this 
   parsing, `.ini` handling, then game setup) inside
   `do { ... FUN_000b8c50(); ... } while (DAT_0027a0ea != DAT_0027a0f4);` — i.e. **once per
   turn/side transition**, not once per frame. Inside its 400-tick loop the same `%0x24==0` test
-  fires `FUN_00066474` roughly `400/36 ≈ 11` times per unit — the "seconds' worth of real-time
-  simulation to catch up" for whatever wall-clock time a side's turn is deemed to have taken.
+  fires `FUN_00066474` roughly `400/36 ≈ 11` times per unit — roughly 11 complete regen intervals
+  caught up for whatever simulated duration a side's turn is deemed to have taken.
 
-**Bound answer:** the Disruptor Shield's item charge regenerates **+1 every 36 vanilla ticks, i.e.
-once per real-time second** — `TICKS_PER_DISRUPTOR_SHIELD_REGEN = TICKS_PER_SECOND` in this
-project's own tick units, directly comparable to the fire scheduler's documented cadence (both are
-driven off the same 36-per-second vanilla clock; fire ties its iteration to 1 vanilla tick, this
-ties its regen to 36 vanilla ticks). This is not a per-turn or per-frame constant — the same
-regen fires continuously during real-time play (`FUN_000655D0`, scaled 1–4× by game speed) and is
-caught up in one burst per turn transition (`FUN_000B8C50`).
+**Bound answer:** the Disruptor Shield's item charge regenerates **+1 every 36 vanilla ticks**. Under
+the repository's selected observational 36-TPS canon, that corresponds to one game-second, so
+`TICKS_PER_DISRUPTOR_SHIELD_REGEN = TICKS_PER_SECOND` in OpenApoc's own tick units. The binary
+evidence binds the 36-tick interval, not an absolute second. This is not a per-turn or per-frame
+constant — the same regen fires continuously during real-time-mode play (`FUN_000655D0`, scaled
+1–4× by game speed) and is caught up in one burst per turn transition (`FUN_000B8C50`).
 
 #### Follow-up 1(a)-continued — periodic full recharge: BOUND, battle load only, not periodic
 
