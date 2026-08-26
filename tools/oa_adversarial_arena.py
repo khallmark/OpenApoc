@@ -36,22 +36,27 @@ from pathlib import Path
 
 from oa_adversarial import Arena, Evaluator, Policy, new_arena, train
 from oa_play import (
-    AdvanceOutcome, TICKS_PER_DAY, Driver, GameProcess, Harness, advance, assign_research,
+    AdvanceOutcome, BattleResult, TICKS_PER_DAY, Driver, GameProcess, Harness, advance,
+    assign_research,
+    battle_outcome,
     buy_interceptor,
     _flying_crewed, base_upkeep, crew_transport, hire_staff, new_game,
     raid_infiltrated_building, recover_crash_sites, return_to_city, sell_ground_fleet,
-    sell_surplus_loot, win_battle,
+    require_positive, sell_surplus_loot, win_battle,
 )
 
 
-def utility(outcome: str, squad_start, squad_end) -> float:
+def utility(outcome, squad_start, squad_end) -> float:
     """Score a battle for the X-COM side, in [0,1].
 
     Winning dominates, but survivors matter on their own: a win that costs the whole squad is not
     a result worth breeding from, and in a campaign it is exactly how a run ends up unable to fly
     the next mission. 70/30 reflects that without letting a cautious policy farm draws.
     """
-    won = 1.0 if outcome == "resolved" else 0.0
+    normalized = battle_outcome(outcome)
+    if not normalized.decided:
+        raise ValueError(f"cannot score undecided battle: {normalized.value}")
+    won = 1.0 if normalized.won else 0.0
     if squad_start and squad_end is not None and squad_start > 0:
         frac = max(0.0, min(1.0, squad_end / squad_start))
     else:
@@ -247,11 +252,10 @@ class CampaignEvaluator(Evaluator):
                             policy=self._xcom_policy(xcom))
                     except Exception as exc:
                         raid = f"error:{type(exc).__name__}: {exc}"
-                    rec["raids"].append(raid)
-                    if raid not in ("nothing-reported", "bad-coords", "already-clear",
-                                    "no-agents-selectable", "refused") \
-                            and not raid.startswith(("not-in-city", "no-building-screen",
-                                                     "no-battle", "error:")):
+                    rec["raids"].append(
+                        raid.as_dict() if isinstance(raid, BattleResult) else raid
+                    )
+                    if isinstance(raid, BattleResult):
                         outcome = raid
                         rec["reason"] = "raid"
                         break
@@ -301,15 +305,21 @@ class CampaignEvaluator(Evaluator):
             except Exception:
                 pass
 
-            if outcome is None:
+            if outcome is None or not outcome.decided:
+                if outcome is not None:
+                    rec["outcome"] = outcome.outcome.value
+                    rec["battle"] = outcome.as_dict()
+                    rec["reason"] = (
+                        rec["reason"] or f"battle did not decide: {outcome.outcome.value}"
+                    )
                 rec["reason"] = rec["reason"] or "budget expired with no battle"
                 print(f"    [attempt {self.battles}] NO CONTEST after "
                       f"{rec['days_advanced']:.1f} game-days / {time.time()-t_start:.0f}s "
                       f"({rec['reason']}; raids={rec['raids'][-3:]})", flush=True)
             else:
-                stats = dict(d.last_battle)
+                stats = outcome.as_dict()
                 rec["battle"] = stats
-                rec["outcome"] = outcome
+                rec["outcome"] = outcome.outcome.value
                 score = utility(outcome, stats.get("started_with"), stats.get("survivors"))
                 rec["score"] = round(score, 3)
                 print(f"    [battle {self.battles}] {xcom.genes.get('behaviour')}/"
@@ -379,6 +389,14 @@ def main() -> int:
     ap.add_argument("--quiet", action="store_true",
                     help="silence the driver's per-leg narration (default: narrate)")
     args = ap.parse_args()
+    try:
+        require_positive(args.generations, "--generations")
+        require_positive(args.battles_per_gen, "--battles-per-gen")
+        require_positive(args.pop, "--pop")
+        require_positive(args.budget, "--budget")
+        require_positive(args.leg, "--leg")
+    except ValueError as exc:
+        ap.error(str(exc))
 
     repo = Path(args.repo)
     out = Path(args.out) if args.out else repo / "build/adversarial"

@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from oa_play import (
+    BattleResult,
     Driver,
     GameProcess,
     Harness,
@@ -40,6 +41,8 @@ from oa_play import (
     classify_connection_failure,
     create_run_directory,
     new_game,
+    reconcile_validation_process_exit,
+    require_positive,
     require_validation_seed,
     run_provenance,
     win_battle,
@@ -72,14 +75,28 @@ class SkirmishAttempt:
     outcome: str | None
     stage: str
     reason: str = ""
+    decided: bool = False
+    started_with: int = 0
+    survivors: int | None = None
+    mission_type: str = "unknown"
+    seconds: float = 0.0
 
     @classmethod
     def setup_failure(cls, stage: str, reason: str) -> "SkirmishAttempt":
         return cls("setup_failure", None, stage, reason)
 
     @classmethod
-    def gameplay(cls, outcome: str, stage: str) -> "SkirmishAttempt":
-        return cls("gameplay", outcome, stage)
+    def gameplay(cls, result: BattleResult, stage: str) -> "SkirmishAttempt":
+        return cls(
+            "gameplay",
+            result.outcome.value,
+            stage,
+            decided=result.decided,
+            started_with=result.started_with,
+            survivors=result.survivors,
+            mission_type=result.mission_type,
+            seconds=result.seconds,
+        )
 
     def as_dict(self) -> dict:
         return {
@@ -87,6 +104,11 @@ class SkirmishAttempt:
             "outcome": self.outcome,
             "stage": self.stage,
             "reason": self.reason,
+            "decided": self.decided,
+            "started_with": self.started_with,
+            "survivors": self.survivors,
+            "mission_type": self.mission_type,
+            "seconds": self.seconds,
         }
 
 
@@ -269,8 +291,8 @@ def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
             reason = "battle_stage_not_reached"
         return setup_failure(d, reason)
 
-    outcome = win_battle(d, budget_s=budget_s, policy=policy)
-    return SkirmishAttempt.gameplay(outcome, final_stage)
+    result = win_battle(d, budget_s=budget_s, policy=policy)
+    return SkirmishAttempt.gameplay(result, final_stage)
 
 
 def battle_snapshot(d: Driver) -> dict | None:
@@ -344,6 +366,10 @@ def main() -> int:
     args = ap.parse_args()
     if args.rounds <= 0:
         ap.error("--rounds must be positive")
+    try:
+        require_positive(args.budget, "--budget")
+    except ValueError as exc:
+        ap.error(str(exc))
 
     try:
         seed = require_validation_seed(args.seed, args.validation)
@@ -408,7 +434,7 @@ def main() -> int:
                 outcome = "setup_failed"
                 detail = f"{result['stage']}: {result['reason']}"
                 break
-            if result["outcome"] not in ("resolved", "lost"):
+            if not result.get("decided", False):
                 outcome = "gameplay_incomplete"
                 detail = str(result["outcome"])
                 break
@@ -427,10 +453,12 @@ def main() -> int:
             exit_code = 0
 
         gameplay = [r for r in results if r["result_kind"] == "gameplay"]
+        decided = [r for r in gameplay if r.get("decided", False)]
         setup_failures = [r for r in results if r["result_kind"] == "setup_failure"]
-        wins = sum(1 for r in gameplay if r["outcome"] == "resolved")
-        losses = sum(1 for r in gameplay if r["outcome"] == "lost")
-        d.say(f"=== summary: {len(gameplay)} battles ({wins} won, {losses} lost), "
+        wins = sum(1 for r in decided if r["outcome"] == "resolved")
+        losses = sum(1 for r in decided if r["outcome"] == "lost")
+        d.say(f"=== summary: {len(decided)} decided battles ({wins} won, {losses} lost), "
+              f"{len(gameplay) - len(decided)} incomplete, "
               f"{len(setup_failures)} setup failures, {len(results)} attempts ===")
     except TimeoutError as exc:
         outcome, detail = "timeout", str(exc)
@@ -449,7 +477,10 @@ def main() -> int:
                 stage = d.status().stage
             except Exception:
                 pass
-        game.stop()
+        process_exit = game.stop()
+        outcome, detail, exit_code = reconcile_validation_process_exit(
+            args.validation, outcome, detail, exit_code, process_exit
+        )
         if receipt and not receipt.finished:
             receipt.finish(
                 outcome,
@@ -459,8 +490,13 @@ def main() -> int:
                 attempts=len(results),
                 gameplay=sum(1 for result in results
                              if result["result_kind"] == "gameplay"),
+                decided_battles=sum(1 for result in results if result.get("decided", False)),
+                incomplete_battles=sum(1 for result in results
+                                       if result["result_kind"] == "gameplay"
+                                       and not result.get("decided", False)),
                 setup_failures=sum(1 for result in results
                                    if result["result_kind"] == "setup_failure"),
+                engine_exit=process_exit.as_dict(),
             )
     if exit_code:
         print(f"oa_skirmish: {outcome}: {detail or 'run did not complete'}", file=sys.stderr)

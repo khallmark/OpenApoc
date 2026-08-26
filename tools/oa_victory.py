@@ -27,6 +27,8 @@ import traceback
 from pathlib import Path
 
 from oa_play import (
+    BattleOutcome,
+    BattleResult,
     Driver,
     GameProcess,
     Harness,
@@ -64,6 +66,8 @@ from oa_play import (
     classify_connection_failure,
     classify_terminal_status,
     create_run_directory,
+    reconcile_validation_process_exit,
+    require_positive,
     require_validation_seed,
     run_provenance,
 )
@@ -155,6 +159,7 @@ class Victory:
         self.best_crashed = 0
         self.last_outcome = "not_started"
         self.last_reason = ""
+        self.last_battle_result: BattleResult | None = None
 
     # -- durability -------------------------------------------------------
     def _load(self) -> dict:
@@ -346,7 +351,7 @@ class Victory:
         return False
 
     # -- play -------------------------------------------------------------
-    def fight(self, stage: str) -> str:
+    def fight(self, stage: str) -> BattleResult:
         self.progress["battles"] += 1
         n = self.progress["battles"]
         self.say(f"=== tactical mission #{n} ({stage}) ===")
@@ -354,29 +359,28 @@ class Victory:
             self.d.h.ok(f"screenshot {self.out}/shots/battle{n:03d}.png")
         except (HarnessError, OSError):
             pass
-        try:
-            # Prove the harness can actually do everything, once, against a real battle. It
-            # perturbs the one mission it runs in -- it changes stance, throws, probes -- which is
-            # the cost of testing a UI for real rather than asserting it works.
-            if os.environ.get("OA_VERIFY_CAPS") == "1" and not self.caps_checked:
-                self.caps_checked = True
-                try:
-                    self.progress["capabilities"] = verify_battle_capabilities(self.d)
-                    self.flush()
-                except (HarnessError, OSError) as exc:
-                    self.say(f"capability check failed: {exc}")
-            outcome = win_battle(self.d, budget_s=900)
-        except (HarnessError, OSError) as exc:
-            outcome = f"lost connection: {exc}"
-        if outcome == "resolved":
+        # Prove the harness can actually do everything, once, against a real battle. It perturbs
+        # the one mission it runs in -- it changes stance, throws, probes -- which is the cost of
+        # testing a UI for real rather than asserting it works.
+        if os.environ.get("OA_VERIFY_CAPS") == "1" and not self.caps_checked:
+            self.caps_checked = True
+            try:
+                self.progress["capabilities"] = verify_battle_capabilities(self.d)
+                self.flush()
+            except (HarnessError, OSError) as exc:
+                self.say(f"capability check failed: {exc}")
+        result = win_battle(self.d, budget_s=900)
+        self.last_battle_result = result
+        if result.won:
             self.progress["wins"] += 1
-        self.say(f"=== mission #{n} outcome: {outcome} (wins {self.progress['wins']}) ===")
+        self.say(f"=== mission #{n} outcome: {result.outcome.value} "
+                 f"(wins {self.progress['wins']}) ===")
         if self.receipt:
-            self.receipt.event("battle", number=n, stage=stage, outcome=outcome)
+            self.receipt.event("battle", number=n, stage=stage, **result.as_dict())
         self.flush()
         if self.alive():
             self.save(f"after mission {n}")
-        return outcome
+        return result
 
     def armoury_size(self) -> int:
         """How many of each loadout item to stock: one per soldier, plus spares.
@@ -392,6 +396,7 @@ class Victory:
         return max(12, fit + 6)
 
     def city_turn(self) -> None:
+        self.last_battle_result = None
         # Watch the actual game-over condition. fundingTerminated latches for good the first week
         # lifetime score drops below -2400, so this is a countdown that has to be tracked, not a
         # number to notice afterwards.
@@ -428,9 +433,11 @@ class Victory:
             alien = self.d.h.gs("alien_buildings")
             if alien.get("current_city") == "CITYMAP_ALIEN":
                 if int(alien.get("raidable", "0") or 0) > 0:
-                    outcome = raid_alien_building(self.d)
-                    self.say(f"=== ALIEN BUILDING RAID: {outcome} ===")
-                    if outcome == "resolved":
+                    raid_result = raid_alien_building(self.d)
+                    if isinstance(raid_result, BattleResult):
+                        self.last_battle_result = raid_result
+                    self.say(f"=== ALIEN BUILDING RAID: {raid_result} ===")
+                    if isinstance(raid_result, BattleResult) and raid_result.won:
                         self.progress["alien_buildings_taken"] = (
                             self.progress.get("alien_buildings_taken", 0) + 1)
                         self.record("alien_building_raided")
@@ -505,9 +512,11 @@ class Victory:
         due = INFIL_COOLDOWN_S if not self.d.alerted_buildings else 0.0
         if armed_now >= 3 and time.time() - self.last_infil_raid >= due:
             self.last_infil_raid = time.time()
-            outcome = raid_infiltrated_building(self.d)
-            if outcome != "nothing-reported":
-                self.say(f"infiltration raid: {outcome}")
+            raid_result = raid_infiltrated_building(self.d)
+            if isinstance(raid_result, BattleResult):
+                self.last_battle_result = raid_result
+            if raid_result != "nothing-reported":
+                self.say(f"infiltration raid: {raid_result}")
                 self.progress["infil_raids"] = self.progress.get("infil_raids", 0) + 1
                 self.flush()
 
@@ -942,11 +951,15 @@ class Victory:
                         return self.finish("process_error", "could not start next campaign", 1)
                     continue
                 if st.stage in BATTLE_STAGES:
-                    battle_outcome = self.fight(st.stage)
-                    if self.validation and battle_outcome == "timeout":
-                        return self.finish("timeout", "tactical mission timed out", 1)
-                    if self.validation and battle_outcome.startswith("lost connection"):
-                        return self.finish("transport_error", battle_outcome, 1)
+                    battle_result = self.fight(st.stage)
+                    if self.validation and not battle_result.decided:
+                        outcome = ("timeout" if battle_result.outcome is BattleOutcome.TIMEOUT
+                                   else "gameplay_incomplete")
+                        return self.finish(
+                            outcome,
+                            f"tactical mission did not decide: {battle_result.outcome.value}",
+                            1,
+                        )
                     continue
                 if st.stage == "AlertScreen":
                     # Record the building BEFORE doing anything else with the alert. This branch
@@ -1013,6 +1026,16 @@ class Victory:
                 if st.stage == "CityView":
                     self.stuck_since = 0.0
                     self.city_turn()
+                    if self.validation and self.last_battle_result \
+                            and not self.last_battle_result.decided:
+                        result = self.last_battle_result
+                        outcome = ("timeout" if result.outcome is BattleOutcome.TIMEOUT
+                                   else "gameplay_incomplete")
+                        return self.finish(
+                            outcome,
+                            f"city raid did not decide: {result.outcome.value}",
+                            1,
+                        )
                 elif not self.d.dismiss_modal(st):
                     # dismiss_modal deliberately does nothing on "working" stages -- the
                     # UFOpaedia among them -- because a test that is exercising those screens
@@ -1083,6 +1106,7 @@ def main() -> int:
     args = ap.parse_args()
     repo = Path(args.repo)
     try:
+        require_positive(args.hours, "--hours")
         seed = require_validation_seed(args.seed, args.validation)
     except ValueError as exc:
         ap.error(str(exc))
@@ -1128,13 +1152,20 @@ def main() -> int:
             status = v.d.status() if v.d else None
         except Exception:
             pass
+        process_exit = None
         try:
             if v.alive():
                 v.save("shutdown")
             if v.game:
-                v.game.stop()
-        except Exception:
-            pass
+                process_exit = v.game.stop()
+        except Exception as exc:
+            v.last_outcome, v.last_reason, rc = (
+                "process_error", f"engine shutdown raised {type(exc).__name__}: {exc}", 1
+            )
+        if process_exit is not None:
+            v.last_outcome, v.last_reason, rc = reconcile_validation_process_exit(
+                args.validation, v.last_outcome, v.last_reason, rc, process_exit
+            )
         if receipt and not receipt.finished:
             receipt.finish(
                 v.last_outcome,
@@ -1143,6 +1174,7 @@ def main() -> int:
                 stage=status.stage if status else "unavailable",
                 detail=status.detail if status else "-",
                 progress=v.progress,
+                engine_exit=process_exit.as_dict() if process_exit else None,
             )
     return rc
 

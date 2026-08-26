@@ -187,11 +187,11 @@ def classify_terminal_status(status: Status) -> str | None:
     evidence; an unknown video (or a return to the menu after play began) is an unexpected
     terminal, never a victory.
     """
-    detail = (status.detail or "-").lower()
+    detail = (status.detail or "-").replace("\\", "/").rsplit("/", 1)[-1].lower()
     if status.stage == "VideoScreen":
-        if "wingame" in detail:
+        if detail == "wingame2.smk":
             return "victory"
-        if "lose" in detail:
+        if detail == "lose1.smk":
             return "defeat"
         return "unexpected_terminal"
     if status.stage in ("MainMenu", "CreditsMenu"):
@@ -208,6 +208,93 @@ class AdvanceOutcome(str, Enum):
     PARKED = "parked"
     TIMEOUT = "timeout"
     TERMINAL = "terminal"
+
+
+class BattleOutcome(str, Enum):
+    """Terminal taxonomy for a tactical-battle attempt.
+
+    Only RESOLVED and LOST are game decisions. The remaining values prove that a battle attempt
+    returned without a decision and therefore must never enter a win/loss denominator.
+    """
+
+    RESOLVED = "resolved"
+    LOST = "lost"
+    RETURNED = "returned"
+    WRONG_MODE = "wrong-mode"
+    TIMEOUT = "timeout"
+
+    @property
+    def decided(self) -> bool:
+        return self in (BattleOutcome.RESOLVED, BattleOutcome.LOST)
+
+    @property
+    def won(self) -> bool:
+        return self is BattleOutcome.RESOLVED
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True)
+class BattleResult:
+    """The complete, typed result of one entered tactical battle."""
+
+    outcome: BattleOutcome
+    started_with: int = 0
+    survivors: int | None = None
+    mission_type: str = "unknown"
+    seconds: float = 0.0
+    policy: str = ""
+
+    @property
+    def decided(self) -> bool:
+        return self.outcome.decided
+
+    @property
+    def won(self) -> bool:
+        return self.outcome.won
+
+    def as_dict(self) -> dict:
+        return {
+            "outcome": self.outcome.value,
+            "decided": self.decided,
+            "won": self.won,
+            "started_with": self.started_with,
+            "survivors": self.survivors,
+            "mission_type": self.mission_type,
+            "seconds": self.seconds,
+            "policy": self.policy,
+        }
+
+    def __str__(self) -> str:
+        return self.outcome.value
+
+
+def battle_outcome(value: BattleResult | BattleOutcome | Mapping | str) -> BattleOutcome:
+    """Normalize a typed or serialized battle result, rejecting unknown outcomes."""
+    if isinstance(value, BattleResult):
+        return value.outcome
+    if isinstance(value, BattleOutcome):
+        return value
+    if isinstance(value, Mapping):
+        value = value.get("outcome", "")
+    return BattleOutcome(str(value))
+
+
+def battle_is_decided(value: BattleResult | BattleOutcome | Mapping | str) -> bool:
+    """Return whether an entered battle reached a real win/loss decision."""
+    try:
+        return battle_outcome(value).decided
+    except (TypeError, ValueError):
+        return False
+
+
+def require_decided_battle(value: BattleResult | BattleOutcome | Mapping | str) -> BattleOutcome:
+    """Validate a battle decision before it can be credited or scored."""
+    outcome = battle_outcome(value)
+    if not outcome.decided:
+        raise ValueError(f"battle did not reach a decision: {outcome.value}")
+    return outcome
 
 
 ADVANCE_TRANSITION_STAGES = frozenset(
@@ -256,6 +343,13 @@ def require_validation_seed(seed: int, validation: bool) -> int:
     value = int(seed)
     if validation and value <= 0:
         raise ValueError("validation requires an explicit nonzero --seed")
+    return value
+
+
+def require_positive(value: float | int, name: str) -> float | int:
+    """Reject empty workloads and zero/negative wall-clock budgets before launch."""
+    if value <= 0:
+        raise ValueError(f"{name} must be positive")
     return value
 
 
@@ -650,6 +744,52 @@ def reap_stale_game(port: int) -> int:
     return killed
 
 
+@dataclass(frozen=True)
+class ProcessExitResult:
+    """Observable process state before and after the runner asked the engine to stop."""
+
+    started: bool
+    pre_stop_returncode: int | None
+    quit_requested: bool
+    forced: bool
+    returncode: int | None
+    status: str
+
+    @property
+    def already_exited(self) -> bool:
+        return self.started and self.pre_stop_returncode is not None
+
+    @property
+    def clean_shutdown(self) -> bool:
+        return (self.started and not self.already_exited and self.quit_requested
+                and not self.forced and self.returncode == 0)
+
+    def as_dict(self) -> dict:
+        return {
+            "started": self.started,
+            "pre_stop_returncode": self.pre_stop_returncode,
+            "already_exited": self.already_exited,
+            "quit_requested": self.quit_requested,
+            "forced": self.forced,
+            "returncode": self.returncode,
+            "status": self.status,
+            "clean_shutdown": self.clean_shutdown,
+        }
+
+
+def reconcile_validation_process_exit(
+        validation: bool, outcome: str, reason: str, exit_code: int,
+        process_exit: ProcessExitResult) -> tuple[str, str, int]:
+    """Prevent a nominally successful validation receipt from hiding an engine failure."""
+    if validation and exit_code == 0 and not process_exit.clean_shutdown:
+        return (
+            "process_error",
+            f"engine did not shut down cleanly: {process_exit.status}",
+            1,
+        )
+    return outcome, reason, exit_code
+
+
 class GameProcess:
     """Owns a game instance so a run needs no human to start or stop anything."""
 
@@ -789,28 +929,49 @@ class GameProcess:
             return f"killed by signal {-rc} ({name})"
         return f"exited rc={rc}"
 
-    def stop(self) -> None:
+    def stop(self) -> ProcessExitResult:
         if not self.proc:
-            return
-        try:
-            Harness(port=self.port).send("quit")
-        except OSError:
-            pass
-        try:
-            self.proc.wait(timeout=20)
-        except Exception:
-            # A wedged instance ignores the harness QUIT and keeps its port, so escalate rather
-            # than leave something behind for the next launch to collide with.
-            self.proc.kill()
+            return ProcessExitResult(False, None, False, False, None, "never started")
+        pre_stop_returncode = self.proc.poll()
+        quit_requested = False
+        forced = False
+        if pre_stop_returncode is None:
             try:
-                self.proc.wait(timeout=10)
-            except Exception:
+                Harness(port=self.port).send("quit")
+                quit_requested = True
+            except OSError:
                 pass
-            reap_stale_game(self.port)
+            try:
+                self.proc.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                # A wedged instance ignores the harness QUIT and keeps its port, so escalate rather
+                # than leave something behind for the next launch to collide with.
+                forced = True
+                self.proc.kill()
+                try:
+                    self.proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    pass
+                reap_stale_game(self.port)
         try:
             self.logf.close()
         except Exception:
             pass
+        returncode = self.proc.poll()
+        if returncode is None:
+            status = "still running after stop"
+        elif returncode < 0:
+            status = f"killed by signal {-returncode}"
+        else:
+            status = f"exited rc={returncode}"
+        return ProcessExitResult(
+            True,
+            pre_stop_returncode,
+            quit_requested,
+            forced,
+            returncode,
+            status,
+        )
 
     def warnings(self) -> list[str]:
         if not self.log_path.exists():
@@ -851,7 +1012,7 @@ class Driver:
         # player, who watches the UFOs and goes where the game says they landed.
         self.alerted_buildings: list[str] = []
         # Stats from the most recent win_battle(), which stamps them on every return path.
-        self.last_battle: dict = {}
+        self.last_battle: BattleResult | dict = {}
         self.act_counts: dict[str, int] = {}
         self.act_reset_at = time.time()
 
@@ -1250,6 +1411,8 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> AdvanceRes
     projectiles or attack missions on the current map -- so we watch that gate explicitly and
     fall back to Speed4 rather than sitting at Speed1 without knowing why.
     """
+    require_positive(game_days, "game_days")
+    require_positive(budget_s, "budget_s")
     wall_started = time.time()
     initial_status = d.status()
     terminal = classify_terminal_status(initial_status)
@@ -1739,7 +1902,7 @@ def current_project(d: Driver) -> str:
 
 
 def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
-                              policy: dict | None = None) -> str:
+                              policy: dict | None = None) -> str | BattleResult:
     """Clear aliens out of a human building. Returns the battle outcome, or why it could not run.
 
     This is the part of the game the driver was not playing at all, and it is the one that decides
@@ -1903,7 +2066,7 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
     return outcome
 
 
-def raid_alien_building(d: Driver) -> str:
+def raid_alien_building(d: Driver) -> str | BattleResult:
     """Raid the next alien building. Returns the battle outcome, or why it could not start.
 
     This is the win condition: Battle::exitBattle fires AliensDefeated only for the alien building
@@ -3188,7 +3351,8 @@ def on_screen(d: Driver, which: str) -> list:
 
 
 
-def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) -> str:
+def win_battle(d: Driver, budget_s: float = 1800.0,
+               policy: dict | None = None) -> BattleResult:
     """Fight a tactical mission, and leave the numbers behind on `d.last_battle`.
 
     _fight_battle has six return points. Rather than thread bookkeeping through all of them, this
@@ -3197,6 +3361,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) 
     afterwards -- as the adversarial arena was -- gets an empty dict and scores a real battle as
     though it had no squad.
     """
+    require_positive(budget_s, "budget_s")
     t0 = time.time()
     d.last_battle = {"outcome": "running", "seconds": 0.0, "started_with": 0,
                      "survivors": None, "mission_type": "unknown",
@@ -3207,11 +3372,21 @@ def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) 
         d.last_battle.update(outcome=f"error:{type(exc).__name__}",
                              seconds=round(time.time() - t0, 1))
         raise
-    d.last_battle.update(outcome=outcome, seconds=round(time.time() - t0, 1))
-    return outcome
+    d.last_battle.update(outcome=outcome.value, seconds=round(time.time() - t0, 1))
+    result = BattleResult(
+        outcome=outcome,
+        started_with=int(d.last_battle.get("started_with", 0) or 0),
+        survivors=d.last_battle.get("survivors"),
+        mission_type=str(d.last_battle.get("mission_type", "unknown")),
+        seconds=float(d.last_battle.get("seconds", 0.0) or 0.0),
+        policy=str(d.last_battle.get("policy", "")),
+    )
+    d.last_battle = result
+    return result
 
 
-def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) -> str:
+def _fight_battle(d: Driver, budget_s: float = 1800.0,
+                  policy: dict | None = None) -> BattleOutcome:
     """Fight a tactical mission to a win, without cheats.
 
     Units default to FirePermissionMode::AtWill (battleunit.h:271) and UnitAIDefault makes any
@@ -3252,15 +3427,15 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
             # Ask the engine who won rather than assuming. Battle::checkMissionEnd sets playerWon;
             # a debriefing appears either way, so treating its arrival as a win counted a total
             # squad wipe -- every soldier dead -- as "resolved (wins 2)".
-            outcome = "resolved" if last_player_won else "lost"
-            d.shot("battle_" + outcome)
+            outcome = BattleOutcome.RESOLVED if last_player_won else BattleOutcome.LOST
+            d.shot("battle_" + outcome.value)
             d.click_id("BUTTON_OK", st)
             d.say(f"[battle] debriefing after {time.time()-t0:.0f}s: {outcome}"
                   f" (survivors {last_mine_alive})")
             return outcome
         if st.stage in ("CityView", "MainMenu", "VideoScreen"):
             d.say(f"[battle] back at {st.stage}")
-            return "returned"
+            return BattleOutcome.RETURNED
         if st.stage != "BattleView":
             if not d.dismiss_modal(st):
                 time.sleep(0.5)
@@ -3296,7 +3471,7 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
             b = d.h.gs("battle")
             if b.get("mode") != "rt":
                 d.say(f"[battle] ABORT: mode is {b.get('mode')}, not real-time")
-                return "wrong-mode"
+                return BattleOutcome.WRONG_MODE
             started_with = int(b.get("mine_alive", "0") or 0)
             mission_type = b.get("mission_type", "unknown")
             d.last_battle.update(started_with=started_with, mission_type=mission_type)
@@ -3488,7 +3663,7 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
                 and alive_now >= foes_now * 3:
             d.say(f"  [battle] won bar {foes_now} unreachable foe(s) with {alive_now} up; banking it")
             if leave_battle(d):
-                return "resolved"
+                return BattleOutcome.RESOLVED
             d.say("  [battle] could not leave; fighting on")
 
         # Retreat rather than be annihilated. "No mission is important enough to lose good men
@@ -3538,7 +3713,7 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
                   f"these aliens back on the map")
 
     d.say("[battle] budget exhausted without a decision")
-    return "timeout"
+    return BattleOutcome.TIMEOUT
 
 
 def open_buysell(d: Driver) -> bool:
@@ -5097,18 +5272,19 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
             break
         st = d.status()
         if st.stage in ("BattleBriefing", "BattlePreStart", "BattleView", "BaseDefenseScreen"):
-            outcome = win_battle(d)
+            battle_result = win_battle(d)
             battles += 1
-            d.checks[f"battle_{battles}"] = outcome
+            d.checks[f"battle_{battles}"] = battle_result.as_dict()
             if receipt:
-                receipt.event("battle", number=battles, outcome=outcome)
-            if validation and outcome == "timeout":
-                d.checks["run_outcome"] = "timeout"
-                d.checks["run_reason"] = f"tactical mission {battles} timed out"
-                break
-            if validation and outcome.startswith("lost connection"):
-                d.checks["run_outcome"] = "transport_error"
-                d.checks["run_reason"] = outcome
+                receipt.event("battle", number=battles, **battle_result.as_dict())
+            if validation and not battle_result.decided:
+                d.checks["run_outcome"] = (
+                    "timeout" if battle_result.outcome is BattleOutcome.TIMEOUT
+                    else "gameplay_incomplete"
+                )
+                d.checks["run_reason"] = (
+                    f"tactical mission {battles} did not decide: {battle_result.outcome.value}"
+                )
                 break
 
         # Per-leg upkeep. Without this the campaign loop was only ever "advance the clock, and
@@ -5151,16 +5327,30 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
             #    government-owned, so this is the mechanism that was quietly ending campaigns
             #    while the driver watched the number climb.
             try:
-                outcome = raid_infiltrated_building(d)
-                if outcome not in ("nothing-reported", "bad-coords") \
-                        and not outcome.startswith("not-in-city"):
+                raid_result = raid_infiltrated_building(d)
+                if isinstance(raid_result, BattleResult):
                     battles += 1
-                    d.checks[f"raid_{battles}"] = outcome
-                    d.say(f"  [leg] raid -> {outcome}")
+                    d.checks[f"raid_{battles}"] = raid_result.as_dict()
+                    d.say(f"  [leg] raid -> {raid_result.outcome.value}")
+                    if receipt:
+                        receipt.event("battle", number=battles, source="infiltration_raid",
+                                      **raid_result.as_dict())
+                    if validation and not raid_result.decided:
+                        d.checks["run_outcome"] = (
+                            "timeout" if raid_result.outcome is BattleOutcome.TIMEOUT
+                            else "gameplay_incomplete"
+                        )
+                        d.checks["run_reason"] = (
+                            f"infiltration raid {battles} did not decide: "
+                            f"{raid_result.outcome.value}"
+                        )
+                        break
                 else:
-                    d.say(f"  [leg] no raid this leg ({outcome})")
+                    d.say(f"  [leg] no raid this leg ({raid_result})")
             except Exception as exc:
                 d.say(f"  [leg] raid failed: {type(exc).__name__}: {exc}")
+                if validation:
+                    raise
 
             # 4. Replace losses. Attrition was the binding constraint on every run measured:
             #    agents 25->16 and the fleet 5->1 flyer inside ten days, after which EXTERMINATE
@@ -5241,6 +5431,8 @@ def main() -> int:
 
     repo = Path(args.repo)
     try:
+        require_positive(args.days, "--days")
+        require_positive(args.leg, "--leg")
         seed = require_validation_seed(args.seed, args.validation)
     except ValueError as exc:
         ap.error(str(exc))
@@ -5324,8 +5516,18 @@ def main() -> int:
                 status = d.status()
             except Exception:
                 pass
+        process_exit = None
         if game:
-            game.stop()
+            try:
+                process_exit = game.stop()
+            except Exception as exc:
+                outcome, reason, rc = (
+                    "process_error", f"engine shutdown raised {type(exc).__name__}: {exc}", 1
+                )
+            if process_exit is not None:
+                outcome, reason, rc = reconcile_validation_process_exit(
+                    args.validation, outcome, reason, rc, process_exit
+                )
             warns = game.warnings()
             (out / "warnings.txt").write_text("\n".join(warns))
             if d:
@@ -5340,6 +5542,7 @@ def main() -> int:
                 stage=status.stage if status else "unavailable",
                 detail=status.detail if status else "-",
                 checks=d.checks if d else {},
+                engine_exit=process_exit.as_dict() if process_exit else None,
             )
     return rc
 

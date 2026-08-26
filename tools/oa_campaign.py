@@ -25,6 +25,8 @@ from pathlib import Path
 from oa_play import (
     AdvanceOutcome,
     AdvanceResult,
+    BattleOutcome,
+    BattleResult,
     Driver,
     GameProcess,
     Harness,
@@ -36,6 +38,8 @@ from oa_play import (
     classify_terminal_status,
     create_run_directory,
     new_game,
+    reconcile_validation_process_exit,
+    require_positive,
     require_validation_seed,
     run_provenance,
     snapshot,
@@ -70,7 +74,7 @@ class Campaign:
         self.restarts = 0
         self.last_outcome = "not_started"
         self.last_reason = ""
-        self.last_battle_outcome = ""
+        self.last_battle_outcome: BattleResult | None = None
 
     # -- durability ------------------------------------------------------
     def _load_progress(self) -> dict:
@@ -184,7 +188,7 @@ class Campaign:
 
     def tick(self, days: float) -> AdvanceResult:
         """One leg of play: advance, fight anything that starts, checkpoint."""
-        self.last_battle_outcome = ""
+        self.last_battle_outcome = None
         advanced = advance(self.d, days, budget_s=2400)
         if self.receipt:
             self.receipt.event(
@@ -199,17 +203,17 @@ class Campaign:
         if advanced.outcome is AdvanceOutcome.TRANSITION and st.stage in BATTLE_STAGES:
             self.progress["battles_fought"] += 1
             self.say(f"tactical mission #{self.progress['battles_fought']} starting")
-            outcome = win_battle(self.d, budget_s=2400)
-            self.last_battle_outcome = outcome
-            if outcome == "resolved":
+            result = win_battle(self.d, budget_s=2400)
+            self.last_battle_outcome = result
+            if result.won:
                 self.progress["battles_won"] += 1
                 self.record("first_battle_resolved")
-            self.say(f"mission outcome: {outcome}")
+            self.say(f"mission outcome: {result.outcome.value}")
             if self.receipt:
                 self.receipt.event(
                     "battle",
                     number=self.progress["battles_fought"],
-                    outcome=outcome,
+                    **result.as_dict(),
                 )
             self.save("after mission")
         return advanced
@@ -249,10 +253,16 @@ class Campaign:
                     if terminal == "victory":
                         return self.finish("victory", "winning video observed during advance", 0)
                     return self.finish(terminal, advanced.reason, 1)
-                if self.validation and self.last_battle_outcome == "timeout":
-                    return self.finish("timeout", "tactical mission timed out", 1)
-                if self.validation and self.last_battle_outcome.startswith("lost connection"):
-                    return self.finish("transport_error", self.last_battle_outcome, 1)
+                if self.validation and self.last_battle_outcome \
+                        and not self.last_battle_outcome.decided:
+                    result = self.last_battle_outcome
+                    outcome = ("timeout" if result.outcome is BattleOutcome.TIMEOUT
+                               else "gameplay_incomplete")
+                    return self.finish(
+                        outcome,
+                        f"tactical mission did not decide: {result.outcome.value}",
+                        1,
+                    )
                 if advanced.reached:
                     self.save("leg complete")
                 elif advanced.outcome is not AdvanceOutcome.TRANSITION:
@@ -313,6 +323,8 @@ def main() -> int:
 
     repo = Path(args.repo)
     try:
+        require_positive(args.hours, "--hours")
+        require_positive(args.leg, "--leg")
         seed = require_validation_seed(args.seed, args.validation)
     except ValueError as exc:
         ap.error(str(exc))
@@ -356,13 +368,20 @@ def main() -> int:
             status = c.d.status() if c.d else None
         except Exception:
             pass
+        process_exit = None
         try:
             if c.d:
                 c.save("shutdown")
             if c.game:
-                c.game.stop()
-        except Exception:
-            pass
+                process_exit = c.game.stop()
+        except Exception as exc:
+            c.last_outcome, c.last_reason, rc = (
+                "process_error", f"engine shutdown raised {type(exc).__name__}: {exc}", 1
+            )
+        if process_exit is not None:
+            c.last_outcome, c.last_reason, rc = reconcile_validation_process_exit(
+                args.validation, c.last_outcome, c.last_reason, rc, process_exit
+            )
         if receipt and not receipt.finished:
             receipt.finish(
                 c.last_outcome,
@@ -371,6 +390,7 @@ def main() -> int:
                 stage=status.stage if status else "unavailable",
                 detail=status.detail if status else "-",
                 progress=c.progress,
+                engine_exit=process_exit.as_dict() if process_exit else None,
             )
     return rc
 

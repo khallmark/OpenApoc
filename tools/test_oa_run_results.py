@@ -52,11 +52,26 @@ check_equal(
 )
 check_equal(
     oa_play.classify_terminal_status(
+        oa_play.Status("VideoScreen", 1280, 720, "", "data/videos/WINGAME2.SMK")
+    ),
+    "victory",
+    "the exact winning basename may arrive as a full path",
+)
+check_equal(
+    oa_play.classify_terminal_status(
         oa_play.Status("VideoScreen", 1280, 720, "", "mystery.smk")
     ),
     "unexpected_terminal",
     "an unrecognised terminal video must fail closed",
 )
+for misleading in ("wingame3.smk", "wingame-preview.smk", "notlosebutintro.smk"):
+    check_equal(
+        oa_play.classify_terminal_status(
+            oa_play.Status("VideoScreen", 1280, 720, "", misleading)
+        ),
+        "unexpected_terminal",
+        f"the ending allowlist must reject {misleading}",
+    )
 check_equal(
     oa_play.classify_terminal_status(oa_play.Status("CityView", 1280, 720, "")),
     None,
@@ -103,6 +118,29 @@ check_raises(ValueError, lambda: oa_play.require_validation_seed(0, validation=T
             "validation must reject the wall-clock/default seed")
 
 
+# Tactical outcomes have one central taxonomy. Only actual wins and losses are decisions.
+for outcome, decided, won in (
+    (oa_play.BattleOutcome.RESOLVED, True, True),
+    (oa_play.BattleOutcome.LOST, True, False),
+    (oa_play.BattleOutcome.RETURNED, False, False),
+    (oa_play.BattleOutcome.WRONG_MODE, False, False),
+    (oa_play.BattleOutcome.TIMEOUT, False, False),
+):
+    result = oa_play.BattleResult(outcome, started_with=10, survivors=7)
+    check_equal(result.decided, decided, f"{outcome.value} decision policy")
+    check_equal(result.won, won, f"{outcome.value} win policy")
+    check_equal(oa_play.battle_is_decided(result.as_dict()), decided,
+                f"serialized {outcome.value} decision policy")
+    if decided:
+        check_equal(oa_play.require_decided_battle(result), outcome,
+                    f"{outcome.value} must be scoreable")
+    else:
+        check_raises(ValueError, lambda result=result: oa_play.require_decided_battle(result),
+                     f"{outcome.value} must not be scoreable")
+check_equal(oa_play.battle_is_decided({"outcome": "invented"}), False,
+            "unknown battle outcomes must fail closed")
+
+
 class FakeExitedProcess:
     def exit_status(self) -> str:
         return "killed by signal 11 (SIGSEGV)"
@@ -122,6 +160,79 @@ kind, detail = oa_play.classify_connection_failure(
     FakeLiveProcess(), ConnectionResetError("connection reset")
 )
 check_equal(kind, "transport_error", "a live engine socket failure is a transport failure")
+
+
+clean_exit = oa_play.ProcessExitResult(True, None, True, False, 0, "exited rc=0")
+crashed_exit = oa_play.ProcessExitResult(True, 9, False, False, 9, "exited rc=9")
+forced_exit = oa_play.ProcessExitResult(True, None, True, True, -9, "killed by signal 9")
+check(clean_exit.clean_shutdown, "a requested zero exit must be clean")
+check(not crashed_exit.clean_shutdown, "an engine that exited before stop is not clean")
+check(not forced_exit.clean_shutdown, "a forced kill is not clean")
+check_equal(
+    oa_play.reconcile_validation_process_exit(True, "victory", "won", 0, clean_exit),
+    ("victory", "won", 0),
+    "a clean engine exit must preserve validation success",
+)
+reconciled = oa_play.reconcile_validation_process_exit(
+    True, "victory", "won", 0, crashed_exit
+)
+check_equal(reconciled[0], "process_error",
+            "a pre-stop engine exit must override nominal validation success")
+check_equal(reconciled[2], 1, "an unclean validation shutdown must be nonzero")
+check_equal(
+    oa_play.reconcile_validation_process_exit(False, "victory", "won", 0, forced_exit),
+    ("victory", "won", 0),
+    "interactive runs may report shutdown truth without changing their result",
+)
+
+
+class FakeManagedProcess:
+    def __init__(self, returncode=None):
+        self.returncode = returncode
+        self.killed = False
+
+    def poll(self):
+        return self.returncode
+
+    def wait(self, timeout):
+        self.returncode = 0
+        return self.returncode
+
+    def kill(self):
+        self.killed = True
+        self.returncode = -9
+
+
+class FakeQuitHarness:
+    sent = []
+
+    def __init__(self, port):
+        self.port = port
+
+    def send(self, command):
+        self.sent.append((self.port, command))
+        return "OK"
+
+
+original_harness = oa_play.Harness
+try:
+    oa_play.Harness = FakeQuitHarness
+    managed = oa_play.GameProcess(Path("."), 17321, Path("unused.log"))
+    managed.proc = FakeManagedProcess()
+    stopped = managed.stop()
+    check(stopped.clean_shutdown, "GameProcess.stop must report a requested zero exit as clean")
+    check_equal(FakeQuitHarness.sent[-1], (17321, "quit"),
+                "GameProcess.stop must request engine shutdown before waiting")
+
+    already_dead = oa_play.GameProcess(Path("."), 17322, Path("unused.log"))
+    already_dead.proc = FakeManagedProcess(7)
+    stopped_dead = already_dead.stop()
+    check_equal(stopped_dead.pre_stop_returncode, 7,
+                "GameProcess.stop must preserve a pre-existing engine exit")
+    check(not stopped_dead.quit_requested,
+          "GameProcess.stop must not claim QUIT was sent to an already-dead engine")
+finally:
+    oa_play.Harness = original_harness
 
 with tempfile.TemporaryDirectory() as tmp:
     missing_repo = Path(tmp) / "missing-repo"
@@ -187,7 +298,7 @@ class FakeAdvanceDriver:
 
 
 def run_fake_advance(stages: list[oa_play.Status], ticks_per_second: int,
-                     budget_s: float = 2.0) -> oa_play.AdvanceResult:
+                     budget_s: float = 2.0, game_days: float = 1.0) -> oa_play.AdvanceResult:
     driver = FakeAdvanceDriver(stages, ticks_per_second)
     original_time, original_sleep = oa_play.time.time, oa_play.time.sleep
     original_ticks_per_day = oa_play.TICKS_PER_DAY
@@ -195,7 +306,7 @@ def run_fake_advance(stages: list[oa_play.Status], ticks_per_second: int,
         oa_play.time.time = driver.clock.time
         oa_play.time.sleep = driver.clock.sleep
         oa_play.TICKS_PER_DAY = 100
-        return oa_play.advance(driver, 1.0, budget_s=budget_s)
+        return oa_play.advance(driver, game_days, budget_s=budget_s)
     finally:
         oa_play.time.time = original_time
         oa_play.time.sleep = original_sleep
@@ -223,6 +334,21 @@ terminal = run_fake_advance([winning], ticks_per_second=0)
 check_equal(terminal.outcome, oa_play.AdvanceOutcome.TERMINAL,
         "ending video must stop advance as a terminal transition")
 check_equal(terminal.reason, "victory", "advance terminal detail classification")
+check_raises(
+    ValueError,
+    lambda: run_fake_advance([city], ticks_per_second=100, game_days=0.0),
+    "advance must reject a zero-day workload",
+)
+check_raises(
+    ValueError,
+    lambda: run_fake_advance([city], ticks_per_second=100, game_days=-1.0),
+    "advance must reject a negative-day workload",
+)
+check_raises(
+    ValueError,
+    lambda: run_fake_advance([city], ticks_per_second=100, budget_s=0.0),
+    "advance must reject a zero wall-clock budget",
+)
 
 
 # Validation runs get collision-free directories, an append-only event stream, and one atomic
@@ -242,7 +368,8 @@ with tempfile.TemporaryDirectory() as tmp:
     snapshot_binary.write_bytes(b"exact executable bytes")
     receipt.record_binary_snapshot(snapshot_binary, [str(snapshot_binary), "--seed=17"])
     receipt.event("advanced", ticks=100)
-    receipt.finish("victory", 0, stage="VideoScreen", detail="wingame2.smk")
+    receipt.finish("victory", 0, stage="VideoScreen", detail="wingame2.smk",
+                   engine_exit=clean_exit.as_dict())
 
     events = [json.loads(line) for line in (run_a / "events.jsonl").read_text().splitlines()]
     terminal = json.loads((run_a / "terminal.json").read_text())
@@ -251,6 +378,10 @@ with tempfile.TemporaryDirectory() as tmp:
                 "events must remain append-only through terminal state")
     check_equal(terminal["outcome"], "victory", "terminal receipt outcome")
     check_equal(terminal["exit_code"], 0, "terminal receipt exit code")
+    check_equal(terminal["engine_exit"]["pre_stop_returncode"], None,
+                "receipt must preserve pre-stop process state")
+    check_equal(terminal["engine_exit"]["returncode"], 0,
+                "receipt must preserve the actual engine return code")
     check_equal(terminal["provenance"]["seed"], 17, "terminal receipt provenance")
     check_equal(terminal["provenance"]["run_binary"], str(snapshot_binary.resolve()),
                 "receipt must identify the private executable that actually ran")
