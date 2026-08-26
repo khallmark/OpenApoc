@@ -12,21 +12,38 @@ without manufacturing a campaign. The present framework drains a snapshot of pen
 If a stage's `resume()` queues another command during that drain, the new command is cleared with
 the snapshot instead of being processed. Two commands in the Skirmish lifecycle are therefore
 lost: SelectForces::resume() queues its own POP after AEquipScreen closes, and, if SelectForces is
-manually popped, Skirmish::resume()->loadBattle() queues the battle transition.
+manually popped, Skirmish::resume()->loadBattle() queues the battle transition. The tool reports
+either condition as `setup_failure`, never as a tactical loss.
 
-The complete cold battle is a preserved known-red acceptance until the live-FIFO StageCmd change
-lands. A separate observed map-generation exception remains a distinct setup/engine failure; it
-is not evidence that a battle was fought or lost.
+This R0 result-truth slice is intentionally expected-red for a complete cold battle on its own.
+Once the live-FIFO StageCmd fix is integrated, the same one-round validation command becomes a
+required-green battle smoke. A separate observed map-generation exception remains a distinct
+setup/engine failure; it is not evidence that a battle was fought or lost.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
-from oa_play import Driver, GameProcess, Harness, HarnessError, new_game, win_battle
+from oa_play import (
+    Driver,
+    GameProcess,
+    Harness,
+    HarnessError,
+    RunReceipt,
+    classify_connection_failure,
+    create_run_directory,
+    new_game,
+    require_validation_seed,
+    run_provenance,
+    win_battle,
+)
 
 # Slider ids from data/forms/selectforces.form, keyed by the same short names players know them
 # by. Values are per-mission counts; the sliders themselves cap out well above what is useful for
@@ -47,6 +64,41 @@ ALIEN_SLIDERS = {
 }
 
 
+@dataclass(frozen=True)
+class SkirmishAttempt:
+    """Keep setup/transition failures out of the tactical outcome namespace."""
+
+    result_kind: str
+    outcome: str | None
+    stage: str
+    reason: str = ""
+
+    @classmethod
+    def setup_failure(cls, stage: str, reason: str) -> "SkirmishAttempt":
+        return cls("setup_failure", None, stage, reason)
+
+    @classmethod
+    def gameplay(cls, outcome: str, stage: str) -> "SkirmishAttempt":
+        return cls("gameplay", outcome, stage)
+
+    def as_dict(self) -> dict:
+        return {
+            "result_kind": self.result_kind,
+            "outcome": self.outcome,
+            "stage": self.stage,
+            "reason": self.reason,
+        }
+
+
+def setup_failure(d: Driver, reason: str) -> SkirmishAttempt:
+    try:
+        stage = d.status().stage
+    except Exception:
+        stage = "unavailable"
+    d.say(f"  [skirmish] setup failed at {stage}: {reason}")
+    return SkirmishAttempt.setup_failure(stage, reason)
+
+
 def open_skirmish(d: Driver) -> bool:
     """Reach Skirmish from the cold MainMenu or an already-running game."""
     st = d.status()
@@ -55,8 +107,9 @@ def open_skirmish(d: Driver) -> bool:
             d.say("  [skirmish] MainMenu Skirmish button was unavailable")
             return False
         try:
-            # Skirmish::begin() immediately pushes MapSelector. The snapshot-drain loop can lose
-            # that nested PUSH and leave Skirmish current; pick_map() can continue from either.
+            # Skirmish::begin() immediately pushes MapSelector. The old snapshot-drain loop can
+            # lose that nested PUSH and leave Skirmish current; both are valid states from which
+            # pick_map() can continue, while PR B makes MapSelector the deterministic result.
             return d.wait_for(("MapSelector", "Skirmish"), 240).stage in (
                 "MapSelector", "Skirmish"
             )
@@ -109,8 +162,9 @@ def pick_map(d: Driver, row: int = 0) -> bool:
 
 
 def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
-                    budget_s: float = 300.0, policy: dict | None = None) -> str:
-    """Configure a force via SelectForces and fight it. Returns win_battle's outcome string.
+                    budget_s: float = 300.0,
+                    policy: dict | None = None) -> SkirmishAttempt:
+    """Configure a force and return a setup or gameplay result with no overlap.
 
     aliens: {short name from ALIEN_SLIDERS: count}. Anything not named is left at zero by
     unchecking DEFAULT_ALIENS first -- otherwise the screen fills in its own default mix, which
@@ -118,8 +172,7 @@ def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
     """
     st = d.status()
     if st.stage != "Skirmish":
-        d.say(f"  [skirmish] not on the Skirmish screen ({st.stage})")
-        return "setup-failed"
+        return setup_failure(d, "not_on_skirmish_screen")
     # Whether BUTTON_OK reaches SelectForces at all depends on the location type and this
     # checkbox (skirmish.cpp:530-545): a Base always customizes, a UFO never does (it goes to
     # AEquipScreen for boarding loadout instead), and an alien Building uses its own preset crew
@@ -131,11 +184,11 @@ def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
         pass
     time.sleep(0.2)
     if not d.click_id("BUTTON_OK", st):
-        return "setup-failed"
+        return setup_failure(d, "skirmish_ok_unavailable")
     time.sleep(1.0)
     if d.status().stage != "SelectForces":
         d.say(f"  [skirmish] expected SelectForces, got {d.status().stage}")
-        return "setup-failed"
+        return setup_failure(d, "select_forces_not_reached")
 
     try:
         d.h.control("DEFAULT_ALIENS", "set", "false")
@@ -160,11 +213,25 @@ def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
     # this stage at all, so without handling it here the driver just sits pressing Escape/Return
     # against a real screen that needs BUTTON_OK.
     #
-    # SelectForces::resume() queues its own POP after AEquipScreen closes. The framework currently
-    # clears commands queued by resume() while draining a snapshot, so this expected POP can be
-    # lost and leave SelectForces current. If SelectForces is manually popped, Skirmish::resume()
-    # queues loadBattle's transition into the same broken drain and can remain on Skirmish. Do not
-    # press BUTTON_OK again here: that re-enters goToBattle and pushes AEquipScreen forever.
+    # goToBattle generates the battlemap on a threadpool worker (the same mechanism that, when it
+    # throws, produces the "Exception occurred in threadpool" signature seen in this engine's
+    # crash reports elsewhere), and generation for a full map with LOS precomputation is not
+    # instant. The screen can appear to sit on SelectForces for a while that is actually
+    # generation still running in the background, not a stall -- so this gives it real time
+    # rather than declaring failure quickly.
+    # Skirmish::resume() fires loadBattle() only once BOTH AEquipScreen and SelectForces have
+    # popped back to Skirmish (skirmish.cpp:698-702). AEquipScreen is pushed BY goToBattle, so
+    # dismissing it returns us to SelectForces -- which then has to be dismissed a SECOND time.
+    #
+    # This loop used to sleep on SelectForces and nothing else, so it waited out its whole budget
+    # against a screen one button press would have cleared, and the failure was recorded as
+    # "loadBattle never transitions" -- an engine bug that was not there. The engine log said as
+    # much all along: goToBattle ran to completion ("Resetting base inventory") and the
+    # no-location diagnostic never fired, so a location WAS set and the lambda simply never got
+    # its second pop.
+    #
+    # Re-press on a cadence rather than every poll: goToBattle rebuilds the base inventory each
+    # time it runs, and hammering OK re-enters it repeatedly for no gain.
     deadline = time.time() + 45.0
     seen_equip = False
     last_ok = 0.0
@@ -195,15 +262,15 @@ def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
     final_stage = d.status().stage
     if final_stage not in ("BattleBriefing", "BattlePreStart", "BattleView"):
         if seen_equip and final_stage == "SelectForces":
-            detail = "SelectForces resume POP was not applied"
+            reason = "select_forces_resume_pop_not_applied"
         elif seen_equip and final_stage == "Skirmish":
-            detail = "Skirmish loadBattle transition was not applied"
+            reason = "skirmish_load_battle_transition_not_applied"
         else:
-            detail = "battle stage was not reached"
-        d.say(f"  [skirmish] setup failed at {final_stage}: {detail}")
-        return "setup-failed"
+            reason = "battle_stage_not_reached"
+        return setup_failure(d, reason)
 
-    return win_battle(d, budget_s=budget_s, policy=policy)
+    outcome = win_battle(d, budget_s=budget_s, policy=policy)
+    return SkirmishAttempt.gameplay(outcome, final_stage)
 
 
 def battle_snapshot(d: Driver) -> dict | None:
@@ -220,18 +287,42 @@ def run_one(d: Driver, aliens: dict, map_row: int = 0, real_time: bool = True,
             budget_s: float = 300.0, policy: dict | None = None) -> dict:
     """One full cycle: open skirmish, pick a map, fight, return a result summary."""
     if not open_skirmish(d):
-        return {"outcome": "could-not-open-skirmish"}
+        attempt = setup_failure(d, "could_not_open_skirmish")
+        return {**attempt.as_dict(), "aliens": aliens, "map_row": map_row, "before": {}}
     if not pick_map(d, map_row):
-        d.say("  [skirmish] map selection failed; using whatever was already chosen")
+        attempt = setup_failure(d, "map_selection_failed")
+        return {**attempt.as_dict(), "aliens": aliens, "map_row": map_row, "before": {}}
     battle_before = battle_snapshot(d)
-    outcome = fight_skirmish(d, aliens, real_time=real_time, budget_s=budget_s,
+    attempt = fight_skirmish(d, aliens, real_time=real_time, budget_s=budget_s,
                              policy=policy)
     return {
-        "outcome": outcome,
+        **attempt.as_dict(),
         "aliens": aliens,
         "map_row": map_row,
         "before": battle_before,
     }
+
+
+def recover_for_next_skirmish(d: Driver, tries: int = 8) -> bool:
+    """Return to a stage from which open_skirmish() can start another attempt."""
+    for _ in range(tries):
+        st = d.status()
+        if st.stage in ("CityView", "MainMenu"):
+            return True
+        if st.stage == "BattleDebriefing":
+            d.click_id("BUTTON_OK", st)
+        elif not d.dismiss_modal(st):
+            d.h.key("Escape")
+        time.sleep(0.6)
+    return d.status().stage in ("CityView", "MainMenu")
+
+
+def append_result(path: Path, result: dict) -> None:
+    """Append and durably flush one attempt before another battle can start."""
+    with path.open("a") as stream:
+        stream.write(json.dumps(result, sort_keys=True) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
 
 
 def main() -> int:
@@ -244,9 +335,21 @@ def main() -> int:
                      help="name=count, repeatable, e.g. --alien popper=6 --alien brainsucker=3")
     ap.add_argument("--map-row", type=int, default=0)
     ap.add_argument("--budget", type=float, default=300.0, help="seconds per battle")
+    ap.add_argument("--seed", type=int, default=0,
+                    help="explicit RNG seed; required and nonzero in validation mode")
+    ap.add_argument("--validation", action="store_true",
+                    help="write immutable evidence and fail closed on setup/driver errors")
     ap.add_argument("--cold-main-menu", action="store_true",
                     help="use MainMenu's first-class Skirmish entry instead of starting a game")
     args = ap.parse_args()
+    if args.rounds <= 0:
+        ap.error("--rounds must be positive")
+
+    try:
+        seed = require_validation_seed(args.seed, args.validation)
+    except ValueError as exc:
+        print(f"oa_skirmish: {exc}", file=sys.stderr)
+        return 2
 
     aliens = {}
     for spec in args.alien:
@@ -256,40 +359,112 @@ def main() -> int:
         aliens = {"popper": 4, "skeletoid": 4}  # a reasonable default mixed threat
 
     repo = Path(args.repo)
-    out = Path(args.out) if args.out else repo / "build/skirmish"
+    out_root = Path(args.out) if args.out else repo / "build/skirmish"
+    out = create_run_directory(out_root, "skirmish", seed) if args.validation else out_root
     out.mkdir(parents=True, exist_ok=True)
+    receipt = RunReceipt(
+        out, run_provenance(repo, seed, args.validation, "oa_skirmish")
+    ) if args.validation else None
 
-    game = GameProcess(repo, args.port, out / "game.log")
-    game.start(wait_s=240)
-    d = Driver(Harness(port=args.port), repo / "data/forms", shots=out / "shots", verbose=True)
-    d.checks = {}
-    if not args.cold_main_menu:
-        new_game(d, 1)
-
+    game = GameProcess(
+        repo,
+        args.port,
+        out / "game.log",
+        seed=seed,
+        require_binary_snapshot=args.validation,
+    )
+    d = None
     results = []
-    for i in range(args.rounds):
-        d.say(f"=== skirmish round {i + 1}/{args.rounds}: {aliens} ===")
-        r = run_one(d, aliens, map_row=args.map_row, budget_s=args.budget)
-        results.append(r)
-        d.say(f"    -> {r['outcome']}")
-        # Escape back to CityView between rounds, whatever state we ended in.
-        for _ in range(6):
-            st = d.status()
-            if st.stage in ("CityView", "MainMenu"):
-                break
-            if st.stage == "BattleDebriefing":
-                d.click_id("BUTTON_OK", st)
-            elif not d.dismiss_modal(st):
-                d.h.key("Escape")
-            time.sleep(0.6)
+    outcome = "not_started"
+    exit_code = 1
+    detail = ""
+    try:
+        game.start(wait_s=240)
+        if receipt:
+            receipt.record_binary_snapshot(game._run_binary, game.argv)
+            receipt.event("started", stage="MainMenu", cold_main_menu=args.cold_main_menu)
+        d = Driver(
+            Harness(port=args.port),
+            repo / "data/forms",
+            shots=out / "shots",
+            verbose=True,
+        )
+        d.checks = {}
+        if not args.cold_main_menu:
+            new_game(d, 1)
 
-    wins = sum(1 for r in results if r["outcome"] == "resolved")
-    withdrew = sum(1 for r in results if r["outcome"] == "withdrew")
-    lost = sum(1 for r in results if r["outcome"] == "lost")
-    d.say(f"=== summary: {wins} won, {withdrew} withdrew, {lost} lost, "
-          f"{len(results) - wins - withdrew - lost} other/{len(results)} total ===")
-    game.stop()
-    return 0 if wins > 0 else 1
+        ledger = out / "results.jsonl"
+        for i in range(args.rounds):
+            d.say(f"=== skirmish round {i + 1}/{args.rounds}: {aliens} ===")
+            result = run_one(d, aliens, map_row=args.map_row, budget_s=args.budget)
+            result["round"] = i + 1
+            results.append(result)
+            append_result(ledger, result)
+            if receipt:
+                receipt.event("skirmish_attempt", **result)
+            d.say(f"    -> {result['result_kind']} / {result['outcome']}"
+                  f" ({result['reason'] or result['stage']})")
+            if result["result_kind"] != "gameplay":
+                outcome = "setup_failed"
+                detail = f"{result['stage']}: {result['reason']}"
+                break
+            if result["outcome"] not in ("resolved", "lost"):
+                outcome = "gameplay_incomplete"
+                detail = str(result["outcome"])
+                break
+            if i + 1 < args.rounds and not recover_for_next_skirmish(d):
+                recovery = setup_failure(d, "could_not_recover_for_next_round").as_dict()
+                recovery.update(round=i + 2, aliens=aliens, map_row=args.map_row, before={})
+                results.append(recovery)
+                append_result(ledger, recovery)
+                if receipt:
+                    receipt.event("skirmish_attempt", **recovery)
+                outcome = "setup_failed"
+                detail = f"{recovery['stage']}: {recovery['reason']}"
+                break
+        else:
+            outcome = "completed"
+            exit_code = 0
+
+        gameplay = [r for r in results if r["result_kind"] == "gameplay"]
+        setup_failures = [r for r in results if r["result_kind"] == "setup_failure"]
+        wins = sum(1 for r in gameplay if r["outcome"] == "resolved")
+        losses = sum(1 for r in gameplay if r["outcome"] == "lost")
+        d.say(f"=== summary: {len(gameplay)} battles ({wins} won, {losses} lost), "
+              f"{len(setup_failures)} setup failures, {len(results)} attempts ===")
+    except TimeoutError as exc:
+        outcome, detail = "timeout", str(exc)
+    except HarnessError as exc:
+        outcome, detail = "protocol_error", str(exc)
+    except OSError as exc:
+        outcome, detail = classify_connection_failure(game, exc)
+    except RuntimeError as exc:
+        outcome, detail = "process_error", str(exc)
+    except Exception as exc:  # validation evidence must name unexpected driver failures
+        outcome, detail = "unexpected_error", f"{type(exc).__name__}: {exc}"
+    finally:
+        stage = "unavailable"
+        if d is not None:
+            try:
+                stage = d.status().stage
+            except Exception:
+                pass
+        game.stop()
+        if receipt and not receipt.finished:
+            receipt.finish(
+                outcome,
+                exit_code,
+                stage=stage,
+                detail=detail,
+                attempts=len(results),
+                gameplay=sum(1 for result in results
+                             if result["result_kind"] == "gameplay"),
+                setup_failures=sum(1 for result in results
+                                   if result["result_kind"] == "setup_failure"),
+            )
+    if exit_code:
+        print(f"oa_skirmish: {outcome}: {detail or 'run did not complete'}", file=sys.stderr)
+    return exit_code
 
 
 if __name__ == "__main__":

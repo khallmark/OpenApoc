@@ -31,6 +31,7 @@ from oa_play import (
     GameProcess,
     Harness,
     HarnessError,
+    RunReceipt,
     assign_research,
     build_second_base,
     sell_ground_fleet,
@@ -60,6 +61,11 @@ from oa_play import (
     new_game,
     recover_crash_sites,
     win_battle,
+    classify_connection_failure,
+    classify_terminal_status,
+    create_run_directory,
+    require_validation_seed,
+    run_provenance,
 )
 
 BATTLE_STAGES = ("BattleBriefing", "BattlePreStart", "BattleView", "BaseDefenseScreen")
@@ -104,9 +110,15 @@ CHECKPOINT_EVERY_S = 300.0
 
 
 class Victory:
-    def __init__(self, repo: Path, out: Path, port: int, difficulty: int = 1):
+    def __init__(self, repo: Path, out: Path, port: int, difficulty: int = 1,
+                 seed: int = 0, validation: bool = False, single_campaign: bool = False,
+                 receipt: RunReceipt | None = None):
         self.repo, self.out, self.port = Path(repo), Path(out), port
         self.difficulty = difficulty
+        self.seed = int(seed)
+        self.validation = bool(validation)
+        self.single_campaign = bool(single_campaign)
+        self.receipt = receipt
         self.out.mkdir(parents=True, exist_ok=True)
         (self.out / "shots").mkdir(exist_ok=True)
         self.checkpoint = self.out / "victory.save"
@@ -141,6 +153,8 @@ class Victory:
         self.last_deferred_why = ""
         self.second_base = False
         self.best_crashed = 0
+        self.last_outcome = "not_started"
+        self.last_reason = ""
 
     # -- durability -------------------------------------------------------
     def _load(self) -> dict:
@@ -207,8 +221,17 @@ class Victory:
     def start(self) -> None:
         resume = self.checkpoint.exists()
         extra = [f"--Game.Load={self.checkpoint}"] if resume else []
-        self.game = GameProcess(self.repo, self.port, self.out / "game.log", extra=extra)
+        self.game = GameProcess(
+            self.repo,
+            self.port,
+            self.out / "game.log",
+            extra=extra,
+            seed=self.seed,
+            require_binary_snapshot=self.validation,
+        )
         self.game.start(wait_s=240)
+        if self.receipt:
+            self.receipt.record_binary_snapshot(self.game._run_binary, self.game.argv)
         self.d = Driver(Harness(port=self.port), self.repo / "data/forms",
                         shots=self.out / "shots", verbose=True)
         self.d.checks = {}
@@ -323,7 +346,7 @@ class Victory:
         return False
 
     # -- play -------------------------------------------------------------
-    def fight(self, stage: str) -> None:
+    def fight(self, stage: str) -> str:
         self.progress["battles"] += 1
         n = self.progress["battles"]
         self.say(f"=== tactical mission #{n} ({stage}) ===")
@@ -348,9 +371,12 @@ class Victory:
         if outcome == "resolved":
             self.progress["wins"] += 1
         self.say(f"=== mission #{n} outcome: {outcome} (wins {self.progress['wins']}) ===")
+        if self.receipt:
+            self.receipt.event("battle", number=n, stage=stage, outcome=outcome)
         self.flush()
         if self.alive():
             self.save(f"after mission {n}")
+        return outcome
 
     def armoury_size(self) -> int:
         """How many of each loadout item to stock: one per soldier, plus spares.
@@ -765,8 +791,8 @@ class Victory:
         weapons with, and a squad that cannot be armed. Seen at day 26 -- funding terminated, $249,
         every facility gone, score -6147 -- with the runner unable to call it either way.
 
-        This lives outside victorious() deliberately: that method is only consulted once the stage
-        is already a VideoScreen, which is exactly the case this condition never reaches.
+        This lives outside terminal_outcome() deliberately: that method is only useful once the
+        stage exposes an ending, which is exactly the case this condition never reaches.
         """
         if time.time() - self.last_solvency_check < 60.0:
             return False
@@ -788,29 +814,37 @@ class Victory:
                  f"score {f.get('score_total')}; recording defeat")
         return True
 
-    def victorious(self) -> bool:
-        try:
-            st = self.d.status()
-        except OSError:
-            return False
-        if st.stage != "VideoScreen":
-            return False
+    def terminal_outcome(self, st=None) -> str | None:
+        """Classify the exact ending video; unknown terminal screens fail closed."""
+        if st is None:
+            try:
+                st = self.d.status()
+            except OSError:
+                return None
         # Both endings are a VideoScreen: AliensDefeated plays wingame2.smk, XComDefeated plays
         # lose1.smk (cityview.cpp:4686-4699), and the intro is a VideoScreen too. Treating any
         # VideoScreen as a win reported victory on day 8 of a campaign with one recovery and no
         # alien research at all, right after a base defence. Only the winning video counts.
-        detail = (st.detail or "-").lower()
-        if "wingame" in detail:
+        outcome = classify_terminal_status(st)
+        if outcome == "victory":
             self.progress["ended"] = "victory"
             self.flush()
             self.say(f"VICTORY - aliens defeated ({st.detail})")
-            return True
-        if "lose" in detail:
+        elif outcome == "defeat":
             self.progress["ended"] = "defeat"
             self.flush()
             self.say(f"campaign lost ({st.detail})")
-            return True
-        return False
+        elif outcome == "unexpected_terminal":
+            self.progress["ended"] = "unexpected_terminal"
+            self.flush()
+            self.say(f"unexpected terminal stage: {st.stage} ({st.detail})")
+        return outcome
+
+    def finish(self, outcome: str, reason: str, exit_code: int) -> int:
+        self.last_outcome = outcome
+        self.last_reason = reason
+        self.say(f"run outcome: {outcome} ({reason})")
+        return int(exit_code)
 
     def run(self, max_hours: float) -> int:
         deadline = time.time() + max_hours * 3600
@@ -824,8 +858,19 @@ class Victory:
                 break
             except (HarnessError, OSError, TimeoutError, RuntimeError) as exc:
                 self.say(f"start failed ({exc}); retrying ({attempt + 1}/4)")
+                if self.validation:
+                    if isinstance(exc, RuntimeError):
+                        outcome, reason = "process_error", str(exc)
+                    elif isinstance(exc, TimeoutError):
+                        outcome, reason = "timeout", str(exc)
+                    elif isinstance(exc, OSError):
+                        outcome, reason = classify_connection_failure(self.game, exc)
+                    else:
+                        outcome, reason = "protocol_error", str(exc)
+                    return self.finish(outcome, reason, 1)
                 try:
-                    self.game.stop()
+                    if self.game:
+                        self.game.stop()
                 except Exception:
                     pass
                 # A checkpoint that kills the game on every resume is not worth four attempts.
@@ -848,39 +893,60 @@ class Victory:
                 time.sleep(5.0)
         else:
             self.say("could not start the game at all")
-            return 1
+            return self.finish("process_error", "could not start the game", 1)
         last_report = 0.0
 
         while time.time() < deadline:
             try:
                 if not self.alive():
+                    if self.validation:
+                        detail = self.game.exit_status() if self.game else "game unavailable"
+                        return self.finish("process_error", detail or "game stopped", 1)
                     if not self.restart():
-                        return 1
+                        return self.finish("process_error", "restart budget exhausted", 1)
                     continue
             except (HarnessError, OSError, TimeoutError) as exc:
                 self.say(f"liveness check failed ({exc}); restarting")
+                if self.validation:
+                    if isinstance(exc, TimeoutError):
+                        outcome, reason = "timeout", str(exc)
+                    elif isinstance(exc, OSError):
+                        outcome, reason = classify_connection_failure(self.game, exc)
+                    else:
+                        outcome, reason = "protocol_error", str(exc)
+                    return self.finish(outcome, reason, 1)
                 if not self.restart():
-                    return 1
+                    return self.finish("transport_error", str(exc), 1)
                 continue
             try:
                 st = self.d.status()
-                if st.stage == "VideoScreen" and self.victorious():
-                    if self.progress.get("ended") == "victory":
-                        return 0
+                terminal = self.terminal_outcome(st)
+                if terminal == "victory":
+                    return self.finish("victory", "winning video observed", 0)
+                if terminal == "defeat":
+                    if self.single_campaign or self.validation:
+                        return self.finish("defeat", "losing video observed", 1)
                     if not self.next_campaign("defeat"):
-                        return 1
+                        return self.finish("process_error", "could not start next campaign", 1)
                     continue
+                if terminal == "unexpected_terminal":
+                    return self.finish(
+                        "unexpected_terminal",
+                        f"unexpected terminal {st.stage} ({st.detail})",
+                        1,
+                    )
                 if self.bankrupt():
+                    if self.single_campaign or self.validation:
+                        return self.finish("defeat", "campaign became irrecoverably bankrupt", 1)
                     if not self.next_campaign("bankruptcy"):
-                        return 1
-                    continue
-                if st.stage == "VideoScreen":
-                    # Some other cutscene (the intro, most likely). Skip it and carry on.
-                    self.d.h.key("Escape")
-                    time.sleep(0.5)
+                        return self.finish("process_error", "could not start next campaign", 1)
                     continue
                 if st.stage in BATTLE_STAGES:
-                    self.fight(st.stage)
+                    battle_outcome = self.fight(st.stage)
+                    if self.validation and battle_outcome == "timeout":
+                        return self.finish("timeout", "tactical mission timed out", 1)
+                    if self.validation and battle_outcome.startswith("lost connection"):
+                        return self.finish("transport_error", battle_outcome, 1)
                     continue
                 if st.stage == "AlertScreen":
                     # Record the building BEFORE doing anything else with the alert. This branch
@@ -975,20 +1041,30 @@ class Victory:
                 time.sleep(0.8)
             except TimeoutError as exc:
                 self.say(f"timed out waiting on a stage: {exc}")
+                if self.validation:
+                    return self.finish("timeout", str(exc), 1)
                 time.sleep(1.0)
             except HarnessError as exc:
                 self.say(f"harness error: {exc}")
+                if self.validation:
+                    return self.finish("protocol_error", str(exc), 1)
                 time.sleep(1.0)
             except OSError as exc:
                 self.say(f"connection lost: {exc}")
+                outcome, detail = classify_connection_failure(self.game, exc)
+                if self.validation:
+                    return self.finish(outcome, detail, 1)
                 if not self.restart():
-                    return 1
-            except Exception:
-                self.say("unexpected error:\n" + traceback.format_exc())
+                    return self.finish(outcome, detail, 1)
+            except Exception as exc:
+                detail = traceback.format_exc()
+                self.say("unexpected error:\n" + detail)
+                if self.validation:
+                    return self.finish("unexpected_error", f"{type(exc).__name__}: {exc}", 1)
                 time.sleep(2.0)
 
         self.say(f"time budget reached; progress: {self.progress}")
-        return 0
+        return self.finish("time_budget", "campaign did not reach victory before deadline", 1)
 
 
 def main() -> int:
@@ -998,19 +1074,77 @@ def main() -> int:
     ap.add_argument("--out", default=None)
     ap.add_argument("--difficulty", type=int, default=1, help="1 = Novice")
     ap.add_argument("--hours", type=float, default=72.0)
+    ap.add_argument("--seed", type=int, default=0,
+                    help="explicit RNG seed; validation requires a nonzero value")
+    ap.add_argument("--validation", action="store_true",
+                    help="emit immutable evidence and fail closed on infrastructure errors")
+    ap.add_argument("--single-campaign", action="store_true",
+                    help="stop after the first victory or defeat instead of starting over")
     args = ap.parse_args()
     repo = Path(args.repo)
-    out = Path(args.out) if args.out else repo / "build/victory"
-    v = Victory(repo, out, args.port, args.difficulty)
     try:
-        return v.run(args.hours)
+        seed = require_validation_seed(args.seed, args.validation)
+    except ValueError as exc:
+        ap.error(str(exc))
+    if args.validation and not args.single_campaign:
+        ap.error("validation requires --single-campaign")
+    out_root = Path(args.out) if args.out else repo / "build/victory"
+    out = create_run_directory(out_root, "victory", seed) if args.validation else out_root
+    receipt = RunReceipt(
+        out, run_provenance(repo, seed, args.validation, "oa_victory")
+    ) if args.validation else None
+    if receipt:
+        receipt.event("started", difficulty=args.difficulty, hours=args.hours,
+                      single_campaign=args.single_campaign)
+    v = Victory(
+        repo,
+        out,
+        args.port,
+        args.difficulty,
+        seed=seed,
+        validation=args.validation,
+        single_campaign=args.single_campaign,
+        receipt=receipt,
+    )
+    rc = 1
+    try:
+        rc = v.run(args.hours)
+    except HarnessError as exc:
+        v.last_outcome, v.last_reason = "protocol_error", str(exc)
+        v.say(f"protocol failure: {exc}")
+    except TimeoutError as exc:
+        v.last_outcome, v.last_reason = "timeout", str(exc)
+        v.say(f"timeout: {exc}")
+    except OSError as exc:
+        v.last_outcome, v.last_reason = classify_connection_failure(v.game, exc)
+        v.say(f"connection failure: {v.last_reason}")
+    except Exception as exc:
+        v.last_outcome = "process_error" if "snapshot" in str(exc).lower() else "unexpected_error"
+        v.last_reason = f"{type(exc).__name__}: {exc}"
+        v.say(f"run failed: {v.last_reason}")
     finally:
+        status = None
+        try:
+            status = v.d.status() if v.d else None
+        except Exception:
+            pass
         try:
             if v.alive():
                 v.save("shutdown")
-            v.game.stop()
+            if v.game:
+                v.game.stop()
         except Exception:
             pass
+        if receipt and not receipt.finished:
+            receipt.finish(
+                v.last_outcome,
+                rc,
+                reason=v.last_reason,
+                stage=status.stage if status else "unavailable",
+                detail=status.detail if status else "-",
+                progress=v.progress,
+            )
+    return rc
 
 
 if __name__ == "__main__":

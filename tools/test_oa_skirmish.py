@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sys
 
+import oa_arena
 import oa_play
 import oa_skirmish
 
@@ -83,6 +84,31 @@ try:
     check(False, "unexpected pre-battle query failures must not be suppressed")
 except oa_play.HarnessError:
     pass
+
+
+setup = oa_skirmish.SkirmishAttempt.setup_failure(
+    stage="SelectForces",
+    reason="select_forces_resume_pop_not_applied",
+)
+record = setup.as_dict()
+check_equal(record["result_kind"], "setup_failure",
+            "a lost lifecycle transition must be setup failure")
+check_equal(record["outcome"], None,
+            "setup failure must not occupy the gameplay outcome field")
+check_equal(record["stage"], "SelectForces", "setup failure must preserve the stuck stage")
+
+
+scored = oa_arena.score([
+    record,
+    {"result_kind": "gameplay", "outcome": "resolved", "survivor_frac": 0.5,
+     "seconds": 12.0},
+])
+check_equal(scored["battles"], 1,
+            "arena score must exclude setup failures from the battle denominator")
+check_equal(scored["setup_failures"], 1,
+            "arena score must report setup failures separately")
+check_equal(scored["win_rate"], 1.0,
+            "setup failure must not be scored as a gameplay loss")
 
 
 if FAILED:
