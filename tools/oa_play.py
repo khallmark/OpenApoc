@@ -4695,6 +4695,52 @@ def log_leg(d: Driver, run_id: str, day: float, phase: str, extra: dict) -> None
         d.say(f"  [ledger] could not write: {type(exc).__name__}: {exc}")
 
 
+def base_upkeep(d: Driver, need_quarters: bool = False) -> dict:
+    """Buy the second base, and build living quarters when recruiting is blocked.
+
+    Both capabilities existed and were called from nowhere but oa_victory.py -- the campaign
+    driver and the adversarial evaluator never expanded a base at all. That is not a missing
+    nicety; it is what makes a campaign run down and a base defence unsurvivable.
+
+    A SECOND BASE. XComDefeated is raised on exactly one condition, player_bases.empty()
+    (base.cpp:150-159), so a second base turns losing one from a defeat into a setback. It also
+    decides whether a base defence can be abandoned at all: win_battle's may_leave requires
+    bases > 1, so with a single base a losing defence must be fought to the last man. Observed
+    exactly that -- 0 of 15 survived, scored 0.00, in a battle the harness had no legal way out of.
+
+    LIVING QUARTERS are what let the roster grow. hire_staff returns the true change in soldier
+    count, and it was returning 0 every leg while its log line read "clicked 6" -- recruits refused
+    for want of space. Attrition became permanent, and a campaign ended at
+    "no-agents-selectable" with 22 game-days on the clock and no mission it could fly.
+    """
+    out: dict = {}
+    if d.status().stage != "CityView":
+        return out
+
+    try:
+        site = d.h.gs("centre_on_basesite")
+        if int(site.get("bases", "1") or 1) < 2 and site.get("affordable") == "1":
+            out["second_base"] = build_second_base(d)
+            d.say(f"  [base] second base: {out['second_base']}")
+    except Exception as exc:
+        out["second_base_error"] = f"{type(exc).__name__}: {exc}"
+
+    if need_quarters:
+        if d.status().stage != "CityView":
+            return_to_city(d)
+        try:
+            built = build_facility(d, "FACILITYTYPE_LIVING_QUARTERS")
+            out["quarters"] = bool(built)
+            if built:
+                d.say("  [base] living quarters built; the roster can grow again")
+        except Exception as exc:
+            out["quarters_error"] = f"{type(exc).__name__}: {exc}"
+
+    if d.status().stage != "CityView":
+        return_to_city(d)
+    return out
+
+
 def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float = 7.0) -> dict:
     run_id = f"r{int(time.time())}"
     d.say(f"[run] {run_id}; ledger {LEDGER}")
@@ -4812,6 +4858,7 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
                     d.say(f"  [leg] replaced {bought} craft")
             except Exception as exc:
                 d.say(f"  [leg] craft purchase failed: {type(exc).__name__}: {exc}")
+            hired = 0
             try:
                 hired = hire_staff(d, want=6)
                 if hired:
@@ -4819,6 +4866,15 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
                     d.say(f"  [leg] hired {hired} agent(s)")
             except Exception as exc:
                 d.say(f"  [leg] hiring failed: {type(exc).__name__}: {exc}")
+
+            # 5. Expand the base. A hire that changed nothing is the signal that quarters are
+            #    full -- hire_staff returns the real delta, and the campaign had been discarding
+            #    that zero every leg for the whole run.
+            try:
+                d.checks.update({f"base_{k}": v
+                                 for k, v in base_upkeep(d, need_quarters=(hired == 0)).items()})
+            except Exception as exc:
+                d.say(f"  [leg] base upkeep failed: {type(exc).__name__}: {exc}")
 
             # Whatever all that left us in, get back to the city before the next leg.
             for _ in range(8):

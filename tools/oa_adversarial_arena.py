@@ -37,8 +37,9 @@ from pathlib import Path
 from oa_adversarial import Arena, Evaluator, Policy, new_arena, train
 from oa_play import (
     TICKS_PER_DAY, Driver, GameProcess, Harness, advance, assign_research, buy_interceptor,
-    _flying_crewed, crew_transport, hire_staff, new_game, raid_infiltrated_building,
-    recover_crash_sites, return_to_city, sell_ground_fleet, sell_surplus_loot, win_battle,
+    _flying_crewed, base_upkeep, crew_transport, hire_staff, new_game,
+    raid_infiltrated_building, recover_crash_sites, return_to_city, sell_ground_fleet,
+    sell_surplus_loot, win_battle,
 )
 
 
@@ -244,12 +245,23 @@ class CampaignEvaluator(Evaluator):
                     # Nothing to raid: keep the base able to mount the next one. A transport
                     # that lost its crew fails every recovery silently, so re-crew when empty.
                     for fn in (lambda: sell_surplus_loot(d), lambda: buy_interceptor(d, want=2),
-                               lambda: hire_staff(d, want=6),
                                lambda: crew_transport(d) if _flying_crewed(d) == 0 else 0):
                         try:
                             fn()
                         except Exception:
                             pass
+
+                    # Recruiting, and the base expansion that recruiting depends on. A hire that
+                    # changed nothing means quarters are full: hire_staff returns the real delta,
+                    # and an attempt that ran out of soldiers ended at "no-agents-selectable"
+                    # with 22 game-days left and no mission it could fly.
+                    try:
+                        hired = hire_staff(d, want=6)
+                        rec["hired"] = rec.get("hired", 0) + hired
+                        rec.setdefault("base", {}).update(
+                            base_upkeep(d, need_quarters=(hired == 0)))
+                    except Exception as exc:
+                        rec.setdefault("base_errors", []).append(f"{type(exc).__name__}: {exc}")
 
                     # Upkeep leaves the driver on BaseScreen, and advance() only runs its clock
                     # on the CityView branch -- so without this the next leg parks and burns its
