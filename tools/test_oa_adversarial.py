@@ -8,10 +8,13 @@ whose correct answer is known in advance, and check the search actually finds it
 """
 import random
 import sys
+import tempfile
+from pathlib import Path
 
 from oa_adversarial import (
-    ALIEN_EFFECTIVE, Arena, Policy, ReplayEvaluator, XCOM_EFFECTIVE, XCOM_GENES, ALIEN_GENES,
-    crossover, effective_genes, expected, mutate, new_arena, random_policy, train, update_elo,
+    ALIEN_EFFECTIVE, Arena, EvidenceWriteError, IncompleteGenerationError, Policy,
+    ReplayEvaluator, XCOM_EFFECTIVE, XCOM_GENES, ALIEN_GENES, crossover, effective_genes,
+    expected, mutate, new_arena, random_policy, train, update_elo,
 )
 
 FAILED = []
@@ -24,6 +27,17 @@ def gene_table_for(side):
 def check(cond, msg):
     if not cond:
         FAILED.append(msg)
+
+
+def check_raises(exc_type, fn, msg):
+    try:
+        fn()
+    except exc_type:
+        return
+    except Exception as exc:
+        FAILED.append(f"{msg}: raised {type(exc).__name__}, not {exc_type.__name__}")
+        return
+    FAILED.append(f"{msg}: did not raise {exc_type.__name__}")
 
 
 # --- Elo ---------------------------------------------------------------------
@@ -162,17 +176,91 @@ def explodes(xcom, alien, seed):
     raise RuntimeError("battlemap generation failed")
 
 ar4 = new_arena(seed=5, pop=3)
-s4 = train(ar4, ReplayEvaluator(explodes), generations=2, battles_per_gen=6,
-           say=lambda *_: None)
-check(len(s4) == 2, "training survives an evaluator that always throws")
+check_raises(
+    IncompleteGenerationError,
+    lambda: train(ar4, ReplayEvaluator(explodes), generations=2, battles_per_gen=6,
+                  say=lambda *_: None),
+    "a zero-cardinality generation must fail instead of being evolved",
+)
 check(ar4.total_plays == 0, "a battle that raised is NOT recorded")
 check(ar4.no_contests > 0, "a battle that raised is counted as a no-contest")
 check(all(p.battles == 0 for p in ar4.xcom + ar4.alien),
       "no Elo/play count may accrue from battles that never happened")
-check(s4[-1]["fought_this_gen"] == 0, "the summary must say no battles were fought")
+check(ar4.generation == 0, "a zero-cardinality generation must not advance")
+check(not ar4.xcom_hof and not ar4.alien_hof,
+      "a zero-cardinality generation must not select Hall-of-Fame champions")
 
 # The bounded-retry guard: an evaluator that never produces a contest must still terminate.
-check(ar4.no_contests == 2 * 6 * 3, "no-contests retry up to max_attempt_factor, then give up")
+check(ar4.no_contests == 6 * 3,
+      "the first incomplete generation retries to its bound, then fails the run")
+
+# A generation that measures only some of its requested battles is still incomplete. It may retain
+# the measured attempts for diagnosis, but it must not evolve or emit a generation summary.
+partial_calls = []
+
+
+def one_then_none(xcom, alien, seed):
+    partial_calls.append(seed)
+    return 0.75 if len(partial_calls) == 1 else None
+
+
+ar_partial = new_arena(seed=8, pop=3)
+check_raises(
+    IncompleteGenerationError,
+    lambda: train(ar_partial, ReplayEvaluator(one_then_none), generations=1,
+                  battles_per_gen=3, max_attempt_factor=2, say=lambda *_: None),
+    "a short nonzero generation must fail instead of being evolved",
+)
+check(ar_partial.total_plays == 1, "the one real partial-generation battle stays auditable")
+check(ar_partial.no_contests == 5, "every failed partial-generation attempt is counted")
+check(ar_partial.generation == 0, "a short nonzero generation must not advance")
+check(not ar_partial.xcom_hof and not ar_partial.alien_hof,
+      "a short nonzero generation must not select champions")
+
+for label, kwargs in (
+    ("generations", {"generations": 0, "battles_per_gen": 1}),
+    ("battles_per_gen", {"generations": 1, "battles_per_gen": 0}),
+    ("max_attempt_factor", {
+        "generations": 1, "battles_per_gen": 1, "max_attempt_factor": 0,
+    }),
+):
+    check_raises(
+        ValueError,
+        lambda kwargs=kwargs: train(
+            new_arena(seed=9, pop=2), ReplayEvaluator(rps), say=lambda *_: None, **kwargs
+        ),
+        f"{label} must be positive",
+    )
+
+# Evolution is a commit after the generation record is durable, never before. A path that cannot
+# accept generations.jsonl must leave generation/Hall-of-Fame state untouched and emit no summary.
+with tempfile.TemporaryDirectory() as tmp:
+    blocked_ledger = Path(tmp) / "generations.jsonl"
+    blocked_ledger.mkdir()
+    ar_blocked = new_arena(seed=10, pop=3)
+    blocked_messages = []
+    check_raises(
+        EvidenceWriteError,
+        lambda: train(
+            ar_blocked,
+            ReplayEvaluator(rps),
+            generations=1,
+            battles_per_gen=3,
+            ledger=blocked_ledger,
+            say=blocked_messages.append,
+        ),
+        "an unwritable generation ledger must fail before evolution",
+    )
+    check(ar_blocked.generation == 0,
+          "an unwritable generation ledger must not advance generation state")
+    check(ar_blocked.total_plays == 0,
+          "an unwritable generation ledger must not retain uncommitted scores")
+    check(all(policy.battles == 0 for policy in ar_blocked.xcom + ar_blocked.alien),
+          "an unwritable generation ledger must roll back policy score counts")
+    check(not ar_blocked.xcom_hof and not ar_blocked.alien_hof,
+          "an unwritable generation ledger must not select Hall-of-Fame champions")
+    check(not any(message.startswith("[adv] gen") for message in blocked_messages),
+          "an unwritable generation ledger must not emit a successful summary")
 
 # None is the ordinary no-contest signal; a mix of None and real scores records only the reals.
 seen_seeds = []

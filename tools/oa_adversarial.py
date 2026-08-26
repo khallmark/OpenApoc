@@ -33,7 +33,9 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import random
+from copy import deepcopy
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
@@ -264,6 +266,28 @@ class Arena:
                              "score": xcom_score,
                              "xcom": self.xcom[xi].name, "alien": self.alien[ai].name})
 
+    def measurement_checkpoint(self) -> dict:
+        """Capture score-only state so an uncommitted generation can be rolled back."""
+        return {
+            "pairings": deepcopy(self.pairings),
+            "total_plays": self.total_plays,
+            "no_contests": self.no_contests,
+            "history_length": len(self.history),
+            "xcom": [(p.elo, p.battles, p.wins) for p in self.xcom],
+            "alien": [(p.elo, p.battles, p.wins) for p in self.alien],
+        }
+
+    def restore_measurement_checkpoint(self, checkpoint: dict) -> None:
+        """Restore score-only state after required generation evidence could not commit."""
+        self.pairings = checkpoint["pairings"]
+        self.total_plays = checkpoint["total_plays"]
+        self.no_contests = checkpoint["no_contests"]
+        del self.history[checkpoint["history_length"]:]
+        for policy, state in zip(self.xcom, checkpoint["xcom"]):
+            policy.elo, policy.battles, policy.wins = state
+        for policy, state in zip(self.alien, checkpoint["alien"]):
+            policy.elo, policy.battles, policy.wins = state
+
     # -- evolution ---------------------------------------------------------
 
     def _evolve_side(self, pop: list, hof: list, gen: int) -> list:
@@ -284,13 +308,12 @@ class Arena:
                 children.append(mutate(self.rng.choice(keep), self.rng, gen))
         return keep + children
 
-    def evolve(self) -> dict:
-        """One generation on BOTH sides. Returns a summary record for the ledger."""
-        self.generation += 1
+    def next_generation_summary(self) -> dict:
+        """Describe the next evolution without mutating populations or generation state."""
         xb = max(self.xcom, key=lambda p: p.elo)
         ab = max(self.alien, key=lambda p: p.elo)
-        summary = {
-            "generation": self.generation,
+        return {
+            "generation": self.generation + 1,
             "battles": self.total_plays,
             "no_contests": self.no_contests,
             "xcom_best": xb.name, "xcom_best_elo": round(xb.elo, 1),
@@ -298,6 +321,11 @@ class Arena:
             "alien_best": ab.name, "alien_best_elo": round(ab.elo, 1),
             "alien_best_wr": round(ab.win_rate, 3),
         }
+
+    def evolve(self) -> dict:
+        """One generation on BOTH sides. Returns the precomputed ledger record."""
+        summary = self.next_generation_summary()
+        self.generation = summary["generation"]
         self.xcom = self._evolve_side(self.xcom, self.xcom_hof, self.generation)
         self.alien = self._evolve_side(self.alien, self.alien_hof, self.generation)
         self.pairings.clear()          # pairings are indices into a population that just changed
@@ -336,6 +364,37 @@ class Evaluator:
         raise NotImplementedError
 
 
+class IncompleteGenerationError(RuntimeError):
+    """A bounded generation ended before its requested evidence cardinality was met."""
+
+    def __init__(self, generation: int, fought: int, requested: int, attempts: int):
+        self.generation = generation
+        self.fought = fought
+        self.requested = requested
+        self.attempts = attempts
+        super().__init__(
+            f"generation {generation} produced {fought}/{requested} decided battles "
+            f"after {attempts} attempts"
+        )
+
+
+class EvidenceWriteError(RuntimeError):
+    """Required robot evidence could not be durably appended."""
+
+
+def append_evidence_record(path: Path, record: dict, label: str) -> None:
+    """Durably append one record or fail before the caller can consume its result."""
+    try:
+        with Path(path).open("a") as stream:
+            stream.write(json.dumps(record) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+    except Exception as exc:
+        raise EvidenceWriteError(
+            f"could not persist {label} evidence to {path}: {type(exc).__name__}: {exc}"
+        ) from exc
+
+
 def train(arena: Arena, evaluator: Evaluator, generations: int, battles_per_gen: int,
           ledger: Optional[Path] = None, say=print, base_seed: int = 0,
           max_attempt_factor: int = 3) -> list:
@@ -354,13 +413,24 @@ def train(arena: Arena, evaluator: Evaluator, generations: int, battles_per_gen:
     match-ups happened to draw a quiet campaign. Exclusion is the only neutral handling.
 
     Seeds advance per ATTEMPT, not per recorded battle. Retrying a no-contest on its original seed
-    would replay the same quiet campaign and fail identically forever.
+    would replay the same quiet campaign and fail identically forever. A generation that exhausts
+    its bounded retry budget before producing the exact requested number of decided battles fails
+    whole and is not evolved: partial evidence must never select the next population.
     """
+    if generations <= 0:
+        raise ValueError("generations must be positive")
+    if battles_per_gen <= 0:
+        raise ValueError("battles_per_gen must be positive")
+    if max_attempt_factor <= 0:
+        raise ValueError("max_attempt_factor must be positive")
+
     summaries = []
     attempt = 0
     for _ in range(generations):
+        checkpoint = arena.measurement_checkpoint() if ledger else None
+        generation = arena.generation + 1
         fought = 0
-        budget = max(1, battles_per_gen * max_attempt_factor)
+        budget = battles_per_gen * max_attempt_factor
         spent = 0
         while fought < battles_per_gen and spent < budget:
             spent += 1
@@ -369,6 +439,8 @@ def train(arena: Arena, evaluator: Evaluator, generations: int, battles_per_gen:
             seed = base_seed + attempt
             try:
                 score = evaluator.evaluate(arena.xcom[xi], arena.alien[ai], seed)
+            except EvidenceWriteError:
+                raise
             except Exception as exc:
                 say(f"  [adv] attempt {attempt} raised {type(exc).__name__}: {exc} "
                     f"-- no contest, not recorded")
@@ -380,20 +452,30 @@ def train(arena: Arena, evaluator: Evaluator, generations: int, battles_per_gen:
             fought += 1
         if fought < battles_per_gen:
             say(f"  [adv] generation short: {fought}/{battles_per_gen} battles fought in "
-                f"{spent} attempts. Evolving on what was measured; the rest never happened.")
-        summary = arena.evolve()
+                f"{spent} attempts. Refusing to evolve from incomplete evidence.")
+            raise IncompleteGenerationError(
+                generation=generation,
+                fought=fought,
+                requested=battles_per_gen,
+                attempts=spent,
+            )
+        summary = arena.next_generation_summary()
         summary["fought_this_gen"] = fought
+        if ledger:
+            try:
+                append_evidence_record(Path(ledger), summary, "generation")
+            except EvidenceWriteError:
+                arena.restore_measurement_checkpoint(checkpoint)
+                raise
+        committed = arena.evolve()
+        committed["fought_this_gen"] = fought
+        if committed != summary:
+            raise RuntimeError("persisted generation summary diverged from committed evolution")
         summaries.append(summary)
         say(f"[adv] gen {summary['generation']:>3} "
             f"battles={summary['battles']:<5} "
             f"nc={summary['no_contests']:<4} "
             f"xcom={summary['xcom_best_elo']:>7.1f} alien={summary['alien_best_elo']:>7.1f}")
-        if ledger:
-            try:
-                with Path(ledger).open("a") as fh:
-                    fh.write(json.dumps(summary) + "\n")
-            except Exception as exc:
-                say(f"  [adv] ledger write failed: {type(exc).__name__}: {exc}")
     return summaries
 
 

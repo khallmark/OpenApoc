@@ -28,29 +28,37 @@ already had -- it does not grant the aliens information either.
 from __future__ import annotations
 
 import argparse
-import json
 import random
 import sys
 import time
 from pathlib import Path
 
-from oa_adversarial import Arena, Evaluator, Policy, new_arena, train
+from oa_adversarial import (
+    Arena, Evaluator, EvidenceWriteError, IncompleteGenerationError, Policy,
+    append_evidence_record, new_arena, train,
+)
 from oa_play import (
-    TICKS_PER_DAY, Driver, GameProcess, Harness, advance, assign_research, buy_interceptor,
+    AdvanceOutcome, BattleResult, TICKS_PER_DAY, Driver, GameProcess, Harness, advance,
+    assign_research,
+    battle_outcome,
+    buy_interceptor,
     _flying_crewed, base_upkeep, crew_transport, hire_staff, new_game,
     raid_infiltrated_building, recover_crash_sites, return_to_city, sell_ground_fleet,
-    sell_surplus_loot, win_battle,
+    require_clean_process_exit, require_positive, sell_surplus_loot, win_battle,
 )
 
 
-def utility(outcome: str, squad_start, squad_end) -> float:
+def utility(outcome, squad_start, squad_end) -> float:
     """Score a battle for the X-COM side, in [0,1].
 
     Winning dominates, but survivors matter on their own: a win that costs the whole squad is not
     a result worth breeding from, and in a campaign it is exactly how a run ends up unable to fly
     the next mission. 70/30 reflects that without letting a cautious policy farm draws.
     """
-    won = 1.0 if outcome == "resolved" else 0.0
+    normalized = battle_outcome(outcome)
+    if not normalized.decided:
+        raise ValueError(f"cannot score undecided battle: {normalized.value}")
+    won = 1.0 if normalized.won else 0.0
     if squad_start and squad_end is not None and squad_start > 0:
         frac = max(0.0, min(1.0, squad_end / squad_start))
     else:
@@ -170,14 +178,34 @@ class CampaignEvaluator(Evaluator):
                     break
 
                 try:
-                    advance(d, self.leg_days, budget_s=max(30.0, deadline - time.time()))
-                    rec["legs"] += 1
+                    advanced = advance(
+                        d, self.leg_days, budget_s=max(30.0, deadline - time.time())
+                    )
                 except Exception as exc:
                     rec.setdefault("advance_errors", []).append(f"{type(exc).__name__}: {exc}")
                     if not d.dismiss_modal(d.status()):
                         d.escape_key()
                     time.sleep(0.5)
                     continue
+
+                rec.setdefault("advance_results", []).append({
+                    "outcome": advanced.outcome.value,
+                    "advanced_ticks": advanced.advanced_ticks,
+                    "stage": advanced.stage,
+                    "reason": advanced.reason,
+                })
+                if advanced.reached:
+                    rec["legs"] += 1
+                elif advanced.outcome is AdvanceOutcome.TRANSITION:
+                    # The next pass drives the battle. A transition is useful progress, but it
+                    # did not reach this leg's target and must not be counted as one.
+                    continue
+                else:
+                    rec["reason"] = (
+                        f"advance {advanced.outcome.value}: {advanced.reason} "
+                        f"({advanced.advanced_ticks} ticks)"
+                    )
+                    break
 
                 # Is the clock actually moving? A campaign pinned at Speed1 produces no missions
                 # no matter how long it is left running, and that is indistinguishable from a
@@ -226,11 +254,10 @@ class CampaignEvaluator(Evaluator):
                             policy=self._xcom_policy(xcom))
                     except Exception as exc:
                         raid = f"error:{type(exc).__name__}: {exc}"
-                    rec["raids"].append(raid)
-                    if raid not in ("nothing-reported", "bad-coords", "already-clear",
-                                    "no-agents-selectable", "refused") \
-                            and not raid.startswith(("not-in-city", "no-building-screen",
-                                                     "no-battle", "error:")):
+                    rec["raids"].append(
+                        raid.as_dict() if isinstance(raid, BattleResult) else raid
+                    )
+                    if isinstance(raid, BattleResult):
                         outcome = raid
                         rec["reason"] = "raid"
                         break
@@ -280,22 +307,20 @@ class CampaignEvaluator(Evaluator):
             except Exception:
                 pass
 
-            if outcome is None:
+            if outcome is None or not outcome.decided:
+                if outcome is not None:
+                    rec["outcome"] = outcome.outcome.value
+                    rec["battle"] = outcome.as_dict()
+                    rec["reason"] = (
+                        rec["reason"] or f"battle did not decide: {outcome.outcome.value}"
+                    )
                 rec["reason"] = rec["reason"] or "budget expired with no battle"
-                print(f"    [attempt {self.battles}] NO CONTEST after "
-                      f"{rec['days_advanced']:.1f} game-days / {time.time()-t_start:.0f}s "
-                      f"({rec['reason']}; raids={rec['raids'][-3:]})", flush=True)
             else:
-                stats = dict(d.last_battle)
+                stats = outcome.as_dict()
                 rec["battle"] = stats
-                rec["outcome"] = outcome
+                rec["outcome"] = outcome.outcome.value
                 score = utility(outcome, stats.get("started_with"), stats.get("survivors"))
                 rec["score"] = round(score, 3)
-                print(f"    [battle {self.battles}] {xcom.genes.get('behaviour')}/"
-                      f"{xcom.genes.get('fire_mode')} vs {alien.genes.get('behaviour_mix')} "
-                      f"-> {outcome} ({stats.get('survivors')}/{stats.get('started_with')} "
-                      f"survived, {rec['days_advanced']:.1f}d) score={score:.2f}", flush=True)
-            return score
         except Exception as exc:
             rec["reason"] = f"{type(exc).__name__}: {exc}"
             # A ConnectionRefusedError says the game is gone; it does not say why. The exit status
@@ -312,16 +337,36 @@ class CampaignEvaluator(Evaluator):
                 rec["game_log_tail"] = lines[-6:]
             except Exception:
                 pass
-            print(f"    [attempt {self.battles}] NO CONTEST: {rec['reason']} "
-                  f"[{rec.get('game_exit', '?')}]", flush=True)
-            return None
         finally:
             rec["wall_s"] = round(time.time() - t_start, 1)
-            self._log(rec)
             try:
-                game.stop()
-            except Exception:
-                pass
+                process_exit = game.stop()
+                rec["engine_exit"] = process_exit.as_dict()
+                require_clean_process_exit(
+                    process_exit, f"adversarial attempt {self.battles} engine"
+                )
+            except Exception as exc:
+                shutdown_reason = f"{type(exc).__name__}: {exc}"
+                rec["shutdown_error"] = shutdown_reason
+                rec["reason"] = "; ".join(filter(None, (rec["reason"], shutdown_reason)))
+                rec["score"] = None
+                score = None
+
+            self._log(rec)
+            if score is None:
+                print(f"    [attempt {self.battles}] NO CONTEST after "
+                      f"{rec['days_advanced']:.1f} game-days / {rec['wall_s']:.0f}s "
+                      f"({rec['reason']}; raids={rec['raids'][-3:]}; "
+                      f"engine={rec.get('engine_exit', rec.get('game_exit', '?'))})",
+                      flush=True)
+            else:
+                stats = rec["battle"]
+                print(f"    [battle {self.battles}] {xcom.genes.get('behaviour')}/"
+                      f"{xcom.genes.get('fire_mode')} vs {alien.genes.get('behaviour_mix')} "
+                      f"-> {rec['outcome']} ({stats.get('survivors')}/"
+                      f"{stats.get('started_with')} survived, {rec['days_advanced']:.1f}d) "
+                      f"score={score:.2f}", flush=True)
+        return score
 
     @staticmethod
     def _ticks(d) -> int:
@@ -337,11 +382,7 @@ class CampaignEvaluator(Evaluator):
         there was no way to tell a campaign that never advanced from one that advanced and stayed
         quiet. That distinction is the whole diagnosis.
         """
-        try:
-            with (self.out / "battles.jsonl").open("a") as fh:
-                fh.write(json.dumps(rec) + "\n")
-        except Exception as exc:
-            print(f"    [adv] battle ledger write failed: {type(exc).__name__}: {exc}", flush=True)
+        append_evidence_record(self.out / "battles.jsonl", rec, "battle")
 
 
 def main() -> int:
@@ -358,6 +399,14 @@ def main() -> int:
     ap.add_argument("--quiet", action="store_true",
                     help="silence the driver's per-leg narration (default: narrate)")
     args = ap.parse_args()
+    try:
+        require_positive(args.generations, "--generations")
+        require_positive(args.battles_per_gen, "--battles-per-gen")
+        require_positive(args.pop, "--pop")
+        require_positive(args.budget, "--budget")
+        require_positive(args.leg, "--leg")
+    except ValueError as exc:
+        ap.error(str(exc))
 
     repo = Path(args.repo)
     out = Path(args.out) if args.out else repo / "build/adversarial"
@@ -368,8 +417,12 @@ def main() -> int:
                            verbose=not args.quiet)
     print(f"[adv] {args.generations} generations x {args.battles_per_gen} real battles, "
           f"pop {args.pop}/side, seed {args.seed}", flush=True)
-    sums = train(arena, ev, args.generations, args.battles_per_gen,
-                 ledger=out / "generations.jsonl", base_seed=args.seed * 1000)
+    try:
+        train(arena, ev, args.generations, args.battles_per_gen,
+              ledger=out / "generations.jsonl", base_seed=args.seed * 1000)
+    except (EvidenceWriteError, IncompleteGenerationError) as exc:
+        print(f"[adv] FAILED: {exc}. No unpersisted generation was evolved.", flush=True)
+        return 1
 
     print(f"\n[adv] {arena.total_plays} battles fought, {arena.no_contests} no-contests "
           f"(attempts that produced no battle; excluded from Elo entirely)")

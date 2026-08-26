@@ -21,13 +21,15 @@ Calling it learning would overstate it.
 KNOWN RISK, to be settled by running rather than assumed: the current framework can discard stage
 commands queued by another stage's `resume()` while it drains a snapshot of the command queue.
 That leaves the cold Skirmish path on SelectForces or Skirmish before BattleView is ever reached.
-The complete cold battle remains a known-red acceptance until the live-FIFO StageCmd fix lands.
+`--probe` fights exactly one battle and reports that lifecycle failure as `setup_failure`; it must
+never be folded into the tactical loss rate.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import queue
 import random
 import sys
@@ -35,8 +37,17 @@ import threading
 import time
 from pathlib import Path
 
-from oa_play import Driver, GameProcess, Harness, new_game
-from oa_skirmish import run_one
+from oa_play import (
+    BattleResult,
+    Driver,
+    GameProcess,
+    Harness,
+    battle_is_decided,
+    new_game,
+    require_clean_process_exit,
+    require_positive,
+)
+from oa_skirmish import parse_alien_specs, run_one
 
 # The policy space. Small and explicit on purpose: every axis here is a control the driver can
 # actually operate through the harness, and nothing is included that it cannot.
@@ -53,54 +64,78 @@ def all_policies() -> list[dict]:
             for f in FIRE_MODES for s in STANCES]
 
 
-def score(results: list[dict]) -> dict:
+def score(results: list[dict], expected_battles: int | None = None) -> dict:
     """Score a policy's battles. Win rate first, then survivors, then speed.
 
     Survivor fraction matters independently of winning: a win that costs the whole squad is not a
     result worth repeating, and in a campaign it is how you end up unable to fly the next mission.
     """
-    n = len(results) or 1
-    wins = sum(1 for r in results if r.get("outcome") == "resolved")
-    surv = [r["survivor_frac"] for r in results if r.get("survivor_frac") is not None]
-    secs = [r["seconds"] for r in results if r.get("seconds") is not None]
+    gameplay = [r for r in results if r.get("result_kind", "gameplay") == "gameplay"]
+    decided = [r for r in gameplay if battle_is_decided(r)]
+    incomplete_battles = len(gameplay) - len(decided)
+    setup_failures = sum(1 for r in results if r.get("result_kind") == "setup_failure")
+    driver_errors = sum(1 for r in results if r.get("result_kind") == "driver_error")
+    n = len(decided) or 1
+    wins = sum(1 for r in decided if r.get("outcome") == "resolved")
+    surv = [r["survivor_frac"] for r in decided if r.get("survivor_frac") is not None]
+    secs = [r["seconds"] for r in decided if r.get("seconds") is not None]
+    complete = bool(decided) and not setup_failures and not driver_errors and not incomplete_battles
+    if expected_battles is not None:
+        complete = complete and len(decided) == expected_battles and len(results) == expected_battles
+    fitness = (wins / n * 100.0
+               + ((sum(surv) / len(surv)) if surv else 0.0) * 10.0
+               - ((sum(secs) / len(secs)) if secs else 0.0) / 600.0)
+    if not decided or not complete:
+        # A policy that never entered a battle is not a zero-win policy. Keep it well below any
+        # real score without emitting non-standard JSON Infinity values into policies.jsonl.
+        fitness = -1_000_000_000.0
     return {
-        "battles": len(results),
+        "attempts": len(results),
+        "gameplay_attempts": len(gameplay),
+        "battles": len(decided),
+        "incomplete_battles": incomplete_battles,
+        "setup_failures": setup_failures,
+        "driver_errors": driver_errors,
+        "expected_battles": expected_battles,
+        "complete": complete,
         "win_rate": wins / n,
         "survivor_frac": (sum(surv) / len(surv)) if surv else 0.0,
         "avg_seconds": (sum(secs) / len(secs)) if secs else 0.0,
         # Lexicographic-ish: wins dominate, survivors break ties, speed breaks those.
-        "fitness": wins / n * 100.0 + ((sum(surv) / len(surv)) if surv else 0.0) * 10.0
-                   - ((sum(secs) / len(secs)) if secs else 0.0) / 600.0,
+        "fitness": fitness,
     }
 
 
 def fight(d: Driver, aliens: dict, policy: dict, map_row: int, budget_s: float) -> dict:
     """One battle. Returns a flat record; never raises for an in-game failure."""
     t0 = time.time()
-    before = {}
-    try:
-        before = d.h.gs("battle")
-    except Exception:
-        pass
     try:
         r = run_one(d, aliens, map_row=map_row, budget_s=budget_s, policy=policy)
-        outcome = r.get("outcome", "error")
+        result_kind = r.get("result_kind", "gameplay")
+        outcome = r.get("outcome")
     except Exception as exc:  # a broken battle must not kill the arena
-        outcome = f"exception:{type(exc).__name__}"
-        r = {}
-    after = {}
-    try:
-        after = d.h.gs("battle")
-    except Exception:
-        pass
+        result_kind = "driver_error"
+        outcome = None
+        r = {
+            "reason": f"{type(exc).__name__}: {exc}",
+            "stage": "unavailable",
+        }
+    captured = getattr(d, "last_battle", {}) if result_kind == "gameplay" else {}
+    if isinstance(captured, BattleResult):
+        stats = captured.as_dict()
+    elif isinstance(captured, dict):
+        stats = dict(captured)
+    else:
+        stats = {}
 
     def num(dct, key):
         try:
-            return int(dct.get(key, ""))
-        except (ValueError, AttributeError):
+            value = dct.get(key)
+            return int(value) if value is not None else None
+        except (TypeError, ValueError, AttributeError):
             return None
 
-    mine0, mine1 = num(before, "mine"), num(after, "mine_alive")
+    mine0, mine1 = num(stats, "started_with"), num(stats, "survivors")
     frac = (mine1 / mine0) if (mine0 and mine1 is not None) else None
     return {
         "policy": policy["name"],
@@ -108,13 +143,16 @@ def fight(d: Driver, aliens: dict, policy: dict, map_row: int, budget_s: float) 
         "stance": policy["stance"],
         "aliens": aliens,
         "map_row": map_row,
+        "result_kind": result_kind,
         "outcome": outcome,
-        "seconds": round(time.time() - t0, 1),
+        "decided": battle_is_decided(r),
+        "stage": r.get("stage", ""),
+        "reason": r.get("reason", ""),
+        "seconds": float(stats.get("seconds", round(time.time() - t0, 1)) or 0.0),
         "squad_start": mine0,
         "squad_end": mine1,
         "survivor_frac": frac,
-        "foes_start": num(before, "foes"),
-        "foes_end": num(after, "foes_alive"),
+        "mission_type": stats.get("mission_type", "unknown"),
     }
 
 
@@ -132,6 +170,45 @@ def recover(d: Driver, tries: int = 8) -> bool:
     return d.status().stage == "CityView"
 
 
+class ArenaCoordinatorError(RuntimeError):
+    pass
+
+
+def collect_policy_results(results: "queue.Queue", generation: int, policy_count: int,
+                           timeout_s: float) -> list[tuple[float, dict, dict]]:
+    """Collect one exact generation or fail on timeout, worker death, stale, or partial data."""
+    deadline = time.monotonic() + timeout_s
+    scored = []
+    seen_policies = set()
+    while len(scored) < policy_count:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ArenaCoordinatorError(
+                "coordinator deadline expired before all policy results arrived"
+            )
+        try:
+            message = results.get(timeout=min(5.0, remaining))
+        except queue.Empty:
+            continue
+        if message.get("kind") == "worker_terminal":
+            raise ArenaCoordinatorError(
+                f"worker {message['worker']} terminated: {message['status']} "
+                f"({message['reason']})"
+            )
+        if message.get("kind") != "policy_result":
+            raise ArenaCoordinatorError(f"unknown worker message: {message!r}")
+        pol, sc = message["policy"], message["score"]
+        if sc.get("generation") != generation or pol["name"] in seen_policies:
+            raise ArenaCoordinatorError("duplicate or stale policy result")
+        seen_policies.add(pol["name"])
+        scored.append((message["fitness"], pol, sc))
+        if message.get("error") or not sc.get("complete"):
+            raise ArenaCoordinatorError(
+                f"incomplete policy {pol['name']}: {message.get('error') or sc}"
+            )
+    return scored
+
+
 def run_worker(wid: int, port: int, repo: Path, out: Path, aliens: dict, args,
                work: "queue.Queue", results: "queue.Queue", ledger_lock: threading.Lock,
                ledger: Path, stop: threading.Event) -> None:
@@ -143,12 +220,14 @@ def run_worker(wid: int, port: int, repo: Path, out: Path, aliens: dict, args,
     Harness port, screenshot dir and log, so nothing is shared with another worker except the
     work queue and the results queue.
 
-    A worker that dies takes only its own battles with it: exceptions are caught, reported, and
-    the policy it was holding is returned to the queue for another worker.
+    Every exit emits a terminal record. Every claimed policy emits exactly one policy-result
+    record, complete or failed, so the coordinator never waits forever on an invisible worker.
     """
     wout = out / f"w{wid}"
     wout.mkdir(parents=True, exist_ok=True)
     game = None
+    terminal_status = "clean"
+    terminal_reason = "stop requested"
     try:
         game = GameProcess(repo, port, wout / "game.log", seed=(args.seed + wid) if args.seed else 0)
         game.start(wait_s=240)
@@ -162,9 +241,11 @@ def run_worker(wid: int, port: int, repo: Path, out: Path, aliens: dict, args,
             except queue.Empty:
                 continue
             rs = []
+            error = ""
             try:
                 for i in range(args.battles_per_policy):
                     if stop.is_set():
+                        error = "coordinator requested stop"
                         break
                     rec = fight(d, aliens, pol, args.map_row, args.budget)
                     rec.update(generation=gen, worker=wid)
@@ -175,25 +256,59 @@ def run_worker(wid: int, port: int, repo: Path, out: Path, aliens: dict, args,
                           f"{args.battles_per_policy} -> {rec['outcome']} "
                           f"surv={rec['squad_end']}/{rec['squad_start']} {rec['seconds']}s",
                           flush=True)
+                    if not battle_is_decided(rec):
+                        error = (f"undecided attempt: {rec['result_kind']} / "
+                                 f"{rec.get('outcome')} ({rec.get('reason', '')})")
+                        print(f"[arena] w{wid} {error}", flush=True)
+                        break
                     if not recover(d):
-                        print(f"[arena] w{wid} lost the UI; abandoning this policy", flush=True)
+                        error = "could not recover UI for next battle"
+                        print(f"[arena] w{wid} {error}", flush=True)
                         break
             except Exception as exc:
-                print(f"[arena] w{wid} FAILED on {pol['name']}: "
-                      f"{type(exc).__name__}: {exc}", flush=True)
+                error = f"{type(exc).__name__}: {exc}"
+                print(f"[arena] w{wid} FAILED on {pol['name']}: {error}", flush=True)
             finally:
-                sc = score(rs)
+                sc = score(rs, expected_battles=args.battles_per_policy)
                 sc.update(policy=pol["name"], generation=gen, worker=wid)
-                results.put((sc["fitness"], pol, sc))
+                results.put({
+                    "kind": "policy_result",
+                    "fitness": sc["fitness"],
+                    "policy": pol,
+                    "score": sc,
+                    "error": error or ("" if sc["complete"] else "incomplete policy batch"),
+                })
                 work.task_done()
     except Exception as exc:
-        print(f"[arena] worker {wid} could not start: {type(exc).__name__}: {exc}", flush=True)
+        terminal_status = "error"
+        terminal_reason = f"{type(exc).__name__}: {exc}"
+        print(f"[arena] worker {wid} could not start: {terminal_reason}", flush=True)
     finally:
+        process_exit = None
         if game is not None:
             try:
-                game.stop()
-            except Exception:
-                pass
+                process_exit = game.stop()
+                require_clean_process_exit(process_exit, f"arena worker {wid} engine")
+            except Exception as exc:
+                shutdown_reason = f"{type(exc).__name__}: {exc}"
+                terminal_status = "error"
+                terminal_reason = "; ".join(filter(None, (terminal_reason, shutdown_reason)))
+        terminal = {
+            "kind": "worker_terminal",
+            "worker": wid,
+            "status": terminal_status,
+            "reason": terminal_reason,
+            "engine_exit": process_exit.as_dict() if process_exit else None,
+        }
+        try:
+            with ledger_lock, ledger.open("a") as fh:
+                fh.write(json.dumps(terminal) + "\n")
+        except Exception as exc:
+            terminal["status"] = "error"
+            terminal["reason"] = "; ".join(filter(None, (
+                terminal["reason"], f"terminal ledger write failed: {type(exc).__name__}: {exc}"
+            )))
+        results.put(terminal)
         print(f"[arena] worker {wid} stopped", flush=True)
 
 
@@ -225,6 +340,7 @@ def run_parallel(args, repo: Path, out: Path, aliens: dict) -> int:
     random.shuffle(pool)
     gen = 0
     best_ever = None
+    result_code = 0
     try:
         while args.generations == 0 or gen < args.generations:
             gen += 1
@@ -232,9 +348,17 @@ def run_parallel(args, repo: Path, out: Path, aliens: dict) -> int:
                   f"workers x {args.battles_per_policy} battles ===", flush=True)
             for pol in pool:
                 work.put((gen, pol))
-            scored = []
-            for _ in range(len(pool)):
-                scored.append(results.get())
+            # Allow worker startup plus one worst-case sequential wave per worker. A dead worker
+            # now emits a terminal record, and this deadline covers the remaining failure mode:
+            # a thread alive but stuck outside every battle's own budget.
+            waves = math.ceil(len(pool) / args.workers)
+            timeout_s = 300.0 + waves * args.battles_per_policy * (args.budget + 60.0)
+            try:
+                scored = collect_policy_results(results, gen, len(pool), timeout_s)
+            except ArenaCoordinatorError as exc:
+                print(f"[arena] {exc}", flush=True)
+                result_code = 1
+                break
             scored.sort(key=lambda t: t[0], reverse=True)
             best_fit, best_pol, _ = scored[0]
             if best_ever is None or best_fit > best_ever[0]:
@@ -264,11 +388,37 @@ def run_parallel(args, repo: Path, out: Path, aliens: dict) -> int:
                     pool.append(p)
     except KeyboardInterrupt:
         print("[arena] interrupted; stopping workers", flush=True)
+        result_code = 130
     finally:
         stop.set()
+        shutdown_deadline = time.monotonic() + 60.0
         for t in threads:
-            t.join(timeout=30)
-    return 0
+            t.join(timeout=max(0.0, shutdown_deadline - time.monotonic()))
+        alive = [t.name for t in threads if t.is_alive()]
+        if alive:
+            print(f"[arena] workers did not stop before deadline: {alive}", flush=True)
+            if result_code == 0:
+                result_code = 1
+
+        terminals = {}
+        while True:
+            try:
+                message = results.get_nowait()
+            except queue.Empty:
+                break
+            if message.get("kind") == "worker_terminal":
+                terminals[message["worker"]] = message
+        missing = sorted(set(range(args.workers)) - set(terminals))
+        failed = [message for message in terminals.values()
+                  if message.get("status") != "clean"]
+        if missing:
+            print(f"[arena] missing worker terminal records: {missing}", flush=True)
+        for message in failed:
+            print(f"[arena] worker {message['worker']} shutdown failed: "
+                  f"{message['reason']}", flush=True)
+        if (missing or failed) and result_code == 0:
+            result_code = 1
+    return result_code
 
 
 def main() -> int:
@@ -291,18 +441,30 @@ def main() -> int:
     ap.add_argument("--probe", action="store_true",
                     help="fight exactly one battle and report where it got to, then exit")
     args = ap.parse_args()
+    try:
+        require_positive(args.battles_per_policy, "--battles-per-policy")
+        require_positive(args.budget, "--budget")
+        require_positive(args.workers, "--workers")
+        if args.generations < 0:
+            raise ValueError("--generations must be zero (unbounded) or positive")
+    except ValueError as exc:
+        ap.error(str(exc))
 
-    aliens = {}
-    for spec in args.alien:
-        name, _, count = spec.partition("=")
-        aliens[name] = int(count or 1)
-    if not aliens:
+    if args.alien:
+        try:
+            aliens = parse_alien_specs(args.alien)
+        except ValueError as exc:
+            ap.error(str(exc))
+    else:
         aliens = {"anthropod": 4, "skeletoid": 2}
 
     repo = Path(args.repo)
     out = Path(args.out) if args.out else repo / "build/arena"
     out.mkdir(parents=True, exist_ok=True)
     ledger = out / "battles.jsonl"
+
+    if args.workers > 1 and not args.probe:
+        return run_parallel(args, repo, out, aliens)
 
     game = GameProcess(repo, args.port, out / "game.log", seed=args.seed)
     game.start(wait_s=240)
@@ -316,19 +478,29 @@ def main() -> int:
         rec = fight(d, aliens, pol, args.map_row, args.budget)
         d.say(f"[arena] PROBE result: {json.dumps(rec)}")
         d.say(f"[arena] PROBE final stage: {d.status().stage}")
+        shutdown_error = ""
+        process_exit = None
+        try:
+            process_exit = game.stop()
+            require_clean_process_exit(process_exit, "arena probe engine")
+        except Exception as exc:
+            shutdown_error = f"{type(exc).__name__}: {exc}"
+            d.say(f"[arena] PROBE shutdown failed: {exc}")
+        probe_record = {
+            "probe": True,
+            **rec,
+            "engine_exit": process_exit.as_dict() if process_exit else None,
+            "shutdown_error": shutdown_error,
+        }
         with ledger.open("a") as fh:
-            fh.write(json.dumps({"probe": True, **rec}) + "\n")
-        game.stop()
-        return 0 if rec["outcome"] in ("resolved", "lost", "withdrew") else 1
-
-    if args.workers > 1:
-        game.stop()  # the single probe/bootstrap process is not needed in parallel mode
-        return run_parallel(args, repo, out, aliens)
+            fh.write(json.dumps(probe_record) + "\n")
+        return 0 if battle_is_decided(rec) and not shutdown_error else 1
 
     pool = all_policies()
     random.shuffle(pool)
     gen = 0
     best_ever = None
+    fatal_driver_failure = False
     while args.generations == 0 or gen < args.generations:
         gen += 1
         d.say(f"=== generation {gen}: {len(pool)} policies x {args.battles_per_policy} battles ===")
@@ -344,16 +516,30 @@ def main() -> int:
                     fh.write(json.dumps(rec) + "\n")
                 d.say(f"[arena]   -> {rec['outcome']} "
                       f"survivors={rec['squad_end']}/{rec['squad_start']} {rec['seconds']}s")
+                if not battle_is_decided(rec):
+                    d.say(f"[arena] undecided attempt: {rec['result_kind']} / "
+                          f"{rec.get('outcome')} stage={rec['stage']} reason={rec['reason']}")
+                    fatal_driver_failure = True
+                    break
                 if not recover(d):
                     d.say("[arena] could not get back to CityView; ending generation")
+                    fatal_driver_failure = True
                     break
-            sc = score(rs)
+            sc = score(rs, expected_battles=args.battles_per_policy)
             sc.update(policy=pol["name"], generation=gen)
             scored.append((sc["fitness"], pol, sc))
             d.say(f"[arena] {pol['name']}: win_rate={sc['win_rate']:.2f} "
                   f"surv={sc['survivor_frac']:.2f} fitness={sc['fitness']:.1f}")
             with (out / "policies.jsonl").open("a") as fh:
                 fh.write(json.dumps(sc) + "\n")
+            if not sc["complete"]:
+                fatal_driver_failure = True
+            if fatal_driver_failure:
+                break
+
+        if fatal_driver_failure:
+            d.say("[arena] stopping: setup/driver failure is not a gameplay loss")
+            break
 
         scored.sort(key=lambda t: t[0], reverse=True)
         if not scored:
@@ -382,8 +568,24 @@ def main() -> int:
                 seen.add(p["name"])
                 pool.append(p)
 
-    game.stop()
-    return 0
+    result_code = 1 if fatal_driver_failure else 0
+    shutdown_error = ""
+    process_exit = None
+    try:
+        process_exit = game.stop()
+        require_clean_process_exit(process_exit, "arena engine")
+    except Exception as exc:
+        shutdown_error = f"{type(exc).__name__}: {exc}"
+        d.say(f"[arena] shutdown failed: {exc}")
+        result_code = 1
+    with ledger.open("a") as fh:
+        fh.write(json.dumps({
+            "kind": "run_terminal",
+            "success": result_code == 0,
+            "engine_exit": process_exit.as_dict() if process_exit else None,
+            "shutdown_error": shutdown_error,
+        }) + "\n")
+    return result_code
 
 
 if __name__ == "__main__":

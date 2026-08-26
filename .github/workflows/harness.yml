@@ -13,5 +13,8 @@ jobs:
         run: python3 tools/regen_compare_report.py --check
       - name: Compare report ordering is deterministic
         run: python3 tools/test_regen_compare_report.py
-      - name: Cold Skirmish entry follows MainMenu
-        run: python3 tools/test_oa_skirmish.py
+      - name: Robot result contracts are truthful
+        run: |
+          for test_file in tools/test_oa_*.py; do
+            python3 "$test_file"
+          done
