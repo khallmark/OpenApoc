@@ -415,6 +415,42 @@ cap2 = SweepCaps()
 _execute(cap2, VeteranAI().decide(calm))
 check(cap2.splits == [True], f"an individual sweep still splits: {cap2.splits}")
 
+# --- being wiped out while winning still ends with being wiped out -----------
+# The withdraw rule required outnumbered AND stalled. stalls resets every time the foe count
+# changes, so a squad trading one soldier per alien never reads as stalled and fights to the last
+# man on the grounds that it is making progress. Observed: six soldiers against twenty-five,
+# hostiles 20 -> 16 while the squad went 6 -> 1, no withdrawal at any point.
+bleeding = Observation(
+    mine=[U(1, 10, 10, 0)],
+    foes=[U(100 + i, 20 + i, 20, 0, hostile=True) for i in range(16)],
+    view_z=0, stalls=0, mission_type="extermination", mode="rt", hard_pressed=True)
+check(bleeding.stalls == 0, "the squad is still killing, so nothing reads as stalled")
+for ai in (VeteranAI(withdraw_ratio=100.0), ScriptedAI(withdraw_ratio=100.0)):
+    kinds = [a.kind for a in ai.decide(bleeding)]
+    check("withdraw" in kinds,
+          f"{type(ai).__name__} must leave at 16:1 having lost a third: {kinds}")
+
+# A squad that is merely outnumbered but intact fights on -- withdrawing early throws away
+# missions that are winnable, and survivors of a raid hand the aliens their building back.
+intact = Observation(
+    mine=[U(i, 10 + i, 10, 0) for i in range(6)],
+    foes=[U(100 + i, 20 + i, 20, 0, hostile=True) for i in range(12)],
+    view_z=0, stalls=0, mission_type="extermination", mode="rt", hard_pressed=False)
+for ai in (VeteranAI(withdraw_ratio=100.0), ScriptedAI(withdraw_ratio=100.0)):
+    check("withdraw" not in [a.kind for a in ai.decide(intact)],
+          f"{type(ai).__name__} must not withdraw with the squad intact")
+
+# NEVER from a base defence: leaving forfeits the base, its facilities, stores and staff. Whether
+# that is survivable depends on owning a second base, which this layer cannot see.
+base = Observation(
+    mine=[U(1, 10, 10, 0)],
+    foes=[U(100 + i, 20 + i, 20, 0, hostile=True) for i in range(16)],
+    view_z=0, stalls=99, mission_type="base_defense", mode="rt", hard_pressed=True)
+for ai in (VeteranAI(withdraw_ratio=1.0, withdraw_stalls=1), ScriptedAI(withdraw_ratio=1.0,
+                                                                       withdraw_stalls=1)):
+    check("withdraw" not in [a.kind for a in ai.decide(base)],
+          f"{type(ai).__name__} must never concede a base defence on its own judgement")
+
 # Seeing a hostile again must end the hunt and resume fighting.
 seen = Observation(mine=[U(1, 10, 10, 0)], foes=[U(9, 10, 16, 0, hostile=True)], view_z=0,
                    mission_type="x", mode="rt")
