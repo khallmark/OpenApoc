@@ -77,6 +77,7 @@ extern ConfigOptionBool optionPauseOnAgentPsiControlled;
 extern ConfigOptionBool optionPauseOnAgentPsiOver;
 
 extern ConfigOptionBool optionDebugCommandsVisible;
+extern ConfigOptionBool optionDebugTileDump;
 extern ConfigOptionBool optionUFODamageModel;
 extern ConfigOptionBool optionInstantExplosionDamage;
 extern ConfigOptionBool optionGravliftSounds;

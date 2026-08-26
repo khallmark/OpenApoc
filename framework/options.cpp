@@ -102,6 +102,7 @@ void dumpOptionsToLog()
 	dumpOption(optionPauseOnAgentPsiOver);
 
 	dumpOption(optionDebugCommandsVisible);
+	dumpOption(optionDebugTileDump);
 	dumpOption(optionUFODamageModel);
 	dumpOption(optionInstantExplosionDamage);
 	dumpOption(optionGravliftSounds);
@@ -356,6 +357,13 @@ ConfigOptionBool optionPauseOnAgentPsiOver("Notifications.Battle", "AgentPsiOver
                                            tr("Unit freed from Psionic control"), true);
 ConfigOptionBool optionDebugCommandsVisible("OpenApoc.NewFeature", "DebugCommandsVisible",
                                             tr("Show the debug commands on screen"), true);
+// OFF by default, unlike DebugCommandsVisible. This one is not a UI affordance: it dumps every
+// owned object on the clicked tile plus the unit's full equipment, missions and visible-unit
+// lists, on EVERY Ctrl-click -- which is also the ordinary multi-select gesture. It used to be
+// `if (true)` in battleview.cpp and segfaulted the engine twice in thirteen automated battles.
+ConfigOptionBool optionDebugTileDump("OpenApoc.NewFeature", "DebugTileDump",
+                                     tr("Dump tile and unit details on Ctrl-click (developers)"),
+                                     false);
 ConfigOptionBool optionUFODamageModel("OpenApoc.NewFeature", "UFODamageModel",
                                       tr("X-Com 1 Damage model (0-200%)"), false);
 ConfigOptionBool optionInstantExplosionDamage("OpenApoc.NewFeature", "InstantExplosionDamage",

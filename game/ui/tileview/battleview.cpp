@@ -15,6 +15,7 @@
 #include "framework/event.h"
 #include "framework/font.h"
 #include "framework/framework.h"
+#include "framework/options.h"
 #include "framework/jukebox.h"
 #include "framework/keycodes.h"
 #include "framework/renderer.h"
@@ -4140,8 +4141,21 @@ bool BattleView::handleMouseDown(Event *e)
 						LogError("Unhandled mouse button!");
 						break;
 				}
-				// Debug section below
-				if (true)
+				// Developer tile/unit dump. This was `if (true)` -- unconditional, in every
+				// build -- so it ran on EVERY Ctrl-click, which is also the game's ordinary
+				// multi-select gesture. It walks every owned object on the tile, static-casts
+				// each to a map part, and reaches u->agent->equipment without checking that
+				// u->agent exists.
+				//
+				// That combination segfaulted the engine twice in thirteen automated attempts,
+				// each time with this dump as the last thing in the log. It also explains two
+				// symptoms that were previously filed separately: a "battle-map generation"
+				// failure that was really this dump (STAND/PASS/FIRE lines), and a wedged
+				// BattleView. A player Ctrl-clicking to add a unit to their squad is on exactly
+				// the same path.
+				//
+				// Gated behind the existing debug-commands option and made null-safe below.
+				if (Options::optionDebugTileDump.get())
 				{
 					UString debug = "";
 					debug += format("\nDEBUG INFORMATION ABOUT TILE {0}, {1}, {2}", t.x, t.y, t.z);
@@ -4228,10 +4242,22 @@ bool BattleView::handleMouseDown(Event *e)
 						                u->goalPosition.y, u->goalPosition.z);
 						debug += format("\nCurrent movement: {0}, falling: {1}",
 						                (int)u->current_movement_state, (int)u->falling);
-						debug += format("\nItems [{0}]:", (int)u->agent->equipment.size());
-						for (auto &e : u->agent->equipment)
+						// u->agent is not guaranteed: a unit whose agent has been released
+						// still has a tile object for a frame, and this dump reaches it.
+						if (u->agent)
 						{
-							debug += format("\n{0}", e->type.id);
+							debug += format("\nItems [{0}]:", (int)u->agent->equipment.size());
+							for (auto &e : u->agent->equipment)
+							{
+								if (e)
+								{
+									debug += format("\n{0}", e->type.id);
+								}
+							}
+						}
+						else
+						{
+							debug += "\nItems: (no agent)";
 						}
 						debug += format("\nMissions [{0}]:", (int)u->missions.size());
 						for (auto &m : u->missions)
