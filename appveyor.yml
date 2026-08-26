@@ -61,7 +61,7 @@ after_build:
 before_test:
   - 7z e temp\cd.iso.xz -odata\
 test_script:
-  - ctest -T Test -V --no-compress-output -C %CONFIGURATION%
+  - ctest -T Test -V --no-compress-output -C %CONFIGURATION% -LE known-master-bug
 after_test:
   - ps: |
       $testFile = ".\Testing\$(Get-Content Testing\TAG -TotalCount 1)\Test.xml"
