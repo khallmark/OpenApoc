@@ -64,6 +64,7 @@ class FrameworkPrivate
   private:
 	friend class Framework;
 	bool quitProgram;
+	bool initializationFailed;
 
 	SDL_DisplayMode screenMode;
 	SDL_Window *window;
@@ -96,9 +97,9 @@ class FrameworkPrivate
 	Vec2<int> toolTipPosition;
 
 	FrameworkPrivate()
-	    : quitProgram(false), window(nullptr), context(0), displaySize(0, 0), windowSize(0, 0),
-	      drawableSize(0, 0), lastWindowedSize(kDefaultScreenWidth, kDefaultScreenHeight),
-	      uiScale(1)
+	    : quitProgram(false), initializationFailed(false), window(nullptr), context(0),
+	      displaySize(0, 0), windowSize(0, 0), drawableSize(0, 0),
+	      lastWindowedSize(kDefaultScreenWidth, kDefaultScreenHeight), uiScale(1)
 	{
 		int threadPoolSize = Options::threadPoolSizeOption.get();
 		if (threadPoolSize > 0)
@@ -158,6 +159,7 @@ Framework::Framework(const UString programName, bool createWindow)
 	{
 		LogError("Cannot init SDL2");
 		LogError("SDL error: {0}", SDL_GetError());
+		p->initializationFailed = true;
 		p->quitProgram = true;
 		return;
 	}
@@ -166,6 +168,7 @@ Framework::Framework(const UString programName, bool createWindow)
 		if (SDL_InitSubSystem(SDL_INIT_VIDEO) < 0)
 		{
 			LogError("Cannot init SDL_VIDEO - \"{0}\"", SDL_GetError());
+			p->initializationFailed = true;
 			p->quitProgram = true;
 			return;
 		}
@@ -343,13 +346,18 @@ Framework &Framework::getInstance()
 }
 Framework *Framework::tryGetInstance() { return instance; }
 
-void Framework::run(sp<Stage> initialStage)
+bool Framework::run(sp<Stage> initialStage)
 {
+	if (p->initializationFailed)
+	{
+		LogError("Trying to run framework after initialization failure");
+		return false;
+	}
 	size_t frameCount = Options::frameLimit.get();
 	if (!createWindow)
 	{
 		LogError("Trying to run framework without window");
-		return;
+		return false;
 	}
 	size_t frame = 0;
 	LogInfo("Program loop started");
@@ -357,12 +365,18 @@ void Framework::run(sp<Stage> initialStage)
 	auto target_frame_duration =
 	    std::chrono::duration<int64_t, std::micro>(1000000 / Options::targetFPS.get());
 
-	p->ProgramStages.push(initialStage);
+	const auto initialDrain =
+	    beginStageCommandTransaction(p->ProgramStages, stageCommands, initialStage, p->quitProgram);
+	if (!initialDrain.continueStageWork)
+	{
+		return initialDrain.runSucceeded;
+	}
 
 	this->renderer->setPalette(this->data->loadPalette("xcom3/ufodata/pal_06.dat"));
 	auto expected_frame_time = std::chrono::steady_clock::now();
 
 	bool frame_time_limited_warning_shown = false;
+	bool runSucceeded = true;
 
 	const size_t profileFrames = (size_t)std::max(0, Options::profileFrames.get());
 	size_t profileSamples = 0;
@@ -418,75 +432,49 @@ void Framework::run(sp<Stage> initialStage)
 			break;
 		}
 		const auto profileFrameStart = std::chrono::steady_clock::now();
+		auto profileUpdateEnd = profileFrameStart;
+		auto profileSwapStart = profileFrameStart;
+		const auto frameDrain = runStageWorkTransaction(
+		    p->ProgramStages, stageCommands, p->quitProgram,
+		    [&]()
+		    {
+			    p->ProgramStages.current()->update();
+			    profileUpdateEnd = std::chrono::steady_clock::now();
+			    profileSwapStart = profileUpdateEnd;
+		    },
+		    [&]()
+		    {
+			    auto surface = p->scaleSurface ? p->scaleSurface : p->defaultSurface;
+			    RendererSurfaceBinding b(*this->renderer, surface);
+			    {
+				    this->renderer->clear();
+			    }
+			    if (!p->ProgramStages.isEmpty())
+			    {
+				    p->ProgramStages.current()->render();
+				    if (p->toolTipImage)
+				    {
+					    renderer->draw(p->toolTipImage, p->toolTipPosition);
+				    }
+				    this->cursor->render();
+				    if (p->scaleSurface)
+				    {
+					    RendererSurfaceBinding scaleBind(*this->renderer, p->defaultSurface);
+					    this->renderer->clear();
+					    this->renderer->drawScaled(p->scaleSurface, {0, 0}, p->drawableSize);
+				    }
+				    {
+					    this->renderer->flush();
+					    this->renderer->newFrame();
+					    profileSwapStart = std::chrono::steady_clock::now();
+					    SDL_GL_SwapWindow(p->window);
+				    }
+			    }
+		    });
+		if (!frameDrain.continueStageWork)
 		{
-			p->ProgramStages.current()->update();
-		}
-		const auto profileUpdateEnd = std::chrono::steady_clock::now();
-		auto profileSwapStart = profileUpdateEnd;
-
-		// Iterate a copy. REPLACEALL/QUIT below clear the stage stack, which destroys stages and
-		// everything they own; anything in that teardown that queues another stage command would
-		// append to this very vector mid-iteration and invalidate the range-for. Copying keeps
-		// the existing semantics -- commands raised while processing this batch are discarded by
-		// the clear() below, exactly as before -- without the undefined behaviour.
-		const auto commandsThisFrame = stageCommands;
-		for (const StageCmd &cmd : commandsThisFrame)
-		{
-			switch (cmd.cmd)
-			{
-				case StageCmd::Command::CONTINUE:
-					break;
-				case StageCmd::Command::REPLACE:
-					p->ProgramStages.pop();
-					p->ProgramStages.push(cmd.nextStage);
-					break;
-				case StageCmd::Command::REPLACEALL:
-					p->ProgramStages.clear();
-					p->ProgramStages.push(cmd.nextStage);
-					break;
-				case StageCmd::Command::PUSH:
-					p->ProgramStages.push(cmd.nextStage);
-					break;
-				case StageCmd::Command::POP:
-					p->ProgramStages.pop();
-					break;
-				case StageCmd::Command::QUIT:
-					p->quitProgram = true;
-					p->ProgramStages.clear();
-					break;
-			}
-			if (p->quitProgram)
-			{
-				break;
-			}
-		}
-		stageCommands.clear();
-
-		auto surface = p->scaleSurface ? p->scaleSurface : p->defaultSurface;
-		RendererSurfaceBinding b(*this->renderer, surface);
-		{
-			this->renderer->clear();
-		}
-		if (!p->ProgramStages.isEmpty())
-		{
-			p->ProgramStages.current()->render();
-			if (p->toolTipImage)
-			{
-				renderer->draw(p->toolTipImage, p->toolTipPosition);
-			}
-			this->cursor->render();
-			if (p->scaleSurface)
-			{
-				RendererSurfaceBinding scaleBind(*this->renderer, p->defaultSurface);
-				this->renderer->clear();
-				this->renderer->drawScaled(p->scaleSurface, {0, 0}, p->drawableSize);
-			}
-			{
-				this->renderer->flush();
-				this->renderer->newFrame();
-				profileSwapStart = std::chrono::steady_clock::now();
-				SDL_GL_SwapWindow(p->window);
-			}
+			runSucceeded = frameDrain.runSucceeded;
+			break;
 		}
 		if (profileFrames)
 		{
@@ -529,6 +517,7 @@ void Framework::run(sp<Stage> initialStage)
 			p->quitProgram = true;
 		}
 	}
+	return runSucceeded;
 }
 
 void Framework::processEvents()
@@ -1366,6 +1355,8 @@ void Framework::audioShutdown()
 }
 
 sp<Stage> Framework::stageGetCurrent() { return p->ProgramStages.current(); }
+
+uint64_t Framework::getStageGeneration() const { return p->ProgramStages.getGeneration(); }
 
 sp<Stage> Framework::stageGetPrevious() { return p->ProgramStages.previous(); }
 

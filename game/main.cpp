@@ -24,13 +24,14 @@ int main(int argc, char *argv[])
 	}
 	LogInfo("Starting OpenApoc \"{0}\"", OPENAPOC_VERSION);
 
+	bool runSucceeded = false;
 	{
 		up<Framework> fw(new Framework(UString(argv[0]), true));
 
 		// Let the harness see the live control tree rather than guessing layout from XML.
 		registerFormsHarnessUI();
 
-		fw->run(mksp<BootUp>());
+		runSucceeded = fw->run(mksp<BootUp>());
 
 		// Release renderer-backed resources while the renderer is still alive. ControlGenerator
 		// keeps its icon cache in a static singleton, so otherwise those images are destroyed at
@@ -40,5 +41,5 @@ int main(int argc, char *argv[])
 		UI::unload();
 	}
 
-	return 0;
+	return frameworkRunExitCode(runSucceeded);
 }

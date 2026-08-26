@@ -5,6 +5,7 @@
 #include "library/strings.h"
 #include "library/vec.h"
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <future>
 #include <list>
@@ -25,6 +26,11 @@ class JukeBox;
 class StageCmd;
 class Stage;
 class RGBImage;
+
+constexpr int frameworkRunExitCode(bool runSucceeded)
+{
+	return runSucceeded ? EXIT_SUCCESS : EXIT_FAILURE;
+}
 
 #define FRAMES_PER_SECOND 100
 
@@ -59,7 +65,7 @@ class Framework
 	static Framework &getInstance();
 	static Framework *tryGetInstance();
 
-	void run(sp<Stage> initialStage);
+	bool run(sp<Stage> initialStage);
 	void processEvents();
 	/* PushEvent() take ownership of the Event, and will delete it after use*/
 	void pushEvent(up<Event> e);
@@ -95,6 +101,7 @@ class Framework
 	void setSlowMode(bool SlowEnabled);
 
 	uint64_t getFrameNumber() const { return frameNumber; }
+	uint64_t getStageGeneration() const;
 
 	sp<Stage> stageGetCurrent();
 	sp<Stage> stageGetPrevious();
