@@ -177,6 +177,8 @@ class Arena:
         self.total_plays = 0
         self.generation = 0
         self.history: list = []
+        # Attempts that produced no battle at all. Counted, never scored -- see train().
+        self.no_contests = 0
 
     def _pair(self, xi: int, ai: int) -> Pairing:
         return self.pairings.setdefault((xi, ai), Pairing(xi, ai))
@@ -240,6 +242,7 @@ class Arena:
         summary = {
             "generation": self.generation,
             "battles": self.total_plays,
+            "no_contests": self.no_contests,
             "xcom_best": xb.name, "xcom_best_elo": round(xb.elo, 1),
             "xcom_best_wr": round(xb.win_rate, 3),
             "alien_best": ab.name, "alien_best_elo": round(ab.elo, 1),
@@ -271,36 +274,69 @@ class Evaluator:
     out without touching the learning code.
     """
 
-    def evaluate(self, xcom: Policy, alien: Policy, seed: int) -> float:
+    def evaluate(self, xcom: Policy, alien: Policy, seed: int):
+        """Return the X-COM score in [0,1], or None if NO BATTLE WAS FOUGHT.
+
+        None is not a loss and not a draw -- it is the absence of a measurement, and the caller
+        drops it whole. Return it whenever the outcome carries no information about the two
+        policies: the budget expired before a mission generated, the process died, the map failed
+        to build. Returning a number there would attribute an engine or harness failure to the
+        genomes that happened to be on the field.
+        """
         raise NotImplementedError
 
 
 def train(arena: Arena, evaluator: Evaluator, generations: int, battles_per_gen: int,
-          ledger: Optional[Path] = None, say=print, base_seed: int = 0) -> list:
+          ledger: Optional[Path] = None, say=print, base_seed: int = 0,
+          max_attempt_factor: int = 3) -> list:
     """Co-evolve both sides. Returns one summary per generation.
 
     Each generation: spend `battles_per_gen` battles on UCB-chosen match-ups, then evolve BOTH
     populations against what the other side has just become. Neither side has a fixed opponent,
     which is the whole point -- X-COM adapts to the aliens' current strategy and the aliens adapt
     right back.
+
+    A NON-EVENT IS NOT A DRAW. If the evaluator returns None (or raises), no battle was fought,
+    and the attempt is dropped whole: no Elo update, no play count, so UCB still reads the pairing
+    as unexplored and will come back to it. The earlier version scored these 0.5 "so one broken map
+    cannot bias the search" -- but recording a draw IS the bias. Every no-contest scored the same
+    constant regardless of which policies were paired, which is a fixed offset applied to whichever
+    match-ups happened to draw a quiet campaign. Exclusion is the only neutral handling.
+
+    Seeds advance per ATTEMPT, not per recorded battle. Retrying a no-contest on its original seed
+    would replay the same quiet campaign and fail identically forever.
     """
     summaries = []
+    attempt = 0
     for _ in range(generations):
-        for b in range(battles_per_gen):
+        fought = 0
+        budget = max(1, battles_per_gen * max_attempt_factor)
+        spent = 0
+        while fought < battles_per_gen and spent < budget:
+            spent += 1
+            attempt += 1
             xi, ai = arena.next_matchup()
-            seed = base_seed + arena.total_plays
+            seed = base_seed + attempt
             try:
                 score = evaluator.evaluate(arena.xcom[xi], arena.alien[ai], seed)
             except Exception as exc:
-                say(f"  [adv] battle failed ({type(exc).__name__}: {exc}); scoring it a draw "
-                    f"so one broken map cannot bias the search")
-                score = 0.5
-            score = min(1.0, max(0.0, float(score)))
-            arena.record(xi, ai, score)
+                say(f"  [adv] attempt {attempt} raised {type(exc).__name__}: {exc} "
+                    f"-- no contest, not recorded")
+                score = None
+            if score is None:
+                arena.no_contests += 1
+                continue
+            arena.record(xi, ai, min(1.0, max(0.0, float(score))))
+            fought += 1
+        if fought < battles_per_gen:
+            say(f"  [adv] generation short: {fought}/{battles_per_gen} battles fought in "
+                f"{spent} attempts. Evolving on what was measured; the rest never happened.")
         summary = arena.evolve()
+        summary["fought_this_gen"] = fought
         summaries.append(summary)
         say(f"[adv] gen {summary['generation']:>3} "
             f"battles={summary['battles']:<5} "
+            f"nc={summary['no_contests']:<4} "
             f"xcom={summary['xcom_best_elo']:>7.1f} alien={summary['alien_best_elo']:>7.1f}")
         if ledger:
             try:

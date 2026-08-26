@@ -115,7 +115,9 @@ check(len(ar3.xcom_hof) > 0 and len(ar3.alien_hof) > 0, "both sides archive cham
 check(len(ar3.xcom_hof) <= ar3.hof_size, "the archive is bounded")
 check(all(isinstance(h, Policy) for h in ar3.xcom_hof), "archive holds real policies")
 
-# --- robustness: a failing battle must not poison the search -----------------
+# --- robustness: a battle that never happened must not enter the search ------
+# A raise and a None both mean "no contest". Neither is a draw: scoring them 0.5 would apply the
+# same constant to whichever pairings UCB happened to pick, which is a fixed bias, not noise.
 def explodes(xcom, alien, seed):
     raise RuntimeError("battlemap generation failed")
 
@@ -123,7 +125,27 @@ ar4 = new_arena(seed=5, pop=3)
 s4 = train(ar4, ReplayEvaluator(explodes), generations=2, battles_per_gen=6,
            say=lambda *_: None)
 check(len(s4) == 2, "training survives an evaluator that always throws")
-check(ar4.total_plays == 12, "failed battles are still recorded, as draws")
+check(ar4.total_plays == 0, "a battle that raised is NOT recorded")
+check(ar4.no_contests > 0, "a battle that raised is counted as a no-contest")
+check(all(p.battles == 0 for p in ar4.xcom + ar4.alien),
+      "no Elo/play count may accrue from battles that never happened")
+check(s4[-1]["fought_this_gen"] == 0, "the summary must say no battles were fought")
+
+# The bounded-retry guard: an evaluator that never produces a contest must still terminate.
+check(ar4.no_contests == 2 * 6 * 3, "no-contests retry up to max_attempt_factor, then give up")
+
+# None is the ordinary no-contest signal; a mix of None and real scores records only the reals.
+seen_seeds = []
+def sometimes(xcom, alien, seed):
+    seen_seeds.append(seed)
+    return None if len(seen_seeds) % 2 else 0.8
+
+ar5 = new_arena(seed=6, pop=3)
+train(ar5, ReplayEvaluator(sometimes), generations=1, battles_per_gen=4, say=lambda *_: None)
+check(ar5.total_plays == 4, "exactly the requested number of REAL battles is recorded")
+check(ar5.no_contests == 4, "the None attempts are counted separately")
+# Retrying a no-contest on its original seed would replay the same quiet campaign forever.
+check(len(set(seen_seeds)) == len(seen_seeds), "each attempt gets a distinct seed")
 
 # --- determinism -------------------------------------------------------------
 r1 = train(new_arena(seed=99, pop=4), ReplayEvaluator(rps), 4, 10, say=lambda *_: None)

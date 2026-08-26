@@ -593,6 +593,8 @@ class Driver:
         # knowledge of where infiltration is -- there is no list to consult, the same as for a
         # player, who watches the UFOs and goes where the game says they landed.
         self.alerted_buildings: list[str] = []
+        # Stats from the most recent win_battle(), which stamps them on every return path.
+        self.last_battle: dict = {}
         self.act_counts: dict[str, int] = {}
         self.act_reset_at = time.time()
 
@@ -1383,7 +1385,8 @@ def current_project(d: Driver) -> str:
     return text
 
 
-def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
+def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
+                              policy: dict | None = None) -> str:
     """Clear aliens out of a human building. Returns the battle outcome, or why it could not run.
 
     This is the part of the game the driver was not playing at all, and it is the one that decides
@@ -1540,7 +1543,7 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
         return_to_city(d)
         return f"no-battle ({st.stage})"
 
-    outcome = win_battle(d, budget_s=budget_s)
+    outcome = win_battle(d, budget_s=budget_s, policy=policy)
     after = d.h.gs("infiltrated")
     d.say(f"  [raid] {outcome}; {after.get('infiltrated')} building(s) still infiltrated, "
           f"gov relation {after.get('gov_relation')}")
@@ -2768,6 +2771,29 @@ def verify_battle_capabilities(d: Driver) -> dict:
 
 
 def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) -> str:
+    """Fight a tactical mission, and leave the numbers behind on `d.last_battle`.
+
+    _fight_battle has six return points. Rather than thread bookkeeping through all of them, this
+    wrapper stamps the result once. The numbers have to be captured DURING the battle: by the time
+    a debriefing closes, Battle::checkMissionEnd has torn current_battle down, so a caller asking
+    afterwards -- as the adversarial arena was -- gets an empty dict and scores a real battle as
+    though it had no squad.
+    """
+    t0 = time.time()
+    d.last_battle = {"outcome": "running", "seconds": 0.0, "started_with": 0,
+                     "survivors": None, "mission_type": "unknown",
+                     "policy": (policy or {}).get("name", "")}
+    try:
+        outcome = _fight_battle(d, budget_s, policy)
+    except Exception as exc:
+        d.last_battle.update(outcome=f"error:{type(exc).__name__}",
+                             seconds=round(time.time() - t0, 1))
+        raise
+    d.last_battle.update(outcome=outcome, seconds=round(time.time() - t0, 1))
+    return outcome
+
+
+def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) -> str:
     """Fight a tactical mission to a win, without cheats.
 
     Units default to FirePermissionMode::AtWill (battleunit.h:271) and UnitAIDefault makes any
@@ -2841,6 +2867,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) 
                 return "wrong-mode"
             started_with = int(b.get("mine_alive", "0") or 0)
             mission_type = b.get("mission_type", "unknown")
+            d.last_battle.update(started_with=started_with, mission_type=mission_type)
             if mission_type == "base_defense":
                 d.say("[battle] BASE DEFENCE - no withdrawal; losing the base ends the campaign")
             d.shot("battle_start")
@@ -2945,6 +2972,10 @@ def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) 
         mine_alive = b.get("mine_alive")
         last_player_won = b.get("player_won") == "1"
         last_mine_alive = mine_alive
+        try:
+            d.last_battle["survivors"] = int(mine_alive)
+        except (TypeError, ValueError):
+            pass
         if mine_alive == "0":
             d.say(f"[battle] squad wiped out: {b}")
         if foes_alive == last_foes:
