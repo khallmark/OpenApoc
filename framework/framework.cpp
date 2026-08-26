@@ -64,6 +64,7 @@ class FrameworkPrivate
   private:
 	friend class Framework;
 	bool quitProgram;
+	bool initializationFailed;
 
 	SDL_DisplayMode screenMode;
 	SDL_Window *window;
@@ -96,9 +97,9 @@ class FrameworkPrivate
 	Vec2<int> toolTipPosition;
 
 	FrameworkPrivate()
-	    : quitProgram(false), window(nullptr), context(0), displaySize(0, 0), windowSize(0, 0),
-	      drawableSize(0, 0), lastWindowedSize(kDefaultScreenWidth, kDefaultScreenHeight),
-	      uiScale(1)
+	    : quitProgram(false), initializationFailed(false), window(nullptr), context(0),
+	      displaySize(0, 0), windowSize(0, 0), drawableSize(0, 0),
+	      lastWindowedSize(kDefaultScreenWidth, kDefaultScreenHeight), uiScale(1)
 	{
 		int threadPoolSize = Options::threadPoolSizeOption.get();
 		if (threadPoolSize > 0)
@@ -158,6 +159,7 @@ Framework::Framework(const UString programName, bool createWindow)
 	{
 		LogError("Cannot init SDL2");
 		LogError("SDL error: {0}", SDL_GetError());
+		p->initializationFailed = true;
 		p->quitProgram = true;
 		return;
 	}
@@ -166,6 +168,7 @@ Framework::Framework(const UString programName, bool createWindow)
 		if (SDL_InitSubSystem(SDL_INIT_VIDEO) < 0)
 		{
 			LogError("Cannot init SDL_VIDEO - \"{0}\"", SDL_GetError());
+			p->initializationFailed = true;
 			p->quitProgram = true;
 			return;
 		}
@@ -357,6 +360,11 @@ StageCommandDrainDecision Framework::drainStageCommands()
 
 bool Framework::run(sp<Stage> initialStage)
 {
+	if (p->initializationFailed)
+	{
+		LogError("Trying to run framework after initialization failure");
+		return false;
+	}
 	size_t frameCount = Options::frameLimit.get();
 	if (!createWindow)
 	{
