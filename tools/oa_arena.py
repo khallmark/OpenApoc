@@ -18,12 +18,11 @@ which that shooting happens -- fire mode and stance today, more as they are wire
 learned model; it is a search over a small, explicit policy space with results recorded honestly.
 Calling it learning would overstate it.
 
-KNOWN RISK, to be settled by running rather than assumed: oa_skirmish.py's own docstring records
-that Skirmish battles never started -- `Skirmish::resume()` fires `loadBattle()` and then does
-not transition, and one battlemap (BATTLEMAP_43sleep) threw "Failed to place mandatory sectors"
-from a threadpool worker. That note predates this session's engine work. `--probe` fights exactly
-one battle and reports precisely where it stopped, so the first question this tool answers is
-whether the arena can run at all.
+KNOWN RISK, to be settled by running rather than assumed: the current framework can discard stage
+commands queued by another stage's `resume()` while it drains a snapshot of the command queue.
+That leaves the cold Skirmish path on SelectForces or Skirmish before BattleView is ever reached.
+`--probe` fights exactly one battle and reports that lifecycle failure as `setup_failure`; it must
+never be folded into the tactical loss rate.
 """
 
 from __future__ import annotations
@@ -61,18 +60,30 @@ def score(results: list[dict]) -> dict:
     Survivor fraction matters independently of winning: a win that costs the whole squad is not a
     result worth repeating, and in a campaign it is how you end up unable to fly the next mission.
     """
-    n = len(results) or 1
-    wins = sum(1 for r in results if r.get("outcome") == "resolved")
-    surv = [r["survivor_frac"] for r in results if r.get("survivor_frac") is not None]
-    secs = [r["seconds"] for r in results if r.get("seconds") is not None]
+    gameplay = [r for r in results if r.get("result_kind", "gameplay") == "gameplay"]
+    setup_failures = sum(1 for r in results if r.get("result_kind") == "setup_failure")
+    driver_errors = sum(1 for r in results if r.get("result_kind") == "driver_error")
+    n = len(gameplay) or 1
+    wins = sum(1 for r in gameplay if r.get("outcome") == "resolved")
+    surv = [r["survivor_frac"] for r in gameplay if r.get("survivor_frac") is not None]
+    secs = [r["seconds"] for r in gameplay if r.get("seconds") is not None]
+    fitness = (wins / n * 100.0
+               + ((sum(surv) / len(surv)) if surv else 0.0) * 10.0
+               - ((sum(secs) / len(secs)) if secs else 0.0) / 600.0)
+    if not gameplay:
+        # A policy that never entered a battle is not a zero-win policy. Keep it well below any
+        # real score without emitting non-standard JSON Infinity values into policies.jsonl.
+        fitness = -1_000_000_000.0
     return {
-        "battles": len(results),
+        "attempts": len(results),
+        "battles": len(gameplay),
+        "setup_failures": setup_failures,
+        "driver_errors": driver_errors,
         "win_rate": wins / n,
         "survivor_frac": (sum(surv) / len(surv)) if surv else 0.0,
         "avg_seconds": (sum(secs) / len(secs)) if secs else 0.0,
         # Lexicographic-ish: wins dominate, survivors break ties, speed breaks those.
-        "fitness": wins / n * 100.0 + ((sum(surv) / len(surv)) if surv else 0.0) * 10.0
-                   - ((sum(secs) / len(secs)) if secs else 0.0) / 600.0,
+        "fitness": fitness,
     }
 
 
@@ -86,10 +97,15 @@ def fight(d: Driver, aliens: dict, policy: dict, map_row: int, budget_s: float) 
         pass
     try:
         r = run_one(d, aliens, map_row=map_row, budget_s=budget_s, policy=policy)
-        outcome = r.get("outcome", "error")
+        result_kind = r.get("result_kind", "gameplay")
+        outcome = r.get("outcome")
     except Exception as exc:  # a broken battle must not kill the arena
-        outcome = f"exception:{type(exc).__name__}"
-        r = {}
+        result_kind = "driver_error"
+        outcome = None
+        r = {
+            "reason": f"{type(exc).__name__}: {exc}",
+            "stage": "unavailable",
+        }
     after = {}
     try:
         after = d.h.gs("battle")
@@ -110,7 +126,10 @@ def fight(d: Driver, aliens: dict, policy: dict, map_row: int, budget_s: float) 
         "stance": policy["stance"],
         "aliens": aliens,
         "map_row": map_row,
+        "result_kind": result_kind,
         "outcome": outcome,
+        "stage": r.get("stage", ""),
+        "reason": r.get("reason", ""),
         "seconds": round(time.time() - t0, 1),
         "squad_start": mine0,
         "squad_end": mine1,
@@ -177,6 +196,10 @@ def run_worker(wid: int, port: int, repo: Path, out: Path, aliens: dict, args,
                           f"{args.battles_per_policy} -> {rec['outcome']} "
                           f"surv={rec['squad_end']}/{rec['squad_start']} {rec['seconds']}s",
                           flush=True)
+                    if rec["result_kind"] != "gameplay":
+                        print(f"[arena] w{wid} stopped before battle: {rec['result_kind']} "
+                              f"stage={rec['stage']} reason={rec['reason']}", flush=True)
+                        break
                     if not recover(d):
                         print(f"[arena] w{wid} lost the UI; abandoning this policy", flush=True)
                         break
@@ -236,7 +259,12 @@ def run_parallel(args, repo: Path, out: Path, aliens: dict) -> int:
                 work.put((gen, pol))
             scored = []
             for _ in range(len(pool)):
-                scored.append(results.get())
+                item = results.get()
+                scored.append(item)
+                if item[2]["setup_failures"] or item[2]["driver_errors"]:
+                    print("[arena] setup/driver failure is not a battle result; "
+                          "stopping the arena", flush=True)
+                    return 1
             scored.sort(key=lambda t: t[0], reverse=True)
             best_fit, best_pol, _ = scored[0]
             if best_ever is None or best_fit > best_ever[0]:
@@ -321,7 +349,8 @@ def main() -> int:
         with ledger.open("a") as fh:
             fh.write(json.dumps({"probe": True, **rec}) + "\n")
         game.stop()
-        return 0 if rec["outcome"] in ("resolved", "lost", "withdrew") else 1
+        return 0 if (rec["result_kind"] == "gameplay"
+                     and rec["outcome"] in ("resolved", "lost")) else 1
 
     if args.workers > 1:
         game.stop()  # the single probe/bootstrap process is not needed in parallel mode
@@ -331,6 +360,7 @@ def main() -> int:
     random.shuffle(pool)
     gen = 0
     best_ever = None
+    fatal_driver_failure = False
     while args.generations == 0 or gen < args.generations:
         gen += 1
         d.say(f"=== generation {gen}: {len(pool)} policies x {args.battles_per_policy} battles ===")
@@ -346,6 +376,11 @@ def main() -> int:
                     fh.write(json.dumps(rec) + "\n")
                 d.say(f"[arena]   -> {rec['outcome']} "
                       f"survivors={rec['squad_end']}/{rec['squad_start']} {rec['seconds']}s")
+                if rec["result_kind"] != "gameplay":
+                    d.say(f"[arena] {rec['result_kind']} before BattleView: "
+                          f"stage={rec['stage']} reason={rec['reason']}")
+                    fatal_driver_failure = True
+                    break
                 if not recover(d):
                     d.say("[arena] could not get back to CityView; ending generation")
                     break
@@ -356,6 +391,12 @@ def main() -> int:
                   f"surv={sc['survivor_frac']:.2f} fitness={sc['fitness']:.1f}")
             with (out / "policies.jsonl").open("a") as fh:
                 fh.write(json.dumps(sc) + "\n")
+            if fatal_driver_failure:
+                break
+
+        if fatal_driver_failure:
+            d.say("[arena] stopping: setup/driver failure is not a gameplay loss")
+            break
 
         scored.sort(key=lambda t: t[0], reverse=True)
         if not scored:
@@ -385,7 +426,7 @@ def main() -> int:
                 pool.append(p)
 
     game.stop()
-    return 0
+    return 1 if fatal_driver_failure else 0
 
 
 if __name__ == "__main__":

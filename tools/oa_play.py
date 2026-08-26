@@ -14,11 +14,16 @@ Stage in this engine -- are detected and dismissed automatically instead of dead
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import platform
 import socket
 import sys
 import time
+import uuid
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 
 import os
@@ -173,6 +178,214 @@ class Status:
     # VideoScreen and differ only by which video plays, so the stage name alone cannot tell a
     # won campaign from a lost one.
     detail: str = "-"
+
+
+def classify_terminal_status(status: Status) -> str | None:
+    """Classify a post-start campaign terminal without guessing from the stage alone.
+
+    Victory and defeat are both ``VideoScreen``. The engine's stage detail is therefore the
+    evidence; an unknown video (or a return to the menu after play began) is an unexpected
+    terminal, never a victory.
+    """
+    detail = (status.detail or "-").lower()
+    if status.stage == "VideoScreen":
+        if "wingame" in detail:
+            return "victory"
+        if "lose" in detail:
+            return "defeat"
+        return "unexpected_terminal"
+    if status.stage in ("MainMenu", "CreditsMenu"):
+        return "unexpected_terminal"
+    return None
+
+
+class AdvanceOutcome(str, Enum):
+    """Why an attempt to advance the campaign clock returned."""
+
+    REACHED = "reached"
+    TRANSITION = "transition"
+    PARTIAL = "partial"
+    PARKED = "parked"
+    TIMEOUT = "timeout"
+    TERMINAL = "terminal"
+
+
+ADVANCE_TRANSITION_STAGES = frozenset(
+    ("BattleView", "BattlePreStart", "BattleBriefing", "BaseDefenseScreen")
+)
+
+
+@dataclass(frozen=True)
+class AdvanceResult(Mapping[str, str]):
+    """Observable result of one clock-advance request.
+
+    The Mapping facade keeps callers that only inspected the old ``gs time`` dictionary working,
+    while the explicit outcome prevents a timeout or battle transition from crediting a leg.
+    """
+
+    outcome: AdvanceOutcome
+    start_ticks: int
+    target_ticks: int
+    end_ticks: int
+    stage: str
+    detail: str = "-"
+    reason: str = ""
+    wall_s: float = 0.0
+    time_state: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def reached(self) -> bool:
+        return self.outcome is AdvanceOutcome.REACHED
+
+    @property
+    def advanced_ticks(self) -> int:
+        return max(0, self.end_ticks - self.start_ticks)
+
+    def __getitem__(self, key: str) -> str:
+        return self.time_state[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.time_state)
+
+    def __len__(self) -> int:
+        return len(self.time_state)
+
+
+def require_validation_seed(seed: int, validation: bool) -> int:
+    """Reject the engine's wall-clock/default seed when producing validation evidence."""
+    value = int(seed)
+    if validation and value <= 0:
+        raise ValueError("validation requires an explicit nonzero --seed")
+    return value
+
+
+def create_run_directory(base: Path, label: str, seed: int) -> Path:
+    """Create a collision-free output directory for one immutable campaign attempt."""
+    root = Path(base)
+    root.mkdir(parents=True, exist_ok=True)
+    safe_label = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in label).strip("-")
+    for _ in range(16):
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        suffix = uuid.uuid4().hex[:10]
+        candidate = root / f"{safe_label or 'run'}-{stamp}-seed{int(seed)}-{suffix}"
+        try:
+            candidate.mkdir()
+            return candidate
+        except FileExistsError:
+            continue
+    raise RuntimeError(f"could not allocate a unique run directory beneath {root}")
+
+
+def _atomic_json(path: Path, payload: dict) -> None:
+    path = Path(path)
+    temporary = path.with_name(f".{path.name}.tmp-{uuid.uuid4().hex}")
+    try:
+        with temporary.open("x") as stream:
+            json.dump(payload, stream, sort_keys=True, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def file_sha256(path: Path) -> str:
+    """Hash a potentially large executable without loading it all into memory."""
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+class RunReceipt:
+    """Append-only run events plus one atomic terminal receipt."""
+
+    def __init__(self, run_dir: Path, provenance: dict):
+        self.run_dir = Path(run_dir)
+        self.run_dir.mkdir(parents=True, exist_ok=True)
+        self.events_path = self.run_dir / "events.jsonl"
+        self.terminal_path = self.run_dir / "terminal.json"
+        self.provenance = dict(provenance)
+        self.finished = self.terminal_path.exists()
+        _atomic_json(self.run_dir / "provenance.json", self.provenance)
+
+    def event(self, event: str, **fields) -> None:
+        record = {"event": event, "wall_time": time.time(), **fields}
+        with self.events_path.open("a") as stream:
+            stream.write(json.dumps(record, sort_keys=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+
+    def record_binary_snapshot(self, binary: Path,
+                               engine_argv: list[str] | None = None) -> None:
+        """Make the copied executable, rather than the mutable shared build, authoritative."""
+        if self.finished:
+            raise RuntimeError(f"terminal receipt already exists: {self.terminal_path}")
+        binary = Path(binary).resolve()
+        self.provenance.update({
+            "run_binary": str(binary),
+            "run_binary_sha256": file_sha256(binary),
+        })
+        if engine_argv is not None:
+            self.provenance["engine_argv"] = list(engine_argv)
+        _atomic_json(self.run_dir / "provenance.json", self.provenance)
+        self.event(
+            "binary_snapshot",
+            path=str(binary),
+            sha256=self.provenance["run_binary_sha256"],
+        )
+
+    def finish(self, outcome: str, exit_code: int, **fields) -> dict:
+        if self.finished:
+            raise RuntimeError(f"terminal receipt already exists: {self.terminal_path}")
+        record = {
+            "outcome": outcome,
+            "exit_code": int(exit_code),
+            "wall_time": time.time(),
+            "provenance": self.provenance,
+            **fields,
+        }
+        self.event("terminal", outcome=outcome, exit_code=int(exit_code), **fields)
+        _atomic_json(self.terminal_path, record)
+        self.finished = True
+        return record
+
+
+def run_provenance(repo: Path, seed: int, validation: bool, driver: str) -> dict:
+    """Capture enough immutable source identity to replay a recorded run."""
+    repo = Path(repo).resolve()
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip()
+    except Exception:
+        head = "unknown"
+    binary = repo / "build/bin/OpenApoc.app/Contents/MacOS/OpenApoc"
+    try:
+        digest = file_sha256(binary)
+    except OSError:
+        digest = "unavailable"
+    return {
+        "driver": driver,
+        "repo": str(repo),
+        "git_head": head,
+        "source_binary": str(binary),
+        "source_binary_sha256": digest,
+        "seed": int(seed),
+        "validation": bool(validation),
+        "argv": list(sys.argv),
+        "python": sys.version,
+        "platform": platform.platform(),
+    }
 
 
 class Harness:
@@ -441,13 +654,15 @@ class GameProcess:
     """Owns a game instance so a run needs no human to start or stop anything."""
 
     def __init__(self, repo: Path, port: int, log_path: Path, extra: list[str] | None = None,
-                 seed: int = 0):
+                 seed: int = 0, require_binary_snapshot: bool = False):
         self.repo = Path(repo)
         self.port = port
         self.log_path = Path(log_path)
         self.extra = extra or []
         self.seed = int(seed)
+        self.require_binary_snapshot = bool(require_binary_snapshot)
         self._run_binary = self.binary
+        self.argv: list[str] = []
         self.proc: subprocess.Popen | None = None
 
     @property
@@ -463,8 +678,8 @@ class GameProcess:
         underneath the run, not the game. A twenty-week run and an active edit loop cannot share
         one binary.
 
-        Falls back to the shared binary if the copy fails for any reason: a slightly fragile run
-        beats no run.
+        Ordinary interactive runs fall back to the shared binary if the copy fails. Validation
+        runs fail closed instead: a run whose executable can change underneath it is not evidence.
         """
         src = self.repo / "build/bin/OpenApoc.app"
         dst = self.log_path.parent / "OpenApoc.app"
@@ -474,6 +689,10 @@ class GameProcess:
             shutil.copytree(src, dst, symlinks=True)
             return dst / "Contents/MacOS/OpenApoc"
         except Exception as exc:
+            if self.require_binary_snapshot:
+                raise RuntimeError(
+                    f"validation binary snapshot failed ({type(exc).__name__}: {exc})"
+                ) from exc
             print(f"[launch] binary snapshot failed ({type(exc).__name__}: {exc}); "
                   f"using the shared build - a rebuild will kill this run", flush=True)
             return self.binary
@@ -514,6 +733,7 @@ class GameProcess:
             # rather than relying on the limiter being broken.
             "--Framework.TargetFPS=1000",
         ] + PAUSE_NOTIFICATION_FLAGS + self.extra
+        self.argv = list(argv)
         self.logf = open(self.log_path, "w")
         # SDL3 makes window operations synchronous by default: Cocoa_SyncWindow pumps the Cocoa
         # event queue until the window server acknowledges the state change. On this machine that
@@ -597,6 +817,19 @@ class GameProcess:
             return []
         return [l.rstrip() for l in self.log_path.read_text(errors="replace").splitlines()
                 if l.startswith("W ") or l.startswith("E ")]
+
+
+def classify_connection_failure(game: GameProcess | None, exc: OSError) -> tuple[str, str]:
+    """Separate an engine death from a socket failure while the engine remains alive."""
+    process_status = ""
+    if game:
+        try:
+            process_status = game.exit_status()
+        except Exception:
+            pass
+    if process_status:
+        return "process_error", f"{process_status}; {type(exc).__name__}: {exc}"
+    return "transport_error", f"{type(exc).__name__}: {exc}"
 
 
 class Driver:
@@ -1009,7 +1242,7 @@ def set_speed(d: Driver, level: int) -> None:
 TICKS_PER_DAY = 12441600
 
 
-def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
+def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> AdvanceResult:
     """Run the clock forward by `game_days`, keeping turbo engaged and clearing modals.
 
     City Speed5 is turbo (a 5-minute jump per frame, ~0.3 game-days/sec here). The engine
@@ -1017,9 +1250,23 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
     projectiles or attack missions on the current map -- so we watch that gate explicitly and
     fall back to Speed4 rather than sitting at Speed1 without knowing why.
     """
+    wall_started = time.time()
+    initial_status = d.status()
+    terminal = classify_terminal_status(initial_status)
+    if terminal:
+        return AdvanceResult(
+            AdvanceOutcome.TERMINAL, 0, 0, 0, initial_status.stage, initial_status.detail,
+            terminal, time.time() - wall_started,
+        )
     if d.game_over():
-        return d.h.gs("time")
-    start = int(d.h.gs("time")["ticks"])
+        status = d.status()
+        return AdvanceResult(
+            AdvanceOutcome.TERMINAL, 0, 0, 0, status.stage, status.detail,
+            classify_terminal_status(status) or "campaign ended", time.time() - wall_started,
+        )
+
+    start_state = d.h.gs("time")
+    start = int(start_state["ticks"])
     target = start + int(game_days * TICKS_PER_DAY)
     deadline = time.time() + budget_s
     last_report = 0.0
@@ -1030,8 +1277,35 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
     last_station = 0.0
     parked_stage = ""
     parked_rounds = 0
+
+    def finish(outcome: AdvanceOutcome, status: Status, reason: str,
+               state: dict[str, str] | None = None) -> AdvanceResult:
+        if state is None:
+            try:
+                state = d.h.gs("time")
+            except (HarnessError, OSError, KeyError, ValueError):
+                state = {}
+        try:
+            end = int(state.get("ticks", start))
+        except (TypeError, ValueError):
+            end = start
+        return AdvanceResult(
+            outcome=outcome,
+            start_ticks=start,
+            target_ticks=target,
+            end_ticks=end,
+            stage=status.stage,
+            detail=status.detail,
+            reason=reason,
+            wall_s=time.time() - wall_started,
+            time_state=dict(state),
+        )
+
     while time.time() < deadline:
         st = d.status()
+        terminal = classify_terminal_status(st)
+        if terminal:
+            return finish(AdvanceOutcome.TERMINAL, st, terminal)
         if st.stage != "CityView":
             # The clock stall detector further down only runs on the CityView branch, so any
             # screen we cannot dismiss used to spin here reporting nothing at all until the whole
@@ -1058,8 +1332,8 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
                 return_to_city(d)
                 continue
             # Some other screen (battle, base, ufopaedia) is in charge; let its own driver run.
-            if st.stage in ("BattleView", "BattlePreStart", "BattleBriefing"):
-                return d.h.gs("time")
+            if st.stage in ADVANCE_TRANSITION_STAGES:
+                return finish(AdvanceOutcome.TRANSITION, st, "battle transition")
             time.sleep(0.5)
             continue
         parked_stage, parked_rounds = "", 0
@@ -1084,9 +1358,10 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
                 d.checks["recoveries"] = d.checks.get("recoveries", 0) + recover_crash_sites(d)
 
         time.sleep(1.0)
-        now = int(d.h.gs("time")["ticks"])
+        now_state = d.h.gs("time")
+        now = int(now_state["ticks"])
         if now >= target:
-            break
+            return finish(AdvanceOutcome.REACHED, st, "target reached", now_state)
         stalls = stalls + 1 if now == prev_ticks else 0
         prev_ticks = now
         if stalls >= 15:
@@ -1098,7 +1373,26 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
             t = d.h.gs("time")
             d.say(f"  [clock] {pct:5.1f}% day={t['day']} week={t['week']} {t['time']} turbo={turbo.get('can_turbo')}")
     d.say(f"  [clock] turbo blocked for ~{blocked_s:.0f}s of this leg")
-    return d.h.gs("time")
+    final_status = d.status()
+    terminal = classify_terminal_status(final_status)
+    final_state = d.h.gs("time") if not terminal else {}
+    try:
+        end = int(final_state.get("ticks", start))
+    except (TypeError, ValueError):
+        end = start
+    if terminal:
+        outcome, reason = AdvanceOutcome.TERMINAL, terminal
+    elif final_status.stage in ADVANCE_TRANSITION_STAGES:
+        outcome, reason = AdvanceOutcome.TRANSITION, "battle transition at deadline"
+    elif end >= target:
+        outcome, reason = AdvanceOutcome.REACHED, "target reached at deadline"
+    elif final_status.stage != "CityView":
+        outcome, reason = AdvanceOutcome.PARKED, f"deadline while parked on {final_status.stage}"
+    elif end > start:
+        outcome, reason = AdvanceOutcome.PARTIAL, "deadline after partial clock progress"
+    else:
+        outcome, reason = AdvanceOutcome.TIMEOUT, "deadline without clock progress"
+    return finish(outcome, final_status, reason, final_state)
 
 
 
@@ -4741,7 +5035,8 @@ def base_upkeep(d: Driver, need_quarters: bool = False) -> dict:
     return out
 
 
-def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float = 7.0) -> dict:
+def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float = 7.0,
+                  receipt: RunReceipt | None = None, validation: bool = False) -> dict:
     run_id = f"r{int(time.time())}"
     d.say(f"[run] {run_id}; ledger {LEDGER}")
     new_game(d, difficulty)
@@ -4782,13 +5077,39 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
         if d.game_over():
             break
         leg = min(leg_days, total_days - elapsed)
-        advance(d, leg)
-        elapsed += leg
+        advanced = advance(d, leg)
+        d.checks["last_advance"] = {
+            "outcome": advanced.outcome.value,
+            "advanced_ticks": advanced.advanced_ticks,
+            "target_ticks": advanced.target_ticks - advanced.start_ticks,
+            "stage": advanced.stage,
+            "reason": advanced.reason,
+        }
+        if receipt:
+            receipt.event("advance", requested_days=leg, **d.checks["last_advance"])
+        if advanced.reached:
+            elapsed += leg
+        elif advanced.outcome is not AdvanceOutcome.TRANSITION:
+            d.checks["run_outcome"] = advanced.outcome.value
+            d.checks["run_reason"] = advanced.reason
+            d.say(f"[run] advance failed closed: {advanced.outcome.value} "
+                  f"({advanced.reason}; {advanced.advanced_ticks} ticks)")
+            break
         st = d.status()
         if st.stage in ("BattleBriefing", "BattlePreStart", "BattleView", "BaseDefenseScreen"):
             outcome = win_battle(d)
             battles += 1
             d.checks[f"battle_{battles}"] = outcome
+            if receipt:
+                receipt.event("battle", number=battles, outcome=outcome)
+            if validation and outcome == "timeout":
+                d.checks["run_outcome"] = "timeout"
+                d.checks["run_reason"] = f"tactical mission {battles} timed out"
+                break
+            if validation and outcome.startswith("lost connection"):
+                d.checks["run_outcome"] = "transport_error"
+                d.checks["run_reason"] = outcome
+                break
 
         # Per-leg upkeep. Without this the campaign loop was only ever "advance the clock, and
         # fight if something forces you to" -- which is exactly what the measurements showed:
@@ -4888,6 +5209,16 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
         snapshot(d, f"day~{elapsed:.0f}")
 
     d.checks["battles_played"] = battles
+    terminal = classify_terminal_status(d.status())
+    if terminal:
+        d.checks["run_outcome"] = terminal
+        d.checks["run_reason"] = "terminal stage observed"
+    elif elapsed >= total_days and "run_outcome" not in d.checks:
+        d.checks["run_outcome"] = "reached"
+        d.checks["run_reason"] = f"advanced requested {total_days:g} game-days"
+    elif "run_outcome" not in d.checks:
+        d.checks["run_outcome"] = "partial"
+        d.checks["run_reason"] = "campaign stopped before requested game-days"
     log_leg(d, run_id, elapsed, "final", {"battles": battles, **d.checks})
     return snapshot(d, "final")
 
@@ -4904,39 +5235,112 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="explicit RNG seed; 0 keeps the engine default. Logged to the ledger so "
                          "any run can be replayed exactly.")
+    ap.add_argument("--validation", action="store_true",
+                    help="emit immutable evidence and fail closed on incomplete progress")
     args = ap.parse_args()
 
     repo = Path(args.repo)
-    out = Path(args.out) if args.out else repo / "build/e2e"
+    try:
+        seed = require_validation_seed(args.seed, args.validation)
+    except ValueError as exc:
+        ap.error(str(exc))
+    if args.validation and args.no_launch:
+        ap.error("validation cannot use --no-launch because the running binary is not provable")
+    out_root = Path(args.out) if args.out else repo / "build/e2e"
+    out = create_run_directory(out_root, "campaign", seed) if args.validation else out_root
     out.mkdir(parents=True, exist_ok=True)
     shots = out / "shots"; shots.mkdir(exist_ok=True)
+    receipt = RunReceipt(
+        out, run_provenance(repo, seed, args.validation, "oa_play")
+    ) if args.validation else None
+    if receipt:
+        receipt.event("started", difficulty=args.difficulty, days=args.days, leg=args.leg)
 
     game = None
     if not args.no_launch:
-        game = GameProcess(repo, args.port, out / "game.log", seed=args.seed)
+        game = GameProcess(
+            repo,
+            args.port,
+            out / "game.log",
+            seed=seed,
+            require_binary_snapshot=args.validation,
+        )
         print(f"[launch] {game.binary}", flush=True)
-        game.start()
 
-    d = Driver(Harness(port=args.port), repo / "data/forms", shots=shots)
-    d.checks = {}
+    d = None
     rc = 0
+    outcome = "not_started"
+    reason = ""
     try:
-        play_campaign(d, args.difficulty, args.days, args.leg)
-    except Exception as exc:
-        d.say(f"[FAIL] {type(exc).__name__}: {exc}")
+        if game:
+            game.start()
+            if receipt:
+                receipt.record_binary_snapshot(game._run_binary, game.argv)
+        d = Driver(Harness(port=args.port), repo / "data/forms", shots=shots)
+        d.checks = {}
+        play_campaign(
+            d,
+            args.difficulty,
+            args.days,
+            args.leg,
+            receipt=receipt,
+            validation=args.validation,
+        )
+        outcome = d.checks.get("run_outcome", "unexpected_error")
+        reason = d.checks.get("run_reason", "run produced no terminal classification")
+        if outcome not in ("reached", "victory"):
+            rc = 1
+    except HarnessError as exc:
+        outcome, reason, rc = "protocol_error", str(exc), 1
+        if d:
+            d.say(f"[FAIL] protocol error: {exc}")
+    except TimeoutError as exc:
+        outcome, reason, rc = "timeout", str(exc), 1
+        if d:
+            d.say(f"[FAIL] timeout: {exc}")
+    except OSError as exc:
+        outcome, reason = classify_connection_failure(game, exc)
         rc = 1
+        if d:
+            d.say(f"[FAIL] {outcome}: {reason}")
+    except Exception as exc:
+        outcome = "process_error" if d is None and isinstance(exc, RuntimeError) else (
+            "process_error" if "snapshot" in str(exc).lower() else "unexpected_error"
+        )
+        reason, rc = f"{type(exc).__name__}: {exc}", 1
+        if d:
+            d.say(f"[FAIL] {reason}")
+        else:
+            print(f"[FAIL] {reason}", flush=True)
     finally:
-        d.say(f"[stages seen] {sorted(d.stages_seen)}")
-        d.say(f"[event responses] {d.responses}")
-        d.say(f"[unknown stages] {d.unknown_stages}")
-        d.say(f"[actions attempted] {d.act_counts}")
-        d.say(f"[checks] {d.checks}")
+        status = None
+        if d:
+            d.say(f"[stages seen] {sorted(d.stages_seen)}")
+            d.say(f"[event responses] {d.responses}")
+            d.say(f"[unknown stages] {d.unknown_stages}")
+            d.say(f"[actions attempted] {d.act_counts}")
+            d.say(f"[checks] {d.checks}")
+            try:
+                status = d.status()
+            except Exception:
+                pass
         if game:
             game.stop()
             warns = game.warnings()
             (out / "warnings.txt").write_text("\n".join(warns))
-            d.say(f"[log] {len(warns)} warning/error lines")
-        (out / "events.txt").write_text("\n".join(d.events))
+            if d:
+                d.say(f"[log] {len(warns)} warning/error lines")
+        if d:
+            (out / "events.txt").write_text("\n".join(d.events))
+        if receipt and not receipt.finished:
+            receipt.finish(
+                outcome,
+                rc,
+                reason=reason,
+                stage=status.stage if status else "unavailable",
+                detail=status.detail if status else "-",
+                checks=d.checks if d else {},
+            )
     return rc
 
 

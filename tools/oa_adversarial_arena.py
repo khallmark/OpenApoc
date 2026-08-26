@@ -36,7 +36,8 @@ from pathlib import Path
 
 from oa_adversarial import Arena, Evaluator, Policy, new_arena, train
 from oa_play import (
-    TICKS_PER_DAY, Driver, GameProcess, Harness, advance, assign_research, buy_interceptor,
+    AdvanceOutcome, TICKS_PER_DAY, Driver, GameProcess, Harness, advance, assign_research,
+    buy_interceptor,
     _flying_crewed, base_upkeep, crew_transport, hire_staff, new_game,
     raid_infiltrated_building, recover_crash_sites, return_to_city, sell_ground_fleet,
     sell_surplus_loot, win_battle,
@@ -170,14 +171,34 @@ class CampaignEvaluator(Evaluator):
                     break
 
                 try:
-                    advance(d, self.leg_days, budget_s=max(30.0, deadline - time.time()))
-                    rec["legs"] += 1
+                    advanced = advance(
+                        d, self.leg_days, budget_s=max(30.0, deadline - time.time())
+                    )
                 except Exception as exc:
                     rec.setdefault("advance_errors", []).append(f"{type(exc).__name__}: {exc}")
                     if not d.dismiss_modal(d.status()):
                         d.escape_key()
                     time.sleep(0.5)
                     continue
+
+                rec.setdefault("advance_results", []).append({
+                    "outcome": advanced.outcome.value,
+                    "advanced_ticks": advanced.advanced_ticks,
+                    "stage": advanced.stage,
+                    "reason": advanced.reason,
+                })
+                if advanced.reached:
+                    rec["legs"] += 1
+                elif advanced.outcome is AdvanceOutcome.TRANSITION:
+                    # The next pass drives the battle. A transition is useful progress, but it
+                    # did not reach this leg's target and must not be counted as one.
+                    continue
+                else:
+                    rec["reason"] = (
+                        f"advance {advanced.outcome.value}: {advanced.reason} "
+                        f"({advanced.advanced_ticks} ticks)"
+                    )
+                    break
 
                 # Is the clock actually moving? A campaign pinned at Speed1 produces no missions
                 # no matter how long it is left running, and that is indistinguishable from a

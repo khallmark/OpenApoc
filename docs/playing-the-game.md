@@ -353,8 +353,9 @@ Sources: [UFOpaedia Apocalypse](https://www.ufopaedia.org/index.php/X-COM:_Apoca
 ## Skirmish mode (for isolated battle testing)
 
 `tools/oa_skirmish.py` drives Skirmish for fast, isolated combat testing instead of running a
-full campaign just to reach one battle. Reaching Skirmish needs a game already running --
-InGameOptions -> BUTTON_SKIRMISH -- there is no cold-boot entry from MainMenu.
+full campaign just to reach one battle. MainMenu has a first-class `BUTTON_SKIRMISH`, so the
+validation path can begin from a cold process without creating unrelated campaign state. Ordinary
+use still starts a game and enters through InGameOptions unless `--cold-main-menu` is supplied.
 
 **A map row is not chosen by ListBox selection.** MapSelector never listens for
 ListBoxChangeSelected at all; each row is an inert Control holding a Label plus a small nested
@@ -369,12 +370,25 @@ alien Building row uses its own preset crew and skips SelectForces too, *unless*
 `CUSTOMISE_FORCES` is checked before clicking Skirmish's own `BUTTON_OK` -- check it regardless
 of which location type is picked.
 
-**Skirmish battles do not currently start.** Setup is fully reliable up through AEquipScreen, but
-the actual transition into BattleView does not happen -- see the status note at the top of
-`tools/oa_skirmish.py` for what was actually verified. This looks like a genuine pre-existing bug
-in Skirmish's own battlemap generation (a threadpool exception was directly observed on one map),
-separate from the main campaign's battle path, which is unaffected and has been fighting real
-missions all session.
+**The current R0 branch must fail this cold smoke truthfully:**
+
+```sh
+python3 tools/oa_skirmish.py --validation --cold-main-menu --seed 101 --rounds 1
+```
+
+The current framework drains a snapshot of its pending `StageCmd` queue. When a stage's
+`resume()` queues another command during that drain, the new command is later cleared rather than
+processed. After AEquipScreen pops, `SelectForces::resume()` queues its own POP and remains stuck on
+SelectForces. If that screen is manually popped, `Skirmish::resume()->loadBattle()` queues the
+battle transition during the same kind of drain and remains stuck on Skirmish. R0 therefore emits
+`result_kind=setup_failure`, keeps `outcome=null`, writes a nonzero terminal receipt, and never
+scores either lifecycle failure as a tactical loss.
+
+Once the live-FIFO StageCmd scheduler change is integrated, this exact command is required-green:
+it must reach BattleView and finish one real battle as either `resolved` or `lost`. A timeout,
+wrong mode, transport/process/protocol error, or return without a battle decision remains nonzero.
+A separately observed battlemap-generation exception is likewise a setup/engine failure, not a
+gameplay outcome.
 
 ## Ask the engine, not the XML
 
