@@ -193,6 +193,30 @@ class CampaignEvaluator(Evaluator):
                     rec["reason"] = "campaign ended before a battle"
                     break
 
+                # Crew FIRST, every leg, before anything that needs a transport.
+                #
+                # Across seven attempts flying_crewed_at_end predicted the outcome exactly: all
+                # four with a crew resolved, both without one failed -- one a 22.7-game-day
+                # no-contest, the other a base defence timed out at 0.16. A crew is not a one-off:
+                # soldiers die, craft are shot down and replaced, and a transport that has lost
+                # its squad refuses every recovery and every raid in silence.
+                #
+                # This used to sit in the "nothing to raid" branch, i.e. AFTER the raid that
+                # needed it, and it was skipped entirely on any leg that did have something to
+                # raid. Ordering was the whole bug.
+                if d.status().stage == "CityView":
+                    try:
+                        if _flying_crewed(d) == 0:
+                            got = crew_transport(d)
+                            rec["recrewed"] = rec.get("recrewed", 0) + (1 if got else 0)
+                            if not got:
+                                rec.setdefault("crew_failures", 0)
+                                rec["crew_failures"] += 1
+                        if d.status().stage != "CityView":
+                            return_to_city(d)
+                    except Exception as exc:
+                        rec.setdefault("crew_errors", []).append(f"{type(exc).__name__}: {exc}")
+
                 # The active half: go and fight where the game said the aliens are.
                 if d.status().stage == "CityView":
                     try:

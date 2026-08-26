@@ -4698,7 +4698,27 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
             except Exception as exc:
                 d.say(f"  [leg] research pass failed: {type(exc).__name__}: {exc}")
 
-            # 2. Take the ground game to them. raid_infiltrated_building() was written,
+            # 2. Keep a squad aboard, BEFORE anything that needs a transport. Not a one-off:
+            #    soldiers die, craft are shot down and replaced, and a transport that has lost
+            #    its squad refuses every recovery and every raid in silence.
+            #
+            #    This used to run last in the leg, i.e. after the raid that needed it, and was
+            #    skipped entirely on any leg that did have something to raid. Ordering was the
+            #    whole bug: across seven measured attempts, every one that ended with a crewed
+            #    flyer resolved its battle and every one without failed -- a 22.7-game-day
+            #    no-contest and a base defence timed out at 0.16.
+            try:
+                if _flying_crewed(d) == 0:
+                    got = crew_transport(d)
+                    if got:
+                        d.checks["crewed"] = d.checks.get("crewed", 0) + got
+                        d.say(f"  [leg] put a squad aboard ({got} craft crewed)")
+                if d.status().stage != "CityView":
+                    return_to_city(d)
+            except Exception as exc:
+                d.say(f"  [leg] crewing failed: {type(exc).__name__}: {exc}")
+
+            # 3. Take the ground game to them. raid_infiltrated_building() was written,
             #    documented at length, and never called from anywhere -- the def was its only
             #    occurrence in the file. Alien crews left in a building raise their owner's
             #    infiltrationValue every hour and spread to neighbours, and most buildings are
@@ -4716,7 +4736,7 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
             except Exception as exc:
                 d.say(f"  [leg] raid failed: {type(exc).__name__}: {exc}")
 
-            # 3. Replace losses. Attrition was the binding constraint on every run measured:
+            # 4. Replace losses. Attrition was the binding constraint on every run measured:
             #    agents 25->16 and the fleet 5->1 flyer inside ten days, after which EXTERMINATE
             #    is refused for want of a transport and the raid loop that earns the score stops.
             #    buy_interceptor and sell_surplus_loot were both written and never called.
@@ -4740,17 +4760,6 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
                     d.say(f"  [leg] hired {hired} agent(s)")
             except Exception as exc:
                 d.say(f"  [leg] hiring failed: {type(exc).__name__}: {exc}")
-
-            # 4. Keep a squad aboard. Not a one-off: soldiers die, craft are shot down and
-            #    replaced, and a transport that lost its crew fails recovery silently.
-            try:
-                if _flying_crewed(d) == 0:
-                    got = crew_transport(d)
-                    if got:
-                        d.checks["crewed"] = d.checks.get("crewed", 0) + got
-                        d.say(f"  [leg] put a squad aboard ({got} craft crewed)")
-            except Exception as exc:
-                d.say(f"  [leg] crewing failed: {type(exc).__name__}: {exc}")
 
             # Whatever all that left us in, get back to the city before the next leg.
             for _ in range(8):
