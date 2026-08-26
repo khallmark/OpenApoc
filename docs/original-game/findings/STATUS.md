@@ -35,8 +35,39 @@ was never traced. No code written.
 
 ### Still open, honestly
 
-B5 type 1-vs-3 · K1 (20 candidate functions unexamined) · U1(b) field semantics ·
-B2/B4 (depend on B1) · MultiTracker's downstream meaning
+**Nothing on this list survived the third pass.** It is kept, struck through, because it was
+quoted as evidence that parity was unassured after every one of its entries had been resolved --
+by findings sitting in this same directory, and in one case by the pass-3 table further down THIS
+FILE.
+
+| Pass-2 "open" | Resolved by | Outcome |
+|---|---|---|
+| B5 type 1-vs-3 | `B5-enzyme-pass3.md` | The question was malformed. Types 1 and 3 are treated identically by all 11 consumers across 17 call sites. Closed negative. |
+| K1 (20 functions unexamined) | `K1-cloak.md` | All 19 readers of the type field examined. Three recognise `0x0a`; none implements concealment. Closed negative. |
+| U1(b) field semantics | `U1b-gate-consumer.md`, `U1-arrived-flag-and-0x168.md` | Overturned, then implemented. |
+| B2 | `unitaihelper.cpp:255` | Implemented, and labelled PRIOR-ART at the code rather than presented as recovered. |
+| B4 | depends on B3 | B3 is a closed negative (no recovered heal threshold). Blocked on an absence, which effort cannot lift. |
+| MultiTracker downstream | `G1-multitracker-downstream.md` | **BOUND**, and shown not to be a multi-target Motion Scanner. |
+
+**There is no parity row left that effort can close.** Every remaining one is either done, shown
+absent from the binaries, or blocked on a row shown absent.
+
+### What "still open" does and does not license
+
+None of these five is in the tactical AI's decision path, and that distinction matters because the
+adversarial learning built on top of this work varies alien behaviour between Aggressive, Normal,
+Cautious and Evasive. Those are engine behaviour modes; the open rows above are a hazard-type
+discrimination, a cloak threshold, a vehicle field's semantics, two rows blocked on B1, and a
+tracker's downstream meaning. Closing them would not change what an alien does in a battle.
+
+Two rows are open in the AI path and both are BLOCKED rather than unstarted: B2 and B4 depend on
+B1, and B4 additionally depends on B3 -- which is itself a closed negative (no recovered heal
+threshold). A row blocked on a closed negative cannot be opened by effort.
+
+The failure mode this section exists to prevent is reading "still open" as "parity unassured, stop
+everything". Parity here is per-row and evidence-bound: a row is done when the original's logic is
+recovered and ported, OR when the original is shown not to have it. Rows of the second kind are
+finished, and implementing them would break parity rather than complete it.
 
 ## Third pass — the RE that was still open
 

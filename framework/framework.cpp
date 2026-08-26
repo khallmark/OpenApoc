@@ -499,8 +499,7 @@ void Framework::run(sp<Stage> initialStage)
 			profileSprites += this->renderer->takeSpriteCount();
 			if (++profileSamples >= profileFrames)
 			{
-				const auto avgMs = [profileSamples](std::chrono::steady_clock::duration d)
-				{
+				const auto avgMs = [profileSamples](std::chrono::steady_clock::duration d) {
 					return std::chrono::duration<double, std::milli>(d).count() /
 					       (double)profileSamples;
 				};
@@ -955,8 +954,7 @@ void Framework::displayInitialise()
 	}
 
 	SDL_DisplayMode desktop{};
-	if (SDL_GetDesktopDisplayMode(displayNumber, &desktop) != 0 || desktop.w <= 0 ||
-	    desktop.h <= 0)
+	if (SDL_GetDesktopDisplayMode(displayNumber, &desktop) != 0 || desktop.w <= 0 || desktop.h <= 0)
 	{
 		LogWarning("Could not read desktop mode for display {0}: {1}", displayNumber,
 		           SDL_GetError());
@@ -1008,10 +1006,9 @@ void Framework::displayInitialise()
 		p->lastWindowedSize = resolved;
 	}
 
-	p->window =
-	    SDL_CreateWindow("OpenApoc", SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber),
-	                     SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber), resolved.x, resolved.y,
-	                     display_flags);
+	p->window = SDL_CreateWindow("OpenApoc", SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber),
+	                             SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber), resolved.x,
+	                             resolved.y, display_flags);
 
 	if (!p->window)
 	{
@@ -1167,9 +1164,8 @@ void Framework::displayRefreshSize()
 	const bool autoScale = Options::screenAutoScale.get();
 	// Tiles and UI layout use window points. HiDPI backing-store pixels are an
 	// upscale blit, not extra world work.
-	const Vec2<int> newDisplay =
-	    computeDisplaySize(newLogical, Options::screenScaleXOption.get(),
-	                       Options::screenScaleYOption.get(), autoScale);
+	const Vec2<int> newDisplay = computeDisplaySize(newLogical, Options::screenScaleXOption.get(),
+	                                                Options::screenScaleYOption.get(), autoScale);
 	const int newUiScale =
 	    computeUiScale(newDisplay.x, Options::screenUiScaleOption.get(), autoScale);
 
@@ -1213,9 +1209,8 @@ void Framework::displayRefreshSize()
 	const bool wantScale = newDisplay != newDrawable;
 	if (wantScale)
 	{
-		if (!p->scaleSurface ||
-		    p->scaleSurface->size != Vec2<unsigned int>{(unsigned)newDisplay.x,
-		                                                (unsigned)newDisplay.y})
+		if (!p->scaleSurface || p->scaleSurface->size != Vec2<unsigned int>{(unsigned)newDisplay.x,
+		                                                                    (unsigned)newDisplay.y})
 		{
 			LogInfo("Scaling from {0} to {1}", newDisplay, newDrawable);
 			p->scaleSurface = mksp<Surface>(newDisplay);

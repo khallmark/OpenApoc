@@ -98,8 +98,8 @@ static bool test_player_relation_mirror()
 	megapol->adjustRelationTo(state, playerRef, -10.0f);
 	TEST_REQUIRE(megapol->getRelationTo(playerRef) == -10.0f, "org side {0}",
 	             megapol->getRelationTo(playerRef));
-	TEST_REQUIRE(player->getRelationTo({&state, "ORG_MEGAPOL"}) == -10.0f,
-	             "player mirror {0}", player->getRelationTo({&state, "ORG_MEGAPOL"}));
+	TEST_REQUIRE(player->getRelationTo({&state, "ORG_MEGAPOL"}) == -10.0f, "player mirror {0}",
+	             player->getRelationTo({&state, "ORG_MEGAPOL"}));
 
 	// Player-initiated adjust does not clobber the org's view (raid deltas stay asymmetric).
 	player->adjustRelationTo(state, {&state, "ORG_MEGAPOL"}, 7.0f);

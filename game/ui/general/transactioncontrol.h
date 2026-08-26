@@ -134,7 +134,6 @@ class TransactionControl : public Control
 	static void releaseCachedImages();
 
   private:
-
   protected:
 	// Link
 	sp<std::list<wp<TransactionControl>>> linked;

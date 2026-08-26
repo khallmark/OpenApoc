@@ -1367,7 +1367,8 @@ class OGLES30Renderer final : public Renderer
 	{
 		this->drawScaled(i, position, i->size, Scaler::Nearest);
 	}
-	void drawRotated(const sp<Image> &i, Vec2<float> center, Vec2<float> position, float angle) override
+	void drawRotated(const sp<Image> &i, Vec2<float> center, Vec2<float> position,
+	                 float angle) override
 	{
 		this->flush();
 		auto viewport_size = this->current_surface->size;
@@ -1397,7 +1398,8 @@ class OGLES30Renderer final : public Renderer
 		}
 		LogError("Unknown image type");
 	}
-	void drawScaled(const sp<Image> &i, Vec2<float> position, Vec2<float> size, Scaler scaler) override
+	void drawScaled(const sp<Image> &i, Vec2<float> position, Vec2<float> size,
+	                Scaler scaler) override
 	{
 		auto viewport_size = this->current_surface->size;
 		bool flip_y = (this->current_surface == this->default_surface);

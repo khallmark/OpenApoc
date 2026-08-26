@@ -545,6 +545,30 @@ class GameProcess:
                 time.sleep(0.5)
         raise TimeoutError(f"harness did not come up on port {self.port}")
 
+    def exit_status(self) -> str:
+        """How the game process ended, in words, or "" if it is still running.
+
+        Three engine deaths this session produced a bare ConnectionRefusedError and nothing else:
+        no uncaught exception (the terminate handler stayed silent), no macOS crash report, no
+        clean exit. That is three different failures wearing the same costume, and the exit status
+        distinguishes them -- a negative returncode is the signal that killed it, which separates
+        a segfault from an abort from an OOM kill from the process simply being asked to leave.
+        """
+        if not self.proc:
+            return "never started"
+        rc = self.proc.poll()
+        if rc is None:
+            return ""
+        if rc < 0:
+            import signal as _signal
+
+            try:
+                name = _signal.Signals(-rc).name
+            except (ValueError, AttributeError):
+                name = "?"
+            return f"killed by signal {-rc} ({name})"
+        return f"exited rc={rc}"
+
     def stop(self) -> None:
         if not self.proc:
             return
@@ -593,8 +617,34 @@ class Driver:
         # knowledge of where infiltration is -- there is no list to consult, the same as for a
         # player, who watches the UFOs and goes where the game says they landed.
         self.alerted_buildings: list[str] = []
+        # Stats from the most recent win_battle(), which stamps them on every return path.
+        self.last_battle: dict = {}
         self.act_counts: dict[str, int] = {}
         self.act_reset_at = time.time()
+
+    # Screens where Escape does NOT mean "back". CityView and BattleView both PUSH InGameOptions
+    # on SDLK_ESCAPE (cityview.cpp:4156, battleview.cpp:3380), so pressing it there OPENS the
+    # settings menu instead of closing anything -- and the harness used Escape as its universal
+    # "stuck, get out of this" fallback. One run reached InGameOptions thirteen times without ever
+    # asking for it, each visit costing a round to notice and another to close.
+    #
+    # These two are also the screens with nothing to escape FROM: they are where the game lives.
+    # leave_battle() still opens InGameOptions on purpose, because BUTTON_EXIT_BATTLE is inside it
+    # -- that one is a destination, not a fallback.
+    ESCAPE_OPENS_OPTIONS = ("CityView", "BattleView")
+
+    def escape_key(self, stage: str = "") -> bool:
+        """Press Escape, unless we are somewhere Escape would open the options menu.
+
+        Returns whether the key was actually sent, so a caller can tell "I tried and it did not
+        help" from "there was nothing here to escape".
+        """
+        stage = stage or self.status().stage
+        if stage in self.ESCAPE_OPENS_OPTIONS:
+            return False
+        # The one place in the file that may press Escape unguarded, besides leave_battle.
+        self.h.key("Escape")
+        return True
 
     def say(self, msg: str) -> None:
         self.events.append(msg)
@@ -892,7 +942,7 @@ class Driver:
                          + (f", {selected} units selected" if selected else "") + f") -> {after}")
                 return True
         # Nothing moved us off the screen; Escape rather than deadlock the run.
-        self.h.key("Escape")
+        self.escape_key(st.stage)
         self.responses[f"{st.stage}:escape"] = self.responses.get(f"{st.stage}:escape", 0) + 1
         self.say(f"  [event] {st.stage} -> Escape (no control advanced the stage)")
         time.sleep(0.35)
@@ -995,6 +1045,17 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
                 d.say(f"  [stall] parked on {st.stage} for ~{parked_rounds // 2}s; "
                       f"nothing is dismissing it")
             if d.dismiss_modal(st):
+                continue
+            # Reporting the park was an improvement on spinning silently, but it still spun: a
+            # leg that ends on BaseScreen (upkeep leaves you there) parked here for its whole
+            # budget while the clock never moved, because the clock only runs on the CityView
+            # branch below. After ~10s of a screen that is not a battle and will not dismiss,
+            # walk back to the city and carry on. return_to_city knows the way out of the base,
+            # research and purchase screens; Escape alone does not.
+            if parked_rounds == 20 and st.stage not in (
+                    "BattleView", "BattlePreStart", "BattleBriefing", "BattleDebriefing"):
+                d.say(f"  [stall] walking back to the city from {st.stage}")
+                return_to_city(d)
                 continue
             # Some other screen (battle, base, ufopaedia) is in charge; let its own driver run.
             if st.stage in ("BattleView", "BattlePreStart", "BattleBriefing"):
@@ -1123,11 +1184,11 @@ def return_to_city(d: Driver, tries: int = 12) -> bool:
                 except (HarnessError, OSError):
                     continue
             else:
-                d.h.key("Escape")
+                d.escape_key(stage)
         time.sleep(0.6)
         if d.status().stage == stage:
             # That exit did nothing; fall back to the keyboard before trying again.
-            d.h.key("Escape")
+            d.escape_key(stage)
             time.sleep(0.4)
     return d.status().stage == "CityView"
 
@@ -1383,7 +1444,8 @@ def current_project(d: Driver) -> str:
     return text
 
 
-def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
+def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
+                              policy: dict | None = None) -> str:
     """Clear aliens out of a human building. Returns the battle outcome, or why it could not run.
 
     This is the part of the game the driver was not playing at all, and it is the one that decides
@@ -1540,7 +1602,7 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0) -> str:
         return_to_city(d)
         return f"no-battle ({st.stage})"
 
-    outcome = win_battle(d, budget_s=budget_s)
+    outcome = win_battle(d, budget_s=budget_s, policy=policy)
     after = d.h.gs("infiltrated")
     d.say(f"  [raid] {outcome}; {after.get('infiltrated')} building(s) still infiltrated, "
           f"gov relation {after.get('gov_relation')}")
@@ -1895,7 +1957,7 @@ def build_facility(d: Driver, want: str = "FACILITYTYPE_ADVANCED_WORKSHOP") -> b
                 if stt.stage == "CityView":
                     break
                 if not d.click_id("BUTTON_OK", stt):
-                    d.h.key("Escape")
+                    d.escape_key()
                 time.sleep(0.5)
             return True
 
@@ -1905,7 +1967,7 @@ def build_facility(d: Driver, want: str = "FACILITYTYPE_ADVANCED_WORKSHOP") -> b
         if stt.stage == "CityView":
             break
         if not d.click_id("BUTTON_OK", stt):
-            d.h.key("Escape")
+            d.escape_key()
         time.sleep(0.5)
     return False
 
@@ -2007,7 +2069,7 @@ def manufacture(d: Driver, want: str = "MANUFACTURE_DIMENSION_SHIFTER", qty: int
         if st.stage in ("ResearchSelect", "ResearchScreen", "BaseScreen"):
             d.click_id("BUTTON_OK", st)
         elif not d.dismiss_modal(st):
-            d.h.key("Escape")
+            d.escape_key()
         time.sleep(0.5)
 
     after = d.h.gs("stores").get("vehicle_top", "-")
@@ -2210,7 +2272,7 @@ def visit_economy(d: Driver) -> bool:
         if st.stage in ("BuyAndSellScreen", "TransactionScreen", "BaseScreen"):
             d.click_id("BUTTON_OK", st); time.sleep(0.6)
         elif not d.dismiss_modal(st):
-            d.h.key("Escape"); time.sleep(0.5)
+            d.escape_key(); time.sleep(0.5)
     return ok
 
 
@@ -2227,7 +2289,7 @@ def visit_ufopaedia(d: Driver) -> bool:
         st = d.status()
         if st.stage == "CityView":
             break
-        d.h.key("Escape"); time.sleep(0.5)
+        d.escape_key(); time.sleep(0.5)
     return ok
 
 
@@ -2290,7 +2352,7 @@ def intercept_ufos(d: Driver) -> int:
         # run: craft_lost reached -440 while incursions, the penalty for letting UFOs alone, stood
         # at -311. Losing craft was costing more than the thing it was meant to prevent.
         d.say("  [intercept] no armed fighter free; leaving the transport out of it")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
     # "Crewed" marks the craft currently carrying the squad, not a craft that cannot fight -- a
     # Valkyrie Interceptor with agents aboard is still an interceptor. Counting it as a transport
@@ -2299,7 +2361,7 @@ def intercept_ufos(d: Driver) -> int:
     # armed fleet and send the uncrewed ones.
     if len(fighters) + len(crewed_fighters) < 2:
         d.say("  [intercept] only one armed flier in the whole fleet; holding it back")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
 
     d.h.send("keydown Left Ctrl")
@@ -2333,7 +2395,7 @@ def intercept_ufos(d: Driver) -> int:
     # attack order at a screen corner where the click hit nothing.
     if d.h.gs("centre_on_ufo").get("centred") != "1":
         d.say("  [intercept] no UFO on the city map")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
     time.sleep(0.5)
     w, h = d.h.display_size()
@@ -2346,7 +2408,7 @@ def intercept_ufos(d: Driver) -> int:
         live = [min(live, key=lambda p: (p[0] - w // 2) ** 2 + (p[1] - h // 2) ** 2)]
     if not live:
         d.say("  [intercept] UFO centred but not resolvable on screen")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
 
     ux, uy = live[0]
@@ -2741,12 +2803,12 @@ def verify_battle_capabilities(d: Driver) -> dict:
         battle_inventory(d, False)
         d.wait_for("BattleView", 15)
     results["hand_icon"] = hand_icon(d, "RIGHT")
-    d.h.key("Escape")
+    d.escape_key()
     time.sleep(0.3)
 
     layout = battle_layout(d)
     results["battle_positions"] = bool(layout)
-    foes = d.h.screen_craft("enemies_screen")
+    foes = on_screen(d, "enemies_screen")
     results["enemies_visible"] = bool(foes)
     if foes:
         fx, fy, fz = foes[0]
@@ -2767,7 +2829,95 @@ def verify_battle_capabilities(d: Driver) -> dict:
     return results
 
 
+def build_battle_ai(policy: dict):
+    """Instantiate the pluggable tactical AI a policy names, or return (None, None).
+
+    The three-layer split (oa_capabilities / oa_ai / oa_executor) was built and then connected to
+    nothing: oa_play imported neither, so win_battle applied fire_mode and stance and ignored the
+    other eight genes, and every doctrine rule in VeteranAI sat unused. This is the join.
+
+    Imports are deliberately lazy. oa_capabilities imports oa_play, so a module-level import here
+    is a cycle; and a harness run that names no AI should not pay to load the AI stack at all.
+
+    Only genes the chosen AI's constructor actually accepts are passed. A policy carrying a gene
+    the AI does not understand is not an error -- the genome is shared across AIs, and one that
+    ignores a knob should simply not be tuned by it.
+    """
+    name = (policy or {}).get("ai")
+    if not name:
+        return None, None
+    import inspect
+    from oa_capabilities import Capabilities
+    from oa_executor import make_ai
+    from oa_ai import REGISTRY
+
+    cls = REGISTRY.get(name)
+    accepted = set()
+    if cls is not None:
+        accepted = set(inspect.signature(cls.__init__).parameters) - {"self"}
+    kw = {k: v for k, v in policy.items() if k in accepted}
+    return make_ai(name, **kw), Capabilities
+
+
+def battle_gs(d: Driver, query: str) -> dict:
+    """gs() for a battle-scoped query, tolerating the battle ending underneath it.
+
+    Same fault as on_screen(), and the reason this is a HELPER rather than another guarded call
+    site: the first fix covered enemies_screen and friends_screen only, and centre_on_enemy went
+    on to throw away a second won mission days-of-debugging later. Battle-scoped queries are a
+    CLASS -- fixing them one at a time is how the second one got missed.
+    """
+    try:
+        return d.h.gs(query) or {}
+    except (HarnessError, OSError):
+        return {}
+
+
+
+def on_screen(d: Driver, which: str) -> list:
+    """screen_craft that tolerates the battle ending underneath it.
+
+    Battle::checkMissionEnd tears current_battle down the instant the last hostile dies, so a
+    query already in flight comes back as an error rather than an empty list. That is not a
+    failure worth abandoning a mission for -- it means the mission is over, which is the outcome
+    we wanted.
+
+    It cost a battle that had just been won: hostiles down from 10 to 6, mission complete, and the
+    run recorded a no-contest because the driver raised instead of shrugging. The engine now
+    answers these two queries with an empty result rather than ERR, and this is the belt to that
+    braces -- an older binary should not be able to lose a won mission this way either.
+    """
+    try:
+        return d.h.screen_craft(which) or []
+    except (HarnessError, OSError):
+        return []
+
+
+
 def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) -> str:
+    """Fight a tactical mission, and leave the numbers behind on `d.last_battle`.
+
+    _fight_battle has six return points. Rather than thread bookkeeping through all of them, this
+    wrapper stamps the result once. The numbers have to be captured DURING the battle: by the time
+    a debriefing closes, Battle::checkMissionEnd has torn current_battle down, so a caller asking
+    afterwards -- as the adversarial arena was -- gets an empty dict and scores a real battle as
+    though it had no squad.
+    """
+    t0 = time.time()
+    d.last_battle = {"outcome": "running", "seconds": 0.0, "started_with": 0,
+                     "survivors": None, "mission_type": "unknown",
+                     "policy": (policy or {}).get("name", "")}
+    try:
+        outcome = _fight_battle(d, budget_s, policy)
+    except Exception as exc:
+        d.last_battle.update(outcome=f"error:{type(exc).__name__}",
+                             seconds=round(time.time() - t0, 1))
+        raise
+    d.last_battle.update(outcome=outcome, seconds=round(time.time() - t0, 1))
+    return outcome
+
+
+def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) -> str:
     """Fight a tactical mission to a win, without cheats.
 
     Units default to FirePermissionMode::AtWill (battleunit.h:271) and UnitAIDefault makes any
@@ -2789,6 +2939,11 @@ def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) 
     started_with = 0
     selected_count = 0
     mission_type = "unknown"
+    # Pluggable tactical AI, built on entry when the policy names one. None means "behave exactly
+    # as before", which is what every existing caller gets.
+    ai_brain = None
+    ai_caps = None
+    ai_failures = 0
 
     while time.time() - t0 < budget_s:
         st = d.status()
@@ -2835,12 +2990,22 @@ def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) 
                     time.sleep(0.15)
                 d.say(f"[battle] policy {policy.get('name','?')}: "
                       f"fire={fm} stance={stance}")
+                try:
+                    ai_brain, caps_cls = build_battle_ai(policy)
+                    if ai_brain is not None:
+                        ai_caps = caps_cls(d)
+                        d.say(f"[battle] tactical AI {ai_brain.name!r} has the squad")
+                except Exception as exc:
+                    d.say(f"[battle] tactical AI {policy.get('ai')!r} could not be built "
+                          f"({type(exc).__name__}: {exc}); fighting on the built-in logic")
+                    ai_brain = None
             b = d.h.gs("battle")
             if b.get("mode") != "rt":
                 d.say(f"[battle] ABORT: mode is {b.get('mode')}, not real-time")
                 return "wrong-mode"
             started_with = int(b.get("mine_alive", "0") or 0)
             mission_type = b.get("mission_type", "unknown")
+            d.last_battle.update(started_with=started_with, mission_type=mission_type)
             if mission_type == "base_defense":
                 d.say("[battle] BASE DEFENCE - no withdrawal; losing the base ends the campaign")
             d.shot("battle_start")
@@ -2856,9 +3021,9 @@ def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) 
         # Keep the camera on the squad. Units are moved by clicking their screen positions, so
         # anything off-camera is neither watchable nor clickable.
         if rounds % 4 == 0:
-            d.h.gs("centre_on_friends")
+            battle_gs(d, "centre_on_friends")
             time.sleep(0.15)
-        friends = d.h.screen_craft("friends_screen")
+        friends = on_screen(d, "friends_screen")
 
         # Re-select only when the squad has actually changed. Selection persists between orders,
         # so rebuilding it every round spent roughly seven clicks on re-selecting the same people
@@ -2878,6 +3043,28 @@ def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) 
             selected_count = len(friends)
             time.sleep(0.12)
 
+        # Hand the round to the pluggable AI first, then fall through to the built-in logic
+        # regardless. Additive on purpose: the inline path below is the one that has actually won
+        # battles, so an AI that misjudges a round costs a round, not the mission. It also cannot
+        # cheat -- Capabilities reads only what the harness can see on screen.
+        if ai_brain is not None:
+            try:
+                from oa_executor import execute as _ai_execute, observe as _ai_observe
+                obs = _ai_observe(ai_caps, stalls=stalls)
+                orders = ai_brain.decide(obs)
+                _ai_execute(ai_caps, orders, say=(d.say if rounds % 10 == 0 else None))
+                if rounds % 10 == 0 and orders:
+                    d.say(f"  [ai] {ai_brain.name}: "
+                          + ", ".join(f"{o.kind}({o.why})" for o in orders[:3]))
+            except Exception as exc:
+                ai_failures += 1
+                if ai_failures <= 3:
+                    d.say(f"  [ai] round failed ({type(exc).__name__}: {exc})")
+                if ai_failures == 8:
+                    d.say("  [ai] too many failures; dropping to the built-in logic for this "
+                          "battle")
+                    ai_brain = None
+
         # Put the camera on the hostiles' floor first: orders only reach the displayed level.
         # Ask the engine before computing it ourselves -- see zoom_to_event() for why its answer
         # is better than the coordinate scan, and why the scan still has to stay.
@@ -2887,16 +3074,16 @@ def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) 
                 if layout:
                     match_enemy_floor(d, layout)
 
-        foes = d.h.screen_craft("enemies_screen")
+        foes = on_screen(d, "enemies_screen")
         # enemies_screen only reports hostiles already on screen. Walking the camera only when
         # *nothing* is visible is not enough: one alien that is framed but unreachable keeps the
         # squad grinding against it while the rest of the map goes unexplored, which is the same
         # stall in a new costume. So also walk on once progress dries up.
         if not foes or stalls > 4:
-            info = d.h.gs("centre_on_enemy")
+            info = battle_gs(d, "centre_on_enemy")
             if info.get("centred") == "1":
                 time.sleep(0.4)
-                found = d.h.screen_craft("enemies_screen")
+                found = on_screen(d, "enemies_screen")
                 if found:
                     foes = found
 
@@ -2945,6 +3132,10 @@ def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) 
         mine_alive = b.get("mine_alive")
         last_player_won = b.get("player_won") == "1"
         last_mine_alive = mine_alive
+        try:
+            d.last_battle["survivors"] = int(mine_alive)
+        except (TypeError, ValueError):
+            pass
         if mine_alive == "0":
             d.say(f"[battle] squad wiped out: {b}")
         if foes_alive == last_foes:
@@ -2959,7 +3150,7 @@ def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) 
             # explain an unreachable hostile -- a unit two floors up is drawn in plain sight and
             # still cannot be walked to -- so log tile positions and let the z gap speak.
             try:
-                pos = d.h.gs("battle_positions")
+                pos = battle_gs(d, "battle_positions")
                 d.say(f"  [battle] positions: foe_at={pos.get('foe_at')} "
                       f"mine_at={pos.get('mine_at')}")
             except (HarnessError, OSError):
@@ -3079,7 +3270,7 @@ def close_buysell(d: Driver, commit: bool) -> bool:
     if commit:
         d.click_id("BUTTON_OK", d.status())
     else:
-        d.h.key("Escape")
+        d.escape_key()
     time.sleep(1.0)
     for _ in range(8):
         st = d.status()
@@ -3090,7 +3281,7 @@ def close_buysell(d: Driver, commit: bool) -> bool:
         elif st.stage in ("BuyAndSellScreen", "BaseScreen"):
             d.click_id("BUTTON_OK", st)
         else:
-            d.h.key("Escape")
+            d.escape_key()
         time.sleep(0.6)
     return d.status().stage == "CityView"
 
@@ -3552,7 +3743,7 @@ def hire_staff(d: Driver, want: int = 6, role: str = "BUTTON_SOLDIERS",
     time.sleep(1.2)
     if d.status().stage != "RecruitScreen":
         d.say(f"  [hire] expected RecruitScreen, got {d.status().stage}")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
 
     d.click_id(role, d.status())  # role filter
@@ -3610,7 +3801,7 @@ def hire_staff(d: Driver, want: int = 6, role: str = "BUTTON_SOLDIERS",
                 d.h.key("Return")
             time.sleep(1.0)
     else:
-        d.h.key("Escape")
+        d.escape_key()
 
     for _ in range(8):
         st = d.status()
@@ -3621,7 +3812,7 @@ def hire_staff(d: Driver, want: int = 6, role: str = "BUTTON_SOLDIERS",
         elif st.stage in ("RecruitScreen", "BaseScreen"):
             d.click_id("BUTTON_OK", st)
         else:
-            d.h.key("Escape")
+            d.escape_key()
         time.sleep(0.6)
 
     after = int(d.h.gs("agents").get(counter, "0") or 0)
@@ -3860,7 +4051,7 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
     time.sleep(1.4)
     if d.status().stage != "AEquipScreen":
         d.say(f"  [equip] expected AEquipScreen, got {d.status().stage}")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
 
     def capture(row: int) -> int:
@@ -3917,7 +4108,7 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
             if st.stage in ("AEquipScreen", "BaseScreen"):
                 d.click_id("BUTTON_OK", st)
             elif not d.dismiss_modal(st):
-                d.h.key("Escape")
+                d.escape_key()
             time.sleep(0.5)
         return 0
 
@@ -3930,7 +4121,7 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
             if st.stage in ("AEquipScreen", "BaseScreen"):
                 d.click_id("BUTTON_OK", st)
             elif not d.dismiss_modal(st):
-                d.h.key("Escape")
+                d.escape_key()
             time.sleep(0.5)
         return 0
 
@@ -3946,7 +4137,7 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
             if st.stage in ("AEquipScreen", "BaseScreen"):
                 d.click_id("BUTTON_OK", st)
             elif not d.dismiss_modal(st):
-                d.h.key("Escape")
+                d.escape_key()
             time.sleep(0.5)
         return 0
 
@@ -3982,7 +4173,7 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
         if st.stage in ("AEquipScreen", "BaseScreen"):
             d.click_id("BUTTON_OK", st)
         elif not d.dismiss_modal(st):
-            d.h.key("Escape")
+            d.escape_key()
         time.sleep(0.5)
 
     after = int(d.h.gs("agents").get("armed", "0") or 0)
@@ -4240,11 +4431,11 @@ def crew_transport(d: Driver) -> int:
     st = d.status()
     if st.stage != "BuildingScreen":
         d.say(f"  [crew] expected BuildingScreen, got {st.stage}")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
     box = d.controls(st).get("AGENT_ASSIGNMENT")
     if box is None or box.w <= 0:
-        d.h.key("Escape")
+        d.escape_key()
         return 0
 
     ROW_H, FIRST_ROW, AGENT_DX, VEHICLE_DX = 26, 63, 103, 383
@@ -4267,7 +4458,7 @@ def crew_transport(d: Driver) -> int:
         picked += 1
         time.sleep(0.1)
     if not picked:
-        d.h.key("Escape")
+        d.escape_key()
         return 0
 
     for row in range(6):
@@ -4298,7 +4489,7 @@ def crew_transport(d: Driver) -> int:
         if st.stage == "CityView":
             break
         if not d.click_id("BUTTON_QUIT", st):
-            d.h.key("Escape")
+            d.escape_key()
         time.sleep(0.4)
     crewed = _flying_crewed(d)
     d.say(f"  [crew] flying crewed craft {before} -> {crewed}")
@@ -4504,6 +4695,52 @@ def log_leg(d: Driver, run_id: str, day: float, phase: str, extra: dict) -> None
         d.say(f"  [ledger] could not write: {type(exc).__name__}: {exc}")
 
 
+def base_upkeep(d: Driver, need_quarters: bool = False) -> dict:
+    """Buy the second base, and build living quarters when recruiting is blocked.
+
+    Both capabilities existed and were called from nowhere but oa_victory.py -- the campaign
+    driver and the adversarial evaluator never expanded a base at all. That is not a missing
+    nicety; it is what makes a campaign run down and a base defence unsurvivable.
+
+    A SECOND BASE. XComDefeated is raised on exactly one condition, player_bases.empty()
+    (base.cpp:150-159), so a second base turns losing one from a defeat into a setback. It also
+    decides whether a base defence can be abandoned at all: win_battle's may_leave requires
+    bases > 1, so with a single base a losing defence must be fought to the last man. Observed
+    exactly that -- 0 of 15 survived, scored 0.00, in a battle the harness had no legal way out of.
+
+    LIVING QUARTERS are what let the roster grow. hire_staff returns the true change in soldier
+    count, and it was returning 0 every leg while its log line read "clicked 6" -- recruits refused
+    for want of space. Attrition became permanent, and a campaign ended at
+    "no-agents-selectable" with 22 game-days on the clock and no mission it could fly.
+    """
+    out: dict = {}
+    if d.status().stage != "CityView":
+        return out
+
+    try:
+        site = d.h.gs("centre_on_basesite")
+        if int(site.get("bases", "1") or 1) < 2 and site.get("affordable") == "1":
+            out["second_base"] = build_second_base(d)
+            d.say(f"  [base] second base: {out['second_base']}")
+    except Exception as exc:
+        out["second_base_error"] = f"{type(exc).__name__}: {exc}"
+
+    if need_quarters:
+        if d.status().stage != "CityView":
+            return_to_city(d)
+        try:
+            built = build_facility(d, "FACILITYTYPE_LIVING_QUARTERS")
+            out["quarters"] = bool(built)
+            if built:
+                d.say("  [base] living quarters built; the roster can grow again")
+        except Exception as exc:
+            out["quarters_error"] = f"{type(exc).__name__}: {exc}"
+
+    if d.status().stage != "CityView":
+        return_to_city(d)
+    return out
+
+
 def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float = 7.0) -> dict:
     run_id = f"r{int(time.time())}"
     d.say(f"[run] {run_id}; ledger {LEDGER}")
@@ -4522,6 +4759,17 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
         d.checks["bought_craft"] = buy_interceptor(d, want=2)
     except Exception as exc:
         d.say(f"  [open] buy_interceptor failed: {type(exc).__name__}: {exc}")
+    # Put a squad aboard. crew_transport was written, documented at length, and called from
+    # NOWHERE -- the def was its only occurrence, the same dead-code shape raid_infiltrated_building
+    # had. The consequence is total: the game hands you a Valkyrie with pax=12, and with crew=0 on
+    # every craft, VehicleMission::recoverVehicle refuses every downed UFO (cityview.cpp:1069-1090)
+    # and no ground mission can be flown at all. Measured directly -- "[select] no flying craft with
+    # troops aboard" on every attempt, across every run, from a fleet that had the transport parked
+    # in the hangar the whole time.
+    try:
+        d.checks["crewed"] = crew_transport(d)
+    except Exception as exc:
+        d.say(f"  [open] crew_transport failed: {type(exc).__name__}: {exc}")
     log_leg(d, run_id, 0.0, "opening", dict(d.checks))
 
     d.checks["research_started"] = assign_research(d)
@@ -4555,7 +4803,27 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
             except Exception as exc:
                 d.say(f"  [leg] research pass failed: {type(exc).__name__}: {exc}")
 
-            # 2. Take the ground game to them. raid_infiltrated_building() was written,
+            # 2. Keep a squad aboard, BEFORE anything that needs a transport. Not a one-off:
+            #    soldiers die, craft are shot down and replaced, and a transport that has lost
+            #    its squad refuses every recovery and every raid in silence.
+            #
+            #    This used to run last in the leg, i.e. after the raid that needed it, and was
+            #    skipped entirely on any leg that did have something to raid. Ordering was the
+            #    whole bug: across seven measured attempts, every one that ended with a crewed
+            #    flyer resolved its battle and every one without failed -- a 22.7-game-day
+            #    no-contest and a base defence timed out at 0.16.
+            try:
+                if _flying_crewed(d) == 0:
+                    got = crew_transport(d)
+                    if got:
+                        d.checks["crewed"] = d.checks.get("crewed", 0) + got
+                        d.say(f"  [leg] put a squad aboard ({got} craft crewed)")
+                if d.status().stage != "CityView":
+                    return_to_city(d)
+            except Exception as exc:
+                d.say(f"  [leg] crewing failed: {type(exc).__name__}: {exc}")
+
+            # 3. Take the ground game to them. raid_infiltrated_building() was written,
             #    documented at length, and never called from anywhere -- the def was its only
             #    occurrence in the file. Alien crews left in a building raise their owner's
             #    infiltrationValue every hour and spread to neighbours, and most buildings are
@@ -4573,7 +4841,7 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
             except Exception as exc:
                 d.say(f"  [leg] raid failed: {type(exc).__name__}: {exc}")
 
-            # 3. Replace losses. Attrition was the binding constraint on every run measured:
+            # 4. Replace losses. Attrition was the binding constraint on every run measured:
             #    agents 25->16 and the fleet 5->1 flyer inside ten days, after which EXTERMINATE
             #    is refused for want of a transport and the raid loop that earns the score stops.
             #    buy_interceptor and sell_surplus_loot were both written and never called.
@@ -4590,6 +4858,7 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
                     d.say(f"  [leg] replaced {bought} craft")
             except Exception as exc:
                 d.say(f"  [leg] craft purchase failed: {type(exc).__name__}: {exc}")
+            hired = 0
             try:
                 hired = hire_staff(d, want=6)
                 if hired:
@@ -4598,12 +4867,21 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
             except Exception as exc:
                 d.say(f"  [leg] hiring failed: {type(exc).__name__}: {exc}")
 
+            # 5. Expand the base. A hire that changed nothing is the signal that quarters are
+            #    full -- hire_staff returns the real delta, and the campaign had been discarding
+            #    that zero every leg for the whole run.
+            try:
+                d.checks.update({f"base_{k}": v
+                                 for k, v in base_upkeep(d, need_quarters=(hired == 0)).items()})
+            except Exception as exc:
+                d.say(f"  [leg] base upkeep failed: {type(exc).__name__}: {exc}")
+
             # Whatever all that left us in, get back to the city before the next leg.
             for _ in range(8):
                 if d.status().stage == "CityView":
                     break
                 if not d.dismiss_modal(d.status()):
-                    d.h.key("Escape")
+                    d.escape_key()
                 time.sleep(0.5)
 
         log_leg(d, run_id, elapsed, "leg", {"battles": battles, **d.checks})

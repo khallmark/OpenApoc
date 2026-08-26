@@ -138,8 +138,7 @@ class Gles3::Gles3Loader
 			}
 			return false;
 #elif defined(GLESWRAP_PLATFORM_SDL)
-			func_pointer =
-			    reinterpret_cast<T>(SDL_GL_GetProcAddress(full_proc_name.c_str()));
+			func_pointer = reinterpret_cast<T>(SDL_GL_GetProcAddress(full_proc_name.c_str()));
 			return func_pointer != nullptr;
 #endif
 		}
@@ -163,8 +162,7 @@ class Gles3::Gles3Loader
 					return true;
 			}
 #elif defined(GLESWRAP_PLATFORM_SDL)
-			func_pointer =
-			    reinterpret_cast<T>(SDL_GL_GetProcAddress(full_proc_name.c_str()));
+			func_pointer = reinterpret_cast<T>(SDL_GL_GetProcAddress(full_proc_name.c_str()));
 			return func_pointer != nullptr;
 #endif
 		}

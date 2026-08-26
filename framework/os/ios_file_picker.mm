@@ -1,6 +1,6 @@
-#include "framework/os/file_picker.h"
 #include "framework/logger.h"
 #include "framework/os/app_paths.h"
+#include "framework/os/file_picker.h"
 
 #import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -83,8 +83,8 @@ UString firstDocumentCdPath()
 		return direct;
 	}
 	NSError *error = nil;
-	NSArray<NSString *> *entries = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:docs
-	                                                                                  error:&error];
+	NSArray<NSString *> *entries =
+	    [[NSFileManager defaultManager] contentsOfDirectoryAtPath:docs error:&error];
 	for (NSString *entry in entries)
 	{
 		const UString candidate = joinDir(docsPath, [entry UTF8String]);
@@ -144,48 +144,47 @@ UString pickCdPath()
 	__block std::atomic<bool> done{false};
 	__block OpenApocCdPickerDelegate *delegate = [[OpenApocCdPickerDelegate alloc] init];
 	delegate.onPicked = ^(NSString *path) {
-		if (path)
-		{
-			result = [path UTF8String];
-		}
-		done.store(true);
+	  if (path)
+	  {
+		  result = [path UTF8String];
+	  }
+	  done.store(true);
 	};
 
 	auto present = ^{
-		@autoreleasepool
-		{
-			NSArray<UTType *> *types = nil;
-			if (@available(iOS 14.0, *))
-			{
-				types = @[
-					[UTType typeWithFilenameExtension:@"iso"] ?: UTTypeData,
-					[UTType typeWithFilenameExtension:@"cue"] ?: UTTypeData,
-					UTTypeFolder
-				];
-			}
-			UIDocumentPickerViewController *picker = nil;
-			if (@available(iOS 14.0, *))
-			{
-				picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:types
-				                                                                     asCopy:YES];
-			}
-			else
-			{
-				picker = [[UIDocumentPickerViewController alloc]
-				    initWithDocumentTypes:@[ @"public.data", @"public.folder" ]
-				                   inMode:UIDocumentPickerModeImport];
-			}
-			picker.delegate = delegate;
-			picker.allowsMultipleSelection = NO;
-			UIViewController *host = topViewController();
-			if (!host)
-			{
-				LogError("No view controller available for CD picker");
-				done.store(true);
-				return;
-			}
-			[host presentViewController:picker animated:YES completion:nil];
-		}
+	  @autoreleasepool
+	  {
+		  NSArray<UTType *> *types = nil;
+		  if (@available(iOS 14.0, *))
+		  {
+			  types = @[
+				  [UTType typeWithFilenameExtension:@"iso"] ?: UTTypeData,
+				  [UTType typeWithFilenameExtension:@"cue"] ?: UTTypeData, UTTypeFolder
+			  ];
+		  }
+		  UIDocumentPickerViewController *picker = nil;
+		  if (@available(iOS 14.0, *))
+		  {
+			  picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:types
+				                                                                   asCopy:YES];
+		  }
+		  else
+		  {
+			  picker = [[UIDocumentPickerViewController alloc]
+				  initWithDocumentTypes:@[ @"public.data", @"public.folder" ]
+				                 inMode:UIDocumentPickerModeImport];
+		  }
+		  picker.delegate = delegate;
+		  picker.allowsMultipleSelection = NO;
+		  UIViewController *host = topViewController();
+		  if (!host)
+		  {
+			  LogError("No view controller available for CD picker");
+			  done.store(true);
+			  return;
+		  }
+		  [host presentViewController:picker animated:YES completion:nil];
+	  }
 	};
 
 	if ([NSThread isMainThread])

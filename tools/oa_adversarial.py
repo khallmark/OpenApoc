@@ -69,6 +69,44 @@ ALIEN_GENES = {
 }
 
 
+# WHICH GENES THE GAME CAN ACTUALLY SEE.
+#
+# This is the difference between a search and a performance. Of the ten X-COM genes, win_battle
+# applies exactly two -- fire_mode and stance -- and ignores the rest. Of the five alien genes, the
+# engine exposes exactly two config options, OpenApoc.AlienAI.Behaviour and .CoverBiasPercent;
+# morale_floor, grenade_bias and advance_bias have no option to bind to.
+#
+# Left unmarked, the learner evolves all fifteen. Two policies differing only in an unwired gene
+# are THE SAME POLICY as far as the game is concerned, but they get different names, separate UCB
+# pairings and separate Hall-of-Fame slots. Elo moves, populations turn over, and none of it means
+# anything -- apparent progress manufactured out of noise. A search space that lies about its own
+# dimensionality is worse than a small one, because a small one is honest.
+#
+# So the unwired genes stay in the tables (they are the list of what still needs connecting) but
+# take no part in the search: they are held at a fixed value, excluded from the name, and skipped
+# by mutation and crossover. Wiring one up is a one-word change here, and it starts varying.
+XCOM_EFFECTIVE = ("fire_mode", "stance", "behaviour", "move_mode", "reserve",
+                  "withdraw_ratio", "focus_fire", "priority_targets")
+# Still unwired, and for a specific reason rather than an oversight:
+#   pull_back_at   VeteranAI emits a "pull_back" Action carrying a unit id; oa_executor declares
+#   min_spacing    it unsupported, and likewise "spread". battle_positions now reports each
+#                  unit's screen coordinates, so the unit could be CLICKED -- what is still
+#                  missing is where to send it. "Back" and "apart" are destinations nothing
+#                  computes yet, and oa_executor refuses rather than clicking a guessed tile,
+#                  which is right: a wrong click is worse than a skipped order.
+# Until a destination exists these must not vary, or the search spends real battles
+# distinguishing policies the game cannot tell apart.
+ALIEN_EFFECTIVE = ("behaviour_mix", "cover_bias")
+
+
+def gene_table(side: str) -> dict:
+    return XCOM_GENES if side == "xcom" else ALIEN_GENES
+
+
+def effective_genes(side: str) -> tuple:
+    return XCOM_EFFECTIVE if side == "xcom" else ALIEN_EFFECTIVE
+
+
 @dataclass
 class Policy:
     side: str                       # "xcom" | "alien"
@@ -80,7 +118,13 @@ class Policy:
 
     @property
     def name(self) -> str:
-        bits = ",".join(f"{k}={self.genes[k]}" for k in sorted(self.genes))
+        """Identity is what the GAME can tell apart, not what the dataclass holds.
+
+        Naming a policy by all its genes made effect-identical policies look distinct, which is
+        how duplicates got separate UCB pairings and separate Hall-of-Fame slots.
+        """
+        keys = [k for k in effective_genes(self.side) if k in self.genes]
+        bits = ",".join(f"{k}={self.genes[k]}" for k in sorted(keys))
         return f"{self.side}[{bits}]"
 
     @property
@@ -89,24 +133,28 @@ class Policy:
 
 
 def random_policy(side: str, rng: random.Random, generation: int = 0) -> Policy:
-    table = XCOM_GENES if side == "xcom" else ALIEN_GENES
-    return Policy(side=side, genes={k: rng.choice(v) for k, v in table.items()}, born=generation)
+    """Randomise only the genes the game reads; hold the rest at a fixed, visible default."""
+    table = gene_table(side)
+    live = effective_genes(side)
+    genes = {k: (rng.choice(v) if k in live else v[0]) for k, v in table.items()}
+    return Policy(side=side, genes=genes, born=generation)
 
 
 def mutate(p: Policy, rng: random.Random, generation: int, rate: float = 0.34) -> Policy:
     """Change a few genes. Deliberately coarse: with battles this expensive, a fine-grained
     search wastes evaluations exploring differences too small for a noisy signal to resolve."""
-    table = XCOM_GENES if p.side == "xcom" else ALIEN_GENES
+    table = gene_table(p.side)
+    live = effective_genes(p.side)
     genes = dict(p.genes)
     changed = False
-    for k, options in table.items():
+    for k in live:
         if rng.random() < rate:
-            alt = [o for o in options if o != genes[k]]
+            alt = [o for o in table[k] if o != genes[k]]
             if alt:
                 genes[k] = rng.choice(alt)
                 changed = True
     if not changed:                                  # never emit a pure clone
-        k = rng.choice(list(table))
+        k = rng.choice(list(live))
         alt = [o for o in table[k] if o != genes[k]]
         if alt:
             genes[k] = rng.choice(alt)
@@ -118,7 +166,9 @@ def crossover(a: Policy, b: Policy, rng: random.Random, generation: int) -> Poli
     that beats both -- the whole reason to keep a population rather than hill-climb a single
     incumbent."""
     assert a.side == b.side, "cannot cross policies from opposing sides"
-    genes = {k: (a.genes[k] if rng.random() < 0.5 else b.genes[k]) for k in a.genes}
+    live = effective_genes(a.side)
+    genes = {k: ((a.genes[k] if rng.random() < 0.5 else b.genes[k]) if k in live else a.genes[k])
+             for k in a.genes}
     return Policy(side=a.side, genes=genes, elo=(a.elo + b.elo) / 2.0, born=generation)
 
 
@@ -177,6 +227,8 @@ class Arena:
         self.total_plays = 0
         self.generation = 0
         self.history: list = []
+        # Attempts that produced no battle at all. Counted, never scored -- see train().
+        self.no_contests = 0
 
     def _pair(self, xi: int, ai: int) -> Pairing:
         return self.pairings.setdefault((xi, ai), Pairing(xi, ai))
@@ -240,6 +292,7 @@ class Arena:
         summary = {
             "generation": self.generation,
             "battles": self.total_plays,
+            "no_contests": self.no_contests,
             "xcom_best": xb.name, "xcom_best_elo": round(xb.elo, 1),
             "xcom_best_wr": round(xb.win_rate, 3),
             "alien_best": ab.name, "alien_best_elo": round(ab.elo, 1),
@@ -271,36 +324,69 @@ class Evaluator:
     out without touching the learning code.
     """
 
-    def evaluate(self, xcom: Policy, alien: Policy, seed: int) -> float:
+    def evaluate(self, xcom: Policy, alien: Policy, seed: int):
+        """Return the X-COM score in [0,1], or None if NO BATTLE WAS FOUGHT.
+
+        None is not a loss and not a draw -- it is the absence of a measurement, and the caller
+        drops it whole. Return it whenever the outcome carries no information about the two
+        policies: the budget expired before a mission generated, the process died, the map failed
+        to build. Returning a number there would attribute an engine or harness failure to the
+        genomes that happened to be on the field.
+        """
         raise NotImplementedError
 
 
 def train(arena: Arena, evaluator: Evaluator, generations: int, battles_per_gen: int,
-          ledger: Optional[Path] = None, say=print, base_seed: int = 0) -> list:
+          ledger: Optional[Path] = None, say=print, base_seed: int = 0,
+          max_attempt_factor: int = 3) -> list:
     """Co-evolve both sides. Returns one summary per generation.
 
     Each generation: spend `battles_per_gen` battles on UCB-chosen match-ups, then evolve BOTH
     populations against what the other side has just become. Neither side has a fixed opponent,
     which is the whole point -- X-COM adapts to the aliens' current strategy and the aliens adapt
     right back.
+
+    A NON-EVENT IS NOT A DRAW. If the evaluator returns None (or raises), no battle was fought,
+    and the attempt is dropped whole: no Elo update, no play count, so UCB still reads the pairing
+    as unexplored and will come back to it. The earlier version scored these 0.5 "so one broken map
+    cannot bias the search" -- but recording a draw IS the bias. Every no-contest scored the same
+    constant regardless of which policies were paired, which is a fixed offset applied to whichever
+    match-ups happened to draw a quiet campaign. Exclusion is the only neutral handling.
+
+    Seeds advance per ATTEMPT, not per recorded battle. Retrying a no-contest on its original seed
+    would replay the same quiet campaign and fail identically forever.
     """
     summaries = []
+    attempt = 0
     for _ in range(generations):
-        for b in range(battles_per_gen):
+        fought = 0
+        budget = max(1, battles_per_gen * max_attempt_factor)
+        spent = 0
+        while fought < battles_per_gen and spent < budget:
+            spent += 1
+            attempt += 1
             xi, ai = arena.next_matchup()
-            seed = base_seed + arena.total_plays
+            seed = base_seed + attempt
             try:
                 score = evaluator.evaluate(arena.xcom[xi], arena.alien[ai], seed)
             except Exception as exc:
-                say(f"  [adv] battle failed ({type(exc).__name__}: {exc}); scoring it a draw "
-                    f"so one broken map cannot bias the search")
-                score = 0.5
-            score = min(1.0, max(0.0, float(score)))
-            arena.record(xi, ai, score)
+                say(f"  [adv] attempt {attempt} raised {type(exc).__name__}: {exc} "
+                    f"-- no contest, not recorded")
+                score = None
+            if score is None:
+                arena.no_contests += 1
+                continue
+            arena.record(xi, ai, min(1.0, max(0.0, float(score))))
+            fought += 1
+        if fought < battles_per_gen:
+            say(f"  [adv] generation short: {fought}/{battles_per_gen} battles fought in "
+                f"{spent} attempts. Evolving on what was measured; the rest never happened.")
         summary = arena.evolve()
+        summary["fought_this_gen"] = fought
         summaries.append(summary)
         say(f"[adv] gen {summary['generation']:>3} "
             f"battles={summary['battles']:<5} "
+            f"nc={summary['no_contests']:<4} "
             f"xcom={summary['xcom_best_elo']:>7.1f} alien={summary['alien_best_elo']:>7.1f}")
         if ledger:
             try:

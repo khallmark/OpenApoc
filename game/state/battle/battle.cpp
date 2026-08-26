@@ -1,7 +1,7 @@
 #include "game/state/battle/battle.h"
 #include "framework/configfile.h"
-#include "framework/options.h"
 #include "framework/framework.h"
+#include "framework/options.h"
 #include "framework/sound.h"
 #include "game/state/battle/ai/aitype.h"
 #include "game/state/battle/battledoor.h"

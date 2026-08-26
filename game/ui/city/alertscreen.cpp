@@ -1,5 +1,4 @@
 #include "game/ui/city/alertscreen.h"
-#include <algorithm>
 #include "forms/form.h"
 #include "forms/graphic.h"
 #include "forms/label.h"
@@ -20,6 +19,7 @@
 #include "game/ui/general/aequipscreen.h"
 #include "game/ui/general/messagebox.h"
 #include "library/strings_format.h"
+#include <algorithm>
 
 namespace OpenApoc
 {
@@ -55,8 +55,8 @@ UString AlertScreen::harnessDetail() const
 	// Building has no id member; its name is what identifies it here.
 	UString name = building->name;
 	std::replace(name.begin(), name.end(), ' ', '_');
-	return format("alert_building={0} crew={1} owner={2}", name.empty() ? UString("-") : name,
-	              crew, owner);
+	return format("alert_building={0} crew={1} owner={2}", name.empty() ? UString("-") : name, crew,
+	              owner);
 }
 
 void AlertScreen::begin()

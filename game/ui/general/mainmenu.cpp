@@ -37,7 +37,6 @@ std::shared_future<void> loadSkirmishState(sp<GameState> state)
 
 } // namespace
 
-
 MainMenu::MainMenu() : Stage(), mainmenuform(ui().getForm("mainmenu"))
 {
 	auto versionLabel = mainmenuform->findControlTyped<Label>("VERSION_LABEL");

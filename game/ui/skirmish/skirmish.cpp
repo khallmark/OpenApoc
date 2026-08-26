@@ -551,6 +551,20 @@ void Skirmish::goToBattle(bool customAliens, std::map<StateRef<AgentType>, int> 
 		{
 			battleInBase(hotseat, playerBase, customAliens, aliens, score);
 		}
+		else
+		{
+			// No location was ever chosen, so there is nothing to fight in and this lambda
+			// silently does nothing -- the stage simply never transitions, which reads
+			// identically to a hang. Skirmish::setLocation is called from exactly one place
+			// (MapSelector's GraphicButton), so a UI path that reaches OK without going through
+			// it lands here.
+			//
+			// Say so. A mechanism whose failure produces no evidence costs far more to diagnose
+			// than one that complains: this exact silence was read as "loadBattle never
+			// transitions" for a long time before anyone could see why.
+			LogWarning("Skirmish: goToBattle with no location set (no building, vehicle or base) "
+			           "- nothing to load, staying put. Choose a map first.");
+		}
 	};
 
 	sp<Agent> firstAgent;

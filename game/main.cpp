@@ -1,6 +1,7 @@
 #include "forms/harness_ui.h"
 #include "forms/ui.h"
 #include "framework/configfile.h"
+#include "framework/crashhandler.h"
 #include "framework/framework.h"
 #include "game/ui/boot.h"
 #include "game/ui/components/controlgenerator.h"
@@ -13,6 +14,10 @@ using namespace OpenApoc;
 
 int main(int argc, char *argv[])
 {
+	// Installed before anything else can throw, so option parsing and framework construction are
+	// covered too.
+	installCrashHandler();
+
 	if (config().parseOptions(argc, argv))
 	{
 		return EXIT_FAILURE;

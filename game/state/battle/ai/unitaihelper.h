@@ -29,8 +29,9 @@ class UnitAIHelper
 	// max-selects. Pure and static so the decision is testable without a battle.
 	//
 	// Deliberately a COUNT. The original weights each threat by a range/facing-indexed table
-	// whose multiplied factor was never traced (docs/original-game/findings/B1-cover-metric-pass2.md
-	// section 4), so the magnitude is not recovered. The ordering it produces for the common case
+	// whose multiplied factor was never traced
+	// (docs/original-game/findings/B1-cover-metric-pass2.md section 4), so the magnitude is not
+	// recovered. The ordering it produces for the common case
 	// -- fewer hostiles with line of sight is safer -- is, and that is the behaviourally
 	// load-bearing part. Do not invent weights to "complete" this.
 	static int exposureScore(const std::vector<Vec3<float>> &threats, Vec3<float> candidate,

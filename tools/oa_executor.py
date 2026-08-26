@@ -84,32 +84,93 @@ def observe(caps, stalls: int = 0, last_event_z=None) -> Observation:
     st = caps.battle_state()
 
     def parse(field):
+        """Entries are "x,y,z" followed by colon-separated key=value fields.
+
+        The old parser took the FIRST colon field as the unit kind, which meant kind was the
+        string "large=0" -- so VeteranAI's priority rules, which look for "popper" and
+        "brainsucker" in it, could never have matched anything. Parse the fields by name.
+        """
         out = []
         raw = (pos or {}).get(field, "-")
         if not raw or raw == "-":
             return out
-        for i, part in enumerate(raw.split(";")):
-            head = part.split(":")[0]
-            bits = head.split(",")
-            kind = part.split(":")[1] if ":" in part else ""
-            if len(bits) >= 3:
-                try:
-                    out.append((int(bits[0]), int(bits[1]), int(bits[2]), kind))
-                except ValueError:
-                    continue
+        for part in raw.split(";"):
+            chunks = part.split(":")
+            bits = chunks[0].split(",")
+            if len(bits) < 3:
+                continue
+            fields = {}
+            for c in chunks[1:]:
+                if "=" in c:
+                    key, _, val = c.partition("=")
+                    fields[key] = val
+            try:
+                out.append((int(bits[0]), int(bits[1]), int(bits[2]), fields))
+            except ValueError:
+                continue
         return out
 
-    mine = [Unit(1000 + i, x, y, z, kind=k)
-            for i, (x, y, z, k) in enumerate(parse("mine_at"))]
-    foes = [Unit(2000 + i, x, y, z, hostile=True, kind=k)
-            for i, (x, y, z, k) in enumerate(parse("foe_at"))]
+    def as_int(fields, key):
+        try:
+            v = int(fields.get(key, -1))
+        except ValueError:
+            return None
+        return None if v < 0 else v
+
+    mine = [Unit(1000 + i, x, y, z, kind=f.get("kind", ""),
+                 sx=as_int(f, "sx"), sy=as_int(f, "sy"))
+            for i, (x, y, z, f) in enumerate(parse("mine_at"))]
+    foes = [Unit(2000 + i, x, y, z, hostile=True, kind=f.get("kind", ""),
+                 sx=as_int(f, "sx"), sy=as_int(f, "sy"))
+            for i, (x, y, z, f) in enumerate(parse("foe_at"))]
     try:
         view_z = int((pos or {}).get("view_z", 0) or 0)
     except ValueError:
         view_z = 0
+    # Are we still in the mission? Battle::checkMissionEnd ends it by itself once no hostile
+    # organisation has a conscious unit left, so still being in it means something is still out
+    # there. Anything other than an explicit "0" counts as yes: the failure that matters is
+    # standing still on a live map, not searching a dead one for a few extra seconds.
+    # Have we lost a third of the squad? The battle UI shows both numbers, so this is information
+    # a player has at a glance. It is the difference between hunting and being hunted, and getting
+    # it wrong cost a whole squad: fifteen soldiers spread out to search a base that nine unseen
+    # aliens were already clearing, and none of them came back.
+    def count(key):
+        try:
+            return int(st.get(key, "") or 0)
+        except (ValueError, TypeError):
+            return 0
+
+    started, standing = count("mine"), count("mine_alive")
+    hard_pressed = started > 0 and standing * 3 <= started * 2
+
     return Observation(mine=mine, foes=foes, view_z=view_z, stalls=stalls,
+                       hostiles_remain=str(st.get("in_battle", "1")) != "0",
+                       hard_pressed=hard_pressed,
                        mission_type=st.get("mission_type", "unknown"),
                        mode=st.get("mode", "rt"), last_event_z=last_event_z)
+
+
+def _screen_of(arg, caps):
+    """Screen coordinates for an Action argument, or None if it cannot be resolved.
+
+    Accepts either a ready-made (sx, sy) pair or a (tile_x, tile_y, tile_z) target, which is
+    matched against the units battle_positions reports. Returns None rather than guessing: a
+    wrong click is worse than a skipped order, and an off-screen unit has sx=-1 by design.
+    """
+    if not isinstance(arg, (tuple, list)) or len(arg) < 2:
+        return None
+    try:
+        want = tuple(int(v) for v in arg[:3])
+    except (TypeError, ValueError):
+        return None
+    if len(want) < 3:
+        return (want[0], want[1])
+    obs = observe(caps)
+    for u in list(obs.foes) + list(obs.mine):
+        if (u.x, u.y, u.z) == want and u.sx is not None and u.sy is not None:
+            return (u.sx, u.sy)
+    return None
 
 
 def execute(caps, actions: list, say=None) -> int:
@@ -120,6 +181,10 @@ def execute(caps, actions: list, say=None) -> int:
     mode that hid four dead capabilities for weeks.
     """
     done = 0
+    # Read once, up front: a squad ordered to move as one must not then be sent to two opposite
+    # corners by the sweep in the same batch. The AI expresses "keep everyone together" through
+    # move_mode, so that is the flag to honour rather than inventing a second one.
+    group_move = any(a.kind == "set_move_mode" and a.arg == "group" for a in actions)
     for a in actions:
         k = a.kind
         try:
@@ -144,16 +209,35 @@ def execute(caps, actions: list, say=None) -> int:
             elif k == "select_squad":
                 ok = caps.select_units(int(a.arg or 6)) > 0
             elif k in ("attack", "focus_fire"):
-                foes = caps.enemies_on_screen()
-                ok = bool(foes) and caps.attack_at(foes[0][0], foes[0][1])
+                # Shoot the target the AI picked. This used to call attack_at(foes[0]) -- the
+                # first hostile on screen -- discarding a.arg entirely, so threat priority was
+                # computed every round and thrown away. battle_positions now carries each unit's
+                # screen coordinates, so the choice can actually be executed.
+                aim = _screen_of(a.arg, caps)
+                if aim is None:
+                    foes = caps.enemies_on_screen()
+                    aim = (foes[0][0], foes[0][1]) if foes else None
+                ok = aim is not None and caps.attack_at(aim[0], aim[1])
             elif k == "move":
-                foes = caps.enemies_on_screen()
-                ok = bool(foes) and caps.move_to(foes[0][0], foes[0][1])
+                aim = _screen_of(a.arg, caps)
+                if aim is None:
+                    foes = caps.enemies_on_screen()
+                    aim = (foes[0][0], foes[0][1]) if foes else None
+                ok = aim is not None and caps.move_to(aim[0], aim[1])
             elif k in ("pull_back", "spread"):
                 # Per-unit repositioning needs a screen coordinate for that specific unit, which
                 # battle_positions gives in TILE space. Declared unsupported rather than faked:
                 # a wrong click is worse than a skipped order.
                 ok = False
+            elif k == "search":
+                # Send the squad somewhere it has not been. The AI works in tile space and has no
+                # idea how big the window is, so the sweep pattern lives here where the screen is
+                # known; the AI supplies only a step counter so successive rounds probe different
+                # ground instead of re-clicking one spot.
+                #
+                # A squad ordered to move as one is not to be split across the map: the group
+                # move-mode is the AI saying it is under fire and wants everyone together.
+                ok = caps.sweep(int(a.arg or 0), split=(group_move is not True))
             elif k == "withdraw":
                 ok = caps.withdraw()
             elif k == "wait":

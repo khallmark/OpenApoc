@@ -130,12 +130,11 @@ void VEquipScreen::registerVEquipIntrospection()
 				    }
 				    // Report damage as well as identity: a driver choosing between a Bolter 4000
 				    // and a Lancer 7000 needs to know which one actually hits harder.
-				    out += format("{0}:at={1},{2}:size={3},{4}:weapon={5}:damage={6}:air={7}", name,
-				                   rect.p0.x, rect.p0.y, rect.p1.x - rect.p0.x,
-				                   rect.p1.y - rect.p0.y,
-				                   type->type == EquipmentSlotType::VehicleWeapon ? 1 : 0,
-				                   type->damage,
-				                   type->users.count(VEquipmentType::User::Air) ? 1 : 0);
+				    out +=
+				        format("{0}:at={1},{2}:size={3},{4}:weapon={5}:damage={6}:air={7}", name,
+				               rect.p0.x, rect.p0.y, rect.p1.x - rect.p0.x, rect.p1.y - rect.p0.y,
+				               type->type == EquipmentSlotType::VehicleWeapon ? 1 : 0, type->damage,
+				               type->users.count(VEquipmentType::User::Air) ? 1 : 0);
 			    }
 			    UString veh = screen->selected ? screen->selected->name : UString("-");
 			    std::replace(veh.begin(), veh.end(), ' ', '_');

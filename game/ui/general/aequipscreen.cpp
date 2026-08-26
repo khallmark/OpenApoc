@@ -185,11 +185,11 @@ void AEquipScreen::registerAEquipIntrospection()
 				    {
 					    out += "|";
 				    }
-				    out += format("{0}:at={1},{2}:size={3},{4}:weapon={5}:research={6}", name,
-				                   rect.p0.x, rect.p0.y, rect.p1.x - rect.p0.x,
-				                   rect.p1.y - rect.p0.y,
-				                   item->type->type == AEquipmentType::Type::Weapon ? 1 : 0,
-				                   item->type->research_dependency.satisfied() ? 1 : 0);
+				    out +=
+				        format("{0}:at={1},{2}:size={3},{4}:weapon={5}:research={6}", name,
+				               rect.p0.x, rect.p0.y, rect.p1.x - rect.p0.x, rect.p1.y - rect.p0.y,
+				               item->type->type == AEquipmentType::Type::Weapon ? 1 : 0,
+				               item->type->research_dependency.satisfied() ? 1 : 0);
 			    }
 			    return format("count={0} detail={1}", n, out.empty() ? UString("-") : out);
 		    }
@@ -561,9 +561,9 @@ void AEquipScreen::render()
 			int wound = 0;
 			while (wound < ftw.second && wound < FATAL_WOUND_LOCATIONS[ftw.first].size())
 			{
-				fw().renderer->draw(
-				    woundImage, formMain->getLocationOnScreen() +
-				                    FATAL_WOUND_LOCATIONS[ftw.first][wound] * fw().uiGetScale());
+				fw().renderer->draw(woundImage, formMain->getLocationOnScreen() +
+				                                    FATAL_WOUND_LOCATIONS[ftw.first][wound] *
+				                                        fw().uiGetScale());
 				wound++;
 			}
 		}

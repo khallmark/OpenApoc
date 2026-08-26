@@ -49,6 +49,11 @@ class Unit:
     max_health: int = 100
     tu: int = 100
     kind: str = ""          # lowercase type name, e.g. "popper", "brainsucker"
+    # Where this unit is drawn, or None when it is off screen. Tile coordinates say WHERE a unit
+    # is; only these say where to click to give it an order, and without them the executor could
+    # not act on a target the AI had named -- it fell back to whatever hostile was listed first.
+    sx: Optional[int] = None
+    sy: Optional[int] = None
 
     @property
     def hurt_frac(self) -> float:
@@ -73,6 +78,26 @@ class Observation:
     turn: int = 0
     mode: str = "rt"
     mission_type: str = "unknown"
+    # Is the mission still running? That is the whole signal. Battle::checkMissionEnd ends a
+    # mission by itself the moment no hostile organisation has a conscious unit left, so while we
+    # are still in it there is by definition something left to find. A player needs nothing more
+    # than this: they keep moving until the debriefing appears.
+    #
+    # Deliberately a boolean and deliberately defaulting to True. An earlier version passed the
+    # engine's hostile COUNT and treated "unknown" as "stop", which is the same standing-still bug
+    # in a quieter costume -- one unparsed field and the squad waits out the clock again. The safe
+    # default is to keep hunting; the cost of searching an empty map is a few seconds, and the cost
+    # of waiting on a live one is the entire mission.
+    hostiles_remain: bool = True
+    # Are we losing people? Also a boolean, and for the same reason.
+    #
+    # Taking casualties from something nobody can see does not mean we are hunting -- it means we
+    # are BEING hunted, and the two call for opposite behaviour. Measured, at the cost of a whole
+    # squad: a base defence where the hunt spread fifteen soldiers out, stood them up and ran them
+    # into the open looking for nine aliens that had already seen them. 15 -> 8 -> 5 -> 3 -> 0,
+    # every one of them picked off alone, scored 0.00. The fix for standing still had become a way
+    # to lose faster.
+    hard_pressed: bool = False
     # Set when the engine has told us where something just happened.
     last_event_z: Optional[int] = None
     # Rounds since the foe count last dropped -- the driver's own stall signal.
@@ -84,7 +109,27 @@ class Observation:
 
     @property
     def foes_alive(self) -> int:
+        """How many hostiles we can SEE. Not how many are left -- see foes_remaining."""
         return sum(1 for u in self.foes if u.alive)
+
+    @property
+    def hunting(self) -> bool:
+        """The mission is still on and nothing is in sight: go and find something.
+
+        Under fog of war the last alien is usually unspotted, so "I can see none" and "there are
+        none" look identical from inside the squad -- and only one of them is a reason to stop.
+        A squad that waits for an unspotted enemy waits forever, because the mission ends only
+        when the last hostile dies.
+        """
+        return self.foes_alive == 0 and self.hostiles_remain
+
+    def sweep_floor(self, step: int) -> int:
+        """A floor to look at while hunting, cycling over the levels the squad occupies and one
+        above them. A squad split across floors -- which is the usual state after a fight moves
+        through a building -- otherwise searches only the level it is already looking at."""
+        levels = sorted({u.z for u in self.mine if u.alive}) or [self.view_z]
+        levels = sorted(set(levels + [min(levels) , max(levels) + 1]))
+        return levels[step % len(levels)]
 
     def foes_on(self, z: int) -> int:
         return sum(1 for u in self.foes if u.alive and u.z == z)
@@ -175,8 +220,50 @@ class ScriptedAI(TacticalAI):
             Action("set_stance", self.stance, "opening posture"),
         ]
 
+    def hunt(self, obs: Observation) -> list[Action]:
+        """Go and find the hostiles we know are out there but cannot see.
+
+        The squad stops being a firing line and becomes a search party: spread out so more ground
+        is covered and one ambush cannot catch everyone, move at a run, look at a different floor
+        each round, and sweep. Fire mode goes to snap because a unit rounding a corner onto the
+        last alien needs to shoot now, not line up a shot.
+
+        This is what a player does without thinking about it, and its absence turned an 8-versus-1
+        base defence into six hundred rounds of standing still -- scored a timeout at 0.16 for a
+        battle the engine had already marked won.
+        """
+        alive = max(1, sum(1 for u in obs.mine if u.alive))
+        if obs.hard_pressed:
+            # We are not hunting, we are being hunted. Something is shooting people we cannot
+            # see, so the ground it is standing on is not ground to walk into one at a time.
+            # Concentrate, get low, and keep moving as one body: still searching -- standing
+            # still is what this whole branch exists to prevent -- but mutually supporting, so
+            # contact is made by the squad rather than by whichever soldier wandered into it.
+            return [
+                Action("show_floor", obs.sweep_floor(obs.stalls),
+                       "under fire from an unseen enemy: regroup, do not scatter"),
+                Action("set_move_mode", "group", "stay together; scattered soldiers die alone"),
+                Action("set_stance", "kneel", "smaller target, steadier shot"),
+                Action("set_fire_mode", "snap", "react, do not line up a shot"),
+                Action("set_behaviour", "evasive", "break contact rather than trade in the open"),
+                Action("select_squad", alive, "the whole squad moves as one"),
+                Action("search", obs.stalls, "advance together toward the threat"),
+            ]
+        return [
+            Action("show_floor", obs.sweep_floor(obs.stalls),
+                   "hunting: mission still running, nothing in sight"),
+            Action("set_move_mode", "individual", "spread the search out"),
+            Action("set_stance", "run", "cover ground"),
+            Action("set_fire_mode", "snap", "shoot on contact"),
+            Action("set_behaviour", "aggressive", "seek contact rather than avoid it"),
+            Action("select_squad", alive, "everyone searches"),
+            Action("search", obs.stalls, "sweep for the hostiles the engine says remain"),
+        ]
+
     def decide(self, obs: Observation) -> list[Action]:
         acts: list[Action] = []
+        if obs.hunting:
+            return self.hunt(obs)
         if obs.foes_alive == 0:
             return [Action("wait", None, "no hostiles left; the engine ends the mission")]
 
@@ -190,13 +277,24 @@ class ScriptedAI(TacticalAI):
                 acts.append(Action("show_floor", best,
                                    f"{obs.foes_on(best)} hostiles on {best}, fallback"))
 
-        # 2. Withdraw only when it is genuinely lost.
-        if obs.mine_alive and obs.foes_alive / max(1, obs.mine_alive) >= self.withdraw_ratio \
-                and obs.stalls >= self.withdraw_stalls:
-            acts.append(Action("withdraw", None,
-                               f"outnumbered {obs.foes_alive}:{obs.mine_alive} and stalled "
-                               f"{obs.stalls} rounds"))
-            return acts
+        # 2. Withdraw. Never from a base defence -- leaving forfeits the base and everything in
+        #    it, and whether that is survivable depends on owning a second one, which this layer
+        #    cannot see. win_battle can, and makes that call.
+        if obs.mine_alive and obs.mission_type != "base_defense":
+            ratio = obs.foes_alive / max(1, obs.mine_alive)
+            if ratio >= self.withdraw_ratio and obs.stalls >= self.withdraw_stalls:
+                acts.append(Action("withdraw", None,
+                                   f"outnumbered {obs.foes_alive}:{obs.mine_alive} and stalled "
+                                   f"{obs.stalls} rounds"))
+                return acts
+            # Being wiped out while winning still ends with being wiped out. stalls resets every
+            # time the foe count changes, so a squad trading one soldier per alien never reads as
+            # stalled and fights to the last man because it is "making progress".
+            if obs.hard_pressed and ratio >= 2.0:
+                acts.append(Action("withdraw", None,
+                                   f"a third of the squad gone and still outnumbered "
+                                   f"{obs.foes_alive}:{obs.mine_alive}"))
+                return acts
 
         # 3. Engage. Nearest live hostile to the centre of mass of our own live units.
         live_mine = [u for u in obs.mine if u.alive]
@@ -241,29 +339,55 @@ class VeteranAI(ScriptedAI):
 
     def __init__(self, pull_back_at: float = 0.5, min_spacing: int = 2,
                  close_range: int = 6, long_range: int = 14,
-                 withdraw_ratio: float = 6.0, withdraw_stalls: int = 12, seed: int = 0):
-        super().__init__(fire_mode="snap", stance="run",
+                 withdraw_ratio: float = 6.0, withdraw_stalls: int = 12, seed: int = 0,
+                 fire_mode: str = "snap", stance: str = "run", behaviour: str = "normal",
+                 move_mode: str = "individual", reserve: str = "snap",
+                 focus_fire: bool = True, priority_targets: bool = True):
+        """Every argument is a doctrine knob a search can turn.
+
+        The adaptive rules stay adaptive: fire mode is still chosen by range and behaviour still
+        by the head-count ratio. What the genome sets is the MIDDLE of each -- what to do at mid
+        range, and in an even fight -- because those are the cases doctrine actually disputes.
+        Nobody argues about what to do when you are outnumbered three to one.
+
+        fire_mode and stance used to be hardcoded here as "snap"/"run" in the super() call, so a
+        VeteranAI could not be told to fight any other way; the two genes the driver did apply
+        were exactly the two this class threw away.
+        """
+        super().__init__(fire_mode=fire_mode, stance=stance,
                          withdraw_ratio=withdraw_ratio, withdraw_stalls=withdraw_stalls,
                          seed=seed)
         self.pull_back_at = pull_back_at
         self.min_spacing = min_spacing
         self.close_range = close_range
         self.long_range = long_range
+        self.behaviour = behaviour
+        self.move_mode = move_mode
+        self.reserve = reserve
+        self.focus_fire = focus_fire
+        self.priority_targets = priority_targets
 
     def threat_rank(self, foe: Unit, centre: tuple[float, float]) -> tuple[int, int]:
         """Lower sorts first. Priority kinds beat distance; distance breaks ties within a class."""
+        d2 = int((foe.x - centre[0]) ** 2 + (foe.y - centre[1]) ** 2)
+        if not self.priority_targets:
+            # Pure "shoot the nearest thing". Kept as a real option so the search can measure
+            # whether threat priority is worth what it costs in walking distance, rather than
+            # having the answer asserted here.
+            return (0, d2)
         kind = (foe.kind or "").lower()
         cls = len(self.PRIORITY_KINDS)
         for i, k in enumerate(self.PRIORITY_KINDS):
             if k in kind:
                 cls = i
                 break
-        d2 = int((foe.x - centre[0]) ** 2 + (foe.y - centre[1]) ** 2)
         return (cls, d2)
 
     def decide(self, obs: Observation) -> list[Action]:
         live_mine = [u for u in obs.mine if u.alive]
         live_foes = [u for u in obs.foes if u.alive]
+        if obs.hunting:
+            return self.hunt(obs)
         if not live_foes:
             return [Action("wait", None, "no hostiles left; the engine ends the mission")]
 
@@ -278,13 +402,30 @@ class VeteranAI(ScriptedAI):
             if best != obs.view_z:
                 acts.append(Action("show_floor", best, f"{obs.foes_on(best)} hostiles on {best}"))
 
-        # 2. Withdraw only when genuinely lost -- both conditions, never one.
-        if live_mine and obs.foes_alive / max(1, len(live_mine)) >= self.withdraw_ratio \
-                and obs.stalls >= self.withdraw_stalls:
-            acts.append(Action("withdraw", None,
-                               f"outnumbered {obs.foes_alive}:{len(live_mine)} and stalled "
-                               f"{obs.stalls}"))
-            return acts
+        # 2. Withdraw. Two independent reasons, and a mission type that overrides both.
+        #
+        # Never voluntarily leave a base defence: withdrawing forfeits the base, every facility
+        # reverts to unbuilt, and the labs, stores and staff go with it. Whether that is
+        # survivable depends on owning a second base, which this layer cannot see -- win_battle
+        # can, and makes that call. A losing base defence fought to the end beats a conceded one.
+        if live_mine and obs.mission_type != "base_defense":
+            ratio = obs.foes_alive / max(1, len(live_mine))
+            if ratio >= self.withdraw_ratio and obs.stalls >= self.withdraw_stalls:
+                acts.append(Action("withdraw", None,
+                                   f"outnumbered {obs.foes_alive}:{len(live_mine)} and stalled "
+                                   f"{obs.stalls}"))
+                return acts
+            # Being wiped out WHILE winning still ends with being wiped out. stalls resets every
+            # time the foe count changes, so a squad trading one soldier per alien never counts as
+            # stalled and fights to the last man on the grounds that it is making progress.
+            # Observed: six soldiers against twenty-five, killing steadily -- hostiles 20 -> 16,
+            # squad 6 -> 1. That is not a mission being won slowly, it is a mission already lost.
+            # Agents are the campaign's scarcest resource; the ones walked out raid again.
+            if obs.hard_pressed and ratio >= 2.0:
+                acts.append(Action("withdraw", None,
+                                   f"a third of the squad gone and still outnumbered "
+                                   f"{obs.foes_alive}:{len(live_mine)} -- leaving with the rest"))
+                return acts
 
         if not live_mine:
             return acts or [Action("wait", None, "nobody left to give orders to")]
@@ -325,7 +466,7 @@ class VeteranAI(ScriptedAI):
         elif d2 >= self.long_range ** 2:
             acts.append(Action("set_fire_mode", "aimed", "long range"))
         else:
-            acts.append(Action("set_fire_mode", "snap", "mid range"))
+            acts.append(Action("set_fire_mode", self.fire_mode, "mid range"))
 
         # 7. Behaviour mode. The engine has Aggressive/Normal/Evasive and the driver never set
         #    any of them -- it fought every battle on whatever the default was. Evasive when
@@ -337,25 +478,30 @@ class VeteranAI(ScriptedAI):
         elif ratio <= 0.5:
             acts.append(Action("set_behaviour", "aggressive", "we have the numbers"))
         else:
-            acts.append(Action("set_behaviour", "normal", "even fight"))
+            acts.append(Action("set_behaviour", self.behaviour, "even fight"))
 
         # 8. Move individually rather than as a blob. BUTTON_MOVE_GROUP herds the squad into one
         #    clump, which is what makes a single explosive catastrophic; individual movement is
         #    the mechanical half of the spacing rule above.
-        acts.append(Action("set_move_mode", "individual", "do not bunch"))
+        acts.append(Action("set_move_mode", self.move_mode, "do not bunch"))
 
         # 9. Reserve TU for the shot rather than spending it all walking. Reserving snap keeps a
         #    unit able to answer when something steps into view mid-move.
-        acts.append(Action("set_reserve", "snap", "keep enough TU to shoot back"))
+        acts.append(Action("set_reserve", self.reserve, "keep enough TU to shoot back"))
 
         # 10. Flyers: hold the hostiles' level. A flying unit left on the ground layer cannot
         #     engage something a floor up, and this squad's own floor is not necessarily theirs.
         if target.z != obs.view_z:
             acts.append(Action("set_layer", target.z, f"engage on level {target.z}"))
 
-        acts.append(Action("select_squad", len(fit), "focus the whole line on one target"))
-        acts.append(Action("focus_fire", (target.x, target.y, target.z),
-                           f"{why}: {kind}"))
+        if self.focus_fire:
+            acts.append(Action("select_squad", len(fit), "focus the whole line on one target"))
+            acts.append(Action("focus_fire", (target.x, target.y, target.z), f"{why}: {kind}"))
+        else:
+            # Engage without concentrating. Units default to FirePermissionMode::AtWill, so an
+            # ordinary attack order lets each unit pick its own target rather than the squad
+            # stacking on one -- the alternative doctrine, and one worth being able to lose with.
+            acts.append(Action("attack", (target.x, target.y, target.z), f"{why}: {kind}"))
         return acts
 
 

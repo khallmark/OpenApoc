@@ -33,9 +33,17 @@ o = a.opening(obs([(0, 0, 0)], [(5, 5, 0)]))
 check(kinds(o) == ["set_fire_mode", "set_stance"], f"opening kinds: {kinds(o)}")
 check(o[0].arg == "snap" and o[1].arg == "run", "opening applies the configured policy")
 
-# --- no hostiles: do not withdraw, do not flail -----------------------------
+# --- nothing in sight: hunt while the mission runs, wait only once it is over ---
+# This check used to read "no foes should wait", which is the bug it was meant to prevent: under
+# fog of war an empty visible list is the NORMAL state late in a mission, and waiting there waits
+# forever. Waiting is correct only once the mission itself is over.
 acts = a.decide(obs([(0, 0, 0)], []))
-check(kinds(acts) == ["wait"], f"no foes should wait, got {kinds(acts)}")
+check("wait" not in kinds(acts) and "search" in kinds(acts),
+      f"nothing in sight while the mission runs should hunt, got {kinds(acts)}")
+ended = obs([(0, 0, 0)], [])
+ended.hostiles_remain = False
+check(kinds(a.decide(ended)) == ["wait"],
+      f"once the mission is over, wait, got {kinds(a.decide(ended))}")
 
 # --- floor: prefer the engine's event location over the headcount -----------
 # Most hostiles are on z=3, but the engine says the action is on z=1. Engine wins.
@@ -188,3 +196,271 @@ if FAILED:
         print("  -", m)
     sys.exit(1)
 print("all tactical AI tests passed (including VeteranAI doctrine)")
+
+
+# --- every doctrine knob must actually change what the squad does -------------
+# VeteranAI used to hardcode fire_mode/stance in its super() call and hardcode behaviour,
+# move_mode, reserve, focus_fire and priority_targets in decide(). A genome could carry all ten
+# X-COM genes and change nothing. Each check below fails if its knob goes back to being a constant.
+def acts_of(ai, obs):
+    return {a.kind: a.arg for a in ai.decide(obs)}
+
+
+# An even fight at mid range: the band where doctrine is a choice rather than a reflex.
+mid = Observation(
+    mine=[U(1, 10, 10, 0), U(2, 14, 10, 0), U(3, 18, 10, 0)],
+    foes=[U(9, 10, 20, 0, hostile=True, kind="anthropod")],
+    view_z=0, stalls=0, mission_type="ufo_recovery", mode="rt")
+
+check(acts_of(VeteranAI(fire_mode="aimed"), mid).get("set_fire_mode") == "aimed",
+      "fire_mode must reach the mid-range band")
+check(acts_of(VeteranAI(fire_mode="auto"), mid).get("set_fire_mode") == "auto",
+      "…and not be pinned to one value")
+check(acts_of(VeteranAI(behaviour="aggressive"), mid).get("set_behaviour") == "aggressive",
+      "behaviour must reach the even-fight band")
+check(acts_of(VeteranAI(move_mode="group"), mid).get("set_move_mode") == "group",
+      "move_mode must be settable, even to the worse option")
+check(acts_of(VeteranAI(reserve="aimed"), mid).get("set_reserve") == "aimed",
+      "reserve must be settable")
+check(VeteranAI(stance="kneel").stance == "kneel", "stance must survive construction")
+
+# The adaptive rules must STAY adaptive: the genome sets the middle, not the extremes.
+close = Observation(mine=[U(1, 10, 10, 0)], foes=[U(9, 11, 11, 0, hostile=True)],
+                    view_z=0, stalls=0, mission_type="x", mode="rt")
+check(acts_of(VeteranAI(fire_mode="aimed"), close).get("set_fire_mode") == "auto",
+      "close quarters must still force auto regardless of the gene")
+
+# focus_fire: concentrate on one target, or let each unit choose.
+check("focus_fire" in acts_of(VeteranAI(focus_fire=True), mid),
+      "focus_fire=True concentrates the squad")
+off = acts_of(VeteranAI(focus_fire=False), mid)
+check("focus_fire" not in off and "attack" in off,
+      "focus_fire=False must engage WITHOUT concentrating")
+check("select_squad" not in off, "…and must not select the whole squad onto one target")
+
+# priority_targets: a distant popper outranks a near anthropod, unless the gene says otherwise.
+threat = Observation(
+    mine=[U(1, 10, 10, 0)],
+    foes=[U(8, 12, 10, 0, hostile=True, kind="anthropod"),      # near, ordinary
+          U(9, 10, 24, 0, hostile=True, kind="popper")],        # far, lethal
+    view_z=0, stalls=0, mission_type="x", mode="rt")
+on_t = acts_of(VeteranAI(priority_targets=True), threat)
+off_t = acts_of(VeteranAI(priority_targets=False), threat)
+check(on_t.get("focus_fire") == (10, 24, 0),
+      f"priority_targets=True must kill the popper first, got {on_t.get('focus_fire')}")
+check(off_t.get("focus_fire") == (12, 10, 0),
+      f"priority_targets=False must take the nearest, got {off_t.get('focus_fire')}")
+
+# --- observe() must read the fields the engine actually sends -----------------
+# battle_positions entries are "x,y,z" plus colon-separated key=value fields. The old parser took
+# the FIRST colon field as the unit kind, so kind was literally the string "large=0" -- and every
+# VeteranAI priority rule, which looks for "popper"/"brainsucker" inside it, was dead on arrival.
+from oa_executor import observe as _observe, _screen_of
+
+
+class FakeCaps:
+    def __init__(self, pos, state=None):
+        self._pos, self._state = pos, state or {"mission_type": "x", "mode": "rt"}
+
+    def battle_positions(self):
+        return self._pos
+
+    def battle_state(self):
+        return self._state
+
+
+caps = FakeCaps({
+    "mine_at": "10,10,0:sx=100:sy=200;12,10,0:sx=140:sy=200",
+    "foe_at": ("20,20,4:sx=300:sy=400:kind=AGENTTYPE_POPPER:large=0:flying=0;"
+               "22,20,4:sx=-1:sy=-1:kind=AGENTTYPE_ANTHROPOD:large=0:flying=0"),
+    "view_z": "4",
+})
+o = _observe(caps)
+check(len(o.mine) == 2 and len(o.foes) == 2, "observe must read both sides")
+check(o.foes[0].kind == "AGENTTYPE_POPPER",
+      f"kind must be the agent type, got {o.foes[0].kind!r}")
+check("popper" in o.foes[0].kind.lower(), "…so the priority rules can match on it")
+check((o.foes[0].sx, o.foes[0].sy) == (300, 400), "on-screen units carry screen coordinates")
+check(o.foes[1].sx is None and o.foes[1].sy is None,
+      "sx=-1 means off screen and must become None, not a click at (-1,-1)")
+check(o.mine[1].x == 12 and o.mine[1].sx == 140, "our own units carry them too")
+check(o.view_z == 4, "view_z is read")
+
+# Threat priority must now actually fire on real engine data.
+v = VeteranAI(priority_targets=True)
+tgt = {a.kind: a.arg for a in v.decide(o)}.get("focus_fire")
+check(tgt == (20, 20, 4), f"the popper must be chosen over the nearer anthropod, got {tgt}")
+
+# _screen_of resolves a chosen tile target to the click point, and refuses when it cannot.
+check(_screen_of((20, 20, 4), caps) == (300, 400), "a chosen target resolves to its click point")
+check(_screen_of((22, 20, 4), caps) is None, "an off-screen target must refuse, not guess")
+check(_screen_of((99, 99, 9), caps) is None, "an unknown target must refuse")
+check(_screen_of((7, 8), caps) == (7, 8), "a ready-made screen pair passes through")
+check(_screen_of(None, caps) is None and _screen_of("x", caps) is None, "junk refuses")
+
+# Empty and absent fields must not crash the parser.
+check(_observe(FakeCaps({"mine_at": "-", "foe_at": "-"})).foes == [], "'-' means none")
+check(_observe(FakeCaps({})).mine == [], "absent fields mean none")
+
+# --- "I cannot see one" must never mean "there are none" ----------------------
+# Under fog of war the last alien is usually unspotted. Both AIs used to read an empty visible
+# list as victory and return wait() -- the one action that can never end a mission, since a
+# mission ends only when the last hostile dies. Observed live: an 8-versus-1 base defence spent
+# 600 rounds printing "no hostiles left" and was scored a timeout at 0.16, for a battle the engine
+# had already marked player_won.
+#
+# The signal is a boolean: is the mission still running? A player needs nothing more than that,
+# and neither does this. A COUNT was tried first and was the same bug in a quieter costume -- it
+# had an "unknown" case, and unknown meant stop.
+blind = Observation(mine=[U(1, 10, 10, 0), U(2, 12, 10, 2)], foes=[], view_z=0,
+                    stalls=7, mission_type="base_defense", mode="rt", hostiles_remain=True)
+check(blind.hunting, "mission still running + nothing visible == hunting")
+check(blind.foes_alive == 0, "…and the visible count is still honestly zero")
+
+over = Observation(mine=[U(1, 10, 10, 0)], foes=[], view_z=0, hostiles_remain=False,
+                   mission_type="x", mode="rt")
+check(not over.hunting, "once the mission is over there is nothing to hunt")
+
+# The default must be to keep moving. A missing or unreadable field is exactly when the old bug
+# came back, so the safe direction is hunt-anyway: searching a dead map costs seconds, waiting on
+# a live one costs the mission.
+check(Observation(mine=[U(1, 1, 1, 0)], foes=[]).hunting,
+      "the DEFAULT must be to keep hunting, not to stand still")
+
+for ai in (VeteranAI(), ScriptedAI(), AggressiveAI(), CautiousAI()):
+    kinds = {a.kind for a in ai.decide(blind)}
+    check("wait" not in kinds,
+          f"{type(ai).__name__} must not wait while the mission runs: {kinds}")
+    check("search" in kinds, f"{type(ai).__name__} must sweep for it: {kinds}")
+    check("select_squad" in kinds, f"{type(ai).__name__} must send the whole squad: {kinds}")
+    done = {a.kind for a in ai.decide(over)}
+    check(done == {"wait"}, f"{type(ai).__name__} must wait once the mission ends: {done}")
+
+# The sweep must look at the floors the squad occupies -- a squad split across levels (the usual
+# state after a fight moves through a building) otherwise searches only the level it is on.
+floors = {blind.sweep_floor(n) for n in range(12)}
+check(len(floors) > 1, f"the hunt must look at more than one floor, got {floors}")
+check(0 in floors and 2 in floors, f"…including both levels the squad is on, got {floors}")
+
+# Successive rounds must probe different ground rather than re-clicking one spot.
+steps = {a.arg for n in range(6)
+         for a in VeteranAI().decide(
+             Observation(mine=[U(1, 10, 10, 0)], foes=[], view_z=0, stalls=n,
+                         mission_type="x", mode="rt"))
+         if a.kind == "search"}
+check(len(steps) == 6, f"successive rounds must probe different ground, got {steps}")
+
+# --- being hunted is not hunting ---------------------------------------------
+# Taking casualties from an enemy nobody can see calls for the OPPOSITE of a sweep. The first
+# version of hunt() spread the squad out, stood it up and ran it into the open; in a base defence
+# against nine unseen aliens that took fifteen soldiers to none, scored 0.00. A search pattern is
+# for an empty map, not for ground the enemy already holds.
+pressed = Observation(mine=[U(1, 10, 10, 0), U(2, 12, 10, 0)], foes=[], view_z=0, stalls=9,
+                      mission_type="base_defense", mode="rt", hard_pressed=True)
+check(pressed.hunting, "still hunting -- standing still is never the answer")
+p_acts = {a.kind: a.arg for a in VeteranAI().decide(pressed)}
+check(p_acts.get("set_move_mode") == "group",
+      f"under fire the squad must stay together, got {p_acts.get('set_move_mode')}")
+check(p_acts.get("set_stance") == "kneel",
+      f"…and get low rather than run upright, got {p_acts.get('set_stance')}")
+check(p_acts.get("set_behaviour") == "evasive",
+      f"…and not charge into it, got {p_acts.get('set_behaviour')}")
+check("search" in p_acts, "…but must still keep moving, or this is the old deadlock again")
+
+# The ordinary hunt keeps the aggressive sweep: an empty map is not a threat.
+calm = Observation(mine=[U(1, 10, 10, 0), U(2, 12, 10, 0)], foes=[], view_z=0, stalls=9,
+                   mission_type="ufo_recovery", mode="rt", hard_pressed=False)
+c_acts = {a.kind: a.arg for a in VeteranAI().decide(calm)}
+check(c_acts.get("set_move_mode") == "individual", "an unthreatened sweep still spreads out")
+check(c_acts.get("set_stance") == "run", "…and still covers ground at a run")
+check(c_acts.get("set_behaviour") == "aggressive", "…and still seeks contact")
+
+# The executor must not split a squad that was told to move as one.
+from oa_executor import execute as _execute
+
+
+class SweepCaps(FakeCaps):
+    def __init__(self):
+        super().__init__({"mine_at": "-", "foe_at": "-"})
+        self.splits = []
+
+    def sweep(self, step, split=True):
+        self.splits.append(split)
+        return True
+
+    def set_move_mode(self, m):
+        return True
+
+    def set_stance(self, m):
+        return True
+
+    def set_fire_mode(self, m):
+        return True
+
+    def set_behaviour(self, m):
+        return True
+
+    def show_floor(self, z):
+        return None
+
+    def select_units(self, n):
+        return n
+
+
+cap = SweepCaps()
+_execute(cap, VeteranAI().decide(pressed))
+check(cap.splits == [False],
+      f"a grouped squad must get ONE destination, not two corners: {cap.splits}")
+cap2 = SweepCaps()
+_execute(cap2, VeteranAI().decide(calm))
+check(cap2.splits == [True], f"an individual sweep still splits: {cap2.splits}")
+
+# --- being wiped out while winning still ends with being wiped out -----------
+# The withdraw rule required outnumbered AND stalled. stalls resets every time the foe count
+# changes, so a squad trading one soldier per alien never reads as stalled and fights to the last
+# man on the grounds that it is making progress. Observed: six soldiers against twenty-five,
+# hostiles 20 -> 16 while the squad went 6 -> 1, no withdrawal at any point.
+bleeding = Observation(
+    mine=[U(1, 10, 10, 0)],
+    foes=[U(100 + i, 20 + i, 20, 0, hostile=True) for i in range(16)],
+    view_z=0, stalls=0, mission_type="extermination", mode="rt", hard_pressed=True)
+check(bleeding.stalls == 0, "the squad is still killing, so nothing reads as stalled")
+for ai in (VeteranAI(withdraw_ratio=100.0), ScriptedAI(withdraw_ratio=100.0)):
+    kinds = [a.kind for a in ai.decide(bleeding)]
+    check("withdraw" in kinds,
+          f"{type(ai).__name__} must leave at 16:1 having lost a third: {kinds}")
+
+# A squad that is merely outnumbered but intact fights on -- withdrawing early throws away
+# missions that are winnable, and survivors of a raid hand the aliens their building back.
+intact = Observation(
+    mine=[U(i, 10 + i, 10, 0) for i in range(6)],
+    foes=[U(100 + i, 20 + i, 20, 0, hostile=True) for i in range(12)],
+    view_z=0, stalls=0, mission_type="extermination", mode="rt", hard_pressed=False)
+for ai in (VeteranAI(withdraw_ratio=100.0), ScriptedAI(withdraw_ratio=100.0)):
+    check("withdraw" not in [a.kind for a in ai.decide(intact)],
+          f"{type(ai).__name__} must not withdraw with the squad intact")
+
+# NEVER from a base defence: leaving forfeits the base, its facilities, stores and staff. Whether
+# that is survivable depends on owning a second base, which this layer cannot see.
+base = Observation(
+    mine=[U(1, 10, 10, 0)],
+    foes=[U(100 + i, 20 + i, 20, 0, hostile=True) for i in range(16)],
+    view_z=0, stalls=99, mission_type="base_defense", mode="rt", hard_pressed=True)
+for ai in (VeteranAI(withdraw_ratio=1.0, withdraw_stalls=1), ScriptedAI(withdraw_ratio=1.0,
+                                                                       withdraw_stalls=1)):
+    check("withdraw" not in [a.kind for a in ai.decide(base)],
+          f"{type(ai).__name__} must never concede a base defence on its own judgement")
+
+# Seeing a hostile again must end the hunt and resume fighting.
+seen = Observation(mine=[U(1, 10, 10, 0)], foes=[U(9, 10, 16, 0, hostile=True)], view_z=0,
+                   mission_type="x", mode="rt")
+check(not seen.hunting, "a visible hostile is not a hunt")
+check("search" not in {a.kind for a in VeteranAI().decide(seen)},
+      "…and the squad must go back to fighting it")
+
+if FAILED:
+    print(f"FAILED {len(FAILED)}:")
+    for m in FAILED:
+        print("  -", m)
+    sys.exit(1)
+print("all VeteranAI doctrine-knob, observe() parsing and fog-of-war hunt tests passed")
