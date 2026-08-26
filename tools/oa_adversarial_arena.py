@@ -37,8 +37,8 @@ from pathlib import Path
 from oa_adversarial import Arena, Evaluator, Policy, new_arena, train
 from oa_play import (
     TICKS_PER_DAY, Driver, GameProcess, Harness, advance, assign_research, buy_interceptor,
-    hire_staff, new_game, raid_infiltrated_building, sell_ground_fleet, sell_surplus_loot,
-    win_battle,
+    hire_staff, new_game, raid_infiltrated_building, recover_crash_sites, return_to_city,
+    sell_ground_fleet, sell_surplus_loot, win_battle,
 )
 
 
@@ -66,9 +66,13 @@ class CampaignEvaluator(Evaluator):
     rather than round-robin.
     """
 
-    def __init__(self, repo: Path, out: Path, port: int, budget_s: float, leg_days: float):
+    def __init__(self, repo: Path, out: Path, port: int, budget_s: float, leg_days: float,
+                 verbose: bool = True):
         self.repo, self.out, self.port = repo, out, port
         self.budget_s, self.leg_days = budget_s, leg_days
+        # On by default: the driver's own [clock] and [raid] lines are the diagnosis when an
+        # attempt comes back a no-contest, and a silent run leaves only the summary.
+        self.verbose = verbose
         self.battles = 0
 
     def _alien_argv(self, alien: Policy) -> list:
@@ -122,7 +126,7 @@ class CampaignEvaluator(Evaluator):
         try:
             game.start(wait_s=240)
             d = Driver(Harness(port=self.port), self.repo / "data/forms",
-                       shots=run_out / "shots", verbose=False)
+                       shots=run_out / "shots", verbose=self.verbose)
             d.checks = {}
             new_game(d, 3)
 
@@ -193,6 +197,14 @@ class CampaignEvaluator(Evaluator):
                         outcome = raid
                         rec["reason"] = "raid"
                         break
+                    # A downed UFO is the other mission the campaign generates, and the gates
+                    # are held by armed craft precisely so that happens. Cheaper to check than
+                    # to wait for another infiltration alert.
+                    try:
+                        rec["crash_sites"] = rec.get("crash_sites", 0) + recover_crash_sites(d)
+                    except Exception as exc:
+                        rec.setdefault("recover_errors", []).append(f"{type(exc).__name__}: {exc}")
+
                     # Nothing to raid: keep the base able to mount the next one.
                     for fn in (lambda: sell_surplus_loot(d), lambda: buy_interceptor(d, want=2),
                                lambda: hire_staff(d, want=6)):
@@ -200,6 +212,14 @@ class CampaignEvaluator(Evaluator):
                             fn()
                         except Exception:
                             pass
+
+                    # Upkeep leaves the driver on BaseScreen, and advance() only runs its clock
+                    # on the CityView branch -- so without this the next leg parks and burns its
+                    # whole budget doing nothing. play_campaign already does this; omitting it
+                    # here cost a 900s attempt, and the stall detector is the only reason it was
+                    # visible at all rather than looking like another quiet campaign.
+                    if d.status().stage != "CityView":
+                        return_to_city(d)
 
             rec["days_advanced"] = round((self._ticks(d) - t0) / TICKS_PER_DAY, 2)
 
@@ -263,6 +283,8 @@ def main() -> int:
     ap.add_argument("--budget", type=float, default=420.0, help="seconds per battle attempt")
     ap.add_argument("--leg", type=float, default=3.0, help="game-days advanced per step")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--quiet", action="store_true",
+                    help="silence the driver's per-leg narration (default: narrate)")
     args = ap.parse_args()
 
     repo = Path(args.repo)
@@ -270,7 +292,8 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     arena = new_arena(seed=args.seed, pop=args.pop)
-    ev = CampaignEvaluator(repo, out, args.port, args.budget, args.leg)
+    ev = CampaignEvaluator(repo, out, args.port, args.budget, args.leg,
+                           verbose=not args.quiet)
     print(f"[adv] {args.generations} generations x {args.battles_per_gen} real battles, "
           f"pop {args.pop}/side, seed {args.seed}", flush=True)
     sums = train(arena, ev, args.generations, args.battles_per_gen,

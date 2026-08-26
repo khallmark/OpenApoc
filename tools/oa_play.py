@@ -998,6 +998,17 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
                       f"nothing is dismissing it")
             if d.dismiss_modal(st):
                 continue
+            # Reporting the park was an improvement on spinning silently, but it still spun: a
+            # leg that ends on BaseScreen (upkeep leaves you there) parked here for its whole
+            # budget while the clock never moved, because the clock only runs on the CityView
+            # branch below. After ~10s of a screen that is not a battle and will not dismiss,
+            # walk back to the city and carry on. return_to_city knows the way out of the base,
+            # research and purchase screens; Escape alone does not.
+            if parked_rounds == 20 and st.stage not in (
+                    "BattleView", "BattlePreStart", "BattleBriefing", "BattleDebriefing"):
+                d.say(f"  [stall] walking back to the city from {st.stage}")
+                return_to_city(d)
+                continue
             # Some other screen (battle, base, ufopaedia) is in charge; let its own driver run.
             if st.stage in ("BattleView", "BattlePreStart", "BattleBriefing"):
                 return d.h.gs("time")
