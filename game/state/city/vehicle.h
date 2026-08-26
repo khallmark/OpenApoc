@@ -53,9 +53,20 @@ static const int FV_CHANCE_TO_RECOVER_EQUIPMENT = 90;
 // How much percent is "scrapped" sold for
 static const int FV_SCRAPPED_COST_PERCENT = 25;
 // How much ticks is accumulated per second of engine usage
-static const int FUEL_TICKS_PER_SECOND = 144;
-// How much ticks is required to spend one unit of fuel
-static const int FUEL_TICKS_PER_UNIT = 40000;
+static const int FUEL_TICKS_PER_SECOND = TICKS_PER_SECOND;
+// How much ticks is required to spend one unit of fuel.
+//
+// fuelSpentTicks accrues FUEL_TICKS_PER_SECOND (== TICKS_PER_SECOND) per real
+// second, so this threshold is a real-time duration expressed in engine ticks
+// and has to move with TICKS_MULTIPLIER or fuel economy silently changes.
+//
+// 40000 was calibrated while the multiplier was 4 and its provenance is not
+// established -- 40000 / TICKS_PER_SECOND is about 277.8 real seconds per unit,
+// which is not a round figure at any multiplier, so it is preserved as-is rather
+// than "tidied" into one. Scaling it here keeps the burn rate identical.
+static constexpr unsigned FUEL_CALIBRATION_MULTIPLIER = 4;
+static const int FUEL_TICKS_PER_UNIT =
+    40000 * (int)TICKS_MULTIPLIER / (int)FUEL_CALIBRATION_MULTIPLIER;
 // Correction factor for turning slowdown mechanic, purely found by data analysis, could not
 // establish any logical conclusion
 static const float TURNING_SLOW_DOWN_CORRECTION = 38.893f;
