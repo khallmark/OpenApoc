@@ -115,6 +115,26 @@ for q in ("enemies_screen", "friends_screen"):
     check(f'd.h.screen_craft("{q}")' not in whole,
           f"{q} must go through on_screen, not raw screen_craft")
 
+# --- never press Quit on the options menu ------------------------------------
+# BUTTON_QUIT means "leave this screen" on BuildingScreen, BribeScreen and friends, and
+# "exit the program" on InGameOptions (ingameoptions.cpp:215 -> StageCmd::Command::QUIT).
+# return_to_city tried it FIRST, unconditionally, so any run that reached the options menu shut
+# its own game down: cleanly, rc=0, no crash -- and then reported that the game had gone. That was
+# the whole "ConnectionRefusedError [exited rc=0]" failure class, five attempts across two runs.
+src_rtc = inspect.getsource(oa_play.return_to_city)
+check("quit_exits_game" in src_rtc,
+      "return_to_city must special-case the screens where Quit exits the program")
+check('"InGameOptions"' in src_rtc and '"MainMenu"' in src_rtc,
+      "…and must name both of them")
+# The dangerous ordering must be gone: BUTTON_QUIT may never be the first thing tried unguarded.
+check('("BUTTON_QUIT", "BUTTON_OK")' in src_rtc and '("BUTTON_OK",) if quit_exits_game' in src_rtc,
+      "on a quit-exits screen it must try BUTTON_OK only")
+
+# The response table must not route InGameOptions at BUTTON_QUIT either.
+opts = oa_play.RESPONSES.get("InGameOptions", {})
+check("BUTTON_QUIT" not in opts.values(),
+      f"InGameOptions must never be acked with BUTTON_QUIT, got {opts}")
+
 if FAILED:
     print(f"FAILED {len(FAILED)}:")
     for m in FAILED:

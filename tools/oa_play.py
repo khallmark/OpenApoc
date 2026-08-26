@@ -1177,7 +1177,23 @@ def return_to_city(d: Driver, tries: int = 12) -> bool:
             else:
                 d.h.key("Return")
         else:
-            for cid in ("BUTTON_QUIT", "BUTTON_OK"):
+            # BUTTON_QUIT means two different things depending on the screen. On BuildingScreen,
+            # BaseDefenseScreen, BribeScreen and the rest it is "leave this screen". On
+            # InGameOptions it is fw().stageQueueCommand({StageCmd::Command::QUIT})
+            # (ingameoptions.cpp:215) -- it exits the PROGRAM.
+            #
+            # This loop tried BUTTON_QUIT first, unconditionally. So any time it ran while the
+            # options menu was up, it shut the game down: cleanly, rc=0, no crash, no exception,
+            # at whatever arbitrary point the campaign had reached. That is the entire
+            # "ConnectionRefusedError [exited rc=0]" failure class -- five attempts across two
+            # runs, every one of them the harness quitting its own game and then reporting that
+            # the game had gone.
+            #
+            # It compounded with the Escape guard's own bug: Escape on CityView/BattleView OPENS
+            # InGameOptions, so the driver could open the options menu by accident and then press
+            # Quit on it.
+            quit_exits_game = stage in ("InGameOptions", "MainMenu")
+            for cid in (("BUTTON_OK",) if quit_exits_game else ("BUTTON_QUIT", "BUTTON_OK")):
                 try:
                     if d.h.send(f"control {cid}").startswith("OK"):
                         break
