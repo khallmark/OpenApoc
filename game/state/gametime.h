@@ -27,7 +27,7 @@ static_assert(VANILLA_TICKS_PER_MINUTE == 0x870,
 static_assert(VANILLA_TICKS_PER_DAY == 0x2F7600,
               "selected 36-TPS interpretation must match the invasion day coefficient");
 
-// OpenApoc uses a finer simulation resolution than the original game.
+// OpenApoc uses a finer simulation resolution than its selected vanilla compatibility base.
 static constexpr unsigned TICKS_MULTIPLIER = 4;
 static constexpr unsigned TICKS_PER_SECOND = VANILLA_TICKS_PER_SECOND * TICKS_MULTIPLIER;
 static constexpr unsigned TICKS_PER_MINUTE = TICKS_PER_SECOND * 60;
