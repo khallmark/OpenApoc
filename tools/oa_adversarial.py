@@ -336,6 +336,20 @@ class Evaluator:
         raise NotImplementedError
 
 
+class IncompleteGenerationError(RuntimeError):
+    """A bounded generation ended before its requested evidence cardinality was met."""
+
+    def __init__(self, generation: int, fought: int, requested: int, attempts: int):
+        self.generation = generation
+        self.fought = fought
+        self.requested = requested
+        self.attempts = attempts
+        super().__init__(
+            f"generation {generation} produced {fought}/{requested} decided battles "
+            f"after {attempts} attempts"
+        )
+
+
 def train(arena: Arena, evaluator: Evaluator, generations: int, battles_per_gen: int,
           ledger: Optional[Path] = None, say=print, base_seed: int = 0,
           max_attempt_factor: int = 3) -> list:
@@ -354,13 +368,23 @@ def train(arena: Arena, evaluator: Evaluator, generations: int, battles_per_gen:
     match-ups happened to draw a quiet campaign. Exclusion is the only neutral handling.
 
     Seeds advance per ATTEMPT, not per recorded battle. Retrying a no-contest on its original seed
-    would replay the same quiet campaign and fail identically forever.
+    would replay the same quiet campaign and fail identically forever. A generation that exhausts
+    its bounded retry budget before producing the exact requested number of decided battles fails
+    whole and is not evolved: partial evidence must never select the next population.
     """
+    if generations <= 0:
+        raise ValueError("generations must be positive")
+    if battles_per_gen <= 0:
+        raise ValueError("battles_per_gen must be positive")
+    if max_attempt_factor <= 0:
+        raise ValueError("max_attempt_factor must be positive")
+
     summaries = []
     attempt = 0
     for _ in range(generations):
+        generation = arena.generation + 1
         fought = 0
-        budget = max(1, battles_per_gen * max_attempt_factor)
+        budget = battles_per_gen * max_attempt_factor
         spent = 0
         while fought < battles_per_gen and spent < budget:
             spent += 1
@@ -380,7 +404,13 @@ def train(arena: Arena, evaluator: Evaluator, generations: int, battles_per_gen:
             fought += 1
         if fought < battles_per_gen:
             say(f"  [adv] generation short: {fought}/{battles_per_gen} battles fought in "
-                f"{spent} attempts. Evolving on what was measured; the rest never happened.")
+                f"{spent} attempts. Refusing to evolve from incomplete evidence.")
+            raise IncompleteGenerationError(
+                generation=generation,
+                fought=fought,
+                requested=battles_per_gen,
+                attempts=spent,
+            )
         summary = arena.evolve()
         summary["fought_this_gen"] = fought
         summaries.append(summary)

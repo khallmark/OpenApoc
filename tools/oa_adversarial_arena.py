@@ -34,7 +34,9 @@ import sys
 import time
 from pathlib import Path
 
-from oa_adversarial import Arena, Evaluator, Policy, new_arena, train
+from oa_adversarial import (
+    Arena, Evaluator, IncompleteGenerationError, Policy, new_arena, train,
+)
 from oa_play import (
     AdvanceOutcome, BattleResult, TICKS_PER_DAY, Driver, GameProcess, Harness, advance,
     assign_research,
@@ -42,7 +44,7 @@ from oa_play import (
     buy_interceptor,
     _flying_crewed, base_upkeep, crew_transport, hire_staff, new_game,
     raid_infiltrated_building, recover_crash_sites, return_to_city, sell_ground_fleet,
-    require_positive, sell_surplus_loot, win_battle,
+    require_clean_process_exit, require_positive, sell_surplus_loot, win_battle,
 )
 
 
@@ -313,20 +315,12 @@ class CampaignEvaluator(Evaluator):
                         rec["reason"] or f"battle did not decide: {outcome.outcome.value}"
                     )
                 rec["reason"] = rec["reason"] or "budget expired with no battle"
-                print(f"    [attempt {self.battles}] NO CONTEST after "
-                      f"{rec['days_advanced']:.1f} game-days / {time.time()-t_start:.0f}s "
-                      f"({rec['reason']}; raids={rec['raids'][-3:]})", flush=True)
             else:
                 stats = outcome.as_dict()
                 rec["battle"] = stats
                 rec["outcome"] = outcome.outcome.value
                 score = utility(outcome, stats.get("started_with"), stats.get("survivors"))
                 rec["score"] = round(score, 3)
-                print(f"    [battle {self.battles}] {xcom.genes.get('behaviour')}/"
-                      f"{xcom.genes.get('fire_mode')} vs {alien.genes.get('behaviour_mix')} "
-                      f"-> {outcome} ({stats.get('survivors')}/{stats.get('started_with')} "
-                      f"survived, {rec['days_advanced']:.1f}d) score={score:.2f}", flush=True)
-            return score
         except Exception as exc:
             rec["reason"] = f"{type(exc).__name__}: {exc}"
             # A ConnectionRefusedError says the game is gone; it does not say why. The exit status
@@ -343,16 +337,36 @@ class CampaignEvaluator(Evaluator):
                 rec["game_log_tail"] = lines[-6:]
             except Exception:
                 pass
-            print(f"    [attempt {self.battles}] NO CONTEST: {rec['reason']} "
-                  f"[{rec.get('game_exit', '?')}]", flush=True)
-            return None
         finally:
             rec["wall_s"] = round(time.time() - t_start, 1)
-            self._log(rec)
             try:
-                game.stop()
-            except Exception:
-                pass
+                process_exit = game.stop()
+                rec["engine_exit"] = process_exit.as_dict()
+                require_clean_process_exit(
+                    process_exit, f"adversarial attempt {self.battles} engine"
+                )
+            except Exception as exc:
+                shutdown_reason = f"{type(exc).__name__}: {exc}"
+                rec["shutdown_error"] = shutdown_reason
+                rec["reason"] = "; ".join(filter(None, (rec["reason"], shutdown_reason)))
+                rec["score"] = None
+                score = None
+
+            self._log(rec)
+            if score is None:
+                print(f"    [attempt {self.battles}] NO CONTEST after "
+                      f"{rec['days_advanced']:.1f} game-days / {rec['wall_s']:.0f}s "
+                      f"({rec['reason']}; raids={rec['raids'][-3:]}; "
+                      f"engine={rec.get('engine_exit', rec.get('game_exit', '?'))})",
+                      flush=True)
+            else:
+                stats = rec["battle"]
+                print(f"    [battle {self.battles}] {xcom.genes.get('behaviour')}/"
+                      f"{xcom.genes.get('fire_mode')} vs {alien.genes.get('behaviour_mix')} "
+                      f"-> {rec['outcome']} ({stats.get('survivors')}/"
+                      f"{stats.get('started_with')} survived, {rec['days_advanced']:.1f}d) "
+                      f"score={score:.2f}", flush=True)
+        return score
 
     @staticmethod
     def _ticks(d) -> int:
@@ -407,8 +421,12 @@ def main() -> int:
                            verbose=not args.quiet)
     print(f"[adv] {args.generations} generations x {args.battles_per_gen} real battles, "
           f"pop {args.pop}/side, seed {args.seed}", flush=True)
-    sums = train(arena, ev, args.generations, args.battles_per_gen,
-                 ledger=out / "generations.jsonl", base_seed=args.seed * 1000)
+    try:
+        train(arena, ev, args.generations, args.battles_per_gen,
+              ledger=out / "generations.jsonl", base_seed=args.seed * 1000)
+    except IncompleteGenerationError as exc:
+        print(f"[adv] FAILED: {exc}. No partial generation was evolved.", flush=True)
+        return 1
 
     print(f"\n[adv] {arena.total_plays} battles fought, {arena.no_contests} no-contests "
           f"(attempts that produced no battle; excluded from Elo entirely)")

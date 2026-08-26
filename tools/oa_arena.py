@@ -44,9 +44,10 @@ from oa_play import (
     Harness,
     battle_is_decided,
     new_game,
+    require_clean_process_exit,
     require_positive,
 )
-from oa_skirmish import run_one
+from oa_skirmish import parse_alien_specs, run_one
 
 # The policy space. Small and explicit on purpose: every axis here is a control the driver can
 # actually operate through the harness, and nothing is included that it cannot.
@@ -283,17 +284,31 @@ def run_worker(wid: int, port: int, repo: Path, out: Path, aliens: dict, args,
         terminal_reason = f"{type(exc).__name__}: {exc}"
         print(f"[arena] worker {wid} could not start: {terminal_reason}", flush=True)
     finally:
+        process_exit = None
         if game is not None:
             try:
-                game.stop()
-            except Exception:
-                pass
-        results.put({
+                process_exit = game.stop()
+                require_clean_process_exit(process_exit, f"arena worker {wid} engine")
+            except Exception as exc:
+                shutdown_reason = f"{type(exc).__name__}: {exc}"
+                terminal_status = "error"
+                terminal_reason = "; ".join(filter(None, (terminal_reason, shutdown_reason)))
+        terminal = {
             "kind": "worker_terminal",
             "worker": wid,
             "status": terminal_status,
             "reason": terminal_reason,
-        })
+            "engine_exit": process_exit.as_dict() if process_exit else None,
+        }
+        try:
+            with ledger_lock, ledger.open("a") as fh:
+                fh.write(json.dumps(terminal) + "\n")
+        except Exception as exc:
+            terminal["status"] = "error"
+            terminal["reason"] = "; ".join(filter(None, (
+                terminal["reason"], f"terminal ledger write failed: {type(exc).__name__}: {exc}"
+            )))
+        results.put(terminal)
         print(f"[arena] worker {wid} stopped", flush=True)
 
 
@@ -342,7 +357,8 @@ def run_parallel(args, repo: Path, out: Path, aliens: dict) -> int:
                 scored = collect_policy_results(results, gen, len(pool), timeout_s)
             except ArenaCoordinatorError as exc:
                 print(f"[arena] {exc}", flush=True)
-                return 1
+                result_code = 1
+                break
             scored.sort(key=lambda t: t[0], reverse=True)
             best_fit, best_pol, _ = scored[0]
             if best_ever is None or best_fit > best_ever[0]:
@@ -375,8 +391,33 @@ def run_parallel(args, repo: Path, out: Path, aliens: dict) -> int:
         result_code = 130
     finally:
         stop.set()
+        shutdown_deadline = time.monotonic() + 60.0
         for t in threads:
-            t.join(timeout=30)
+            t.join(timeout=max(0.0, shutdown_deadline - time.monotonic()))
+        alive = [t.name for t in threads if t.is_alive()]
+        if alive:
+            print(f"[arena] workers did not stop before deadline: {alive}", flush=True)
+            if result_code == 0:
+                result_code = 1
+
+        terminals = {}
+        while True:
+            try:
+                message = results.get_nowait()
+            except queue.Empty:
+                break
+            if message.get("kind") == "worker_terminal":
+                terminals[message["worker"]] = message
+        missing = sorted(set(range(args.workers)) - set(terminals))
+        failed = [message for message in terminals.values()
+                  if message.get("status") != "clean"]
+        if missing:
+            print(f"[arena] missing worker terminal records: {missing}", flush=True)
+        for message in failed:
+            print(f"[arena] worker {message['worker']} shutdown failed: "
+                  f"{message['reason']}", flush=True)
+        if (missing or failed) and result_code == 0:
+            result_code = 1
     return result_code
 
 
@@ -409,13 +450,12 @@ def main() -> int:
     except ValueError as exc:
         ap.error(str(exc))
 
-    aliens = {}
-    for spec in args.alien:
-        name, _, count = spec.partition("=")
-        aliens[name] = int(count or 1)
-        if aliens[name] <= 0:
-            ap.error(f"--alien count must be positive: {spec}")
-    if not aliens:
+    if args.alien:
+        try:
+            aliens = parse_alien_specs(args.alien)
+        except ValueError as exc:
+            ap.error(str(exc))
+    else:
         aliens = {"anthropod": 4, "skeletoid": 2}
 
     repo = Path(args.repo)
@@ -438,10 +478,23 @@ def main() -> int:
         rec = fight(d, aliens, pol, args.map_row, args.budget)
         d.say(f"[arena] PROBE result: {json.dumps(rec)}")
         d.say(f"[arena] PROBE final stage: {d.status().stage}")
+        shutdown_error = ""
+        process_exit = None
+        try:
+            process_exit = game.stop()
+            require_clean_process_exit(process_exit, "arena probe engine")
+        except Exception as exc:
+            shutdown_error = f"{type(exc).__name__}: {exc}"
+            d.say(f"[arena] PROBE shutdown failed: {exc}")
+        probe_record = {
+            "probe": True,
+            **rec,
+            "engine_exit": process_exit.as_dict() if process_exit else None,
+            "shutdown_error": shutdown_error,
+        }
         with ledger.open("a") as fh:
-            fh.write(json.dumps({"probe": True, **rec}) + "\n")
-        game.stop()
-        return 0 if battle_is_decided(rec) else 1
+            fh.write(json.dumps(probe_record) + "\n")
+        return 0 if battle_is_decided(rec) and not shutdown_error else 1
 
     pool = all_policies()
     random.shuffle(pool)
@@ -515,8 +568,24 @@ def main() -> int:
                 seen.add(p["name"])
                 pool.append(p)
 
-    game.stop()
-    return 1 if fatal_driver_failure else 0
+    result_code = 1 if fatal_driver_failure else 0
+    shutdown_error = ""
+    process_exit = None
+    try:
+        process_exit = game.stop()
+        require_clean_process_exit(process_exit, "arena engine")
+    except Exception as exc:
+        shutdown_error = f"{type(exc).__name__}: {exc}"
+        d.say(f"[arena] shutdown failed: {exc}")
+        result_code = 1
+    with ledger.open("a") as fh:
+        fh.write(json.dumps({
+            "kind": "run_terminal",
+            "success": result_code == 0,
+            "engine_exit": process_exit.as_dict() if process_exit else None,
+            "shutdown_error": shutdown_error,
+        }) + "\n")
+    return result_code
 
 
 if __name__ == "__main__":

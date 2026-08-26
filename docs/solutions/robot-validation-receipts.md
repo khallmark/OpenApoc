@@ -36,6 +36,16 @@ transition queued by `Skirmish::resume()` if that POP is supplied manually). R0'
 this is recorded as setup failure with no gameplay outcome. Once the live-FIFO scheduler PR is
 integrated, the exact command becomes a required-green one-battle smoke.
 
+Arena and adversarial runs use the same fail-closed evidence rules even when they are not writing a
+validation receipt. Every alien force name must map to a real `SelectForces` slider and every count
+must be a positive integer before the engine launches; direct skirmish calls validate the same
+contract before touching the UI. A finite arena policy batch or adversarial generation is usable
+only when it contains exactly the requested number of decided battles. Bounded retries may recover
+from no-contests, but exhausting them fails the generation without evolving a partial or empty
+population. Finally, any engine that exited before shutdown was requested, returned nonzero, or had
+to be killed invalidates the arena run or adversarial score even when the battle itself looked
+decided. The typed process-exit record remains in the ledger so that veto is auditable.
+
 Each invocation creates a unique child directory beneath `--out`. It contains:
 
 - `provenance.json`: driver arguments, git commit, seed, source binary and its SHA-256;

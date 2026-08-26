@@ -777,16 +777,21 @@ class ProcessExitResult:
         }
 
 
+def require_clean_process_exit(process_exit: ProcessExitResult, context: str = "engine") -> None:
+    """Reject an engine that exited early, nonzero, or only after a forced kill."""
+    if not process_exit.clean_shutdown:
+        raise RuntimeError(f"{context} did not shut down cleanly: {process_exit.status}")
+
+
 def reconcile_validation_process_exit(
         validation: bool, outcome: str, reason: str, exit_code: int,
         process_exit: ProcessExitResult) -> tuple[str, str, int]:
     """Prevent a nominally successful validation receipt from hiding an engine failure."""
-    if validation and exit_code == 0 and not process_exit.clean_shutdown:
-        return (
-            "process_error",
-            f"engine did not shut down cleanly: {process_exit.status}",
-            1,
-        )
+    if validation and exit_code == 0:
+        try:
+            require_clean_process_exit(process_exit)
+        except RuntimeError as exc:
+            return "process_error", str(exc), 1
     return outcome, reason, exit_code
 
 

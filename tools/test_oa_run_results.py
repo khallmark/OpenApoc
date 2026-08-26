@@ -163,11 +163,29 @@ check_equal(kind, "transport_error", "a live engine socket failure is a transpor
 
 
 clean_exit = oa_play.ProcessExitResult(True, None, True, False, 0, "exited rc=0")
+late_exit = oa_play.ProcessExitResult(True, 0, False, False, 0, "exited rc=0 before stop")
 crashed_exit = oa_play.ProcessExitResult(True, 9, False, False, 9, "exited rc=9")
 forced_exit = oa_play.ProcessExitResult(True, None, True, True, -9, "killed by signal 9")
 check(clean_exit.clean_shutdown, "a requested zero exit must be clean")
+check(not late_exit.clean_shutdown, "an unsolicited zero exit before stop is not clean")
 check(not crashed_exit.clean_shutdown, "an engine that exited before stop is not clean")
 check(not forced_exit.clean_shutdown, "a forced kill is not clean")
+oa_play.require_clean_process_exit(clean_exit, "test engine")
+check_raises(
+    RuntimeError,
+    lambda: oa_play.require_clean_process_exit(late_exit, "test engine"),
+    "an unsolicited pre-stop zero exit must veto engine-owned success",
+)
+check_raises(
+    RuntimeError,
+    lambda: oa_play.require_clean_process_exit(crashed_exit, "test engine"),
+    "a pre-stop nonzero exit must veto engine-owned success",
+)
+check_raises(
+    RuntimeError,
+    lambda: oa_play.require_clean_process_exit(forced_exit, "test engine"),
+    "a forced kill must veto engine-owned success",
+)
 check_equal(
     oa_play.reconcile_validation_process_exit(True, "victory", "won", 0, clean_exit),
     ("victory", "won", 0),

@@ -67,6 +67,38 @@ ALIEN_SLIDERS = {
 }
 
 
+def validate_alien_force(aliens: dict[str, int]) -> dict[str, int]:
+    """Reject a force that SelectForces cannot represent without silently dropping units."""
+    if not aliens:
+        raise ValueError("alien force must contain at least one known positive unit count")
+    for name, count in aliens.items():
+        if name not in ALIEN_SLIDERS:
+            raise ValueError(f"unknown alien type: {name!r}")
+        if isinstance(count, bool) or not isinstance(count, int):
+            raise ValueError(f"alien count for {name!r} must be an integer")
+        require_positive(count, f"--alien {name} count")
+    return dict(aliens)
+
+
+def parse_alien_specs(specs: list[str]) -> dict[str, int]:
+    """Parse a non-empty, known, positive alien force before the engine is launched."""
+    if not specs:
+        return {"popper": 4, "skeletoid": 4}
+
+    aliens: dict[str, int] = {}
+    for spec in specs:
+        name, separator, raw_count = spec.partition("=")
+        if name not in ALIEN_SLIDERS:
+            raise ValueError(f"unknown alien type: {name or spec!r}")
+        try:
+            count = int(raw_count) if separator else 1
+        except ValueError as exc:
+            raise ValueError(f"invalid alien count: {spec}") from exc
+        require_positive(count, f"--alien {name} count")
+        aliens[name] = count
+    return validate_alien_force(aliens)
+
+
 @dataclass(frozen=True)
 class SkirmishAttempt:
     """Keep setup/transition failures out of the tactical outcome namespace."""
@@ -192,6 +224,7 @@ def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
     unchecking DEFAULT_ALIENS first -- otherwise the screen fills in its own default mix, which
     defeats the point of testing one specific threat in isolation.
     """
+    aliens = validate_alien_force(aliens)
     st = d.status()
     if st.stage != "Skirmish":
         return setup_failure(d, "not_on_skirmish_screen")
@@ -218,10 +251,7 @@ def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
         pass
     time.sleep(0.2)
     for name, count in aliens.items():
-        slider = ALIEN_SLIDERS.get(name)
-        if not slider:
-            d.say(f"  [skirmish] unknown alien type {name!r}, skipping")
-            continue
+        slider = ALIEN_SLIDERS[name]
         try:
             d.h.control(slider, "set", str(count))
         except HarnessError as exc:
@@ -308,6 +338,7 @@ def battle_snapshot(d: Driver) -> dict | None:
 def run_one(d: Driver, aliens: dict, map_row: int = 0, real_time: bool = True,
             budget_s: float = 300.0, policy: dict | None = None) -> dict:
     """One full cycle: open skirmish, pick a map, fight, return a result summary."""
+    aliens = validate_alien_force(aliens)
     if not open_skirmish(d):
         attempt = setup_failure(d, "could_not_open_skirmish")
         return {**attempt.as_dict(), "aliens": aliens, "map_row": map_row, "before": {}}
@@ -377,12 +408,10 @@ def main() -> int:
         print(f"oa_skirmish: {exc}", file=sys.stderr)
         return 2
 
-    aliens = {}
-    for spec in args.alien:
-        name, _, count = spec.partition("=")
-        aliens[name] = int(count or 1)
-    if not aliens:
-        aliens = {"popper": 4, "skeletoid": 4}  # a reasonable default mixed threat
+    try:
+        aliens = parse_alien_specs(args.alien)
+    except ValueError as exc:
+        ap.error(str(exc))
 
     repo = Path(args.repo)
     out_root = Path(args.out) if args.out else repo / "build/skirmish"
