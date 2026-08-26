@@ -437,6 +437,17 @@ def reap_stale_game(port: int) -> int:
     return killed
 
 
+def build_dir() -> str:
+    """Which build tree to launch from. Defaults to the one everything else uses.
+
+    snapshot_binary() protects a RUNNING process from a rebuild, but not the next attempt: that
+    one copies whatever build/bin holds by then, so an engine change landing mid-experiment
+    silently becomes part of it. Testing a fix against a live run therefore needs a second build
+    tree, and this is how a driver is pointed at one -- OA_BUILD_DIR=build-something.
+    """
+    return os.environ.get("OA_BUILD_DIR", "build")
+
+
 class GameProcess:
     """Owns a game instance so a run needs no human to start or stop anything."""
 
@@ -452,7 +463,7 @@ class GameProcess:
 
     @property
     def binary(self) -> Path:
-        return self.repo / "build/bin/OpenApoc.app/Contents/MacOS/OpenApoc"
+        return self.repo / build_dir() / "bin/OpenApoc.app/Contents/MacOS/OpenApoc"
 
     def snapshot_binary(self) -> Path:
         """Copy the app bundle so a rebuild cannot kill a run in flight.
@@ -466,7 +477,7 @@ class GameProcess:
         Falls back to the shared binary if the copy fails for any reason: a slightly fragile run
         beats no run.
         """
-        src = self.repo / "build/bin/OpenApoc.app"
+        src = self.repo / build_dir() / "bin/OpenApoc.app"
         dst = self.log_path.parent / "OpenApoc.app"
         try:
             if dst.exists():
@@ -1516,14 +1527,55 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
     # absent on that path -- printing them as "None" made a working raid look broken.
     where = info.get("building") or info.get("text", "a reported sighting")[:40]
     crew_here = info.get("crew")
+    # Which of the two coordinate sources produced this. A failure from the alert path and a
+    # failure from the message-log path have different causes and the record must separate them.
+    source = "alert" if target else "message-log"
     d.say(f"  [raid] clearing {where}"
           + (f" ({crew_here} aliens)" if crew_here else ""))
 
-    d.h.ok(f"click {bx} {by} right")
-    time.sleep(1.0)
-    if d.status().stage != "BuildingScreen":
-        return_to_city(d)
-        return f"no-building-screen ({d.status().stage})"
+    # A raid that never opens BuildingScreen is the worst failure this driver has, because from
+    # outside it is indistinguishable from a quiet map: attempt 1 of the 301 arena run recorded
+    # "no-building-screen (CityView)" and the mission was simply never offered.
+    #
+    # This does NOT claim to fix that. Why the right-click missed is not established -- one
+    # candidate is that centre_on_building returns the screen point of the building's mid-tile at
+    # z=2 (cityview.cpp:2371), which need not be where the building is DRAWN, the same class of
+    # error already fixed in the battle view -- and a fixed one-second sleep could equally have
+    # been the whole story. So: poll instead of sleeping, try once more from freshly-centred
+    # coordinates, and record which source the coordinates came from. That turns a silent miss
+    # into a diagnosable one, and costs one extra click when the first genuinely missed.
+    def open_building_screen() -> bool:
+        d.h.ok(f"click {bx} {by} right")
+        deadline = time.time() + 3.0
+        while time.time() < deadline and d.status().stage == "CityView":
+            time.sleep(0.2)
+        return d.status().stage == "BuildingScreen"
+
+    if not open_building_screen():
+        # Read the stage ONCE, and BEFORE return_to_city. Both this function and its predecessor
+        # built the label from a d.status() call placed after the recovery, so every report came
+        # back saying "CityView" -- the stage we had just navigated back to, never the screen that
+        # actually answered the click. The label existed to name that screen and was destroying
+        # the only copy of it.
+        landed_on = d.status().stage
+        # Retry only from CityView. Any other screen means the click DID land and was answered --
+        # a "No Entrance" box, say -- and clicking again would hammer a modal.
+        if landed_on != "CityView":
+            return_to_city(d)
+            return f"no-building-screen ({landed_on}, via {source})"
+        again = d.h.gs(f"centre_on_building {target}") if target else d.h.gs("centre_on_message")
+        retried = False
+        if again.get("centred") == "1":
+            try:
+                bx, by = (int(v) for v in again.get("at", "").split(",")[:2])
+            except ValueError:
+                pass
+            else:
+                retried = open_building_screen()
+        if not retried:
+            landed_on = d.status().stage
+            return_to_city(d)
+            return f"no-building-screen ({landed_on}, via {source}, retry failed)"
 
     # Select, then CHECK. select_assignment_rows counts the clicks it issued, not the agents it
     # actually selected, so it reported success even when every click missed -- which is how every
@@ -3849,9 +3901,23 @@ def hire_staff(d: Driver, want: int = 6, role: str = "BUTTON_SOLDIERS",
 
     after = int(d.h.gs("agents").get(counter, "0") or 0)
     funds_after = int(d.h.gs("funds").get("balance", "0") or 0)
-    d.say(f"  [hire] {role}: clicked {hired}; {counter} {before}->{after}; "
-          f"funds {funds_before}->{funds_after}")
-    return after - before
+    # Say WHY when nothing was hired. "clicked 6; soldiers 10->10; funds unchanged" reads like a
+    # success and is not one -- it was logged that way on every leg of a 29-attempt experiment
+    # while the roster never grew once, and the zero it returns was the only signal anything was
+    # wrong. Clicks that cost nothing and change nothing have a small number of causes and the
+    # driver can distinguish them.
+    delta = after - before
+    if hired and delta == 0:
+        if funds_after == funds_before:
+            why = "clicks landed but nothing was recruited: no candidates, or no room for them"
+        else:
+            why = "funds moved without the roster growing -- hired into another role?"
+        d.say(f"  [hire] {role}: clicked {hired}; {counter} {before}->{after}; "
+              f"funds {funds_before}->{funds_after} -- {why}")
+    else:
+        d.say(f"  [hire] {role}: clicked {hired}; {counter} {before}->{after}; "
+              f"funds {funds_before}->{funds_after}")
+    return delta
 
 
 def hire_soldiers(d: Driver, want: int = 6) -> int:
@@ -4745,28 +4811,49 @@ def base_upkeep(d: Driver, need_quarters: bool = False) -> dict:
     for want of space. Attrition became permanent, and a campaign ended at
     "no-agents-selectable" with 22 game-days on the clock and no mission it could fly.
     """
+    # ALWAYS returns a reason, never an empty dict. An earlier version returned {} whenever it
+    # found nothing to do, which is indistinguishable from never having run -- and it ran every
+    # leg of a 29-attempt experiment achieving nothing, while the ledger showed only silence. A
+    # step that declines to act has to say why it declined.
     out: dict = {}
-    if d.status().stage != "CityView":
-        return out
+    stage = d.status().stage
+    if stage != "CityView":
+        return {"skipped": f"not in city ({stage})"}
 
     try:
         site = d.h.gs("centre_on_basesite")
-        if int(site.get("bases", "1") or 1) < 2 and site.get("affordable") == "1":
+        bases = int(site.get("bases", "1") or 1)
+        out["bases"] = bases
+        if bases >= 2:
+            out["second_base"] = "already have one"
+        elif site.get("centred") != "1":
+            out["second_base"] = "no base site could be centred on"
+        elif site.get("affordable") != "1":
+            out["second_base"] = f"not affordable (balance {site.get('balance', '?')}, "
+            out["second_base"] += f"cost {site.get('cost', '?')})"
+        else:
             out["second_base"] = build_second_base(d)
             d.say(f"  [base] second base: {out['second_base']}")
     except Exception as exc:
-        out["second_base_error"] = f"{type(exc).__name__}: {exc}"
+        out["second_base"] = f"error: {type(exc).__name__}: {exc}"
 
-    if need_quarters:
+    if not need_quarters:
+        out["quarters"] = "not needed (recruiting is working)"
+    else:
         if d.status().stage != "CityView":
             return_to_city(d)
         try:
-            built = build_facility(d, "FACILITYTYPE_LIVING_QUARTERS")
-            out["quarters"] = bool(built)
-            if built:
-                d.say("  [base] living quarters built; the roster can grow again")
+            info = d.h.gs("facilities")
+            offer = info.get("offer", "")
+            if "FACILITYTYPE_LIVING_QUARTERS" not in offer:
+                out["quarters"] = f"not offered; offer={offer[:60] or 'empty'}"
+            else:
+                built = build_facility(d, "FACILITYTYPE_LIVING_QUARTERS")
+                out["quarters"] = "built" if built else "offered but placement failed"
+                if built:
+                    d.say("  [base] living quarters built; the roster can grow again")
         except Exception as exc:
-            out["quarters_error"] = f"{type(exc).__name__}: {exc}"
+            out["quarters"] = f"error: {type(exc).__name__}: {exc}"
 
     if d.status().stage != "CityView":
         return_to_city(d)
