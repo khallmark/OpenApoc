@@ -4,6 +4,8 @@
 #include "library/sp.h"
 #include "library/strings.h"
 
+#include <cstdint>
+
 namespace OpenApoc
 {
 
@@ -77,8 +79,9 @@ typedef struct FrameworkFingerEvent
 	int Y;
 	int DeltaX;
 	int DeltaY;
-	// Touch ID (system-specified)
-	int Id;
+	// Touch ID (system-specified). 64-bit: iOS derives it from a UITouch pointer,
+	// which does not fit in an int.
+	int64_t Id;
 	// Should this be considered a "primary" touch? (first finger?)
 	bool IsPrimary;
 } FrameworkFingerEvent;

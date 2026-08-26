@@ -87,6 +87,10 @@ class FrameworkPrivate
 	int uiScale;
 	// Mouse input from the OS is ignored while the window is not the focused one.
 	bool windowFocused = true;
+	// The finger that started the current gesture, held until it lifts. SDL_FingerID is
+	// 64-bit and iOS derives it from a UITouch pointer, so it must not be narrowed.
+	SDL_FingerID primaryFingerId = 0;
+	bool primaryFingerActive = false;
 	up<ThreadPool> threadPool;
 	up<Harness> harness;
 
@@ -631,17 +635,6 @@ void Framework::translateSdlEvents()
 	Event *fwE;
 	bool touch_events_enabled = Options::optionEnableTouchEvents.get();
 
-	// FIXME: That's not the right way to figure out the primary finger!
-	int primaryFingerID = -1;
-	if (SDL_GetNumTouchDevices())
-	{
-		SDL_Finger *primaryFinger = SDL_GetTouchFinger(SDL_GetTouchDevice(0), 0);
-		if (primaryFinger)
-		{
-			primaryFingerID = primaryFinger->id;
-		}
-	}
-
 	while (SDL_PollEvent(&e))
 	{
 		// A background window must not be playable: neither the click that raises it nor
@@ -755,6 +748,11 @@ void Framework::translateSdlEvents()
 			case SDL_FINGERDOWN:
 				if (!touch_events_enabled)
 					break;
+				if (!p->primaryFingerActive)
+				{
+					p->primaryFingerActive = true;
+					p->primaryFingerId = e.tfinger.fingerId;
+				}
 				fwE = new FingerEvent(EVENT_FINGER_DOWN);
 				fwE->finger().X = static_cast<int>(e.tfinger.x * displayGetWidth());
 				fwE->finger().Y = static_cast<int>(e.tfinger.y * displayGetHeight());
@@ -762,8 +760,7 @@ void Framework::translateSdlEvents()
 				fwE->finger().DeltaY = static_cast<int>(e.tfinger.dy * displayGetHeight());
 				fwE->finger().Id = e.tfinger.fingerId;
 				fwE->finger().IsPrimary =
-				    e.tfinger.fingerId == primaryFingerID; // FIXME: Try to remember the ID of
-				                                           // the first touching finger!
+				    p->primaryFingerActive && e.tfinger.fingerId == p->primaryFingerId;
 				pushEvent(up<Event>(fwE));
 				break;
 			case SDL_FINGERUP:
@@ -776,9 +773,12 @@ void Framework::translateSdlEvents()
 				fwE->finger().DeltaY = static_cast<int>(e.tfinger.dy * displayGetHeight());
 				fwE->finger().Id = e.tfinger.fingerId;
 				fwE->finger().IsPrimary =
-				    e.tfinger.fingerId == primaryFingerID; // FIXME: Try to remember the ID of
-				                                           // the first touching finger!
+				    p->primaryFingerActive && e.tfinger.fingerId == p->primaryFingerId;
 				pushEvent(up<Event>(fwE));
+				if (p->primaryFingerActive && e.tfinger.fingerId == p->primaryFingerId)
+				{
+					p->primaryFingerActive = false;
+				}
 				break;
 			case SDL_FINGERMOTION:
 				if (!touch_events_enabled)
@@ -790,8 +790,7 @@ void Framework::translateSdlEvents()
 				fwE->finger().DeltaY = static_cast<int>(e.tfinger.dy * displayGetHeight());
 				fwE->finger().Id = e.tfinger.fingerId;
 				fwE->finger().IsPrimary =
-				    e.tfinger.fingerId == primaryFingerID; // FIXME: Try to remember the ID of
-				                                           // the first touching finger!
+				    p->primaryFingerActive && e.tfinger.fingerId == p->primaryFingerId;
 				pushEvent(up<Event>(fwE));
 				break;
 			case SDL_WINDOWEVENT:
@@ -810,6 +809,7 @@ void Framework::translateSdlEvents()
 						break;
 					case SDL_WINDOWEVENT_FOCUS_LOST:
 						p->windowFocused = false;
+						p->primaryFingerActive = false;
 						fwE = new DisplayEvent(EVENT_WINDOW_DEACTIVATE);
 						fwE->display().X = 0;
 						fwE->display().Y = 0;
