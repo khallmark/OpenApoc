@@ -6,6 +6,7 @@
 #include "game/ui/components/controlgenerator.h"
 #include "game/ui/general/transactioncontrol.h"
 #include "game/ui/tileview/cityview.h"
+#include "framework/crashhandler.h"
 #include "version.h"
 #include <SDL_main.h>
 
@@ -13,6 +14,10 @@ using namespace OpenApoc;
 
 int main(int argc, char *argv[])
 {
+	// Installed before anything else can throw, so option parsing and framework construction are
+	// covered too.
+	installCrashHandler();
+
 	if (config().parseOptions(argc, argv))
 	{
 		return EXIT_FAILURE;

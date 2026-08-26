@@ -46,6 +46,10 @@ function(add_openapoc_test NAME)
 			--Framework.CD=${CD_PATH} --Framework.Data=${CMAKE_SOURCE_DIR}/data)
 endfunction()
 
+# The crash necessarily aborts, and ctest counts an aborted subprocess as failed whatever its
+# output says -- so this test crashes a CHILD and asserts on what the child printed.
+add_openapoc_test(test_crash_handler)
+
 add_openapoc_test(test_gametime)
 add_openapoc_test(test_vec)
 add_openapoc_test(test_line)
