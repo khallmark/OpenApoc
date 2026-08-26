@@ -11,3 +11,5 @@ jobs:
         run: ./tools/check_ignored_binaries.sh
       - name: Compare report matches in-repo sources
         run: python3 tools/regen_compare_report.py --check
+      - name: Compare report ordering is deterministic
+        run: python3 tools/test_regen_compare_report.py

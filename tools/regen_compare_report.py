@@ -100,12 +100,17 @@ def gap_mix(rows: list[dict[str, str]]) -> str:
     return f'    <p class="muted">Status mix:\n    {", ".join(bits)}.</p>'
 
 
+def ranked_counts(counts: Counter[str], limit: int) -> list[tuple[str, int]]:
+    """Return stable count-descending, name-ascending rows on every filesystem."""
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]
+
+
 def todo_counts() -> tuple[int, list[tuple[str, int]], list[tuple[str, int]]]:
     dirs: Counter[str] = Counter()
     files: Counter[str] = Counter()
     total = 0
     for folder in (ROOT / "game" / "state", ROOT / "game" / "ui"):
-        for path in folder.rglob("*"):
+        for path in sorted(folder.rglob("*")):
             if path.suffix not in {".cpp", ".h"}:
                 continue
             if "generated" in path.name:
@@ -119,7 +124,7 @@ def todo_counts() -> tuple[int, list[tuple[str, int]], list[tuple[str, int]]]:
             files[rel] += n
             parent = str(path.parent.relative_to(ROOT))
             dirs[parent] += n
-    return total, dirs.most_common(8), files.most_common(15)
+    return total, ranked_counts(dirs, 8), ranked_counts(files, 15)
 
 
 def todo_html(total: int, dirs: list[tuple[str, int]], files: list[tuple[str, int]]) -> tuple[str, str]:
