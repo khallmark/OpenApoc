@@ -241,24 +241,48 @@ class VeteranAI(ScriptedAI):
 
     def __init__(self, pull_back_at: float = 0.5, min_spacing: int = 2,
                  close_range: int = 6, long_range: int = 14,
-                 withdraw_ratio: float = 6.0, withdraw_stalls: int = 12, seed: int = 0):
-        super().__init__(fire_mode="snap", stance="run",
+                 withdraw_ratio: float = 6.0, withdraw_stalls: int = 12, seed: int = 0,
+                 fire_mode: str = "snap", stance: str = "run", behaviour: str = "normal",
+                 move_mode: str = "individual", reserve: str = "snap",
+                 focus_fire: bool = True, priority_targets: bool = True):
+        """Every argument is a doctrine knob a search can turn.
+
+        The adaptive rules stay adaptive: fire mode is still chosen by range and behaviour still
+        by the head-count ratio. What the genome sets is the MIDDLE of each -- what to do at mid
+        range, and in an even fight -- because those are the cases doctrine actually disputes.
+        Nobody argues about what to do when you are outnumbered three to one.
+
+        fire_mode and stance used to be hardcoded here as "snap"/"run" in the super() call, so a
+        VeteranAI could not be told to fight any other way; the two genes the driver did apply
+        were exactly the two this class threw away.
+        """
+        super().__init__(fire_mode=fire_mode, stance=stance,
                          withdraw_ratio=withdraw_ratio, withdraw_stalls=withdraw_stalls,
                          seed=seed)
         self.pull_back_at = pull_back_at
         self.min_spacing = min_spacing
         self.close_range = close_range
         self.long_range = long_range
+        self.behaviour = behaviour
+        self.move_mode = move_mode
+        self.reserve = reserve
+        self.focus_fire = focus_fire
+        self.priority_targets = priority_targets
 
     def threat_rank(self, foe: Unit, centre: tuple[float, float]) -> tuple[int, int]:
         """Lower sorts first. Priority kinds beat distance; distance breaks ties within a class."""
+        d2 = int((foe.x - centre[0]) ** 2 + (foe.y - centre[1]) ** 2)
+        if not self.priority_targets:
+            # Pure "shoot the nearest thing". Kept as a real option so the search can measure
+            # whether threat priority is worth what it costs in walking distance, rather than
+            # having the answer asserted here.
+            return (0, d2)
         kind = (foe.kind or "").lower()
         cls = len(self.PRIORITY_KINDS)
         for i, k in enumerate(self.PRIORITY_KINDS):
             if k in kind:
                 cls = i
                 break
-        d2 = int((foe.x - centre[0]) ** 2 + (foe.y - centre[1]) ** 2)
         return (cls, d2)
 
     def decide(self, obs: Observation) -> list[Action]:
@@ -325,7 +349,7 @@ class VeteranAI(ScriptedAI):
         elif d2 >= self.long_range ** 2:
             acts.append(Action("set_fire_mode", "aimed", "long range"))
         else:
-            acts.append(Action("set_fire_mode", "snap", "mid range"))
+            acts.append(Action("set_fire_mode", self.fire_mode, "mid range"))
 
         # 7. Behaviour mode. The engine has Aggressive/Normal/Evasive and the driver never set
         #    any of them -- it fought every battle on whatever the default was. Evasive when
@@ -337,25 +361,30 @@ class VeteranAI(ScriptedAI):
         elif ratio <= 0.5:
             acts.append(Action("set_behaviour", "aggressive", "we have the numbers"))
         else:
-            acts.append(Action("set_behaviour", "normal", "even fight"))
+            acts.append(Action("set_behaviour", self.behaviour, "even fight"))
 
         # 8. Move individually rather than as a blob. BUTTON_MOVE_GROUP herds the squad into one
         #    clump, which is what makes a single explosive catastrophic; individual movement is
         #    the mechanical half of the spacing rule above.
-        acts.append(Action("set_move_mode", "individual", "do not bunch"))
+        acts.append(Action("set_move_mode", self.move_mode, "do not bunch"))
 
         # 9. Reserve TU for the shot rather than spending it all walking. Reserving snap keeps a
         #    unit able to answer when something steps into view mid-move.
-        acts.append(Action("set_reserve", "snap", "keep enough TU to shoot back"))
+        acts.append(Action("set_reserve", self.reserve, "keep enough TU to shoot back"))
 
         # 10. Flyers: hold the hostiles' level. A flying unit left on the ground layer cannot
         #     engage something a floor up, and this squad's own floor is not necessarily theirs.
         if target.z != obs.view_z:
             acts.append(Action("set_layer", target.z, f"engage on level {target.z}"))
 
-        acts.append(Action("select_squad", len(fit), "focus the whole line on one target"))
-        acts.append(Action("focus_fire", (target.x, target.y, target.z),
-                           f"{why}: {kind}"))
+        if self.focus_fire:
+            acts.append(Action("select_squad", len(fit), "focus the whole line on one target"))
+            acts.append(Action("focus_fire", (target.x, target.y, target.z), f"{why}: {kind}"))
+        else:
+            # Engage without concentrating. Units default to FirePermissionMode::AtWill, so an
+            # ordinary attack order lets each unit pick its own target rather than the squad
+            # stacking on one -- the alternative doctrine, and one worth being able to lose with.
+            acts.append(Action("attack", (target.x, target.y, target.z), f"{why}: {kind}"))
         return acts
 
 

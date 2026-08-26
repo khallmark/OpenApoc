@@ -188,3 +188,64 @@ if FAILED:
         print("  -", m)
     sys.exit(1)
 print("all tactical AI tests passed (including VeteranAI doctrine)")
+
+
+# --- every doctrine knob must actually change what the squad does -------------
+# VeteranAI used to hardcode fire_mode/stance in its super() call and hardcode behaviour,
+# move_mode, reserve, focus_fire and priority_targets in decide(). A genome could carry all ten
+# X-COM genes and change nothing. Each check below fails if its knob goes back to being a constant.
+def acts_of(ai, obs):
+    return {a.kind: a.arg for a in ai.decide(obs)}
+
+
+# An even fight at mid range: the band where doctrine is a choice rather than a reflex.
+mid = Observation(
+    mine=[U(1, 10, 10, 0), U(2, 14, 10, 0), U(3, 18, 10, 0)],
+    foes=[U(9, 10, 20, 0, hostile=True, kind="anthropod")],
+    view_z=0, stalls=0, mission_type="ufo_recovery", mode="rt")
+
+check(acts_of(VeteranAI(fire_mode="aimed"), mid).get("set_fire_mode") == "aimed",
+      "fire_mode must reach the mid-range band")
+check(acts_of(VeteranAI(fire_mode="auto"), mid).get("set_fire_mode") == "auto",
+      "…and not be pinned to one value")
+check(acts_of(VeteranAI(behaviour="aggressive"), mid).get("set_behaviour") == "aggressive",
+      "behaviour must reach the even-fight band")
+check(acts_of(VeteranAI(move_mode="group"), mid).get("set_move_mode") == "group",
+      "move_mode must be settable, even to the worse option")
+check(acts_of(VeteranAI(reserve="aimed"), mid).get("set_reserve") == "aimed",
+      "reserve must be settable")
+check(VeteranAI(stance="kneel").stance == "kneel", "stance must survive construction")
+
+# The adaptive rules must STAY adaptive: the genome sets the middle, not the extremes.
+close = Observation(mine=[U(1, 10, 10, 0)], foes=[U(9, 11, 11, 0, hostile=True)],
+                    view_z=0, stalls=0, mission_type="x", mode="rt")
+check(acts_of(VeteranAI(fire_mode="aimed"), close).get("set_fire_mode") == "auto",
+      "close quarters must still force auto regardless of the gene")
+
+# focus_fire: concentrate on one target, or let each unit choose.
+check("focus_fire" in acts_of(VeteranAI(focus_fire=True), mid),
+      "focus_fire=True concentrates the squad")
+off = acts_of(VeteranAI(focus_fire=False), mid)
+check("focus_fire" not in off and "attack" in off,
+      "focus_fire=False must engage WITHOUT concentrating")
+check("select_squad" not in off, "…and must not select the whole squad onto one target")
+
+# priority_targets: a distant popper outranks a near anthropod, unless the gene says otherwise.
+threat = Observation(
+    mine=[U(1, 10, 10, 0)],
+    foes=[U(8, 12, 10, 0, hostile=True, kind="anthropod"),      # near, ordinary
+          U(9, 10, 24, 0, hostile=True, kind="popper")],        # far, lethal
+    view_z=0, stalls=0, mission_type="x", mode="rt")
+on_t = acts_of(VeteranAI(priority_targets=True), threat)
+off_t = acts_of(VeteranAI(priority_targets=False), threat)
+check(on_t.get("focus_fire") == (10, 24, 0),
+      f"priority_targets=True must kill the popper first, got {on_t.get('focus_fire')}")
+check(off_t.get("focus_fire") == (12, 10, 0),
+      f"priority_targets=False must take the nearest, got {off_t.get('focus_fire')}")
+
+if FAILED:
+    print(f"FAILED {len(FAILED)}:")
+    for m in FAILED:
+        print("  -", m)
+    sys.exit(1)
+print("all VeteranAI doctrine-knob tests passed")
