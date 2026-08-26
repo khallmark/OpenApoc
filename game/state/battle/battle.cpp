@@ -1,5 +1,6 @@
 #include "game/state/battle/battle.h"
 #include "framework/configfile.h"
+#include "framework/options.h"
 #include "framework/framework.h"
 #include "framework/sound.h"
 #include "game/state/battle/ai/aitype.h"
@@ -229,6 +230,27 @@ void Battle::initBattle(GameState &state, bool first)
 	{
 		o->tryCollapse();
 	}
+	// Adversarial arena: pin the opponent's doctrine if one was requested. Default -1 leaves
+	// every unit exactly as the game set it, so the normal game path is untouched.
+	//
+	// A human player cannot choose the aliens' behaviour mode, so this is deliberately not
+	// reachable from any UI - it is a training control that lets a learner field a specific
+	// opponent doctrine and measure what happens. Without it, "both sides adapt to each other"
+	// is a claim about a module rather than about the game.
+	const int opponentMode = config().getInt("OpenApoc.NewFeature.OpponentBehaviorMode");
+	if (opponentMode >= 0 && opponentMode <= 2)
+	{
+		const auto mode = static_cast<BattleUnit::BehaviorMode>(opponentMode);
+		for (auto &u : units)
+		{
+			if (u.second && u.second->owner != state.getPlayer())
+			{
+				u.second->setBehaviorMode(mode);
+			}
+		}
+		LogInfo("Arena: pinned non-player units to behaviour mode {0}", opponentMode);
+	}
+
 	// Check which blocks and tiles are visible
 	for (auto &u : units)
 	{
