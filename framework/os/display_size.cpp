@@ -115,7 +115,11 @@ void applyAppBundleDisplayDefaults(const UString &programPath)
 	Options::screenHeightOption.set(0);
 	Options::screenModeOption.set("borderless");
 	Options::screenAutoScale.set(false);
-	Options::screenUiScaleOption.set(0);
+	// The auto rule only reaches 2x above 2560 points, which no iPad is, so a
+	// 640x480 UI would sit in a small box in the middle of a 13-inch screen with
+	// targets far under the ~44pt a finger needs. AutoScale must stay false:
+	// computeUiScale pins the scale back to 1 whenever it is set.
+	Options::screenUiScaleOption.set(2);
 	return;
 #endif
 #endif
