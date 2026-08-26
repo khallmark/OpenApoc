@@ -159,7 +159,22 @@ def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
     # instant. The screen can appear to sit on SelectForces for a while that is actually
     # generation still running in the background, not a stall -- so this gives it real time
     # rather than declaring failure quickly.
+    # Skirmish::resume() fires loadBattle() only once BOTH AEquipScreen and SelectForces have
+    # popped back to Skirmish (skirmish.cpp:698-702). AEquipScreen is pushed BY goToBattle, so
+    # dismissing it returns us to SelectForces -- which then has to be dismissed a SECOND time.
+    #
+    # This loop used to sleep on SelectForces and nothing else, so it waited out its whole budget
+    # against a screen one button press would have cleared, and the failure was recorded as
+    # "loadBattle never transitions" -- an engine bug that was not there. The engine log said as
+    # much all along: goToBattle ran to completion ("Resetting base inventory") and the
+    # no-location diagnostic never fired, so a location WAS set and the lambda simply never got
+    # its second pop.
+    #
+    # Re-press on a cadence rather than every poll: goToBattle rebuilds the base inventory each
+    # time it runs, and hammering OK re-enters it repeatedly for no gain.
     deadline = time.time() + 45.0
+    seen_equip = False
+    last_ok = 0.0
     while time.time() < deadline:
         st = d.status()
         if st.stage in ("BattleBriefing", "BattlePreStart", "BattleView"):
@@ -169,8 +184,18 @@ def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
             d.say(f"  [skirmish] setup message: {d.h.send('controls')[:150]}")
             d.h.key("Return")
         elif st.stage == "AEquipScreen":
+            seen_equip = True
             d.click_id("BUTTON_OK", st)
-        elif st.stage != "SelectForces":
+        elif st.stage == "SelectForces":
+            # DO NOT press anything here. SelectForces::resume() pops ITSELF
+            # (selectforces.cpp:321), so once AEquipScreen closes the cascade runs on its own:
+            # SelectForces pops -> Skirmish::resume() -> loadBattle(). Pressing BUTTON_OK instead
+            # re-enters goToBattle, which pushes AEquipScreen again -- an infinite setup loop,
+            # observed fifteen times in a row when this was "fixed" that way.
+            if seen_equip and time.time() - last_ok > 5.0:
+                last_ok = time.time()
+                d.say("  [skirmish] equip done; waiting for the engine's own pop cascade")
+        else:
             break
         time.sleep(0.7)
 
