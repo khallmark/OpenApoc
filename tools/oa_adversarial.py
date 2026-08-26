@@ -85,7 +85,20 @@ ALIEN_GENES = {
 # So the unwired genes stay in the tables (they are the list of what still needs connecting) but
 # take no part in the search: they are held at a fixed value, excluded from the name, and skipped
 # by mutation and crossover. Wiring one up is a one-word change here, and it starts varying.
-XCOM_EFFECTIVE = ("fire_mode", "stance")
+XCOM_EFFECTIVE = ("fire_mode", "stance", "behaviour", "move_mode", "reserve",
+                  "withdraw_ratio", "focus_fire")
+# Still unwired, and each for a specific reason rather than an oversight:
+#   pull_back_at      VeteranAI emits a "pull_back" Action; oa_executor declares it unsupported.
+#   min_spacing       likewise "spread". Both need a SCREEN coordinate for one named unit, and
+#                     battle_positions reports tile space with no correspondence between them.
+#                     oa_executor refuses rather than clicking a guessed pixel, which is right: a
+#                     wrong click is worse than a skipped order.
+#   priority_targets  VeteranAI ranks poppers and brainsuckers above nearer, ordinary targets and
+#                     puts the chosen target in the Action -- and oa_executor then calls
+#                     attack_at(foes[0]) with the first hostile on screen, discarding it. The
+#                     doctrine is computed and thrown away. Same tile-vs-screen gap.
+# Wiring any of these means giving the harness a tile->screen mapping for a named unit. Until
+# then they must not vary, or the search spends real battles distinguishing identical policies.
 ALIEN_EFFECTIVE = ("behaviour_mix", "cover_bias")
 
 

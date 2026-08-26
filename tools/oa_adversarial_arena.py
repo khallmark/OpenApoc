@@ -87,8 +87,15 @@ class CampaignEvaluator(Evaluator):
         return argv
 
     def _xcom_policy(self, xcom: Policy) -> dict:
+        """The genome, plus the AI that is to read it.
+
+        Naming an AI is what routes the genome through oa_ai's doctrine rules instead of having
+        win_battle apply two settings and drop the rest. VeteranAI's constructor takes the gene
+        names directly, so the genome needs no translation.
+        """
         g = dict(xcom.genes)
         g["name"] = xcom.name[:60]
+        g["ai"] = "veteran"
         return g
 
     def evaluate(self, xcom: Policy, alien: Policy, seed: int):

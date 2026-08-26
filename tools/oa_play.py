@@ -2781,6 +2781,36 @@ def verify_battle_capabilities(d: Driver) -> dict:
     return results
 
 
+def build_battle_ai(policy: dict):
+    """Instantiate the pluggable tactical AI a policy names, or return (None, None).
+
+    The three-layer split (oa_capabilities / oa_ai / oa_executor) was built and then connected to
+    nothing: oa_play imported neither, so win_battle applied fire_mode and stance and ignored the
+    other eight genes, and every doctrine rule in VeteranAI sat unused. This is the join.
+
+    Imports are deliberately lazy. oa_capabilities imports oa_play, so a module-level import here
+    is a cycle; and a harness run that names no AI should not pay to load the AI stack at all.
+
+    Only genes the chosen AI's constructor actually accepts are passed. A policy carrying a gene
+    the AI does not understand is not an error -- the genome is shared across AIs, and one that
+    ignores a knob should simply not be tuned by it.
+    """
+    name = (policy or {}).get("ai")
+    if not name:
+        return None, None
+    import inspect
+    from oa_capabilities import Capabilities
+    from oa_executor import make_ai
+    from oa_ai import REGISTRY
+
+    cls = REGISTRY.get(name)
+    accepted = set()
+    if cls is not None:
+        accepted = set(inspect.signature(cls.__init__).parameters) - {"self"}
+    kw = {k: v for k, v in policy.items() if k in accepted}
+    return make_ai(name, **kw), Capabilities
+
+
 def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) -> str:
     """Fight a tactical mission, and leave the numbers behind on `d.last_battle`.
 
@@ -2826,6 +2856,11 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
     started_with = 0
     selected_count = 0
     mission_type = "unknown"
+    # Pluggable tactical AI, built on entry when the policy names one. None means "behave exactly
+    # as before", which is what every existing caller gets.
+    ai_brain = None
+    ai_caps = None
+    ai_failures = 0
 
     while time.time() - t0 < budget_s:
         st = d.status()
@@ -2872,6 +2907,15 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
                     time.sleep(0.15)
                 d.say(f"[battle] policy {policy.get('name','?')}: "
                       f"fire={fm} stance={stance}")
+                try:
+                    ai_brain, caps_cls = build_battle_ai(policy)
+                    if ai_brain is not None:
+                        ai_caps = caps_cls(d)
+                        d.say(f"[battle] tactical AI {ai_brain.name!r} has the squad")
+                except Exception as exc:
+                    d.say(f"[battle] tactical AI {policy.get('ai')!r} could not be built "
+                          f"({type(exc).__name__}: {exc}); fighting on the built-in logic")
+                    ai_brain = None
             b = d.h.gs("battle")
             if b.get("mode") != "rt":
                 d.say(f"[battle] ABORT: mode is {b.get('mode')}, not real-time")
@@ -2915,6 +2959,28 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
                 d.h.send("keyup Left Ctrl")
             selected_count = len(friends)
             time.sleep(0.12)
+
+        # Hand the round to the pluggable AI first, then fall through to the built-in logic
+        # regardless. Additive on purpose: the inline path below is the one that has actually won
+        # battles, so an AI that misjudges a round costs a round, not the mission. It also cannot
+        # cheat -- Capabilities reads only what the harness can see on screen.
+        if ai_brain is not None:
+            try:
+                from oa_executor import execute as _ai_execute, observe as _ai_observe
+                obs = _ai_observe(ai_caps, stalls=stalls)
+                orders = ai_brain.decide(obs)
+                _ai_execute(ai_caps, orders, say=(d.say if rounds % 10 == 0 else None))
+                if rounds % 10 == 0 and orders:
+                    d.say(f"  [ai] {ai_brain.name}: "
+                          + ", ".join(f"{o.kind}({o.why})" for o in orders[:3]))
+            except Exception as exc:
+                ai_failures += 1
+                if ai_failures <= 3:
+                    d.say(f"  [ai] round failed ({type(exc).__name__}: {exc})")
+                if ai_failures == 8:
+                    d.say("  [ai] too many failures; dropping to the built-in logic for this "
+                          "battle")
+                    ai_brain = None
 
         # Put the camera on the hostiles' floor first: orders only reach the displayed level.
         # Ask the engine before computing it ourselves -- see zoom_to_event() for why its answer
