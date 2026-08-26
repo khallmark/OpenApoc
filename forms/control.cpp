@@ -375,9 +375,8 @@ void Control::eventOccured(Event *e)
 				int screenWidth = fw().displayGetWidth();
 				const int s = uiScale();
 
-				Vec2<int> tooltipPos =
-				    uiToDisplay(pos + resolvedLocation, s) -
-				    Vec2<int>{(int)surface->size.x / 2, (int)surface->size.y};
+				Vec2<int> tooltipPos = uiToDisplay(pos + resolvedLocation, s) -
+				                       Vec2<int>{(int)surface->size.x / 2, (int)surface->size.y};
 
 				// Check if the tooltip is off the screen
 				if (tooltipPos.x < 0)
@@ -1159,8 +1158,8 @@ void Control::pushFormEvent(FormEventType type, Event *parentEvent)
 			event->forms().RaisedBy = shared_from_this();
 			event->forms().EventFlag = type;
 			event->forms().MouseInfo = parentEvent->mouse();
-			const Vec2<int> local = displayToUi({parentEvent->mouse().X, parentEvent->mouse().Y},
-			                                    uiScale());
+			const Vec2<int> local =
+			    displayToUi({parentEvent->mouse().X, parentEvent->mouse().Y}, uiScale());
 			event->forms().MouseInfo.X = local.x - resolvedLocation.x;
 			event->forms().MouseInfo.Y = local.y - resolvedLocation.y;
 			fw().pushEvent(event);
@@ -1174,8 +1173,8 @@ void Control::pushFormEvent(FormEventType type, Event *parentEvent)
 			event->forms().RaisedBy = shared_from_this();
 			event->forms().EventFlag = type;
 			event->forms().MouseInfo = parentEvent->mouse();
-			const Vec2<int> local = displayToUi({parentEvent->mouse().X, parentEvent->mouse().Y},
-			                                    uiScale());
+			const Vec2<int> local =
+			    displayToUi({parentEvent->mouse().X, parentEvent->mouse().Y}, uiScale());
 			event->forms().MouseInfo.X = local.x - resolvedLocation.x;
 			event->forms().MouseInfo.Y = local.y - resolvedLocation.y;
 			fw().pushEvent(event);

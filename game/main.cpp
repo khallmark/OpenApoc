@@ -1,12 +1,12 @@
 #include "forms/harness_ui.h"
 #include "forms/ui.h"
 #include "framework/configfile.h"
+#include "framework/crashhandler.h"
 #include "framework/framework.h"
 #include "game/ui/boot.h"
 #include "game/ui/components/controlgenerator.h"
 #include "game/ui/general/transactioncontrol.h"
 #include "game/ui/tileview/cityview.h"
-#include "framework/crashhandler.h"
 #include "version.h"
 #include <SDL_main.h>
 

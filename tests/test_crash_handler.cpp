@@ -66,8 +66,7 @@ int main(int argc, char **argv)
 	require("map::at: key not found", "…and pass through what() unchanged");
 	// The stack is the part that was missing entirely and the whole reason for this handler.
 	require("FATAL: backtrace follows", "the handler must emit a backtrace");
-	if (out.find("logUncaughtAndAbort") == std::string::npos &&
-	    out.find("0x") == std::string::npos)
+	if (out.find("logUncaughtAndAbort") == std::string::npos && out.find("0x") == std::string::npos)
 	{
 		std::cerr << "FAILED: the backtrace must contain actual frames\n";
 		failed++;

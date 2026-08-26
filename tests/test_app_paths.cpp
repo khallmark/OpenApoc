@@ -39,7 +39,10 @@ static bool testCdPathLooksValid()
 	fs::create_directories(tmp / "xcom3");
 	TEST_REQUIRE(cdPathLooksValid(tmp.string()), "extracted tree");
 	const fs::path iso = tmp / "dummy.iso";
-	{ std::ofstream out(iso.string()); out << "x"; }
+	{
+		std::ofstream out(iso.string());
+		out << "x";
+	}
 	TEST_REQUIRE(cdPathLooksValid(iso.string()), "iso file");
 	fs::remove_all(tmp);
 	return true;

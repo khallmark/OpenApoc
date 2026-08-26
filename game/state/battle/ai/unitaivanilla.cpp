@@ -295,9 +295,8 @@ UnitAIVanilla::getGrenadeDecision(GameState &state, BattleUnit &u, sp<AEquipment
 		}
 		localDamage = std::max(
 		    0, payload->damage_type->dealDamage(localDamage * 1.5f, damageModifier) - armorValue);
-		damage += blastDamageContribution(
-		    localDamage,
-		    u.owner->isRelatedTo(t.second->owner) == Organisation::Relation::Hostile);
+		damage += blastDamageContribution(localDamage, u.owner->isRelatedTo(t.second->owner) ==
+		                                                   Organisation::Relation::Hostile);
 	}
 	if (!aoeIsWorthThrowing(damage))
 	{

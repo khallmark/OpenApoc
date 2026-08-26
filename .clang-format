@@ -1,5 +1,4 @@
 ---
-Language:        Cpp
 AccessModifierOffset: -2
 AlignAfterOpenBracket: Align
 AlignConsecutiveAssignments: false
@@ -86,4 +85,3 @@ Standard:        Cpp11
 TabWidth:        4
 UseTab:          ForIndentation
 ...
-

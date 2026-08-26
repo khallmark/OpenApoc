@@ -3,10 +3,9 @@
 #include "framework/framework.h"
 #include "game/state/city/agentmission.h"
 #include "game/state/city/base.h"
-#include "game/state/city/facility.h"
-#include "game/state/rules/city/facilitytype.h"
 #include "game/state/city/building.h"
 #include "game/state/city/city.h"
+#include "game/state/city/facility.h"
 #include "game/state/city/research.h"
 #include "game/state/city/vehicle.h"
 #include "game/state/city/vehiclemission.h"
@@ -16,6 +15,7 @@
 #include "game/state/rules/battle/battlemap.h"
 #include "game/state/rules/battle/battlemapparttype.h"
 #include "game/state/rules/battle/battlemaptileset.h"
+#include "game/state/rules/city/facilitytype.h"
 #include "game/state/rules/city/ufogrowth.h"
 #include "game/state/rules/city/ufoincursion.h"
 #include "game/state/rules/city/ufomissionpreference.h"
@@ -661,7 +661,7 @@ static bool test_ufo_mission_counter_zero_picks_new_target()
 	// Stand right on top of the building so acquireTargetBuilding()'s distance
 	// check (TARGET_BUILDING_DISTANCE_LIMIT) finds it.
 	v.position = {(float)((nearby->bounds.p0.x + nearby->bounds.p1.x) / 2),
-	             (float)((nearby->bounds.p0.y + nearby->bounds.p1.y) / 2), 0.0f};
+	              (float)((nearby->bounds.p0.y + nearby->bounds.p1.y) / 2), 0.0f};
 
 	VehicleMission mission;
 	mission.type = VehicleMission::MissionType::AttackBuilding;
@@ -775,7 +775,8 @@ static bool test_ufo_mission_counter_zero_sends_aliens_to_a_portal()
 	TEST_REQUIRE(!keepGoing,
 	             "an alien UFO reaching mission-counter zero should end this mission, not carry on "
 	             "pathing to another building");
-	TEST_REQUIRE(mission.cancelled, "the AttackBuilding mission should be cancelled once it leaves");
+	TEST_REQUIRE(mission.cancelled,
+	             "the AttackBuilding mission should be cancelled once it leaves");
 	bool queuedPortal = false;
 	for (auto &m : v->missions)
 	{
@@ -790,8 +791,7 @@ static bool test_ufo_mission_counter_zero_sends_aliens_to_a_portal()
 	             "queued)",
 	             v->missions.size());
 	// And it must NOT have retargeted: that is the branch this population never takes.
-	TEST_CHECK(mission.targetBuilding == target,
-	           "the mission retargeted to {0} instead of leaving",
+	TEST_CHECK(mission.targetBuilding == target, "the mission retargeted to {0} instead of leaving",
 	           mission.targetBuilding.id);
 	return true;
 }
@@ -889,7 +889,8 @@ static bool test_ufo_mission_counter_decrements_from_mission_start()
 		}
 	}
 	TEST_REQUIRE(v != nullptr, "could not place any UFO-type vehicle in CITYMAP_HUMAN");
-	TEST_REQUIRE((bool)v->tileObject, "placed UFO has no tile object, so takeOffCheck() would fire");
+	TEST_REQUIRE((bool)v->tileObject,
+	             "placed UFO has no tile object, so takeOffCheck() would fire");
 
 	VehicleMission mission;
 	mission.type = VehicleMission::MissionType::AttackBuilding;
@@ -3075,7 +3076,8 @@ int main(int argc, char **argv)
 	    {"overspawn_invasion", test_overspawn_invasion},
 	    {"ufo_mission_counter_decrements_on_arrival",
 	     test_ufo_mission_counter_decrements_on_arrival},
-	    {"ufo_mission_counter_zero_picks_new_target", test_ufo_mission_counter_zero_picks_new_target},
+	    {"ufo_mission_counter_zero_picks_new_target",
+	     test_ufo_mission_counter_zero_picks_new_target},
 	    {"ufo_mission_counter_zero_without_building_clears_target",
 	     test_ufo_mission_counter_zero_without_building_clears_target},
 	    {"ufo_withdraw_band", test_ufo_withdraw_band},

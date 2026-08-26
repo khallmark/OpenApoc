@@ -49,8 +49,8 @@ static std::list<std::pair<UString, ModInfo>> enumerateMods()
 constexpr std::array<QSize, 7> default_resolutions = {
 
     // {0,0} is Custom (spinboxes). {-1,-1} writes 0×0 (desktop size) to the engine.
-    QSize{0, 0},        QSize{-1, -1},      QSize{640, 480},  QSize{1280, 720},
-    QSize{1920, 1080},  QSize{2560, 1440},  QSize{3200, 1800}};
+    QSize{0, 0},       QSize{-1, -1},     QSize{640, 480},  QSize{1280, 720},
+    QSize{1920, 1080}, QSize{2560, 1440}, QSize{3200, 1800}};
 
 constexpr QSize MINIMUM_RESOLUTION = {640, 480};
 constexpr QSize MAXIMUM_RESOLUTION = {100000, 100000};

@@ -48,8 +48,7 @@ int BattleUnit::getPsiCost(PsiStatus status, bool isAttack)
 	return 0;
 }
 
-int BattleUnit::getPsiAttackChance(int psiAttack, int psiDefense, PsiStatus status,
-                                  bool isAttack)
+int BattleUnit::getPsiAttackChance(int psiAttack, int psiDefense, PsiStatus status, bool isAttack)
 {
 	// Psi chance as per Wong's Guide, confirmed by Mell
 	/*

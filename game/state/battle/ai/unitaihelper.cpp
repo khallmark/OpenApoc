@@ -1,14 +1,14 @@
 #include "game/state/battle/ai/unitaihelper.h"
+#include "framework/configfile.h"
 #include "game/state/battle/ai/aidecision.h"
 #include "game/state/battle/battleunit.h"
-#include "framework/configfile.h"
 #include "game/state/gamestate.h"
-#include "game/state/tilemap/tileobject_battleunit.h"
 #include "game/state/shared/aequipment.h"
+#include "game/state/tilemap/tileobject_battleunit.h"
 #include <cfloat>
 #include <cmath>
-#include <vector>
 #include <glm/glm.hpp>
+#include <vector>
 
 namespace OpenApoc
 {

@@ -1,9 +1,9 @@
 #include "framework/os/app_paths.h"
 #include "framework/configfile.h"
+#include "framework/filesystem.h"
 #include "framework/fs.h"
 #include "framework/logger.h"
 #include "framework/options.h"
-#include "framework/filesystem.h"
 #include <SDL.h>
 #include <fstream>
 #include <physfs.h>
@@ -116,10 +116,7 @@ bool cdPathLooksValid(const UString &path)
 	       fs::exists(p / "xcom3", ec) || fs::exists(p / "XCOM3", ec);
 }
 
-static bool pathIsInsideAppBundle(const UString &path)
-{
-	return pathLooksLikeAppBundle(path);
-}
+static bool pathIsInsideAppBundle(const UString &path) { return pathLooksLikeAppBundle(path); }
 
 void applyAppBundlePathDefaults(const UString &programPath)
 {

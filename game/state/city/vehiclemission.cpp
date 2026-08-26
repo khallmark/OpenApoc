@@ -851,8 +851,7 @@ VehicleTargetHelper::adjustTargetToClosestFlying(GameState &state, Vehicle &v, V
 						if (x == midX - i || x == midX + i || y == midY - i || y == midY + i ||
 						    z == midZ - i || z == midZ + i)
 						{
-							if (!map.tileIsValid(x, y, z) ||
-							    !footprintFitsOnMap({x, y, z}))
+							if (!map.tileIsValid(x, y, z) || !footprintFitsOnMap({x, y, z}))
 							{
 								continue;
 							}

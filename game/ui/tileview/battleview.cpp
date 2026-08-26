@@ -15,6 +15,7 @@
 #include "framework/event.h"
 #include "framework/font.h"
 #include "framework/framework.h"
+#include "framework/harness.h"
 #include "framework/jukebox.h"
 #include "framework/keycodes.h"
 #include "framework/renderer.h"
@@ -27,7 +28,6 @@
 #include "game/state/battle/battleunit.h"
 #include "game/state/gameevent.h"
 #include "game/state/gamestate.h"
-#include "framework/harness.h"
 #include "game/state/gamestateintrospect.h"
 #include "game/state/message.h"
 #include "game/state/rules/aequipmenttype.h"
@@ -347,8 +347,7 @@ BattleView::BattleView(sp<GameState> gameState)
 
 	baseForm->findControl("BUTTON_FOLLOW_AGENT")
 	    ->addCallback(FormEventType::CheckBoxChange,
-	                  [this](FormsEvent *e)
-	                  {
+	                  [this](FormsEvent *e) {
 		                  this->followAgent =
 		                      std::dynamic_pointer_cast<CheckBox>(e->forms().RaisedBy)->isChecked();
 	                  });
@@ -971,8 +970,7 @@ BattleView::BattleView(sp<GameState> gameState)
 	                  });
 	this->baseForm->findControl("BUTTON_SHOW_LOG")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *)
-	                  {
+	                  [this](Event *) {
 		                  fw().stageQueueCommand({StageCmd::Command::PUSH,
 		                                          mksp<MessageLogScreen>(this->state, *this)});
 	                  });
@@ -1468,10 +1466,9 @@ void BattleView::registerBattleViewIntrospection()
 		    {
 			    if (!gameState || !gameState->current_battle)
 			    {
-				    return q == "battle_positions"
-				               ? UString("foes=0 mine=0 view_z=0 foes_unseen=0 "
-				                         "foes_bystanders=0 foe_at=- mine_at=-")
-				               : UString("centred=0");
+				    return q == "battle_positions" ? UString("foes=0 mine=0 view_z=0 foes_unseen=0 "
+				                                             "foes_bystanders=0 foe_at=- mine_at=-")
+				                                   : UString("centred=0");
 			    }
 		    }
 		    if (gameState && gameState->current_battle && q == "centre_on_friends")
@@ -1523,8 +1520,8 @@ void BattleView::registerBattleViewIntrospection()
 					    continue;
 				    }
 				    const auto screen = view->tileToOffsetScreenCoords<float>(unit->position);
-				    const bool onScreen = screen.x >= 0 && screen.y >= 0 && screen.x < size.x &&
-				                          screen.y < size.y;
+				    const bool onScreen =
+				        screen.x >= 0 && screen.y >= 0 && screen.x < size.x && screen.y < size.y;
 				    // Prefer a hostile that is not already framed, so repeated calls walk the
 				    // map instead of re-centring on the same alien for ever. Take the first
 				    // off-screen one immediately; otherwise keep the first seen as a fallback.
@@ -1587,8 +1584,8 @@ void BattleView::registerBattleViewIntrospection()
 				    const auto p = unit->position;
 				    const bool isMine = unit->owner.id == player.id;
 				    const auto screen = view->tileToOffsetScreenCoords<float>(p);
-				    const bool onScreen = screen.x >= 0 && screen.y >= 0 && screen.x < size.x &&
-				                          screen.y < size.y;
+				    const bool onScreen =
+				        screen.x >= 0 && screen.y >= 0 && screen.x < size.x && screen.y < size.y;
 				    const auto entry =
 				        format("{0},{1},{2}:sx={3}:sy={4}", (int)p.x, (int)p.y, (int)p.z,
 				               onScreen ? (int)screen.x : -1, onScreen ? (int)screen.y : -1);
@@ -1730,8 +1727,8 @@ void BattleView::registerBattleViewIntrospection()
 				    // stood on. Orders only reach the displayed level, so without this there is
 				    // no way to align the view to the specific unit being fired at, and a single
 				    // survivor one floor up stalls the whole battle.
-				    out += format("{0},{1},{2}", (int)screen.x, (int)screen.y,
-				                  (int)unit->position.z);
+				    out +=
+				        format("{0},{1},{2}", (int)screen.x, (int)screen.y, (int)unit->position.z);
 			    }
 			    return format("count={0} unarmed={2} bystanders={3} unseen={4} at={1}", count,
 			                  out.empty() ? UString("-") : out, unarmed, bystanders, unseen);
@@ -1774,8 +1771,7 @@ void BattleView::update()
 				         format("{0}, it is your turn!",
 				                state->current_battle->currentActiveOrganisation->name),
 				         MessageBox::ButtonOptions::Ok,
-				         [this]
-				         {
+				         [this] {
 					         state->current_battle->currentPlayer =
 					             state->current_battle->currentActiveOrganisation;
 				         })});

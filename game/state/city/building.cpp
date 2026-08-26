@@ -284,8 +284,8 @@ void Building::updateCargo(GameState &state)
 				v->provideService(state, true);
 				spawnedFerry = true;
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
-				LogInfo("Spawned cargo ferry {0} owned by {1} at {2}", v->type.id,
-				           ferryCompany.id, thisRef.id);
+				LogInfo("Spawned cargo ferry {0} owned by {1} at {2}", v->type.id, ferryCompany.id,
+				        thisRef.id);
 #endif
 				break;
 			}
@@ -334,7 +334,7 @@ void Building::updateCargo(GameState &state)
 				spawnedFerry = true;
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
 				LogInfo("Spawned passenger ferry {0} owned by {1} at {2}", v->type.id,
-				           ferryCompany.id, thisRef.id);
+				        ferryCompany.id, thisRef.id);
 #endif
 				break;
 			}
@@ -372,7 +372,7 @@ void Building::updateCargo(GameState &state)
 		{
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
 			LogInfo("BIOCARGO: {0} needs to deliver {1} to {2}", thisRef.id,
-			           c.count * c.space / c.divisor, c.destination.id);
+			        c.count * c.space / c.divisor, c.destination.id);
 #endif
 			spaceNeeded[c.destination][sourceOrg][0] += std::max(1, c.count * c.space / c.divisor);
 		}
@@ -380,7 +380,7 @@ void Building::updateCargo(GameState &state)
 		{
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
 			LogInfo("CARGO: {0} needs to deliver {1} to {2}", thisRef.id,
-			           c.count * c.space / c.divisor, c.destination.id);
+			        c.count * c.space / c.divisor, c.destination.id);
 #endif
 			spaceNeeded[c.destination][sourceOrg][1] += std::max(1, c.count * c.space / c.divisor);
 		}
@@ -398,7 +398,7 @@ void Building::updateCargo(GameState &state)
 		}
 #ifdef DEBUG_VERBOSE_CARGO_SYSTEM
 		LogInfo("AGENT: {0} needs to deliver to {1}", thisRef.id,
-		           a->missions.front().targetBuilding.id);
+		        a->missions.front().targetBuilding.id);
 #endif
 		spaceNeeded[a->missions.front().targetBuilding][a->owner].resize(3);
 		spaceNeeded[a->missions.front().targetBuilding][a->owner][2]++;

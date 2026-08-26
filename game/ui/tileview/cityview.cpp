@@ -13,6 +13,7 @@
 #include "framework/event.h"
 #include "framework/font.h"
 #include "framework/framework.h"
+#include "framework/harness.h"
 #include "framework/image.h"
 #include "framework/jukebox.h"
 #include "framework/keycodes.h"
@@ -22,7 +23,6 @@
 #include "game/state/city/agentmission.h"
 #include "game/state/city/base.h"
 #include "game/state/city/building.h"
-#include "game/state/shared/doodad.h"
 #include "game/state/city/city.h"
 #include "game/state/city/facility.h"
 #include "game/state/city/research.h"
@@ -32,7 +32,6 @@
 #include "game/state/city/vequipment.h"
 #include "game/state/gameevent.h"
 #include "game/state/gamestate.h"
-#include "framework/harness.h"
 #include "game/state/gamestateintrospect.h"
 #include "game/state/gametime.h"
 #include "game/state/message.h"
@@ -46,6 +45,7 @@
 #include "game/state/rules/city/vehicletype.h"
 #include "game/state/rules/city/vequipmenttype.h"
 #include "game/state/shared/agent.h"
+#include "game/state/shared/doodad.h"
 #include "game/state/shared/organisation.h"
 #include "game/state/shared/projectile.h"
 #include "game/state/tilemap/collision.h"
@@ -1233,8 +1233,7 @@ CityView::CityView(sp<GameState> state)
 	}
 	this->baseForm->findControl("BUTTON_FOLLOW_VEHICLE")
 	    ->addCallback(FormEventType::CheckBoxChange,
-	                  [this](FormsEvent *e)
-	                  {
+	                  [this](FormsEvent *e) {
 		                  this->followVehicle =
 		                      std::dynamic_pointer_cast<CheckBox>(e->forms().RaisedBy)->isChecked();
 	                  });
@@ -1267,8 +1266,7 @@ CityView::CityView(sp<GameState> state)
 	                  [this](Event *) { this->updateSpeed = CityUpdateSpeed::Speed5; });
 	this->baseForm->findControl("BUTTON_SHOW_ALIEN_INFILTRATION")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *)
-	                  {
+	                  [this](Event *) {
 		                  fw().stageQueueCommand(
 		                      {StageCmd::Command::PUSH, mksp<InfiltrationScreen>(this->state)});
 	                  });
@@ -1278,22 +1276,19 @@ CityView::CityView(sp<GameState> state)
 	        { fw().stageQueueCommand({StageCmd::Command::PUSH, mksp<ScoreScreen>(this->state)}); });
 	this->baseForm->findControl("BUTTON_SHOW_UFOPAEDIA")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *)
-	                  {
+	                  [this](Event *) {
 		                  fw().stageQueueCommand(
 		                      {StageCmd::Command::PUSH, mksp<UfopaediaView>(this->state)});
 	                  });
 	this->baseForm->findControl("BUTTON_SHOW_OPTIONS")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *)
-	                  {
+	                  [this](Event *) {
 		                  fw().stageQueueCommand(
 		                      {StageCmd::Command::PUSH, mksp<InGameOptions>(this->state)});
 	                  });
 	this->baseForm->findControl("BUTTON_SHOW_LOG")
 	    ->addCallback(FormEventType::ButtonClick,
-	                  [this](Event *)
-	                  {
+	                  [this](Event *) {
 		                  fw().stageQueueCommand({StageCmd::Command::PUSH,
 		                                          mksp<MessageLogScreen>(this->state, *this)});
 	                  });
@@ -1906,10 +1901,7 @@ void CityView::snapshotCity()
 static size_t miniBaseSignature(const Base &base)
 {
 	size_t hash = 1469598103934665603u;
-	auto mix = [&hash](size_t value)
-	{
-		hash = (hash ^ value) * 1099511628211u;
-	};
+	auto mix = [&hash](size_t value) { hash = (hash ^ value) * 1099511628211u; };
 
 	mix(base.facilities.size());
 	for (const auto &column : base.corridors)
@@ -1973,8 +1965,8 @@ void CityView::refreshBaseView()
 				    FormEventType::ButtonClick,
 				    [this](FormsEvent *e)
 				    {
-					    auto clickedBase = StateRef<Base>(this->state.get(),
-					                                      e->forms().RaisedBy->getData<Base>());
+					    auto clickedBase =
+					        StateRef<Base>(this->state.get(), e->forms().RaisedBy->getData<Base>());
 					    if (clickedBase == this->state->current_base)
 					    {
 						    this->setScreenCenterTile(clickedBase->building->crewQuarters);
@@ -2081,11 +2073,11 @@ void CityView::renderCityScene()
 					Vec2<float> targetScreenPos = this->tileToOffsetScreenCoords(targetPos);
 					Vec2<float> attackerScreenPos = this->tileToOffsetScreenCoords(attackerPos);
 
-					fw().renderer->drawLine(
-					    attackerScreenPos, targetScreenPos,
-					    targetVehicle->missions.front().targetVehicle == v ? targetMutualColor
-					    : v->owner == state->getPlayer()                   ? targetXCOMColor
-					                                                       : targetOtherColor);
+					fw().renderer->drawLine(attackerScreenPos, targetScreenPos,
+					                        targetVehicle->missions.front().targetVehicle == v
+					                            ? targetMutualColor
+					                        : v->owner == state->getPlayer() ? targetXCOMColor
+					                                                         : targetOtherColor);
 				}
 			}
 		}
@@ -2103,9 +2095,8 @@ void CityView::renderCityScene()
 				continue;
 			}
 			// Connections
-			auto color = (s.connections.size() > 2 && s.tilePosition.size() > 1)
-			                 ? lineColorEnemy
-			                 : lineColorFriend;
+			auto color = (s.connections.size() > 2 && s.tilePosition.size() > 1) ? lineColorEnemy
+			                                                                     : lineColorFriend;
 			int count = 0;
 			for (auto &c : s.connections)
 			{
@@ -2113,8 +2104,8 @@ void CityView::renderCityScene()
 				    s.connections.front() == c ? s.tilePosition.front() : s.tilePosition.back();
 				thisPos += Vec3<float>{0.5f, 0.5f, 0.0f};
 				auto &s2 = state->current_city->roadSegments[c];
-				Vec3<float> tarPos = s2.connections.front() == i ? s2.tilePosition.front()
-				                                                 : s2.tilePosition.back();
+				Vec3<float> tarPos =
+				    s2.connections.front() == i ? s2.tilePosition.front() : s2.tilePosition.back();
 				tarPos += Vec3<float>{0.5f, 0.5f, 0.0f};
 				fw().renderer->drawLine(
 				    this->tileToOffsetScreenCoords(thisPos),
@@ -2389,8 +2380,7 @@ void CityView::registerCityViewIntrospection()
 			    {
 				    return UString("centred=0");
 			    }
-			    for (auto it = gameState->messages.rbegin(); it != gameState->messages.rend();
-			         ++it)
+			    for (auto it = gameState->messages.rbegin(); it != gameState->messages.rend(); ++it)
 			    {
 				    if (it->location == EventMessage::NO_LOCATION)
 				    {
@@ -2431,9 +2421,9 @@ void CityView::registerCityViewIntrospection()
 				    const auto screen = view->tileToOffsetScreenCoords<float>(at);
 				    UString text = it->text;
 				    std::replace(text.begin(), text.end(), ' ', '_');
-				    return format("centred=1 at={0},{1},0 tile={2},{3},{4} text={5}",
-				                  (int)screen.x, (int)screen.y, it->location.x, it->location.y,
-				                  it->location.z, text);
+				    return format("centred=1 at={0},{1},0 tile={2},{3},{4} text={5}", (int)screen.x,
+				                  (int)screen.y, it->location.x, it->location.y, it->location.z,
+				                  text);
 			    }
 			    return UString("centred=0");
 		    }
@@ -2468,7 +2458,7 @@ void CityView::registerCityViewIntrospection()
 				    }
 				    if (bld->base)
 				    {
-					    continue;  // our own base defends itself
+					    continue; // our own base defends itself
 				    }
 				    int crew = 0;
 				    for (const auto &c : bld->current_crew)
@@ -2536,9 +2526,9 @@ void CityView::registerCityViewIntrospection()
 			    view->setScreenCenterTile(portal->getPosition());
 			    const auto screen = view->tileToOffsetScreenCoords<float>(portal->getPosition());
 			    return format("centred=1 portals={0} at={1},{2},0 tile={3},{4},{5}",
-			                  gameState->current_city->portals.size(), (int)screen.x,
-			                  (int)screen.y, (int)portal->getPosition().x,
-			                  (int)portal->getPosition().y, (int)portal->getPosition().z);
+			                  gameState->current_city->portals.size(), (int)screen.x, (int)screen.y,
+			                  (int)portal->getPosition().x, (int)portal->getPosition().y,
+			                  (int)portal->getPosition().z);
 		    }
 		    if (gameState && q == "centre_on_free_crash")
 		    {
@@ -2564,8 +2554,8 @@ void CityView::registerCityViewIntrospection()
 			    }
 			    return UString("centred=0");
 		    }
-		    if (gameState && (q == "centre_on_ufo" || q == "centre_on_own" ||
-		                      q == "centre_on_crash"))
+		    if (gameState &&
+		        (q == "centre_on_ufo" || q == "centre_on_own" || q == "centre_on_crash"))
 		    {
 			    const auto aliens = gameState->getAliens();
 			    if (q == "centre_on_own")
@@ -2582,8 +2572,7 @@ void CityView::registerCityViewIntrospection()
 					    }
 					    view->setScreenCenterTile(vehicle->getPosition());
 					    return format("centred=1 at={0},{1},{2}", (int)vehicle->getPosition().x,
-					                  (int)vehicle->getPosition().y,
-					                  (int)vehicle->getPosition().z);
+					                  (int)vehicle->getPosition().y, (int)vehicle->getPosition().z);
 				    }
 				    return UString("centred=0");
 			    }
@@ -4452,7 +4441,7 @@ bool CityView::handleMouseDown(Event *e)
 					vehicle = std::dynamic_pointer_cast<TileObjectVehicle>(collisionVehicle.obj)
 					              ->getVehicle();
 					LogInfo("SECONDARY CLICK ON VEHICLE {0} at {1}", vehicle->name,
-					           vehicle->position);
+					        vehicle->position);
 					for (auto &m : vehicle->missions)
 					{
 						LogInfo("Mission {0}", m.getName());

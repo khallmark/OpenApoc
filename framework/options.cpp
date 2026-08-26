@@ -228,12 +228,10 @@ ConfigOptionInt audioMusicGainOption("Framework.Audio", "MusicGain", tr("Music a
 ConfigOptionInt
     audioConcurrentSampleCount("Framework.Audio", "ConcurrentSamples",
                                tr("The number of concurrent samples to play at one time"), 10);
-ConfigOptionInt screenWidthOption(
-    "Framework.Screen", "Width",
-    tr("Initial screen width in pixels (0 = desktop width)"), 1280);
-ConfigOptionInt screenHeightOption(
-    "Framework.Screen", "Height",
-    tr("Initial screen height in pixels (0 = desktop height)"), 720);
+ConfigOptionInt screenWidthOption("Framework.Screen", "Width",
+                                  tr("Initial screen width in pixels (0 = desktop width)"), 1280);
+ConfigOptionInt screenHeightOption("Framework.Screen", "Height",
+                                   tr("Initial screen height in pixels (0 = desktop height)"), 720);
 ConfigOptionString screenModeOption("Framework.Screen", "Mode",
                                     tr("Mode: {windowed,fullscreen,borderless}"), "windowed");
 ConfigOptionInt screenDisplayNumberOption("Framework.Screen", "Display",
@@ -249,8 +247,7 @@ ConfigOptionBool screenAutoScale(
     false);
 ConfigOptionInt screenUiScaleOption(
     "Framework.Screen", "UiScale",
-    tr("Integer UI scale (1-4). 0 = auto from window width. Does not scale city/battle tiles."),
-    0);
+    tr("Integer UI scale (1-4). 0 = auto from window width. Does not scale city/battle tiles."), 0);
 ConfigOptionString languageOption("Framework", "Language",
                                   tr("The language used ingame (empty for system default)"), "");
 
@@ -441,14 +438,12 @@ ConfigOptionBool optionRunAndKneel("OpenApoc.NewFeature", "RunAndKneel",
 ConfigOptionBool optionSeedRng("OpenApoc.NewFeature", "SeedRng", tr("Seed RNG on game start"),
                                true);
 
-
 // An explicit seed, so a run is both reproducible AND variable at will. SeedRng gives only two
 // behaviours -- reseed from wall-clock, or leave the default -- which means runs are either
 // unrepeatable or all identical, and neither is what comparing two AIs across the same campaign
 // needs. Zero keeps the old behaviour exactly; any non-zero value is used verbatim and logged.
 ConfigOptionInt optionRngSeed("OpenApoc.NewFeature", "RngSeed",
                               tr("Explicit RNG seed (0 = use SeedRng behaviour)"), 0);
-
 
 // Alien AI tunables. The engine's behaviour set is fixed and faithful (ai.txt: Default, Vanilla,
 // Normal, Cautious, Aggressive, plus the morale states) - these do NOT add new behaviours, they
@@ -475,7 +470,8 @@ ConfigOptionInt optionAlienCoverBias("OpenApoc.AlienAI", "CoverBiasPercent",
 // observable rather than asserted.
 ConfigOptionInt optionOpponentBehaviorMode("OpenApoc.NewFeature", "OpponentBehaviorMode",
                                            tr("Pin non-player unit doctrine (-1 = game's own)"),
-                                           -1);ConfigOptionBool optionAutoReload("OpenApoc.NewFeature", "AutoReload",
+                                           -1);
+ConfigOptionBool optionAutoReload("OpenApoc.NewFeature", "AutoReload",
                                   tr("Automatically reload weapons when empty"), true);
 ConfigOptionBool optionLeftClickIcon("OpenApoc.NewFeature", "LeftClickIconEquip",
                                      tr("Left clicking icon opens equip menu"), false);

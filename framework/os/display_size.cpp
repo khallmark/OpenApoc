@@ -134,10 +134,9 @@ void applyAppBundleDisplayDefaults(const UString &programPath)
 	{
 		return;
 	}
-	if (!isFactoryWindowedDefault(Options::screenWidthOption.get(),
-	                             Options::screenHeightOption.get(),
-	                             Options::screenModeOption.get().c_str(),
-	                             Options::screenAutoScale.get()))
+	if (!isFactoryWindowedDefault(
+	        Options::screenWidthOption.get(), Options::screenHeightOption.get(),
+	        Options::screenModeOption.get().c_str(), Options::screenAutoScale.get()))
 	{
 		return;
 	}

@@ -4,27 +4,27 @@
 #include "game/state/battle/battleunit.h"
 #include "game/state/city/base.h"
 #include "game/state/city/building.h"
-#include "game/state/rules/battle/battlemap.h"
-#include "game/state/rules/city/vequipmenttype.h"
-#include "game/state/city/vequipment.h"
-#include "game/state/city/facility.h"
-#include "game/state/rules/city/facilitytype.h"
-#include "game/state/rules/aequipmenttype.h"
-#include "game/state/shared/aequipment.h"
-#include <map>
-#include <set>
 #include "game/state/city/city.h"
+#include "game/state/city/facility.h"
 #include "game/state/city/research.h"
 #include "game/state/city/vehicle.h"
 #include "game/state/city/vehiclemission.h"
-#include "game/state/rules/city/vehicletype.h"
+#include "game/state/city/vequipment.h"
 #include "game/state/gamestate.h"
 #include "game/state/gametime.h"
+#include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/agenttype.h"
+#include "game/state/rules/battle/battlemap.h"
+#include "game/state/rules/city/facilitytype.h"
+#include "game/state/rules/city/vehicletype.h"
+#include "game/state/rules/city/vequipmenttype.h"
+#include "game/state/shared/aequipment.h"
 #include "game/state/shared/agent.h"
 #include "game/state/shared/organisation.h"
 #include "library/strings_format.h"
+#include <map>
 #include <memory>
+#include <set>
 
 namespace OpenApoc
 {
@@ -106,7 +106,7 @@ UString describeResearch(GameState &state)
 			busyLabs++;
 		}
 	}
-		// Per-lab detail, and how many topics could be started right now. Research throughput is the
+	// Per-lab detail, and how many topics could be started right now. Research throughput is the
 	// gate on everything after the early game -- dimension travel, the alien-building chain, the
 	// victory raid -- and "labs_busy=1 of 5" is invisible in a bare completion count. This is the
 	// campaign's progress meter: without it there is no way to tell a campaign that is advancing
@@ -148,20 +148,20 @@ UString describeResearch(GameState &state)
 				assignableBusy++;
 			}
 		}
-		const char *kind = l.second->type == ResearchTopic::Type::BioChem     ? "biochem"
-		                   : l.second->type == ResearchTopic::Type::Physics   ? "physics"
-		                                                                      : "engineering";
+		const char *kind = l.second->type == ResearchTopic::Type::BioChem   ? "biochem"
+		                   : l.second->type == ResearchTopic::Type::Physics ? "physics"
+		                                                                    : "engineering";
 		// Staffing and progress, not just "is something assigned". Lab::update returns
 		// immediately when getTotalSkill() is zero (research.cpp:445-449), so a lab with a
 		// project and no scientists in it looks busy and advances nothing, for ever.
 		const int skill = l.second->getTotalSkill();
 		const auto &proj = l.second->current_project;
-		labDetail += (labDetail.empty() ? "" : "|") +
-		             format("{0}:{1}:{2}:staff={3}:skill={4}:{5}", l.first, kind,
-		                    built ? "built" : "unbuilt", l.second->assigned_agents.size(), skill,
-		                    proj ? format("{0}({1}/{2})", proj.id, proj->man_hours_progress,
-		                                  proj->man_hours)
-		                         : UString("idle"));
+		labDetail +=
+		    (labDetail.empty() ? "" : "|") +
+		    format("{0}:{1}:{2}:staff={3}:skill={4}:{5}", l.first, kind,
+		           built ? "built" : "unbuilt", l.second->assigned_agents.size(), skill,
+		           proj ? format("{0}({1}/{2})", proj.id, proj->man_hours_progress, proj->man_hours)
+		                : UString("idle"));
 	}
 	// Topics that are unlocked, unfinished and not already running somewhere. Dependency
 	// satisfaction is evaluated against the first player base, which is where the labs are.
@@ -186,7 +186,6 @@ UString describeResearch(GameState &state)
 	              "assignable_busy={5} startable={6} labs_detail={7}",
 	              total, complete, labs, busyLabs, assignable, assignableBusy, startable,
 	              labDetail.empty() ? UString("-") : labDetail);
-
 }
 
 UString describeOrgs(GameState &state)
@@ -212,8 +211,8 @@ UString describeOrgs(GameState &state)
 			allied++;
 		}
 	}
-	return format("orgs={0} hostile={1} allied={2} infiltration_sum={3}", state.organisations.size(),
-	              hostile, allied, infiltration);
+	return format("orgs={0} hostile={1} allied={2} infiltration_sum={3}",
+	              state.organisations.size(), hostile, allied, infiltration);
 }
 
 UString describeVehicles(GameState &state)
@@ -357,7 +356,6 @@ UString describeAgents(GameState &state)
 	              state.agents.size(), mine, soldiers, soldiersFit, armed);
 }
 
-
 UString describeBattle(GameState &state)
 {
 	if (!state.current_battle)
@@ -422,11 +420,12 @@ UString describeBattle(GameState &state)
 			missionType = "ufo_recovery";
 			break;
 	}
-	return format("player_won={0} ", battle.playerWon ? 1 : 0) + format("in_battle=1 mode={0} units={1} mine={2} mine_alive={3} mine_retreated={4} "
+	return format("player_won={0} ", battle.playerWon ? 1 : 0) +
+	       format("in_battle=1 mode={0} units={1} mine={2} mine_alive={3} mine_retreated={4} "
 	              "foes={5} foes_alive={6} hazards={7} mission_type={8} bases={9}",
 	              battle.mode == Battle::Mode::RealTime ? "rt" : "tb", battle.units.size(), mine,
-	              mineAlive, retreated, hostiles, hostilesAlive, battle.hazards.size(),
-	              missionType, state.player_bases.size());
+	              mineAlive, retreated, hostiles, hostilesAlive, battle.hazards.size(), missionType,
+	              state.player_bases.size());
 }
 
 UString describeStage(GameState &state)
@@ -511,9 +510,9 @@ UString introspectGameState(GameState &state, const UString &query)
 					names += (names.empty() ? "" : "+") + e.type.id;
 				}
 			}
-			out += (out.empty() ? "" : "|") +
-			       format("{0}:items={1},weapons={2},types={3}", i, t.equipment.size(), weapons,
-			              names.empty() ? UString("-") : names);
+			out += (out.empty() ? "" : "|") + format("{0}:items={1},weapons={2},types={3}", i,
+			                                         t.equipment.size(), weapons,
+			                                         names.empty() ? UString("-") : names);
 		}
 		return format("templates={0} detail={1}", state.agentEquipmentTemplates.size(),
 		              out.empty() ? UString("-") : out);
@@ -542,9 +541,9 @@ UString introspectGameState(GameState &state, const UString &query)
 			return format("found=0 id={0}", id);
 		}
 		const auto &t = it->second;
-		const char *kind = t->type == ResearchTopic::Type::BioChem     ? "biochem"
-		                   : t->type == ResearchTopic::Type::Physics   ? "physics"
-		                                                              : "engineering";
+		const char *kind = t->type == ResearchTopic::Type::BioChem   ? "biochem"
+		                   : t->type == ResearchTopic::Type::Physics ? "physics"
+		                                                             : "engineering";
 		bool satisfied = false;
 		if (!state.player_bases.empty())
 		{
@@ -594,10 +593,10 @@ UString introspectGameState(GameState &state, const UString &query)
 			const bool tooLarge = t->required_lab_size == ResearchTopic::LabSize::Large &&
 			                      lab->size == ResearchTopic::LabSize::Small;
 			const auto found = ids.find(t.get());
-			out += (out.empty() ? "" : "|") +
-			       format("{0}={1},done={2},big={3}", idx,
-			              found == ids.end() ? UString("?") : found->second,
-			              t->isComplete() ? 1 : 0, tooLarge ? 1 : 0);
+			out +=
+			    (out.empty() ? "" : "|") + format("{0}={1},done={2},big={3}", idx,
+			                                      found == ids.end() ? UString("?") : found->second,
+			                                      t->isComplete() ? 1 : 0, tooLarge ? 1 : 0);
 			idx++;
 		}
 		return format("options={0} lab={1} detail={2}", idx, lab.id,
@@ -636,8 +635,8 @@ UString introspectGameState(GameState &state, const UString &query)
 				{
 					pending++;
 				}
-				built += (built.empty() ? "" : ",") +
-				         format("{0}:{1}", fac->type.id, fac->buildTime);
+				built +=
+				    (built.empty() ? "" : ",") + format("{0}:{1}", fac->type.id, fac->buildTime);
 			}
 		}
 		return format("buildable={0} pending={1} offer={2} base={3}", idx, pending,
@@ -730,7 +729,7 @@ UString introspectGameState(GameState &state, const UString &query)
 				out += "|";
 			}
 			out += format("{0}:damage={1}:price={2}:stock={3}", name, damage,
-			               econ->second.currentPrice, econ->second.currentStock);
+			              econ->second.currentPrice, econ->second.currentStock);
 		}
 		return format("count={0} detail={1}", n, out.empty() ? UString("-") : out);
 	}
@@ -769,8 +768,8 @@ UString introspectGameState(GameState &state, const UString &query)
 				out += "|";
 			}
 			out += format("{0}:flying={1}:weapons={2}:price={3}:stock={4}", name,
-			               vt.second->type == VehicleType::Type::Flying ? 1 : 0, weaponSlots,
-			               econ->second.currentPrice, econ->second.currentStock);
+			              vt.second->type == VehicleType::Type::Flying ? 1 : 0, weaponSlots,
+			              econ->second.currentPrice, econ->second.currentStock);
 		}
 		return format("count={0} detail={1}", n, out.empty() ? UString("-") : out);
 	}
@@ -829,8 +828,7 @@ UString introspectGameState(GameState &state, const UString &query)
 			const int pax = veh->getMaxPassengers();
 			out += (out.empty() ? "" : "|") +
 			       format("{0}:{1}:flying={2},armed={3},crew={4},shifter={5},pax={6}", idx,
-			              safeName,
-			              flying ? 1 : 0, armed ? 1 : 0, crew,
+			              safeName, flying ? 1 : 0, armed ? 1 : 0, crew,
 			              veh->hasDimensionShifter() ? 1 : 0, pax);
 			idx++;
 		}
@@ -919,7 +917,7 @@ UString introspectGameState(GameState &state, const UString &query)
 		// specimen and stalling its own tech tree.
 		UString out;
 		int n = 0;
-		std::map<UString, std::pair<int, int>> merged;  // id -> (count, researched)
+		std::map<UString, std::pair<int, int>> merged; // id -> (count, researched)
 		for (const auto &b : state.player_bases)
 		{
 			if (!b.second)
@@ -1033,10 +1031,10 @@ UString introspectGameState(GameState &state, const UString &query)
 			              "pos={7},{8},{9}",
 			              v.first, vehicle->type ? vehicle->type.id : UString("-"),
 			              (vehicle->type && vehicle->type->battle_map) ? 1 : 0,
-			              vehicle->tileObject ? 1 : 0,
-			              vehicle->city == state.current_city ? 1 : 0, vehicle->falling ? 1 : 0,
-			              vehicle->sliding ? 1 : 0, (int)vehicle->getPosition().x,
-			              (int)vehicle->getPosition().y, (int)vehicle->getPosition().z);
+			              vehicle->tileObject ? 1 : 0, vehicle->city == state.current_city ? 1 : 0,
+			              vehicle->falling ? 1 : 0, vehicle->sliding ? 1 : 0,
+			              (int)vehicle->getPosition().x, (int)vehicle->getPosition().y,
+			              (int)vehicle->getPosition().z);
 		}
 		return format("crashes={0} detail={1}", n, out.empty() ? UString("-") : out);
 	}

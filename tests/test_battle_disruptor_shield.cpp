@@ -314,8 +314,8 @@ static bool test_disruptor_shield_item_charge_tracks_the_buffer()
 	             unit->disruptorShieldCurrent);
 
 	unit->updateDisruptorShield(state, TICKS_PER_DISRUPTOR_SHIELD_REGEN);
-	TEST_REQUIRE(unit->disruptorShieldCurrent == 41, "buffer is {0} after one regen tick, expected 41",
-	             unit->disruptorShieldCurrent);
+	TEST_REQUIRE(unit->disruptorShieldCurrent == 41,
+	             "buffer is {0} after one regen tick, expected 41", unit->disruptorShieldCurrent);
 	TEST_REQUIRE(shield->ammo == 41,
 	             "item charge is {0} after one regen tick but the buffer is {1} - FUN_0006511C "
 	             "regenerates the item's charge field too, not just the unit-level buffer",

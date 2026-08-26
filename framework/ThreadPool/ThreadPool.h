@@ -68,8 +68,8 @@ inline ThreadPool::ThreadPool(size_t threads) : stop(false)
 					    // this session presented as "vector", "map" and "mutex lock failed:
 					    // Invalid argument", and each cost hours mostly spent working out
 					    // which subsystem had even thrown.
-					    LogError("Exception occurred in threadpool: {0}: {1}",
-					             typeid(e).name(), e.what());
+					    LogError("Exception occurred in threadpool: {0}: {1}", typeid(e).name(),
+					             e.what());
 				    }
 				    catch (...)
 				    {
