@@ -10,6 +10,7 @@
 #include <queue>
 #include <stdexcept>
 #include <thread>
+#include <typeinfo>
 #include <vector>
 
 class ThreadPool
@@ -60,7 +61,23 @@ inline ThreadPool::ThreadPool(size_t threads) : stop(false)
 				    }
 				    catch (std::exception &e)
 				    {
-					    LogError("Exception occurred in threadpool: {0}", e.what());
+					    // Report the TYPE as well as what(). A worker exception is the
+					    // hardest failure in this engine to diagnose: the stack is gone, the
+					    // stage it belonged to has usually moved on, and what() alone is
+					    // frequently a single word. Three separate battle-generation faults
+					    // this session presented as "vector", "map" and "mutex lock failed:
+					    // Invalid argument", and each cost hours mostly spent working out
+					    // which subsystem had even thrown.
+					    LogError("Exception occurred in threadpool: {0}: {1}",
+					             typeid(e).name(), e.what());
+				    }
+				    catch (...)
+				    {
+					    // A non-std::exception used to vanish here without a trace, so a
+					    // worker could die in total silence and the only symptom was a stage
+					    // that never transitioned.
+					    LogError("Unknown (non-std::exception) thrown in threadpool - task "
+					             "abandoned");
 				    }
 			    }
 		    });
