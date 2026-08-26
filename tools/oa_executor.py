@@ -127,7 +127,12 @@ def observe(caps, stalls: int = 0, last_event_z=None) -> Observation:
         view_z = int((pos or {}).get("view_z", 0) or 0)
     except ValueError:
         view_z = 0
+    # Are we still in the mission? Battle::checkMissionEnd ends it by itself once no hostile
+    # organisation has a conscious unit left, so still being in it means something is still out
+    # there. Anything other than an explicit "0" counts as yes: the failure that matters is
+    # standing still on a live map, not searching a dead one for a few extra seconds.
     return Observation(mine=mine, foes=foes, view_z=view_z, stalls=stalls,
+                       hostiles_remain=str(st.get("in_battle", "1")) != "0",
                        mission_type=st.get("mission_type", "unknown"),
                        mode=st.get("mode", "rt"), last_event_z=last_event_z)
 
@@ -206,6 +211,12 @@ def execute(caps, actions: list, say=None) -> int:
                 # battle_positions gives in TILE space. Declared unsupported rather than faked:
                 # a wrong click is worse than a skipped order.
                 ok = False
+            elif k == "search":
+                # Send the squad somewhere it has not been. The AI works in tile space and has no
+                # idea how big the window is, so the sweep pattern lives here where the screen is
+                # known; the AI supplies only a step counter so successive rounds probe different
+                # ground instead of re-clicking one spot.
+                ok = caps.sweep(int(a.arg or 0))
             elif k == "withdraw":
                 ok = caps.withdraw()
             elif k == "wait":

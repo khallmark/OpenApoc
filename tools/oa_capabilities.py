@@ -145,6 +145,34 @@ class Capabilities:
         except Exception:
             return False
 
+    def sweep(self, step: int) -> bool:
+        """Send the selected units to a point on a search pattern, a different one each step.
+
+        Two orders per call, to opposite quadrants, because the squad hunts as individuals: one
+        destination sends everyone to the same corner, which searches one room with eight soldiers
+        and leaves the rest of the map alone.
+
+        The pattern walks a 5x5 grid of the viewport using steps that are coprime with it (7 and
+        11 against 25), so successive calls land far apart and the whole grid is covered before
+        anything repeats -- rather than the neat rows a naive x+1 sweep produces, which re-search
+        the same wall for twenty rounds.
+        """
+        try:
+            st = self.d.status()
+            if not st.w or not st.h:
+                return False
+            cells = 5
+            gx, gy = (step * 7) % cells, (step * 11) % cells
+            x = int(st.w * (gx + 0.5) / cells)
+            y = int(st.h * (gy + 0.5) / cells)
+            self.d.h.click_xy(max(0, min(st.w - 1, x)), max(0, min(st.h - 1, y)))
+            time.sleep(0.2)
+            # The mirrored point, so the squad splits rather than clumping on one destination.
+            self.d.h.click_xy(max(0, min(st.w - 1, st.w - x)), max(0, min(st.h - 1, st.h - y)))
+            return True
+        except Exception:
+            return False
+
     def withdraw(self) -> bool:
         """Leave the battle. Note the cost: survivors of a building raid go back into that same
         building, so this hands the aliens their position back."""

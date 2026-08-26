@@ -33,9 +33,17 @@ o = a.opening(obs([(0, 0, 0)], [(5, 5, 0)]))
 check(kinds(o) == ["set_fire_mode", "set_stance"], f"opening kinds: {kinds(o)}")
 check(o[0].arg == "snap" and o[1].arg == "run", "opening applies the configured policy")
 
-# --- no hostiles: do not withdraw, do not flail -----------------------------
+# --- nothing in sight: hunt while the mission runs, wait only once it is over ---
+# This check used to read "no foes should wait", which is the bug it was meant to prevent: under
+# fog of war an empty visible list is the NORMAL state late in a mission, and waiting there waits
+# forever. Waiting is correct only once the mission itself is over.
 acts = a.decide(obs([(0, 0, 0)], []))
-check(kinds(acts) == ["wait"], f"no foes should wait, got {kinds(acts)}")
+check("wait" not in kinds(acts) and "search" in kinds(acts),
+      f"nothing in sight while the mission runs should hunt, got {kinds(acts)}")
+ended = obs([(0, 0, 0)], [])
+ended.hostiles_remain = False
+check(kinds(a.decide(ended)) == ["wait"],
+      f"once the mission is over, wait, got {kinds(a.decide(ended))}")
 
 # --- floor: prefer the engine's event location over the headcount -----------
 # Most hostiles are on z=3, but the engine says the action is on z=1. Engine wins.
@@ -294,9 +302,64 @@ check(_screen_of(None, caps) is None and _screen_of("x", caps) is None, "junk re
 check(_observe(FakeCaps({"mine_at": "-", "foe_at": "-"})).foes == [], "'-' means none")
 check(_observe(FakeCaps({})).mine == [], "absent fields mean none")
 
+# --- "I cannot see one" must never mean "there are none" ----------------------
+# Under fog of war the last alien is usually unspotted. Both AIs used to read an empty visible
+# list as victory and return wait() -- the one action that can never end a mission, since a
+# mission ends only when the last hostile dies. Observed live: an 8-versus-1 base defence spent
+# 600 rounds printing "no hostiles left" and was scored a timeout at 0.16, for a battle the engine
+# had already marked player_won.
+#
+# The signal is a boolean: is the mission still running? A player needs nothing more than that,
+# and neither does this. A COUNT was tried first and was the same bug in a quieter costume -- it
+# had an "unknown" case, and unknown meant stop.
+blind = Observation(mine=[U(1, 10, 10, 0), U(2, 12, 10, 2)], foes=[], view_z=0,
+                    stalls=7, mission_type="base_defense", mode="rt", hostiles_remain=True)
+check(blind.hunting, "mission still running + nothing visible == hunting")
+check(blind.foes_alive == 0, "…and the visible count is still honestly zero")
+
+over = Observation(mine=[U(1, 10, 10, 0)], foes=[], view_z=0, hostiles_remain=False,
+                   mission_type="x", mode="rt")
+check(not over.hunting, "once the mission is over there is nothing to hunt")
+
+# The default must be to keep moving. A missing or unreadable field is exactly when the old bug
+# came back, so the safe direction is hunt-anyway: searching a dead map costs seconds, waiting on
+# a live one costs the mission.
+check(Observation(mine=[U(1, 1, 1, 0)], foes=[]).hunting,
+      "the DEFAULT must be to keep hunting, not to stand still")
+
+for ai in (VeteranAI(), ScriptedAI(), AggressiveAI(), CautiousAI()):
+    kinds = {a.kind for a in ai.decide(blind)}
+    check("wait" not in kinds,
+          f"{type(ai).__name__} must not wait while the mission runs: {kinds}")
+    check("search" in kinds, f"{type(ai).__name__} must sweep for it: {kinds}")
+    check("select_squad" in kinds, f"{type(ai).__name__} must send the whole squad: {kinds}")
+    done = {a.kind for a in ai.decide(over)}
+    check(done == {"wait"}, f"{type(ai).__name__} must wait once the mission ends: {done}")
+
+# The sweep must look at the floors the squad occupies -- a squad split across levels (the usual
+# state after a fight moves through a building) otherwise searches only the level it is on.
+floors = {blind.sweep_floor(n) for n in range(12)}
+check(len(floors) > 1, f"the hunt must look at more than one floor, got {floors}")
+check(0 in floors and 2 in floors, f"…including both levels the squad is on, got {floors}")
+
+# Successive rounds must probe different ground rather than re-clicking one spot.
+steps = {a.arg for n in range(6)
+         for a in VeteranAI().decide(
+             Observation(mine=[U(1, 10, 10, 0)], foes=[], view_z=0, stalls=n,
+                         mission_type="x", mode="rt"))
+         if a.kind == "search"}
+check(len(steps) == 6, f"successive rounds must probe different ground, got {steps}")
+
+# Seeing a hostile again must end the hunt and resume fighting.
+seen = Observation(mine=[U(1, 10, 10, 0)], foes=[U(9, 10, 16, 0, hostile=True)], view_z=0,
+                   mission_type="x", mode="rt")
+check(not seen.hunting, "a visible hostile is not a hunt")
+check("search" not in {a.kind for a in VeteranAI().decide(seen)},
+      "…and the squad must go back to fighting it")
+
 if FAILED:
     print(f"FAILED {len(FAILED)}:")
     for m in FAILED:
         print("  -", m)
     sys.exit(1)
-print("all VeteranAI doctrine-knob and observe() parsing tests passed")
+print("all VeteranAI doctrine-knob, observe() parsing and fog-of-war hunt tests passed")

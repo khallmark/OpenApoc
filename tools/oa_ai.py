@@ -78,6 +78,17 @@ class Observation:
     turn: int = 0
     mode: str = "rt"
     mission_type: str = "unknown"
+    # Is the mission still running? That is the whole signal. Battle::checkMissionEnd ends a
+    # mission by itself the moment no hostile organisation has a conscious unit left, so while we
+    # are still in it there is by definition something left to find. A player needs nothing more
+    # than this: they keep moving until the debriefing appears.
+    #
+    # Deliberately a boolean and deliberately defaulting to True. An earlier version passed the
+    # engine's hostile COUNT and treated "unknown" as "stop", which is the same standing-still bug
+    # in a quieter costume -- one unparsed field and the squad waits out the clock again. The safe
+    # default is to keep hunting; the cost of searching an empty map is a few seconds, and the cost
+    # of waiting on a live one is the entire mission.
+    hostiles_remain: bool = True
     # Set when the engine has told us where something just happened.
     last_event_z: Optional[int] = None
     # Rounds since the foe count last dropped -- the driver's own stall signal.
@@ -89,7 +100,27 @@ class Observation:
 
     @property
     def foes_alive(self) -> int:
+        """How many hostiles we can SEE. Not how many are left -- see foes_remaining."""
         return sum(1 for u in self.foes if u.alive)
+
+    @property
+    def hunting(self) -> bool:
+        """The mission is still on and nothing is in sight: go and find something.
+
+        Under fog of war the last alien is usually unspotted, so "I can see none" and "there are
+        none" look identical from inside the squad -- and only one of them is a reason to stop.
+        A squad that waits for an unspotted enemy waits forever, because the mission ends only
+        when the last hostile dies.
+        """
+        return self.foes_alive == 0 and self.hostiles_remain
+
+    def sweep_floor(self, step: int) -> int:
+        """A floor to look at while hunting, cycling over the levels the squad occupies and one
+        above them. A squad split across floors -- which is the usual state after a fight moves
+        through a building -- otherwise searches only the level it is already looking at."""
+        levels = sorted({u.z for u in self.mine if u.alive}) or [self.view_z]
+        levels = sorted(set(levels + [min(levels) , max(levels) + 1]))
+        return levels[step % len(levels)]
 
     def foes_on(self, z: int) -> int:
         return sum(1 for u in self.foes if u.alive and u.z == z)
@@ -180,8 +211,34 @@ class ScriptedAI(TacticalAI):
             Action("set_stance", self.stance, "opening posture"),
         ]
 
+    def hunt(self, obs: Observation) -> list[Action]:
+        """Go and find the hostiles we know are out there but cannot see.
+
+        The squad stops being a firing line and becomes a search party: spread out so more ground
+        is covered and one ambush cannot catch everyone, move at a run, look at a different floor
+        each round, and sweep. Fire mode goes to snap because a unit rounding a corner onto the
+        last alien needs to shoot now, not line up a shot.
+
+        This is what a player does without thinking about it, and its absence turned an 8-versus-1
+        base defence into six hundred rounds of standing still -- scored a timeout at 0.16 for a
+        battle the engine had already marked won.
+        """
+        alive = max(1, sum(1 for u in obs.mine if u.alive))
+        return [
+            Action("show_floor", obs.sweep_floor(obs.stalls),
+                   "hunting: mission still running, nothing in sight"),
+            Action("set_move_mode", "individual", "spread the search out"),
+            Action("set_stance", "run", "cover ground"),
+            Action("set_fire_mode", "snap", "shoot on contact"),
+            Action("set_behaviour", "aggressive", "seek contact rather than avoid it"),
+            Action("select_squad", alive, "everyone searches"),
+            Action("search", obs.stalls, "sweep for the hostiles the engine says remain"),
+        ]
+
     def decide(self, obs: Observation) -> list[Action]:
         acts: list[Action] = []
+        if obs.hunting:
+            return self.hunt(obs)
         if obs.foes_alive == 0:
             return [Action("wait", None, "no hostiles left; the engine ends the mission")]
 
@@ -293,6 +350,8 @@ class VeteranAI(ScriptedAI):
     def decide(self, obs: Observation) -> list[Action]:
         live_mine = [u for u in obs.mine if u.alive]
         live_foes = [u for u in obs.foes if u.alive]
+        if obs.hunting:
+            return self.hunt(obs)
         if not live_foes:
             return [Action("wait", None, "no hostiles left; the engine ends the mission")]
 
