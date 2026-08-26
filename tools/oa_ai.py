@@ -54,6 +54,21 @@ class Unit:
     # not act on a target the AI had named -- it fell back to whatever hostile was listed first.
     sx: Optional[int] = None
     sy: Optional[int] = None
+    # Where to CLICK to hit this unit: the middle of the box it is drawn in, not the corner of
+    # its tile. For a large (2x2) unit those are different tiles, so clicking sx/sy could select
+    # a neighbour or the ground. Prefer these whenever they are set.
+    cx: Optional[int] = None
+    cy: Optional[int] = None
+    large: bool = False
+
+    @property
+    def click_point(self):
+        """The best available screen point for an order aimed at this unit, or None."""
+        if self.cx is not None and self.cy is not None:
+            return (self.cx, self.cy)
+        if self.sx is not None and self.sy is not None:
+            return (self.sx, self.sy)
+        return None
 
     @property
     def hurt_frac(self) -> float:

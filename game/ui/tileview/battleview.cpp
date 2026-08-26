@@ -1587,12 +1587,33 @@ void BattleView::registerBattleViewIntrospection()
 				    }
 				    const auto p = unit->position;
 				    const bool isMine = unit->owner.id == player.id;
+				    // Two points per unit, and they are not the same point.
+				    //
+				    // sx/sy is the projection of the unit's tile ORIGIN. That is the corner of an
+				    // isometric diamond, so a click there lands on the tile edge -- or, for a
+				    // large (2x2) unit, on a neighbouring tile entirely, because the origin is a
+				    // corner of the footprint rather than its middle.
+				    //
+				    // cx/cy is the middle of the box the unit is DRAWN in: the midpoint between
+				    // the projections of the footprint's near and far corners. Derived from the
+				    // footprint rather than from sprite offsets, so it is correct for large units
+				    // without knowing anything about how they are rendered. This is the point to
+				    // click to hit this unit, and the one an AI naming a target should be given.
+				    const float span = unit->isLarge() ? 2.0f : 1.0f;
 				    const auto screen = view->tileToOffsetScreenCoords<float>(p);
+				    const auto far = view->tileToOffsetScreenCoords<float>(
+				        Vec3<float>{p.x + span, p.y + span, p.z});
+				    const Vec2<float> centre{(screen.x + far.x) / 2.0f, (screen.y + far.y) / 2.0f};
 				    const bool onScreen = screen.x >= 0 && screen.y >= 0 && screen.x < size.x &&
 				                          screen.y < size.y;
+				    const bool centreOnScreen = centre.x >= 0 && centre.y >= 0 &&
+				                                centre.x < size.x && centre.y < size.y;
 				    const auto entry =
-				        format("{0},{1},{2}:sx={3}:sy={4}", (int)p.x, (int)p.y, (int)p.z,
-				               onScreen ? (int)screen.x : -1, onScreen ? (int)screen.y : -1);
+				        format("{0},{1},{2}:sx={3}:sy={4}:cx={5}:cy={6}:large={7}", (int)p.x,
+				               (int)p.y, (int)p.z, onScreen ? (int)screen.x : -1,
+				               onScreen ? (int)screen.y : -1,
+				               centreOnScreen ? (int)centre.x : -1,
+				               centreOnScreen ? (int)centre.y : -1, unit->isLarge() ? 1 : 0);
 				    if (isMine)
 				    {
 					    if (mineCount++ > 0)
@@ -1623,9 +1644,9 @@ void BattleView::registerBattleViewIntrospection()
 					    // outright, so both are worth killing before a nearer ordinary target.
 					    // This field used to be absent, and the AI's parser took "large=0" as
 					    // the unit kind -- so no priority rule could ever have matched.
-					    foes += format("{0}:kind={1}:large={2}:flying={3}", entry,
+					    foes += format("{0}:kind={1}:flying={2}", entry,
 					                   unit->agent ? unit->agent->type.id : UString("unknown"),
-					                   unit->isLarge() ? 1 : 0, unit->canFly() ? 1 : 0);
+					                   unit->canFly() ? 1 : 0);
 				    }
 			    }
 			    return format("foes={0} mine={1} view_z={4} foes_unseen={5} foes_bystanders={6} "

@@ -118,10 +118,12 @@ def observe(caps, stalls: int = 0, last_event_z=None) -> Observation:
         return None if v < 0 else v
 
     mine = [Unit(1000 + i, x, y, z, kind=f.get("kind", ""),
-                 sx=as_int(f, "sx"), sy=as_int(f, "sy"))
+                 sx=as_int(f, "sx"), sy=as_int(f, "sy"),
+                 cx=as_int(f, "cx"), cy=as_int(f, "cy"), large=f.get("large") == "1")
             for i, (x, y, z, f) in enumerate(parse("mine_at"))]
     foes = [Unit(2000 + i, x, y, z, hostile=True, kind=f.get("kind", ""),
-                 sx=as_int(f, "sx"), sy=as_int(f, "sy"))
+                 sx=as_int(f, "sx"), sy=as_int(f, "sy"),
+                 cx=as_int(f, "cx"), cy=as_int(f, "cy"), large=f.get("large") == "1")
             for i, (x, y, z, f) in enumerate(parse("foe_at"))]
     try:
         view_z = int((pos or {}).get("view_z", 0) or 0)
@@ -168,8 +170,10 @@ def _screen_of(arg, caps):
         return (want[0], want[1])
     obs = observe(caps)
     for u in list(obs.foes) + list(obs.mine):
-        if (u.x, u.y, u.z) == want and u.sx is not None and u.sy is not None:
-            return (u.sx, u.sy)
+        if (u.x, u.y, u.z) == want:
+            # click_point prefers the middle of the drawn box over the tile corner; for a large
+            # unit the corner belongs to a different tile and the order would miss.
+            return u.click_point
     return None
 
 

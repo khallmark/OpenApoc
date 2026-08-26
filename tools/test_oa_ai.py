@@ -286,6 +286,35 @@ check(o.foes[1].sx is None and o.foes[1].sy is None,
 check(o.mine[1].x == 12 and o.mine[1].sx == 140, "our own units carry them too")
 check(o.view_z == 4, "view_z is read")
 
+# --- click the middle of a unit, not the corner of its tile -------------------
+# battle_positions reports sx/sy (the tile ORIGIN's projection) and cx/cy (the middle of the box
+# the unit is drawn in). For a 2x2 unit those are different tiles, so an order aimed at sx/sy can
+# select a neighbour or the bare ground. Anything aiming AT a unit must prefer cx/cy.
+boxed = FakeCaps({
+    "mine_at": "10,10,0:sx=100:sy=200:cx=118:cy=209",
+    "foe_at": ("20,20,4:sx=300:sy=400:cx=336:cy=418:kind=AGENTTYPE_MEGASPAWN:large=1:flying=0;"
+               "24,20,4:sx=500:sy=400:cx=518:cy=409:kind=AGENTTYPE_ANTHROPOD:large=0:flying=0"),
+    "view_z": "4",
+})
+ob = _observe(boxed)
+big, small = ob.foes[0], ob.foes[1]
+check(big.large and not small.large, "the large flag must survive the parse")
+check(big.click_point == (336, 418), f"a large unit aims at its centre, got {big.click_point}")
+check(big.click_point != (big.sx, big.sy),
+      "…which for a 2x2 unit is NOT the tile corner -- that is the bug this exists to prevent")
+check(small.click_point == (518, 409), "a normal unit aims at its centre too")
+check(ob.mine[0].click_point == (118, 209), "our own units carry a click point as well")
+
+# The executor must resolve a named target to that click point.
+check(_screen_of((20, 20, 4), boxed) == (336, 418),
+      f"_screen_of must return the drawn centre, got {_screen_of((20, 20, 4), boxed)}")
+
+# Older engine builds send no cx/cy. Fall back to sx/sy rather than refusing the order outright.
+legacy = FakeCaps({"mine_at": "-", "foe_at": "9,9,0:sx=70:sy=80:kind=X:large=0", "view_z": "0"})
+check(_observe(legacy).foes[0].click_point == (70, 80),
+      "with no cx/cy, fall back to the tile projection")
+check(Unit(1, 0, 0, 0).click_point is None, "…and to None when there is nothing on screen")
+
 # Threat priority must now actually fire on real engine data.
 v = VeteranAI(priority_targets=True)
 tgt = {a.kind: a.arg for a in v.decide(o)}.get("focus_fire")
