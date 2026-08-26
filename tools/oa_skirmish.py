@@ -7,29 +7,16 @@ thing actually being tested. Skirmish mode is meant to fight a single battlescap
 map and a chosen alien force in under a minute of wall-clock, which is what iterating on combat
 tactics (squad size, retreat threshold, movement pattern) actually needs.
 
-CURRENT STATUS: setup is fully driven and reliable (Skirmish -> pick a map -> SelectForces ->
-name an alien mix -> AEquipScreen), confirmed against the real screens step by step. The battle
-itself currently does not start. Skirmish::resume() is supposed to fire loadBattle() once
-AEquipScreen and SelectForces have both popped back to Skirmish (skirmish.cpp:698-702), and that
-cascade was confirmed to happen -- the stage genuinely returns to "Skirmish" -- but loadBattle()
-then never transitions anywhere, for at least 15 seconds of polling. Separately, one battlemap
-(BATTLEMAP_43sleep) was observed to throw an actual unhandled exception during generation
-("Failed to place mandatory sectors...", "Exception occurred in threadpool: vector"), on a
-background thread. Read together, this looks like a genuine, pre-existing bug in Skirmish's
-battlemap generation, not a harness or automation defect: the same async-generation-on-a-
-threadpool mechanism that produced the resumed-save GameState::initState segfault fixed earlier
-this session, in a different subsystem.
+CURRENT STATUS: MainMenu has a first-class Skirmish button, and the robot drives that cold path
+without manufacturing a campaign. The present framework drains a snapshot of pending StageCmds.
+If a stage's `resume()` queues another command during that drain, the new command is cleared with
+the snapshot instead of being processed. Two commands in the Skirmish lifecycle are therefore
+lost: SelectForces::resume() queues its own POP after AEquipScreen closes, and, if SelectForces is
+manually popped, Skirmish::resume()->loadBattle() queues the battle transition.
 
-This does NOT affect the main campaign. City missions reach battle through a different code path
-entirely -- loadBattleBuilding from BuildingScreen/AlertScreen, not Skirmish::goToBattle -- and
-that path has been fighting real missions (wins, losses, retreats) all session. Skirmish mode's
-own generation path is what is broken.
-
-There is no way to reach Skirmish from a cold MainMenu: it lives behind InGameOptions, which only
-exists once a game is running. So a run is: boot -> new game -> Escape into InGameOptions ->
-BUTTON_SKIRMISH -> MapSelector -> SelectForces -> fight -> read the result -> repeat with a fresh
-force selection, all inside the same process. Reported findings apply to the shared battle code
-(win_battle, unit selection, retreat) that the full campaign also uses.
+The complete cold battle is a preserved known-red acceptance until the live-FIFO StageCmd change
+lands. A separate observed map-generation exception remains a distinct setup/engine failure; it
+is not evidence that a battle was fought or lost.
 """
 
 from __future__ import annotations
@@ -61,8 +48,21 @@ ALIEN_SLIDERS = {
 
 
 def open_skirmish(d: Driver) -> bool:
-    """From an already-running game, reach Skirmish's map selector."""
+    """Reach Skirmish from the cold MainMenu or an already-running game."""
     st = d.status()
+    if st.stage == "MainMenu":
+        if not d.click_id("BUTTON_SKIRMISH", st):
+            d.say("  [skirmish] MainMenu Skirmish button was unavailable")
+            return False
+        try:
+            # Skirmish::begin() immediately pushes MapSelector. The snapshot-drain loop can lose
+            # that nested PUSH and leave Skirmish current; pick_map() can continue from either.
+            return d.wait_for(("MapSelector", "Skirmish"), 240).stage in (
+                "MapSelector", "Skirmish"
+            )
+        except TimeoutError:
+            d.say(f"  [skirmish] cold entry stalled on {d.status().stage}")
+            return False
     if st.stage not in ("CityView", "BattleView"):
         d.say(f"  [skirmish] need an in-progress game, got {st.stage}")
         return False
@@ -73,8 +73,12 @@ def open_skirmish(d: Driver) -> bool:
         return False
     if not d.click_id("BUTTON_SKIRMISH", d.status()):
         return False
-    time.sleep(1.0)
-    return d.status().stage == "Skirmish"
+    try:
+        return d.wait_for(("MapSelector", "Skirmish"), 240).stage in (
+            "MapSelector", "Skirmish"
+        )
+    except TimeoutError:
+        return False
 
 
 def pick_map(d: Driver, row: int = 0) -> bool:
@@ -87,10 +91,13 @@ def pick_map(d: Driver, row: int = 0) -> bool:
     changes nothing, which let BUTTON_OK silently re-open MapSelector on the next click instead
     of proceeding to SelectForces -- reached with `item <row> item 1 click`.
     """
-    if not d.click_id("BUTTON_SELECTMAP", d.status()):
-        return False
-    time.sleep(0.8)
-    if d.status().stage != "MapSelector":
+    st = d.status()
+    if st.stage == "Skirmish":
+        if not d.click_id("BUTTON_SELECTMAP", st):
+            return False
+        time.sleep(0.8)
+        st = d.status()
+    if st.stage != "MapSelector":
         return False
     try:
         if not d.h.send(f"control LISTBOX_MAPS item {row} item 1 click").startswith("OK"):
@@ -153,25 +160,11 @@ def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
     # this stage at all, so without handling it here the driver just sits pressing Escape/Return
     # against a real screen that needs BUTTON_OK.
     #
-    # goToBattle generates the battlemap on a threadpool worker (the same mechanism that, when it
-    # throws, produces the "Exception occurred in threadpool" signature seen in this engine's
-    # crash reports elsewhere), and generation for a full map with LOS precomputation is not
-    # instant. The screen can appear to sit on SelectForces for a while that is actually
-    # generation still running in the background, not a stall -- so this gives it real time
-    # rather than declaring failure quickly.
-    # Skirmish::resume() fires loadBattle() only once BOTH AEquipScreen and SelectForces have
-    # popped back to Skirmish (skirmish.cpp:698-702). AEquipScreen is pushed BY goToBattle, so
-    # dismissing it returns us to SelectForces -- which then has to be dismissed a SECOND time.
-    #
-    # This loop used to sleep on SelectForces and nothing else, so it waited out its whole budget
-    # against a screen one button press would have cleared, and the failure was recorded as
-    # "loadBattle never transitions" -- an engine bug that was not there. The engine log said as
-    # much all along: goToBattle ran to completion ("Resetting base inventory") and the
-    # no-location diagnostic never fired, so a location WAS set and the lambda simply never got
-    # its second pop.
-    #
-    # Re-press on a cadence rather than every poll: goToBattle rebuilds the base inventory each
-    # time it runs, and hammering OK re-enters it repeatedly for no gain.
+    # SelectForces::resume() queues its own POP after AEquipScreen closes. The framework currently
+    # clears commands queued by resume() while draining a snapshot, so this expected POP can be
+    # lost and leave SelectForces current. If SelectForces is manually popped, Skirmish::resume()
+    # queues loadBattle's transition into the same broken drain and can remain on Skirmish. Do not
+    # press BUTTON_OK again here: that re-enters goToBattle and pushes AEquipScreen forever.
     deadline = time.time() + 45.0
     seen_equip = False
     last_ok = 0.0
@@ -199,11 +192,28 @@ def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
             break
         time.sleep(0.7)
 
-    if d.status().stage not in ("BattleBriefing", "BattlePreStart", "BattleView"):
-        d.say(f"  [skirmish] did not reach a battle stage (at {d.status().stage})")
+    final_stage = d.status().stage
+    if final_stage not in ("BattleBriefing", "BattlePreStart", "BattleView"):
+        if seen_equip and final_stage == "SelectForces":
+            detail = "SelectForces resume POP was not applied"
+        elif seen_equip and final_stage == "Skirmish":
+            detail = "Skirmish loadBattle transition was not applied"
+        else:
+            detail = "battle stage was not reached"
+        d.say(f"  [skirmish] setup failed at {final_stage}: {detail}")
         return "setup-failed"
 
     return win_battle(d, budget_s=budget_s, policy=policy)
+
+
+def battle_snapshot(d: Driver) -> dict | None:
+    """Return pre-battle state when a GameState-backed query handler exists."""
+    try:
+        return d.h.gs("battle")
+    except HarnessError as exc:
+        if "ERR no gamestate" not in str(exc):
+            raise
+        return None
 
 
 def run_one(d: Driver, aliens: dict, map_row: int = 0, real_time: bool = True,
@@ -213,7 +223,7 @@ def run_one(d: Driver, aliens: dict, map_row: int = 0, real_time: bool = True,
         return {"outcome": "could-not-open-skirmish"}
     if not pick_map(d, map_row):
         d.say("  [skirmish] map selection failed; using whatever was already chosen")
-    battle_before = d.h.gs("battle")
+    battle_before = battle_snapshot(d)
     outcome = fight_skirmish(d, aliens, real_time=real_time, budget_s=budget_s,
                              policy=policy)
     return {
@@ -234,6 +244,8 @@ def main() -> int:
                      help="name=count, repeatable, e.g. --alien popper=6 --alien brainsucker=3")
     ap.add_argument("--map-row", type=int, default=0)
     ap.add_argument("--budget", type=float, default=300.0, help="seconds per battle")
+    ap.add_argument("--cold-main-menu", action="store_true",
+                    help="use MainMenu's first-class Skirmish entry instead of starting a game")
     args = ap.parse_args()
 
     aliens = {}
@@ -251,7 +263,8 @@ def main() -> int:
     game.start(wait_s=240)
     d = Driver(Harness(port=args.port), repo / "data/forms", shots=out / "shots", verbose=True)
     d.checks = {}
-    new_game(d, 1)
+    if not args.cold_main_menu:
+        new_game(d, 1)
 
     results = []
     for i in range(args.rounds):
@@ -262,7 +275,7 @@ def main() -> int:
         # Escape back to CityView between rounds, whatever state we ended in.
         for _ in range(6):
             st = d.status()
-            if st.stage == "CityView":
+            if st.stage in ("CityView", "MainMenu"):
                 break
             if st.stage == "BattleDebriefing":
                 d.click_id("BUTTON_OK", st)

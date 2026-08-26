@@ -18,12 +18,10 @@ which that shooting happens -- fire mode and stance today, more as they are wire
 learned model; it is a search over a small, explicit policy space with results recorded honestly.
 Calling it learning would overstate it.
 
-KNOWN RISK, to be settled by running rather than assumed: oa_skirmish.py's own docstring records
-that Skirmish battles never started -- `Skirmish::resume()` fires `loadBattle()` and then does
-not transition, and one battlemap (BATTLEMAP_43sleep) threw "Failed to place mandatory sectors"
-from a threadpool worker. That note predates this session's engine work. `--probe` fights exactly
-one battle and reports precisely where it stopped, so the first question this tool answers is
-whether the arena can run at all.
+KNOWN RISK, to be settled by running rather than assumed: the current framework can discard stage
+commands queued by another stage's `resume()` while it drains a snapshot of the command queue.
+That leaves the cold Skirmish path on SelectForces or Skirmish before BattleView is ever reached.
+The complete cold battle remains a known-red acceptance until the live-FIFO StageCmd fix lands.
 """
 
 from __future__ import annotations
