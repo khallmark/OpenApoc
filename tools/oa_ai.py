@@ -49,6 +49,11 @@ class Unit:
     max_health: int = 100
     tu: int = 100
     kind: str = ""          # lowercase type name, e.g. "popper", "brainsucker"
+    # Where this unit is drawn, or None when it is off screen. Tile coordinates say WHERE a unit
+    # is; only these say where to click to give it an order, and without them the executor could
+    # not act on a target the AI had named -- it fell back to whatever hostile was listed first.
+    sx: Optional[int] = None
+    sy: Optional[int] = None
 
     @property
     def hurt_frac(self) -> float:

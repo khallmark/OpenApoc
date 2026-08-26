@@ -243,9 +243,60 @@ check(on_t.get("focus_fire") == (10, 24, 0),
 check(off_t.get("focus_fire") == (12, 10, 0),
       f"priority_targets=False must take the nearest, got {off_t.get('focus_fire')}")
 
+# --- observe() must read the fields the engine actually sends -----------------
+# battle_positions entries are "x,y,z" plus colon-separated key=value fields. The old parser took
+# the FIRST colon field as the unit kind, so kind was literally the string "large=0" -- and every
+# VeteranAI priority rule, which looks for "popper"/"brainsucker" inside it, was dead on arrival.
+from oa_executor import observe as _observe, _screen_of
+
+
+class FakeCaps:
+    def __init__(self, pos, state=None):
+        self._pos, self._state = pos, state or {"mission_type": "x", "mode": "rt"}
+
+    def battle_positions(self):
+        return self._pos
+
+    def battle_state(self):
+        return self._state
+
+
+caps = FakeCaps({
+    "mine_at": "10,10,0:sx=100:sy=200;12,10,0:sx=140:sy=200",
+    "foe_at": ("20,20,4:sx=300:sy=400:kind=AGENTTYPE_POPPER:large=0:flying=0;"
+               "22,20,4:sx=-1:sy=-1:kind=AGENTTYPE_ANTHROPOD:large=0:flying=0"),
+    "view_z": "4",
+})
+o = _observe(caps)
+check(len(o.mine) == 2 and len(o.foes) == 2, "observe must read both sides")
+check(o.foes[0].kind == "AGENTTYPE_POPPER",
+      f"kind must be the agent type, got {o.foes[0].kind!r}")
+check("popper" in o.foes[0].kind.lower(), "…so the priority rules can match on it")
+check((o.foes[0].sx, o.foes[0].sy) == (300, 400), "on-screen units carry screen coordinates")
+check(o.foes[1].sx is None and o.foes[1].sy is None,
+      "sx=-1 means off screen and must become None, not a click at (-1,-1)")
+check(o.mine[1].x == 12 and o.mine[1].sx == 140, "our own units carry them too")
+check(o.view_z == 4, "view_z is read")
+
+# Threat priority must now actually fire on real engine data.
+v = VeteranAI(priority_targets=True)
+tgt = {a.kind: a.arg for a in v.decide(o)}.get("focus_fire")
+check(tgt == (20, 20, 4), f"the popper must be chosen over the nearer anthropod, got {tgt}")
+
+# _screen_of resolves a chosen tile target to the click point, and refuses when it cannot.
+check(_screen_of((20, 20, 4), caps) == (300, 400), "a chosen target resolves to its click point")
+check(_screen_of((22, 20, 4), caps) is None, "an off-screen target must refuse, not guess")
+check(_screen_of((99, 99, 9), caps) is None, "an unknown target must refuse")
+check(_screen_of((7, 8), caps) == (7, 8), "a ready-made screen pair passes through")
+check(_screen_of(None, caps) is None and _screen_of("x", caps) is None, "junk refuses")
+
+# Empty and absent fields must not crash the parser.
+check(_observe(FakeCaps({"mine_at": "-", "foe_at": "-"})).foes == [], "'-' means none")
+check(_observe(FakeCaps({})).mine == [], "absent fields mean none")
+
 if FAILED:
     print(f"FAILED {len(FAILED)}:")
     for m in FAILED:
         print("  -", m)
     sys.exit(1)
-print("all VeteranAI doctrine-knob tests passed")
+print("all VeteranAI doctrine-knob and observe() parsing tests passed")

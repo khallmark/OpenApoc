@@ -1533,13 +1533,34 @@ void BattleView::registerBattleViewIntrospection()
 		    }
 		    if (gameState && gameState->current_battle && q == "battle_positions")
 		    {
-			    // Diagnostic for the "one unreachable hostile" deadlock. Screen coordinates alone
-			    // cannot explain it -- a unit two floors up is drawn in plain sight and still
-			    // cannot be walked to. Report tile positions, so the z gap between the squad and
-			    // the survivor is visible, along with whether each unit can actually move.
+			    // Diagnostic for the "one unreachable hostile" deadlock, and the field the
+			    // tactical AI reads. Screen coordinates alone cannot explain that deadlock -- a
+			    // unit two floors up is drawn in plain sight and still cannot be walked to -- so
+			    // tile positions are reported, making the z gap visible.
+			    //
+			    // THIS QUERY FEEDS A DECIDER, so it carries the same two filters enemies_screen
+			    // has. It previously had neither, and the tactical AI consumed it raw:
+			    //
+			    //  * FOG OF WAR. Battle::visibleUnits is what the player's side can actually see.
+			    //    Reporting hostiles the squad has never spotted handed the AI knowledge no
+			    //    player has -- it could walk straight to an alien nobody had laid eyes on.
+			    //  * BYSTANDERS. "Not ours" is not "hostile". A building raid is full of
+			    //    civilians and the owner's security, and killing a unit whose organisation is
+			    //    not hostile to us costs 30 relation against 5 for a real enemy
+			    //    (battleunit.cpp:4802-4813). Most buildings are the government's, and
+			    //    government relation below -50 terminates funding outright.
+			    //
+			    // Both exclusions are COUNTED and reported, so nothing is hidden silently.
+			    //
+			    // Screen coordinates are reported per unit as well. Without them the AI could
+			    // name a specific unit to shoot, pull back or spread out and the executor had no
+			    // way to click it: battle_positions spoke tile space, attack_at wants screen
+			    // space, and nothing mapped between them. sx/sy are -1 when the unit is off
+			    // screen, which is a fact worth knowing rather than an error.
 			    const auto player = gameState->getPlayer();
+			    const auto size = fw().displayGetSize();
 			    UString foes, mine;
-			    int foeCount = 0, mineCount = 0;
+			    int foeCount = 0, mineCount = 0, unseen = 0, bystanders = 0;
 			    for (const auto &u : gameState->current_battle->units)
 			    {
 				    const auto &unit = u.second;
@@ -1549,8 +1570,12 @@ void BattleView::registerBattleViewIntrospection()
 				    }
 				    const auto p = unit->position;
 				    const bool isMine = unit->owner.id == player.id;
+				    const auto screen = view->tileToOffsetScreenCoords<float>(p);
+				    const bool onScreen = screen.x >= 0 && screen.y >= 0 && screen.x < size.x &&
+				                          screen.y < size.y;
 				    const auto entry =
-				        format("{0},{1},{2}", (int)p.x, (int)p.y, (int)p.z);
+				        format("{0},{1},{2}:sx={3}:sy={4}", (int)p.x, (int)p.y, (int)p.z,
+				               onScreen ? (int)screen.x : -1, onScreen ? (int)screen.y : -1);
 				    if (isMine)
 				    {
 					    if (mineCount++ > 0)
@@ -1561,18 +1586,36 @@ void BattleView::registerBattleViewIntrospection()
 				    }
 				    else
 				    {
+					    if (unit->owner->isRelatedTo(player) != Organisation::Relation::Hostile)
+					    {
+						    bystanders++;
+						    continue;
+					    }
+					    const auto &seen = gameState->current_battle->visibleUnits[player];
+					    if (seen.find({&*gameState, unit->id}) == seen.end())
+					    {
+						    unseen++;
+						    continue;
+					    }
 					    if (foeCount++ > 0)
 					    {
 						    foes += ";";
 					    }
-					    foes += format("{0}:large={1}:flying={2}", entry,
-					                   unit->isLarge() ? 1 : 0,
-					                   unit->canFly() ? 1 : 0);
+					    // kind is the agent type, which is what threat priority is decided on:
+					    // a popper detonates on contact and a brainsucker removes an agent
+					    // outright, so both are worth killing before a nearer ordinary target.
+					    // This field used to be absent, and the AI's parser took "large=0" as
+					    // the unit kind -- so no priority rule could ever have matched.
+					    foes += format("{0}:kind={1}:large={2}:flying={3}", entry,
+					                   unit->agent ? unit->agent->type.id : UString("unknown"),
+					                   unit->isLarge() ? 1 : 0, unit->canFly() ? 1 : 0);
 				    }
 			    }
-			    return format("foes={0} mine={1} view_z={4} foe_at={2} mine_at={3}", foeCount,
-			                  mineCount, foes.empty() ? UString("-") : foes,
-			                  mine.empty() ? UString("-") : mine, view->getZLevel());
+			    return format("foes={0} mine={1} view_z={4} foes_unseen={5} foes_bystanders={6} "
+			                  "foe_at={2} mine_at={3}",
+			                  foeCount, mineCount, foes.empty() ? UString("-") : foes,
+			                  mine.empty() ? UString("-") : mine, view->getZLevel(), unseen,
+			                  bystanders);
 		    }
 		    if (gameState && gameState->current_battle &&
 		        (q == "enemies_screen" || q == "friends_screen"))
