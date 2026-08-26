@@ -85,6 +85,11 @@ class CampaignEvaluator(Evaluator):
         bias = g.get("cover_bias")
         if bias is not None:
             argv.append(f"--OpenApoc.AlienAI.CoverBiasPercent={int(float(bias) * 100)}")
+        grenade = g.get("grenade_bias")
+        if grenade is not None:
+            # 0.0-0.75 in the genome; the engine takes a percentage where 100 is "unchanged", so
+            # the gene spans hoarding grenades through throwing them twice as readily.
+            argv.append(f"--OpenApoc.AlienAI.GrenadeBiasPercent={int(float(grenade) * 200)}")
         return argv
 
     def _xcom_policy(self, xcom: Policy) -> dict:
@@ -156,6 +161,10 @@ class CampaignEvaluator(Evaluator):
             t0 = self._ticks(d)
             deadline = time.time() + self.budget_s
             outcome = None
+            # What the driver did that could produce a battle LATER. A recovery craft is sent
+            # now and the mission appears when it arrives, so the cause has to outlive the leg
+            # that caused it.
+            pending_cause = None
 
             while time.time() < deadline and outcome is None:
                 st = d.status()
@@ -166,7 +175,17 @@ class CampaignEvaluator(Evaluator):
                                 "BaseDefenseScreen"):
                     outcome = win_battle(d, budget_s=max(120.0, deadline - time.time()),
                                          policy=self._xcom_policy(xcom))
-                    rec["reason"] = "battle came to us"
+                    # Say who started it. This branch catches EVERY battle already on screen at
+                    # the top of a leg, and it used to stamp all of them "battle came to us" --
+                    # which records where in the loop the fight was NOTICED, not its cause. The
+                    # first three attempts of the 301 run were all logged as unprovoked and all
+                    # three were ufo_recovery, i.e. wrecks this driver had sent a craft to
+                    # collect. A base defence still reads as an attack on us, correctly.
+                    mission = (d.last_battle or {}).get("mission_type", "")
+                    rec["mission_type"] = mission
+                    rec["reason"] = (pending_cause
+                                     if pending_cause and mission == "ufo_recovery"
+                                     else "battle came to us")
                     break
 
                 try:
@@ -238,7 +257,14 @@ class CampaignEvaluator(Evaluator):
                     # are held by armed craft precisely so that happens. Cheaper to check than
                     # to wait for another infiltration alert.
                     try:
-                        rec["crash_sites"] = rec.get("crash_sites", 0) + recover_crash_sites(d)
+                        dispatched = recover_crash_sites(d)
+                        rec["crash_sites"] = rec.get("crash_sites", 0) + dispatched
+                        if dispatched:
+                            # Dispatched, not fought. recover_crash_sites gives a craft its
+                            # order and returns; the tactical mission only exists once it
+                            # reaches the wreck, one or more legs later, and it then surfaces
+                            # at the top of this loop.
+                            pending_cause = "crash-site recovery we dispatched"
                     except Exception as exc:
                         rec.setdefault("recover_errors", []).append(f"{type(exc).__name__}: {exc}")
 

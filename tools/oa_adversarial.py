@@ -96,7 +96,7 @@ XCOM_EFFECTIVE = ("fire_mode", "stance", "behaviour", "move_mode", "reserve",
 #                  which is right: a wrong click is worse than a skipped order.
 # Until a destination exists these must not vary, or the search spends real battles
 # distinguishing policies the game cannot tell apart.
-ALIEN_EFFECTIVE = ("behaviour_mix", "cover_bias")
+ALIEN_EFFECTIVE = ("behaviour_mix", "cover_bias", "grenade_bias")
 
 
 def gene_table(side: str) -> dict:

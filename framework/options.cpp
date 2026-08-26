@@ -140,6 +140,7 @@ void dumpOptionsToLog()
 	dumpOption(optionRngSeed);
 	dumpOption(optionAlienBehaviour);
 	dumpOption(optionAlienCoverBias);
+	dumpOption(optionAlienGrenadeBias);
 	dumpOption(optionAutoReload);
 	dumpOption(optionLeftClickIcon);
 	dumpOption(optionBattlescapeVertScroll);
@@ -473,6 +474,11 @@ ConfigOptionInt optionAlienCoverBias("OpenApoc.AlienAI", "CoverBiasPercent",
                                      tr("Alien take-cover chance scaling, percent "
                                         "(-1 = engine default)"),
                                      -1);
+ConfigOptionInt optionAlienGrenadeBias(
+    "OpenApoc.AlienAI", "GrenadeBiasPercent",
+    "Scale how readily the aliens choose a grenade over another attack. -1 leaves the original "
+    "weighting alone; 0 means never, 200 means twice as eager.",
+    -1);
 // Opponent doctrine for the adversarial training arena. -1 leaves every unit on whatever the
 // game itself chose, which is the shipped behaviour and the default. 0/1/2 pin non-player units
 // to Aggressive/Normal/Evasive at battle start.

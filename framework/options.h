@@ -115,6 +115,7 @@ extern ConfigOptionBool optionSeedRng;
 extern ConfigOptionInt optionRngSeed;
 extern ConfigOptionString optionAlienBehaviour;
 extern ConfigOptionInt optionAlienCoverBias;
+extern ConfigOptionInt optionAlienGrenadeBias;
 extern ConfigOptionInt optionOpponentBehaviorMode;
 extern ConfigOptionBool optionAutoReload;
 extern ConfigOptionBool optionLeftClickIcon;

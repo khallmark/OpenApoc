@@ -1,4 +1,5 @@
 #include "game/state/battle/ai/unitaivanilla.h"
+#include "framework/configfile.h"
 #include "game/state/battle/ai/aidecision.h"
 #include "game/state/battle/ai/aitype.h"
 #include "game/state/battle/ai/unitaihelper.h"
@@ -305,6 +306,22 @@ UnitAIVanilla::getGrenadeDecision(GameState &state, BattleUnit &u, sp<AEquipment
 	}
 
 	float priority = attackPriority(cth, damage, time);
+
+	// Adversarial-training knob, matching OpenApoc.AlienAI.CoverBiasPercent in unitaihelper.cpp.
+	// 100 (the shipped default) leaves the recovered weighting exactly as it is; lower makes the
+	// aliens hoard grenades, higher makes them throw where they would otherwise shoot. This scales
+	// a choice the original AI already makes rather than adding a new behaviour, so a run that
+	// never sets it is unchanged.
+	//
+	// Applied only to units the player does not own: it selects how the ALIENS fight.
+	if (u.owner && u.owner != state.getPlayer())
+	{
+		const int bias = config().getInt("OpenApoc.AlienAI.GrenadeBiasPercent");
+		if (bias >= 0)
+		{
+			priority *= (float)bias / 100.0f;
+		}
+	}
 
 	if (!e->getCanThrow(u, target->position))
 	{

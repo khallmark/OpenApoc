@@ -44,6 +44,14 @@ int main(int argc, char **argv)
 	                                     Mode::Normal) == Mode::Evasive,
 	             "the value set on the command line reaches the mapping");
 
-	std::cout << "alien AI behaviour option maps to real modes and is read by the AI\n";
+	// GrenadeBiasPercent scales a choice the vanilla AI already makes (unitaivanilla.cpp,
+	// getGrenadeDecision). -1 is the shipped default and must leave the recovered weighting alone.
+	TEST_REQUIRE(config().getInt("OpenApoc.AlienAI.GrenadeBiasPercent") == -1,
+	             "the grenade bias default must be -1, meaning 'change nothing'");
+	config().set("OpenApoc.AlienAI.GrenadeBiasPercent", 200);
+	TEST_REQUIRE(config().getInt("OpenApoc.AlienAI.GrenadeBiasPercent") == 200,
+	             "grenade bias must reach the config the AI reads it from");
+
+	std::cout << "alien AI behaviour and grenade options map to real modes and are read\n";
 	return EXIT_SUCCESS;
 }
