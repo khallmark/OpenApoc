@@ -133,4 +133,22 @@ StageCommandDrainResult StageStack::drainCommands(std::list<StageCmd> &commands,
 	return StageCommandDrainResult::Complete;
 }
 
+StageCommandDrainDecision
+drainStageCommandTransaction(StageStack &stack, std::list<StageCmd> &commands, bool &quitRequested)
+{
+	const auto result = stack.drainCommands(commands);
+	const auto decision = decideStageCommandDrain(result, quitRequested, stack.isEmpty());
+	if (!decision.runSucceeded || result == StageCommandDrainResult::Quit)
+		quitRequested = true;
+	return decision;
+}
+
+StageCommandDrainDecision beginStageCommandTransaction(StageStack &stack,
+                                                       std::list<StageCmd> &commands,
+                                                       sp<Stage> initialStage, bool &quitRequested)
+{
+	commands.emplace_back(StageCmd::Command::PUSH, initialStage);
+	return drainStageCommandTransaction(stack, commands, quitRequested);
+}
+
 }; // namespace OpenApoc

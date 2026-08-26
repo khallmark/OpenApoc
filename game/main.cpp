@@ -41,5 +41,5 @@ int main(int argc, char *argv[])
 		UI::unload();
 	}
 
-	return runSucceeded ? EXIT_SUCCESS : EXIT_FAILURE;
+	return frameworkRunExitCode(runSucceeded);
 }

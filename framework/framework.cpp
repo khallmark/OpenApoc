@@ -346,18 +346,6 @@ Framework &Framework::getInstance()
 }
 Framework *Framework::tryGetInstance() { return instance; }
 
-StageCommandDrainDecision Framework::drainStageCommands()
-{
-	const auto result = p->ProgramStages.drainCommands(stageCommands);
-	const auto decision =
-	    decideStageCommandDrain(result, p->quitProgram, p->ProgramStages.isEmpty());
-	if (!decision.runSucceeded || result == StageCommandDrainResult::Quit)
-	{
-		p->quitProgram = true;
-	}
-	return decision;
-}
-
 bool Framework::run(sp<Stage> initialStage)
 {
 	if (p->initializationFailed)
@@ -377,8 +365,8 @@ bool Framework::run(sp<Stage> initialStage)
 	auto target_frame_duration =
 	    std::chrono::duration<int64_t, std::micro>(1000000 / Options::targetFPS.get());
 
-	stageCommands.emplace_back(StageCmd::Command::PUSH, initialStage);
-	const auto initialDrain = drainStageCommands();
+	const auto initialDrain =
+	    beginStageCommandTransaction(p->ProgramStages, stageCommands, initialStage, p->quitProgram);
 	if (!initialDrain.continueStageWork)
 	{
 		return initialDrain.runSucceeded;
@@ -444,44 +432,49 @@ bool Framework::run(sp<Stage> initialStage)
 			break;
 		}
 		const auto profileFrameStart = std::chrono::steady_clock::now();
-		{
-			p->ProgramStages.current()->update();
-		}
-		const auto profileUpdateEnd = std::chrono::steady_clock::now();
-		auto profileSwapStart = profileUpdateEnd;
-
-		const auto frameDrain = drainStageCommands();
+		auto profileUpdateEnd = profileFrameStart;
+		auto profileSwapStart = profileFrameStart;
+		const auto frameDrain = runStageWorkTransaction(
+		    p->ProgramStages, stageCommands, p->quitProgram,
+		    [&]()
+		    {
+			    p->ProgramStages.current()->update();
+			    profileUpdateEnd = std::chrono::steady_clock::now();
+			    profileSwapStart = profileUpdateEnd;
+		    },
+		    [&]()
+		    {
+			    auto surface = p->scaleSurface ? p->scaleSurface : p->defaultSurface;
+			    RendererSurfaceBinding b(*this->renderer, surface);
+			    {
+				    this->renderer->clear();
+			    }
+			    if (!p->ProgramStages.isEmpty())
+			    {
+				    p->ProgramStages.current()->render();
+				    if (p->toolTipImage)
+				    {
+					    renderer->draw(p->toolTipImage, p->toolTipPosition);
+				    }
+				    this->cursor->render();
+				    if (p->scaleSurface)
+				    {
+					    RendererSurfaceBinding scaleBind(*this->renderer, p->defaultSurface);
+					    this->renderer->clear();
+					    this->renderer->drawScaled(p->scaleSurface, {0, 0}, p->drawableSize);
+				    }
+				    {
+					    this->renderer->flush();
+					    this->renderer->newFrame();
+					    profileSwapStart = std::chrono::steady_clock::now();
+					    SDL_GL_SwapWindow(p->window);
+				    }
+			    }
+		    });
 		if (!frameDrain.continueStageWork)
 		{
 			runSucceeded = frameDrain.runSucceeded;
 			break;
-		}
-
-		auto surface = p->scaleSurface ? p->scaleSurface : p->defaultSurface;
-		RendererSurfaceBinding b(*this->renderer, surface);
-		{
-			this->renderer->clear();
-		}
-		if (!p->ProgramStages.isEmpty())
-		{
-			p->ProgramStages.current()->render();
-			if (p->toolTipImage)
-			{
-				renderer->draw(p->toolTipImage, p->toolTipPosition);
-			}
-			this->cursor->render();
-			if (p->scaleSurface)
-			{
-				RendererSurfaceBinding scaleBind(*this->renderer, p->defaultSurface);
-				this->renderer->clear();
-				this->renderer->drawScaled(p->scaleSurface, {0, 0}, p->drawableSize);
-			}
-			{
-				this->renderer->flush();
-				this->renderer->newFrame();
-				profileSwapStart = std::chrono::steady_clock::now();
-				SDL_GL_SwapWindow(p->window);
-			}
 		}
 		if (profileFrames)
 		{

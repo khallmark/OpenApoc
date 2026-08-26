@@ -1,3 +1,4 @@
+#include "framework/framework.h"
 #include "framework/stagestack.h"
 #include "tests/test_helpers.h"
 #include <functional>
@@ -343,27 +344,87 @@ bool test_initial_stage_begin_commands_drain_before_first_stage_work()
 {
 	StageStack stack;
 	std::list<StageCmd> commands;
+	bool quitRequested = false;
 	auto initial = mksp<TestStage>();
 	auto leaf = mksp<TestStage>();
 	initial->onBegin = [&]() { commands.emplace_back(StageCmd::Command::PUSH, leaf); };
-	commands.emplace_back(StageCmd::Command::PUSH, initial);
 
-	const auto result = stack.drainCommands(commands);
-	const auto decision = decideStageCommandDrain(result, false, stack.isEmpty());
-	if (decision.continueStageWork)
-	{
-		stack.current()->update();
-		stack.current()->render();
-	}
+	const auto initialDecision =
+	    beginStageCommandTransaction(stack, commands, initial, quitRequested);
+	TEST_REQUIRE(initialDecision.continueStageWork && initialDecision.runSucceeded,
+	             "initial-stage transaction continues successfully");
+	const auto frameDecision = runStageWorkTransaction(
+	    stack, commands, quitRequested, [&]() { stack.current()->update(); },
+	    [&]() { stack.current()->render(); });
 
-	TEST_REQUIRE(result == StageCommandDrainResult::Complete,
-	             "initial-stage transaction completes");
+	TEST_REQUIRE(frameDecision.continueStageWork && frameDecision.runSucceeded,
+	             "first stage-work transaction completes");
 	TEST_REQUIRE(stack.current() == leaf, "initial begin command drains before control returns");
 	TEST_REQUIRE(initial->updates == 0, "initial stage is not updated before begin commands drain");
 	TEST_REQUIRE(initial->renders == 0,
 	             "initial stage is not rendered before begin commands drain");
 	TEST_REQUIRE(leaf->updates == 1 && leaf->renders == 1,
 	             "the post-drain current stage receives the first update and render");
+	return true;
+}
+
+bool test_resume_pop_to_empty_is_successful_and_nonrendering()
+{
+	StageStack stack;
+	std::list<StageCmd> commands;
+	bool quitRequested = false;
+	bool renderCalled = false;
+	auto root = mksp<TestStage>();
+	auto active = mksp<TestStage>();
+	stack.push(root);
+	stack.push(active);
+	root->onResume = [&]() { commands.emplace_back(StageCmd::Command::POP); };
+	commands.emplace_back(StageCmd::Command::POP);
+
+	const auto decision = runStageWorkTransaction(
+	    stack, commands, quitRequested, [&]() { stack.current()->update(); },
+	    [&]()
+	    {
+		    renderCalled = true;
+		    if (stack.current())
+			    stack.current()->render();
+	    });
+
+	TEST_REQUIRE(!decision.continueStageWork && decision.runSucceeded,
+	             "resume-queued POP ends with successful empty-stack termination");
+	TEST_REQUIRE(stack.isEmpty(), "resume-queued POP drains to an empty stack");
+	TEST_REQUIRE(commands.empty(), "resume-queued POP leaves no command tail");
+	TEST_REQUIRE(!quitRequested, "natural empty-stack completion is not an explicit quit");
+	TEST_REQUIRE(active->updates == 1, "active stage updates before its terminal POP drain");
+	TEST_REQUIRE(!renderCalled && active->renders == 0 && root->renders == 0,
+	             "empty-stack termination suppresses rendering");
+	return true;
+}
+
+bool test_pop_empty_then_tail_push_recovers()
+{
+	StageStack stack;
+	std::list<StageCmd> commands;
+	bool quitRequested = false;
+	auto active = mksp<TestStage>();
+	auto replacement = mksp<TestStage>();
+	stack.push(active);
+	commands.emplace_back(StageCmd::Command::POP);
+	commands.emplace_back(StageCmd::Command::PUSH, replacement);
+
+	const auto decision = runStageWorkTransaction(
+	    stack, commands, quitRequested, [&]() { stack.current()->update(); },
+	    [&]() { stack.current()->render(); });
+
+	TEST_REQUIRE(decision.continueStageWork && decision.runSucceeded,
+	             "tail PUSH recovers from a temporarily empty stack");
+	TEST_REQUIRE(stack.current() == replacement, "tail PUSH installs the replacement stage");
+	TEST_REQUIRE(commands.empty(), "recovery drains the complete live tail");
+	TEST_REQUIRE(!quitRequested, "successful recovery does not request framework quit");
+	TEST_REQUIRE(active->updates == 1 && active->renders == 0,
+	             "departing stage updates but does not render");
+	TEST_REQUIRE(replacement->updates == 0 && replacement->renders == 1,
+	             "recovered current stage renders without an extra update");
 	return true;
 }
 
@@ -380,23 +441,19 @@ bool test_drain_result_success_mapping()
 	return true;
 }
 
-bool test_framework_drain_decision_is_terminal()
+bool test_framework_transaction_exit_mapping()
 {
 	for (const StageCommandDrainResult result :
 	     {StageCommandDrainResult::Quit, StageCommandDrainResult::Overflow,
 	      StageCommandDrainResult::Invalid})
 	{
 		const auto decision = decideStageCommandDrain(result, false, false);
-		unsigned int updates = 0;
-		unsigned int renders = 0;
-		if (decision.continueStageWork)
-		{
-			updates++;
-			renders++;
-		}
-		TEST_REQUIRE(updates == 0 && renders == 0, "terminal drain forbids subsequent stage work");
+		TEST_REQUIRE(!decision.continueStageWork, "terminal drain forbids subsequent stage work");
 		TEST_REQUIRE(decision.runSucceeded == (result == StageCommandDrainResult::Quit),
 		             "QUIT succeeds while overflow and invalid commands fail");
+		TEST_REQUIRE(frameworkRunExitCode(decision.runSucceeded) ==
+		                 (result == StageCommandDrainResult::Quit ? EXIT_SUCCESS : EXIT_FAILURE),
+		             "terminal drain maps to the production process exit status");
 	}
 
 	const auto emptyDecision =
@@ -419,56 +476,77 @@ bool test_terminal_drains_gate_stage_work()
 	{
 		StageStack stack;
 		std::list<StageCmd> commands;
+		bool quitRequested = false;
 		auto initial = mksp<TestStage>();
 		initial->onBegin = [&]() { commands.emplace_back(StageCmd::Command::QUIT); };
-		commands.emplace_back(StageCmd::Command::PUSH, initial);
-		const auto result = stack.drainCommands(commands);
-		const auto decision = decideStageCommandDrain(result, false, stack.isEmpty());
-		if (decision.continueStageWork)
-		{
-			initial->update();
-			initial->render();
-		}
-		TEST_REQUIRE(result == StageCommandDrainResult::Quit && decision.runSucceeded,
+		const auto decision = beginStageCommandTransaction(stack, commands, initial, quitRequested);
+		TEST_REQUIRE(!decision.continueStageWork && decision.runSucceeded,
 		             "initial QUIT is a successful terminal drain");
+		TEST_REQUIRE(quitRequested, "initial QUIT marks the framework transaction terminal");
+		TEST_REQUIRE(frameworkRunExitCode(decision.runSucceeded) == EXIT_SUCCESS,
+		             "initial QUIT maps to process success");
 		TEST_REQUIRE(initial->updates == 0 && initial->renders == 0,
 		             "initial QUIT prevents the first update and render");
 	}
 	{
 		StageStack stack;
 		std::list<StageCmd> commands;
+		bool quitRequested = false;
 		auto initial = mksp<TestStage>();
 		initial->onBegin = [&]()
 		{
 			for (size_t i = 0; i < MAX_STAGE_COMMANDS_PER_DRAIN; i++)
 				commands.emplace_back(StageCmd::Command::CONTINUE);
 		};
-		commands.emplace_back(StageCmd::Command::PUSH, initial);
-		const auto result = stack.drainCommands(commands);
-		const auto decision = decideStageCommandDrain(result, false, stack.isEmpty());
-		if (decision.continueStageWork)
-		{
-			initial->update();
-			initial->render();
-		}
-		TEST_REQUIRE(result == StageCommandDrainResult::Overflow && !decision.runSucceeded,
+		const auto decision = beginStageCommandTransaction(stack, commands, initial, quitRequested);
+		TEST_REQUIRE(!decision.continueStageWork && !decision.runSucceeded,
 		             "initial overflow is a failed terminal drain");
+		TEST_REQUIRE(quitRequested, "initial overflow marks the framework transaction terminal");
+		TEST_REQUIRE(frameworkRunExitCode(decision.runSucceeded) == EXIT_FAILURE,
+		             "initial overflow maps to process failure");
 		TEST_REQUIRE(initial->updates == 0 && initial->renders == 0,
 		             "initial overflow prevents the first update and render");
 	}
 	{
 		StageStack stack;
 		std::list<StageCmd> commands;
+		bool quitRequested = false;
+		bool renderCalled = false;
 		auto active = mksp<TestStage>();
 		stack.push(active);
-		active->update();
 		commands.emplace_back(StageCmd::Command::QUIT);
-		const auto result = stack.drainCommands(commands);
-		const auto decision = decideStageCommandDrain(result, false, stack.isEmpty());
-		if (decision.continueStageWork)
-			active->render();
+		const auto decision = runStageWorkTransaction(
+		    stack, commands, quitRequested, [&]() { stack.current()->update(); },
+		    [&]() { renderCalled = true; });
+		TEST_REQUIRE(!decision.continueStageWork && decision.runSucceeded,
+		             "frame QUIT is a successful terminal drain");
+		TEST_REQUIRE(quitRequested, "frame QUIT marks the framework transaction terminal");
+		TEST_REQUIRE(frameworkRunExitCode(decision.runSucceeded) == EXIT_SUCCESS,
+		             "frame QUIT maps to process success");
 		TEST_REQUIRE(active->updates == 1, "frame update completes before its terminal drain");
-		TEST_REQUIRE(active->renders == 0, "terminal frame drain suppresses rendering");
+		TEST_REQUIRE(!renderCalled && active->renders == 0,
+		             "terminal frame drain suppresses rendering");
+	}
+	{
+		StageStack stack;
+		std::list<StageCmd> commands;
+		bool quitRequested = false;
+		bool renderCalled = false;
+		auto active = mksp<TestStage>();
+		stack.push(active);
+		commands.emplace_back(StageCmd::Command::PUSH, nullptr);
+		const auto decision = runStageWorkTransaction(
+		    stack, commands, quitRequested, [&]() { stack.current()->update(); },
+		    [&]() { renderCalled = true; });
+		TEST_REQUIRE(!decision.continueStageWork && !decision.runSucceeded,
+		             "invalid frame command is a failed terminal drain");
+		TEST_REQUIRE(quitRequested,
+		             "invalid frame command marks the framework transaction terminal");
+		TEST_REQUIRE(frameworkRunExitCode(decision.runSucceeded) == EXIT_FAILURE,
+		             "invalid frame command maps to process failure");
+		TEST_REQUIRE(active->updates == 1, "invalid command is drained after the current update");
+		TEST_REQUIRE(!renderCalled && active->renders == 0,
+		             "invalid frame command suppresses rendering");
 	}
 	return true;
 }
@@ -569,28 +647,32 @@ bool test_initial_push_counts_toward_command_limit()
 	{
 		StageStack stack;
 		std::list<StageCmd> commands;
+		bool quitRequested = false;
 		auto initial = mksp<TestStage>();
 		initial->onBegin = [&]()
 		{
 			for (size_t i = 1; i < MAX_STAGE_COMMANDS_PER_DRAIN; i++)
 				commands.emplace_back(StageCmd::Command::CONTINUE);
 		};
-		commands.emplace_back(StageCmd::Command::PUSH, initial);
-		TEST_REQUIRE(stack.drainCommands(commands) == StageCommandDrainResult::Complete,
+		const auto decision = beginStageCommandTransaction(stack, commands, initial, quitRequested);
+		TEST_REQUIRE(decision.continueStageWork && decision.runSucceeded,
 		             "initial PUSH plus 63 begin commands reaches the exact cap");
+		TEST_REQUIRE(!quitRequested, "exact-cap initial transaction does not request quit");
 	}
 	{
 		StageStack stack;
 		std::list<StageCmd> commands;
+		bool quitRequested = false;
 		auto initial = mksp<TestStage>();
 		initial->onBegin = [&]()
 		{
 			for (size_t i = 0; i < MAX_STAGE_COMMANDS_PER_DRAIN; i++)
 				commands.emplace_back(StageCmd::Command::CONTINUE);
 		};
-		commands.emplace_back(StageCmd::Command::PUSH, initial);
-		TEST_REQUIRE(stack.drainCommands(commands) == StageCommandDrainResult::Overflow,
+		const auto decision = beginStageCommandTransaction(stack, commands, initial, quitRequested);
+		TEST_REQUIRE(!decision.continueStageWork && !decision.runSucceeded,
 		             "initial PUSH plus 64 begin commands overflows");
+		TEST_REQUIRE(quitRequested, "overflowing initial transaction requests framework quit");
 	}
 	return true;
 }
@@ -659,8 +741,11 @@ int main(int argc, char **argv)
 	    {"nested_replace_all_preserves_strict_fifo", test_nested_replace_all_preserves_strict_fifo},
 	    {"initial_stage_begin_commands_drain_before_first_stage_work",
 	     test_initial_stage_begin_commands_drain_before_first_stage_work},
+	    {"resume_pop_to_empty_is_successful_and_nonrendering",
+	     test_resume_pop_to_empty_is_successful_and_nonrendering},
+	    {"pop_empty_then_tail_push_recovers", test_pop_empty_then_tail_push_recovers},
 	    {"drain_result_success_mapping", test_drain_result_success_mapping},
-	    {"framework_drain_decision_is_terminal", test_framework_drain_decision_is_terminal},
+	    {"framework_transaction_exit_mapping", test_framework_transaction_exit_mapping},
 	    {"terminal_drains_gate_stage_work", test_terminal_drains_gate_stage_work},
 	    {"quit_is_terminal", test_quit_is_terminal},
 	    {"cycle_limit_terminates_transaction", test_cycle_limit_terminates_transaction},

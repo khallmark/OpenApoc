@@ -104,4 +104,25 @@ class StageStack
 	                                      size_t commandLimit = MAX_STAGE_COMMANDS_PER_DRAIN);
 };
 
+StageCommandDrainDecision
+drainStageCommandTransaction(StageStack &stack, std::list<StageCmd> &commands, bool &quitRequested);
+// Enter the first stage through the same bounded transaction used after later stage work.
+StageCommandDrainDecision beginStageCommandTransaction(StageStack &stack,
+                                                       std::list<StageCmd> &commands,
+                                                       sp<Stage> initialStage, bool &quitRequested);
+
+// Framework's per-frame transaction boundary: update once, drain to a terminal or stable stack,
+// and only then permit rendering of the resulting current stage.
+template <typename UpdateWork, typename RenderWork>
+StageCommandDrainDecision runStageWorkTransaction(StageStack &stack, std::list<StageCmd> &commands,
+                                                  bool &quitRequested, UpdateWork &&updateWork,
+                                                  RenderWork &&renderWork)
+{
+	updateWork();
+	const auto decision = drainStageCommandTransaction(stack, commands, quitRequested);
+	if (decision.continueStageWork)
+		renderWork();
+	return decision;
+}
+
 }; // namespace OpenApoc

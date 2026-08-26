@@ -5,6 +5,7 @@
 #include "library/strings.h"
 #include "library/vec.h"
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <future>
 #include <list>
@@ -24,8 +25,12 @@ class SoundBackend;
 class JukeBox;
 class StageCmd;
 class Stage;
-struct StageCommandDrainDecision;
 class RGBImage;
+
+constexpr int frameworkRunExitCode(bool runSucceeded)
+{
+	return runSucceeded ? EXIT_SUCCESS : EXIT_FAILURE;
+}
 
 #define FRAMES_PER_SECOND 100
 
@@ -37,7 +42,6 @@ class Framework
 	bool createWindow;
 	void audioInitialise(bool headless);
 	void audioShutdown();
-	StageCommandDrainDecision drainStageCommands();
 
 	static Framework *instance;
 
