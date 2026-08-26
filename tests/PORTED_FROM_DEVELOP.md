@@ -16,8 +16,16 @@ regression baseline for master and becomes a feature port.
 ctest --test-dir build -LE known-master-bug
 ```
 
-That is the regression gate: **25 tests, all green**. Plain `ctest` also runs
-three quarantined reproducers that fail on purpose (see below).
+That is the regression gate: **25 tests, all green**, verified stable across five
+consecutive runs. Plain `ctest` also runs three quarantined reproducers that fail
+on purpose (see below).
+
+Both CI runners were updated to match: `.github/workflows/cmake.yml` and
+`appveyor.yml` / `appveyor-dev.yml` pass `-LE known-master-bug`, so a red build
+still means a real regression. The GitHub workflow additionally runs
+`-L known-master-bug` as a `continue-on-error` step, so the reproducers stay
+visible without gating the build. Both runners fetch `cd_minimal.iso` and run the
+extractor, so the data-backed tests work there unchanged.
 
 ### Data-backed tests need extracted game data
 
