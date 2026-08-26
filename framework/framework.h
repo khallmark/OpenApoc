@@ -24,6 +24,7 @@ class SoundBackend;
 class JukeBox;
 class StageCmd;
 class Stage;
+struct StageCommandDrainDecision;
 class RGBImage;
 
 #define FRAMES_PER_SECOND 100
@@ -36,6 +37,7 @@ class Framework
 	bool createWindow;
 	void audioInitialise(bool headless);
 	void audioShutdown();
+	StageCommandDrainDecision drainStageCommands();
 
 	static Framework *instance;
 
@@ -59,7 +61,7 @@ class Framework
 	static Framework &getInstance();
 	static Framework *tryGetInstance();
 
-	void run(sp<Stage> initialStage);
+	bool run(sp<Stage> initialStage);
 	void processEvents();
 	/* PushEvent() take ownership of the Event, and will delete it after use*/
 	void pushEvent(up<Event> e);
@@ -95,6 +97,7 @@ class Framework
 	void setSlowMode(bool SlowEnabled);
 
 	uint64_t getFrameNumber() const { return frameNumber; }
+	uint64_t getStageGeneration() const;
 
 	sp<Stage> stageGetCurrent();
 	sp<Stage> stageGetPrevious();

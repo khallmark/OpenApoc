@@ -343,13 +343,25 @@ Framework &Framework::getInstance()
 }
 Framework *Framework::tryGetInstance() { return instance; }
 
-void Framework::run(sp<Stage> initialStage)
+StageCommandDrainDecision Framework::drainStageCommands()
+{
+	const auto result = p->ProgramStages.drainCommands(stageCommands);
+	const auto decision =
+	    decideStageCommandDrain(result, p->quitProgram, p->ProgramStages.isEmpty());
+	if (!decision.runSucceeded || result == StageCommandDrainResult::Quit)
+	{
+		p->quitProgram = true;
+	}
+	return decision;
+}
+
+bool Framework::run(sp<Stage> initialStage)
 {
 	size_t frameCount = Options::frameLimit.get();
 	if (!createWindow)
 	{
 		LogError("Trying to run framework without window");
-		return;
+		return false;
 	}
 	size_t frame = 0;
 	LogInfo("Program loop started");
@@ -357,12 +369,18 @@ void Framework::run(sp<Stage> initialStage)
 	auto target_frame_duration =
 	    std::chrono::duration<int64_t, std::micro>(1000000 / Options::targetFPS.get());
 
-	p->ProgramStages.push(initialStage);
+	stageCommands.emplace_back(StageCmd::Command::PUSH, initialStage);
+	const auto initialDrain = drainStageCommands();
+	if (!initialDrain.continueStageWork)
+	{
+		return initialDrain.runSucceeded;
+	}
 
 	this->renderer->setPalette(this->data->loadPalette("xcom3/ufodata/pal_06.dat"));
 	auto expected_frame_time = std::chrono::steady_clock::now();
 
 	bool frame_time_limited_warning_shown = false;
+	bool runSucceeded = true;
 
 	const size_t profileFrames = (size_t)std::max(0, Options::profileFrames.get());
 	size_t profileSamples = 0;
@@ -424,43 +442,12 @@ void Framework::run(sp<Stage> initialStage)
 		const auto profileUpdateEnd = std::chrono::steady_clock::now();
 		auto profileSwapStart = profileUpdateEnd;
 
-		// Iterate a copy. REPLACEALL/QUIT below clear the stage stack, which destroys stages and
-		// everything they own; anything in that teardown that queues another stage command would
-		// append to this very vector mid-iteration and invalidate the range-for. Copying keeps
-		// the existing semantics -- commands raised while processing this batch are discarded by
-		// the clear() below, exactly as before -- without the undefined behaviour.
-		const auto commandsThisFrame = stageCommands;
-		for (const StageCmd &cmd : commandsThisFrame)
+		const auto frameDrain = drainStageCommands();
+		if (!frameDrain.continueStageWork)
 		{
-			switch (cmd.cmd)
-			{
-				case StageCmd::Command::CONTINUE:
-					break;
-				case StageCmd::Command::REPLACE:
-					p->ProgramStages.pop();
-					p->ProgramStages.push(cmd.nextStage);
-					break;
-				case StageCmd::Command::REPLACEALL:
-					p->ProgramStages.clear();
-					p->ProgramStages.push(cmd.nextStage);
-					break;
-				case StageCmd::Command::PUSH:
-					p->ProgramStages.push(cmd.nextStage);
-					break;
-				case StageCmd::Command::POP:
-					p->ProgramStages.pop();
-					break;
-				case StageCmd::Command::QUIT:
-					p->quitProgram = true;
-					p->ProgramStages.clear();
-					break;
-			}
-			if (p->quitProgram)
-			{
-				break;
-			}
+			runSucceeded = frameDrain.runSucceeded;
+			break;
 		}
-		stageCommands.clear();
 
 		auto surface = p->scaleSurface ? p->scaleSurface : p->defaultSurface;
 		RendererSurfaceBinding b(*this->renderer, surface);
@@ -529,6 +516,7 @@ void Framework::run(sp<Stage> initialStage)
 			p->quitProgram = true;
 		}
 	}
+	return runSucceeded;
 }
 
 void Framework::processEvents()
@@ -1366,6 +1354,8 @@ void Framework::audioShutdown()
 }
 
 sp<Stage> Framework::stageGetCurrent() { return p->ProgramStages.current(); }
+
+uint64_t Framework::getStageGeneration() const { return p->ProgramStages.getGeneration(); }
 
 sp<Stage> Framework::stageGetPrevious() { return p->ProgramStages.previous(); }
 

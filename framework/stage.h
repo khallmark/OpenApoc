@@ -29,22 +29,25 @@ class StageCmd
 	sp<Stage> nextStage;
 
 	StageCmd() : cmd(Command::CONTINUE) {}
-	StageCmd(Command cmd, sp<Stage> nextStage = nullptr) : cmd(cmd), nextStage(nextStage)
+	StageCmd(Command cmd, sp<Stage> nextStage = nullptr) : cmd(cmd), nextStage(nextStage) {}
+
+	bool requiresNextStage() const
 	{
 		switch (cmd)
 		{
 			case Command::REPLACE:
 			case Command::REPLACEALL:
 			case Command::PUSH:
-				LogAssert(nextStage != nullptr);
-				break;
+				return true;
 			case Command::CONTINUE:
 			case Command::POP:
 			case Command::QUIT:
-				LogAssert(nextStage == nullptr);
-				break;
+				return false;
 		}
+		return false;
 	}
+
+	bool isValid() const { return requiresNextStage() == (nextStage != nullptr); }
 };
 
 /*
