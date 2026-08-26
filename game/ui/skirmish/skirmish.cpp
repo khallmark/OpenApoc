@@ -139,9 +139,10 @@ std::shared_future<void> loadBattleVehicle(bool hotseat, sp<VehicleType> vehicle
 }
 } // namespace
 
-Skirmish::Skirmish(sp<GameState> state) : Stage(), menuform(ui().getForm("skirmish")), state(*state)
+Skirmish::Skirmish(sp<GameState> gameState)
+    : Stage(), menuform(ui().getForm("skirmish")), ownedState(gameState), state(*gameState)
 {
-	menuform->findControlTyped<Label>("TEXT_FUNDS")->setText(state->getPlayerBalance());
+	menuform->findControlTyped<Label>("TEXT_FUNDS")->setText(state.getPlayerBalance());
 	updateLocationLabel();
 	menuform->findControlTyped<ScrollBar>("NUM_HUMANS_SLIDER")
 	    ->addCallback(
