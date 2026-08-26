@@ -73,6 +73,63 @@ int main(int, char **)
 	check(vanillaTicks(1) == TICKS_MULTIPLIER, "vanillaTicks(1) is one multiplier step");
 	check(vanillaTicks(VANILLA_TICKS_PER_DAY) == TICKS_PER_DAY, "a vanilla day converts to a day");
 
+	// ---- boundary crossing counts -------------------------------------------
+	//
+	// The *Passed() booleans saturate at "one or more". Anything that advances
+	// more than one interval in a single step needs the real count, because each
+	// interval handler in GameState::update() represents exactly one interval and
+	// hands its subsystems a fixed duration.
+	{
+		GameTime t0(0);
+		t0.addTicks(TICKS_PER_SECOND / 2);
+		check(t0.secondsPassedCount() == 0, "half a second crosses no second boundary");
+
+		GameTime t1(0);
+		t1.addTicks(TICKS_PER_SECOND);
+		check(t1.secondsPassedCount() == 1, "one second crosses one second boundary");
+
+		GameTime t2(0);
+		t2.addTicks(TICKS_PER_SECOND * 10);
+		check(t2.secondsPassedCount() == 10, "ten seconds cross ten second boundaries");
+		check(t2.secondPassed(), "the boolean still fires for a ten second step");
+
+		// The case the counters exist for: one step spanning several hours must
+		// report every hour, not just that at least one elapsed.
+		GameTime t3(0);
+		t3.addTicks(TICKS_PER_HOUR * 3);
+		check(t3.hoursPassedCount() == 3, "a three hour step crosses three hours");
+		check(t3.fiveMinuteIntervalsPassedCount() == 36, "a three hour step crosses 36 five-minute marks");
+		check(t3.daysPassedCount() == 0, "a three hour step crosses no day");
+
+		GameTime t4(0);
+		t4.addTicks(TICKS_PER_DAY * 2);
+		check(t4.daysPassedCount() == 2, "a two day step crosses two days");
+		check(t4.hoursPassedCount() == 48, "a two day step crosses 48 hours");
+
+		// Weeks roll on day 6, 13, 20 ... (the game starts on a Tuesday).
+		GameTime t5(0);
+		t5.addTicks(TICKS_PER_DAY * 6);
+		check(t5.weeksPassedCount() == 1, "reaching day six rolls one week");
+		GameTime t6(0);
+		t6.addTicks(TICKS_PER_DAY * 5);
+		check(t6.weeksPassedCount() == 0, "day five rolls no week");
+		GameTime t7(0);
+		t7.addTicks(TICKS_PER_DAY * 20);
+		check(t7.weeksPassedCount() == 3, "twenty days roll three weeks");
+
+		// Counts are per-step, not cumulative.
+		GameTime t8(0);
+		t8.addTicks(TICKS_PER_HOUR);
+		t8.clearFlags();
+		t8.addTicks(TICKS_PER_HOUR * 2);
+		check(t8.hoursPassedCount() == 2, "counts describe the last step only");
+
+		// Crossing from just before a boundary to just after counts once.
+		GameTime t9(TICKS_PER_HOUR - 1);
+		t9.addTicks(2);
+		check(t9.hoursPassedCount() == 1, "stepping over an hour boundary counts it once");
+	}
+
 	if (failures)
 	{
 		printf("test_gametime: %d failure(s)\n", failures);

@@ -226,10 +226,36 @@ void GameTime::clearFlags()
 	hourPassedFlag = false;
 	dayPassedFlag = false;
 	weekPassedFlag = false;
+	secondsPassedCounter = 0;
+	fiveMinuteIntervalsPassedCounter = 0;
+	hoursPassedCounter = 0;
+	daysPassedCounter = 0;
+	weeksPassedCounter = 0;
 }
 
 void GameTime::addTicks(uint64_t ticks)
 {
+	// How many of each boundary this step actually crosses. The *PassedFlag
+	// booleans below only say "at least one", which is all that is needed while
+	// every caller advances a handful of ticks at a time -- but GameState::update
+	// hands each interval handler a fixed duration and runs it once per call, so
+	// a step spanning several intervals silently under-runs them. Counting is
+	// exact and costs a few divisions.
+	const uint64_t before = this->ticks;
+	const uint64_t after = before + ticks;
+	const auto crossings = [before, after](uint64_t interval)
+	{ return (unsigned)(after / interval - before / interval); };
+
+	secondsPassedCounter = crossings(TICKS_PER_SECOND);
+	fiveMinuteIntervalsPassedCounter = crossings(5 * TICKS_PER_MINUTE);
+	hoursPassedCounter = crossings(TICKS_PER_HOUR);
+	daysPassedCounter = crossings(TICKS_PER_DAY);
+	// The game starts on a Tuesday, so a week rolls on days 6, 13, 20 ... i.e.
+	// day numbers congruent to 6 mod 7. Count those in (beforeDay, afterDay].
+	const uint64_t beforeDay = before / TICKS_PER_DAY;
+	const uint64_t afterDay = after / TICKS_PER_DAY;
+	weeksPassedCounter = (unsigned)((afterDay + 1) / 7 - (beforeDay + 1) / 7);
+
 	this->ticks += ticks;
 	uint64_t secondTicks = this->ticks % (TICKS_PER_SECOND);
 	uint64_t fiveMinutesTicks = this->ticks % (5 * TICKS_PER_MINUTE);

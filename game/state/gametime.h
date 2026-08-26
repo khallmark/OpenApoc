@@ -74,6 +74,13 @@ class GameTime
 	bool hourPassedFlag = false;
 	bool dayPassedFlag = false;
 	bool weekPassedFlag = false;
+	// Exact number of each boundary crossed by the last addTicks(). The booleans
+	// above saturate at "one or more"; these do not.
+	unsigned secondsPassedCounter = 0;
+	unsigned fiveMinuteIntervalsPassedCounter = 0;
+	unsigned hoursPassedCounter = 0;
+	unsigned daysPassedCounter = 0;
+	unsigned weeksPassedCounter = 0;
 
   public:
 	uint64_t ticks = 0;
@@ -142,6 +149,15 @@ class GameTime
 	// set at sunday midnight
 	bool weekPassed() const;
 	void setWeekPassed(bool newValue) { weekPassedFlag = newValue; }
+
+	// Exact crossing counts for the last addTicks(). A caller that advances more
+	// than one interval in a single step must drive the matching handler this
+	// many times; the bool accessors above cannot express that.
+	unsigned secondsPassedCount() const { return secondsPassedCounter; }
+	unsigned fiveMinuteIntervalsPassedCount() const { return fiveMinuteIntervalsPassedCounter; }
+	unsigned hoursPassedCount() const { return hoursPassedCounter; }
+	unsigned daysPassedCount() const { return daysPassedCounter; }
+	unsigned weeksPassedCount() const { return weeksPassedCounter; }
 
 	void clearFlags();
 

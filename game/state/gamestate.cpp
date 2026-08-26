@@ -1123,27 +1123,34 @@ void GameState::update(unsigned int ticks)
 
 		gameTime.addTicks(ticks);
 
-		if (gameTime.getTicks() > nextInvasion)
+		// Each of these handlers represents exactly one elapsed interval and hands
+		// its subsystems a fixed duration for that interval, so it has to run once
+		// per interval actually crossed -- not once per update() call. While every
+		// caller advances a few ticks at a time the counts are 0 or 1 and this is
+		// identical to the old edge-triggered form; it stops being identical the
+		// moment anything advances a larger step. updateTurbo() already aligns its
+		// own step down to the next five-minute boundary for precisely this reason.
+		while (gameTime.getTicks() > nextInvasion)
 		{
 			invasion();
 		}
-		if (gameTime.secondPassed())
+		for (unsigned i = gameTime.secondsPassedCount(); i > 0; i--)
 		{
 			this->updateEndOfSecond();
 		}
-		if (gameTime.fiveMinutesPassed())
+		for (unsigned i = gameTime.fiveMinuteIntervalsPassedCount(); i > 0; i--)
 		{
 			this->updateEndOfFiveMinutes();
 		}
-		if (gameTime.hourPassed())
+		for (unsigned i = gameTime.hoursPassedCount(); i > 0; i--)
 		{
 			this->updateEndOfHour();
 		}
-		if (gameTime.dayPassed())
+		for (unsigned i = gameTime.daysPassedCount(); i > 0; i--)
 		{
 			this->updateEndOfDay();
 		}
-		if (gameTime.weekPassed())
+		for (unsigned i = gameTime.weeksPassedCount(); i > 0; i--)
 		{
 			this->updateEndOfWeek(false);
 		}
