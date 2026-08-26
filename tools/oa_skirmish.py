@@ -7,6 +7,30 @@ thing actually being tested. Skirmish mode is meant to fight a single battlescap
 map and a chosen alien force in under a minute of wall-clock, which is what iterating on combat
 tactics (squad size, retreat threshold, movement pattern) actually needs.
 
+ROOT CAUSE FOUND (not yet safely fixed) -- framework/framework.cpp, the stage-command drain:
+
+    const auto commandsThisFrame = stageCommands;   // a copy
+    for (const StageCmd &cmd : commandsThisFrame) { ... }
+    stageCommands.clear();                          // discards anything queued DURING processing
+
+StageStack::pop() calls resume() on the stage it uncovers, and SelectForces::resume() queues a POP
+of itself (selectforces.cpp:321) so the Skirmish stage underneath is reached. That POP is appended
+AFTER the copy is taken, and clear() then throws it away -- every frame, forever. Skirmish::resume()
+never runs, loadBattle() is never called, and the mode looks like a hang.
+
+Traced by watching stage transitions directly:
+
+    0.0s  Skirmish
+    0.3s  SelectForces
+    1.6s  AEquipScreen
+    1.7s  SelectForces      <- popped correctly, and then nothing, ever
+
+The obvious repair -- consume only the commands actually processed and let the rest survive to the
+next frame -- was written, built green, and BROKE A WORKING PATH: Skirmish then could not be opened
+at all, because previously-swallowed commands across every screen suddenly took effect. Reverted.
+The discard is load-bearing somewhere else, and finding where is the real work. Do not re-apply the
+naive version; it has already been tried.
+
 CURRENT STATUS: setup is fully driven and reliable (Skirmish -> pick a map -> SelectForces ->
 name an alien mix -> AEquipScreen), confirmed against the real screens step by step. The battle
 itself currently does not start. Skirmish::resume() is supposed to fire loadBattle() once
