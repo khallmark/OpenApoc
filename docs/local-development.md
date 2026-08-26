@@ -129,6 +129,12 @@ Finder launch (`open ./build/bin/OpenApoc.app`) uses Resources for OpenApoc data
 
 The window is resizable. `Framework.Screen.Width`/`Height` of `0` means desktop size. Mode is `windowed`, `fullscreen` (exclusive), or `borderless`. F11 or Alt+Enter toggles windowed ↔ borderless. City and battle tiles stay 1:1 with **window points** so a larger window shows more of the map; HiDPI backing-store pixels are one GPU upscale, not extra tile work. Forms stay at original 640-wide layout and are integer-scaled (`Framework.Screen.UiScale`, `0` = auto: 1× below 2560-wide, then `width/1280`). `Framework.Screen.AutoScale` is the older “scale the whole game to ~1280-wide” path and keeps UI and map tied together. Bundle first launch (no saved Screen.* overrides) uses native borderless + auto UI scale.
 
+### App icon
+
+`cmake/apple/OpenApocIcon.icon` is an [Icon Composer](https://developer.apple.com/documentation/xcode/creating-your-app-icon-using-icon-composer) bundle, compiled into the app by `actool` on every build (macOS: `Contents/Resources/Assets.car` + `OpenApocIcon.icns`; iOS: `Assets.car` at the bundle root). `actool` only ships with a full Xcode, so a Command Line Tools-only checkout builds fine but produces an icon-less bundle, with a warning. Point `-DAPPLE_ACTOOL=` at it if Xcode lives somewhere unusual, and set `-DAPPLE_REQUIRE_APP_ICON=ON` for release builds to turn that warning into an error.
+
+Compiling the icon **for iOS** additionally needs an installed simulator runtime (`xcodebuild -downloadPlatform iOS`) — `actool` renders the iOS appearances through it even for an `iphoneos` build. Swap in different art by replacing the `.icon` bundle, or point `-DAPPLE_ICON_NAME=` at another `cmake/apple/<name>.icon`.
+
 ### Signed Mac app (Developer ID)
 
 ```sh
