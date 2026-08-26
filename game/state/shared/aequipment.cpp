@@ -416,15 +416,18 @@ void AEquipment::updateInner(GameState &state, unsigned int ticks)
 	// Recharge update
 	//
 	// The Disruptor Shield is excluded deliberately. Its charge field has exactly one bound
-	// regen - +1 per real-time second, driven from the per-unit tick dispatcher
-	// (BattleUnit::updateDisruptorShield, TACP FUN_0006511C) - and its only full recharge is
-	// bound to battle load, not to any periodic trigger
+	// regen - +1 per 36 vanilla ticks, driven from the per-unit tick dispatcher
+	// (BattleUnit::updateDisruptorShield, TACP FUN_0006511C). Under OpenApoc's selected
+	// observational 36-TPS canon that interval is one game-second; the binary cadence gate binds
+	// the interval, not absolute time. Its only full recharge is bound to battle load, not to any
+	// periodic trigger
 	// (docs/original-game/findings/B3-G1-wounds-gadgets.md, "Follow-up 1(a)" and
 	// "1(a)-continued"). The generic path below would be a second regen of the same field at
-	// TICKS_PER_RECHARGE (one per four seconds) in real time and rechargeTB per turn - rates
-	// that come from hardcoded 2016 literals in tools/extractors/extract_agent_equipment.cpp,
-	// not from the binary. Left in the extractor rather than zeroed there so the exclusion is
-	// visible at the point of use and does not depend on a data regen to take effect.
+	// TICKS_PER_RECHARGE (one per four selected-canon game-seconds) in real-time mode and
+	// rechargeTB per turn - rates that come from hardcoded 2016 literals in
+	// tools/extractors/extract_agent_equipment.cpp, not from the binary. Left in the extractor
+	// rather than zeroed there so the exclusion is visible at the point of use and does not depend
+	// on a data regen to take effect.
 	auto payload = getPayloadType();
 	if (payload && payload->recharge > 0 && ammo < payload->max_ammo &&
 	    type->type != AEquipmentType::Type::DisruptorShield)

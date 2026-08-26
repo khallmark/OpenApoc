@@ -129,7 +129,8 @@ static bool test_hand_weapon_fire_priority_base()
 
 static bool test_invasion_delay_ticks()
 {
-	// FUN_0006d384 / FUN_000ad148: 24h + [0..2820] min + [0..3600] sec → 24h..72h.
+	// FUN_0006d384 / FUN_000ad148 binds a 1:60:86400 coefficient ratio. Under OpenApoc's
+	// selected observational 36-TPS canon: 24h + [0..2820] min + [0..3600] sec → 24h..72h.
 	TEST_REQUIRE(INVASION_DELAY_MINUTE_MAX == 2820, "minute max is {0}", INVASION_DELAY_MINUTE_MAX);
 	TEST_REQUIRE(INVASION_DELAY_SECOND_MAX == 3600, "second max is {0}", INVASION_DELAY_SECOND_MAX);
 	TEST_REQUIRE(vanillaInvasionDelayTicks(0, 0) == TICKS_PER_DAY,

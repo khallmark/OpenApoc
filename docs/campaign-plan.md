@@ -114,7 +114,8 @@ OpenApoc runs the strategic layer on five nested boundaries
 Everything a player or an automated agent must do hangs off one of them. This is the spine of the
 whole plan: learn this table and the day-by-day sections below become mechanical.
 
-`TICKS_PER_SECOND = 144` (36 vanilla × 4 multiplier) — [game/state/gametime.h:11](../game/state/gametime.h#L11).
+`TICKS_PER_SECOND = 144` (selected observational 36-TPS compatibility base × 4 multiplier) —
+[game/state/gametime.h:18](../game/state/gametime.h#L18).
 
 ### 2.1 Every second — `updateEndOfSecond`
 
@@ -386,20 +387,26 @@ write at `FUN_000ad148` @ file `0xAD231`:
 
 ```
 delay = 0x2F7600 + rand[0..0xB04] * 0x870 + rand[0..0xE10] * 0x24
-      = 24 h     + rand[0..2820] minutes  + rand[0..3600] seconds
-      = 24 h … 72 h
+coefficient ratio = 86400 : 60 : 1
 ```
+
+The formula and coefficient ratio are verified. The wall-clock translation below uses the
+repository/community-observed 36-TPS compatibility canon; the coefficients alone do not bind
+absolute cadence (18 TPS preserves the ratio and doubles every duration). Under the selected
+36-TPS interpretation, the delay is `24 h + rand[0..2820] minutes + rand[0..3600] seconds`, or
+24–72 hours.
 
 - **The same formula schedules the first incursion and every one after it.** There is no special
   opening wave.
-- First incursion: **between Wed 8 March 12:00 and Fri 10 March 12:00** — 24 to 72 hours after the
-  12:00 start.
-- Thereafter: **one wave every 1–3 days.**
+- Under the selected 36-TPS interpretation, the first incursion is **between Wed 8 March 12:00 and
+  Fri 10 March 12:00** — 24 to 72 hours after the 12:00 start.
+- Under that same interpretation, there is **one wave every 1–3 days.**
 
 > **Correction.** Earlier versions of this guide said the first wave lands at 22:00–24:00 on day 0,
 > and that the cadence is 1–4 days. Both came from `master`, which invents a `10 h + rand(0…2 h)`
-> opening delay and uses `24 h + rand(0…72 h)` (= 24–96 h) thereafter. `FixShitUp` implements the
-> EXE formula for both ([gametime.h:27](../game/state/gametime.h#L27)).
+> opening delay and uses `24 h + rand(0…72 h)` (= 24–96 h) thereafter under the same selected
+> timing interpretation. `FixShitUp` implements the EXE formula for both
+> ([gametime.h:49](../game/state/gametime.h#L49)).
 > **Day 0 has no UFO wave at all** — see [§5](#5-day-0--tuesday-7-march-2084).
 
 ### 3.5 The real Transporter deadline

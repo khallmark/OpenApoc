@@ -162,9 +162,21 @@ def strip_md(text: str) -> str:
 
 def constants_tbody() -> str:
     specs = [
-        ("VANILLA_TICKS_PER_SECOND", "game/state/gametime.h", "Original city/battle sim rate"),
-        ("TICKS_MULTIPLIER", "game/state/gametime.h", "OpenApoc runs 4× vanilla"),
-        ("TICKS_PER_SECOND", "game/state/gametime.h", "36 × multiplier — contaminates rates"),
+        (
+            "VANILLA_TICKS_PER_SECOND",
+            "game/state/gametime.h",
+            "Repository observational 36-TPS compatibility base",
+        ),
+        (
+            "TICKS_MULTIPLIER",
+            "game/state/gametime.h",
+            "OpenApoc uses 4× the selected compatibility base",
+        ),
+        (
+            "TICKS_PER_SECOND",
+            "game/state/gametime.h",
+            "Selected compatibility base × multiplier — audit dependent rates",
+        ),
         ("TICKS_PER_TURN", "game/state/battle/battle.h", "TPS × 4"),
         ("TICKS_PER_WOUND_EFFECT", "game/state/battle/battleunit.h", "FIXME: ensure vanilla"),
         ("TICKS_PER_ENZYME_EFFECT", "game/state/battle/battleunit.h", "TPS/9 — unverified"),

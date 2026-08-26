@@ -18,7 +18,7 @@
 //     scope for a lock test, per tests/test_unit_ai_priority.cpp's own file header. The "fully
 //     absorbed" branch has no such dependency and is still exercised end to end below.
 //   - The buffer regenerates +1 every TICKS_PER_DISRUPTOR_SHIELD_REGEN (bound "Follow-up 1(a)":
-//     once per real-time second).
+//     every 36 vanilla ticks, one game-second under OpenApoc's selected observational canon).
 //   - The new fields round-trip through save/load (game/state/gamestate_serialize.xml).
 //
 // Not covered here (out of scope for this row, or exercised elsewhere):
@@ -227,7 +227,8 @@ static bool test_disruptor_shield_absorbs_before_health()
 }
 
 // docs/original-game/findings/B3-G1-wounds-gadgets.md, "Follow-up 1(a)": the buffer regenerates
-// +1 every TICKS_PER_DISRUPTOR_SHIELD_REGEN (bound: once per real-time second). Drives
+// +1 every TICKS_PER_DISRUPTOR_SHIELD_REGEN (bound: every 36 vanilla ticks; one game-second under
+// OpenApoc's selected observational 36-TPS canon). Drives
 // BattleUnit::updateDisruptorShield() directly, mirroring test_psi_regen_one_per_second in
 // tests/test_psionics.cpp.
 static bool test_disruptor_shield_regenerates()
@@ -286,11 +287,13 @@ static bool test_disruptor_shield_regenerates()
 //
 // The second half of this test covers the other side of the same field: AEquipment::updateInner()
 // applies a generic recharge to every item with recharge > 0, at TICKS_PER_RECHARGE
-// (= TICKS_PER_TURN, one per four seconds) in real time and rechargeTB per turn - values
-// hardcoded for the Disruptor Shield in tools/extractors/extract_agent_equipment.cpp since 2016.
-// The shield's charge has exactly one bound regen, +1 per real-time second via the unit
-// dispatcher, so the generic path is a second regen of the same field at a rate nothing supports,
-// and "Follow-up 1(a)-continued" additionally binds the only full recharge to battle load.
+// (= TICKS_PER_TURN, one per four selected-canon game-seconds) in real-time mode and rechargeTB per
+// turn - values hardcoded for the Disruptor Shield in tools/extractors/extract_agent_equipment.cpp
+// since 2016.
+// The shield's charge has exactly one bound regen, +1 per 36 vanilla ticks via the unit dispatcher.
+// OpenApoc treats that interval as one game-second under its selected observational 36-TPS canon,
+// so the generic path is a second regen of the same field at a rate nothing supports, and
+// "Follow-up 1(a)-continued" additionally binds the only full recharge to battle load.
 static bool test_disruptor_shield_item_charge_tracks_the_buffer()
 {
 	auto &state = *g_state;
@@ -339,17 +342,17 @@ static bool test_disruptor_shield_item_charge_tracks_the_buffer()
 	shield->updateInner(state, TICKS_PER_TURN + 1);
 	TEST_REQUIRE(shield->ammo == chargeBefore,
 	             "AEquipment::updateInner() raised the shield charge {0} -> {1}; the shield's only "
-	             "bound regen is +1 per real-time second through BattleUnit::updateDisruptorShield",
+	             "bound regen is +1 per 36 vanilla ticks through BattleUnit::updateDisruptorShield",
 	             chargeBefore, shield->ammo);
 
 	state.current_battle = nullptr;
 	return true;
 }
 
-// Freezes the bound cadence constant itself: if a future TPS refactor changes TICKS_PER_SECOND
+// Freezes OpenApoc's selected-canon conversion: if a future TPS refactor changes TICKS_PER_SECOND
 // without updating TICKS_PER_DISRUPTOR_SHIELD_REGEN to match, this fails loudly instead of
-// silently drifting the regen rate the findings doc bound to "once per real-time second".
-static bool test_disruptor_shield_regen_cadence_is_one_second()
+// drifting the bound 36-vanilla-tick interval away from one selected-canon game-second.
+static bool test_disruptor_shield_regen_matches_selected_game_second()
 {
 	TEST_REQUIRE(TICKS_PER_DISRUPTOR_SHIELD_REGEN == TICKS_PER_SECOND,
 	             "TICKS_PER_DISRUPTOR_SHIELD_REGEN ({0}) != TICKS_PER_SECOND ({1})",
@@ -443,8 +446,8 @@ int main(int argc, char **argv)
 	    {"disruptor_shield_regenerates", test_disruptor_shield_regenerates},
 	    {"disruptor_shield_item_charge_tracks_the_buffer",
 	     test_disruptor_shield_item_charge_tracks_the_buffer},
-	    {"disruptor_shield_regen_cadence_is_one_second",
-	     test_disruptor_shield_regen_cadence_is_one_second},
+	    {"disruptor_shield_regen_matches_selected_game_second",
+	     test_disruptor_shield_regen_matches_selected_game_second},
 	    {"disruptor_shield_serializes_roundtrip", test_disruptor_shield_serializes_roundtrip},
 	});
 	// Each battle-driving test above hand-builds a minimal Battle and points state.current_battle
