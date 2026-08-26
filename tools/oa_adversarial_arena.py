@@ -286,7 +286,22 @@ class CampaignEvaluator(Evaluator):
             return score
         except Exception as exc:
             rec["reason"] = f"{type(exc).__name__}: {exc}"
-            print(f"    [attempt {self.battles}] NO CONTEST: {rec['reason']}", flush=True)
+            # A ConnectionRefusedError says the game is gone; it does not say why. The exit status
+            # does, and it is the difference between a segfault, an abort, an OOM kill and a
+            # process that was simply asked to leave -- three engine deaths this session were
+            # indistinguishable without it.
+            try:
+                rec["game_exit"] = game.exit_status() or "still running"
+            except Exception:
+                pass
+            # The tail of the engine's own log names what it was doing at the time.
+            try:
+                lines = (run_out / "game.log").read_text(errors="replace").splitlines()
+                rec["game_log_tail"] = lines[-6:]
+            except Exception:
+                pass
+            print(f"    [attempt {self.battles}] NO CONTEST: {rec['reason']} "
+                  f"[{rec.get('game_exit', '?')}]", flush=True)
             return None
         finally:
             rec["wall_s"] = round(time.time() - t_start, 1)

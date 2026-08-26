@@ -545,6 +545,30 @@ class GameProcess:
                 time.sleep(0.5)
         raise TimeoutError(f"harness did not come up on port {self.port}")
 
+    def exit_status(self) -> str:
+        """How the game process ended, in words, or "" if it is still running.
+
+        Three engine deaths this session produced a bare ConnectionRefusedError and nothing else:
+        no uncaught exception (the terminate handler stayed silent), no macOS crash report, no
+        clean exit. That is three different failures wearing the same costume, and the exit status
+        distinguishes them -- a negative returncode is the signal that killed it, which separates
+        a segfault from an abort from an OOM kill from the process simply being asked to leave.
+        """
+        if not self.proc:
+            return "never started"
+        rc = self.proc.poll()
+        if rc is None:
+            return ""
+        if rc < 0:
+            import signal as _signal
+
+            try:
+                name = _signal.Signals(-rc).name
+            except (ValueError, AttributeError):
+                name = "?"
+            return f"killed by signal {-rc} ({name})"
+        return f"exited rc={rc}"
+
     def stop(self) -> None:
         if not self.proc:
             return
