@@ -89,6 +89,15 @@ class Observation:
     # default is to keep hunting; the cost of searching an empty map is a few seconds, and the cost
     # of waiting on a live one is the entire mission.
     hostiles_remain: bool = True
+    # Are we losing people? Also a boolean, and for the same reason.
+    #
+    # Taking casualties from something nobody can see does not mean we are hunting -- it means we
+    # are BEING hunted, and the two call for opposite behaviour. Measured, at the cost of a whole
+    # squad: a base defence where the hunt spread fifteen soldiers out, stood them up and ran them
+    # into the open looking for nine aliens that had already seen them. 15 -> 8 -> 5 -> 3 -> 0,
+    # every one of them picked off alone, scored 0.00. The fix for standing still had become a way
+    # to lose faster.
+    hard_pressed: bool = False
     # Set when the engine has told us where something just happened.
     last_event_z: Optional[int] = None
     # Rounds since the foe count last dropped -- the driver's own stall signal.
@@ -224,6 +233,22 @@ class ScriptedAI(TacticalAI):
         battle the engine had already marked won.
         """
         alive = max(1, sum(1 for u in obs.mine if u.alive))
+        if obs.hard_pressed:
+            # We are not hunting, we are being hunted. Something is shooting people we cannot
+            # see, so the ground it is standing on is not ground to walk into one at a time.
+            # Concentrate, get low, and keep moving as one body: still searching -- standing
+            # still is what this whole branch exists to prevent -- but mutually supporting, so
+            # contact is made by the squad rather than by whichever soldier wandered into it.
+            return [
+                Action("show_floor", obs.sweep_floor(obs.stalls),
+                       "under fire from an unseen enemy: regroup, do not scatter"),
+                Action("set_move_mode", "group", "stay together; scattered soldiers die alone"),
+                Action("set_stance", "kneel", "smaller target, steadier shot"),
+                Action("set_fire_mode", "snap", "react, do not line up a shot"),
+                Action("set_behaviour", "evasive", "break contact rather than trade in the open"),
+                Action("select_squad", alive, "the whole squad moves as one"),
+                Action("search", obs.stalls, "advance together toward the threat"),
+            ]
         return [
             Action("show_floor", obs.sweep_floor(obs.stalls),
                    "hunting: mission still running, nothing in sight"),

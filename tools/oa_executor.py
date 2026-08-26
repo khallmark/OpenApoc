@@ -131,8 +131,22 @@ def observe(caps, stalls: int = 0, last_event_z=None) -> Observation:
     # organisation has a conscious unit left, so still being in it means something is still out
     # there. Anything other than an explicit "0" counts as yes: the failure that matters is
     # standing still on a live map, not searching a dead one for a few extra seconds.
+    # Have we lost a third of the squad? The battle UI shows both numbers, so this is information
+    # a player has at a glance. It is the difference between hunting and being hunted, and getting
+    # it wrong cost a whole squad: fifteen soldiers spread out to search a base that nine unseen
+    # aliens were already clearing, and none of them came back.
+    def count(key):
+        try:
+            return int(st.get(key, "") or 0)
+        except (ValueError, TypeError):
+            return 0
+
+    started, standing = count("mine"), count("mine_alive")
+    hard_pressed = started > 0 and standing * 3 <= started * 2
+
     return Observation(mine=mine, foes=foes, view_z=view_z, stalls=stalls,
                        hostiles_remain=str(st.get("in_battle", "1")) != "0",
+                       hard_pressed=hard_pressed,
                        mission_type=st.get("mission_type", "unknown"),
                        mode=st.get("mode", "rt"), last_event_z=last_event_z)
 
@@ -167,6 +181,10 @@ def execute(caps, actions: list, say=None) -> int:
     mode that hid four dead capabilities for weeks.
     """
     done = 0
+    # Read once, up front: a squad ordered to move as one must not then be sent to two opposite
+    # corners by the sweep in the same batch. The AI expresses "keep everyone together" through
+    # move_mode, so that is the flag to honour rather than inventing a second one.
+    group_move = any(a.kind == "set_move_mode" and a.arg == "group" for a in actions)
     for a in actions:
         k = a.kind
         try:
@@ -216,7 +234,10 @@ def execute(caps, actions: list, say=None) -> int:
                 # idea how big the window is, so the sweep pattern lives here where the screen is
                 # known; the AI supplies only a step counter so successive rounds probe different
                 # ground instead of re-clicking one spot.
-                ok = caps.sweep(int(a.arg or 0))
+                #
+                # A squad ordered to move as one is not to be split across the map: the group
+                # move-mode is the AI saying it is under fire and wants everyone together.
+                ok = caps.sweep(int(a.arg or 0), split=(group_move is not True))
             elif k == "withdraw":
                 ok = caps.withdraw()
             elif k == "wait":

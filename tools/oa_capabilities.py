@@ -145,12 +145,16 @@ class Capabilities:
         except Exception:
             return False
 
-    def sweep(self, step: int) -> bool:
+    def sweep(self, step: int, split: bool = True) -> bool:
         """Send the selected units to a point on a search pattern, a different one each step.
 
-        Two orders per call, to opposite quadrants, because the squad hunts as individuals: one
-        destination sends everyone to the same corner, which searches one room with eight soldiers
-        and leaves the rest of the map alone.
+        Two orders per call, to opposite quadrants, because the squad normally hunts as
+        individuals: one destination sends everyone to the same corner, which searches one room
+        with eight soldiers and leaves the rest of the map alone.
+
+        split=False issues only the first, for a squad that is under fire from an enemy it cannot
+        see. Splitting there is how fifteen soldiers became none: each pair sent to a far corner
+        arrives alone against whatever is already there.
 
         The pattern walks a 5x5 grid of the viewport using steps that are coprime with it (7 and
         11 against 25), so successive calls land far apart and the whole grid is covered before
@@ -166,9 +170,12 @@ class Capabilities:
             x = int(st.w * (gx + 0.5) / cells)
             y = int(st.h * (gy + 0.5) / cells)
             self.d.h.click_xy(max(0, min(st.w - 1, x)), max(0, min(st.h - 1, y)))
-            time.sleep(0.2)
-            # The mirrored point, so the squad splits rather than clumping on one destination.
-            self.d.h.click_xy(max(0, min(st.w - 1, st.w - x)), max(0, min(st.h - 1, st.h - y)))
+            if split:
+                time.sleep(0.2)
+                # The mirrored point, so the squad spreads rather than clumping on one
+                # destination. Suppressed when the squad is being shot at from cover.
+                self.d.h.click_xy(max(0, min(st.w - 1, st.w - x)),
+                                  max(0, min(st.h - 1, st.h - y)))
             return True
         except Exception:
             return False

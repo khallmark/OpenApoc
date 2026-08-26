@@ -350,6 +350,71 @@ steps = {a.arg for n in range(6)
          if a.kind == "search"}
 check(len(steps) == 6, f"successive rounds must probe different ground, got {steps}")
 
+# --- being hunted is not hunting ---------------------------------------------
+# Taking casualties from an enemy nobody can see calls for the OPPOSITE of a sweep. The first
+# version of hunt() spread the squad out, stood it up and ran it into the open; in a base defence
+# against nine unseen aliens that took fifteen soldiers to none, scored 0.00. A search pattern is
+# for an empty map, not for ground the enemy already holds.
+pressed = Observation(mine=[U(1, 10, 10, 0), U(2, 12, 10, 0)], foes=[], view_z=0, stalls=9,
+                      mission_type="base_defense", mode="rt", hard_pressed=True)
+check(pressed.hunting, "still hunting -- standing still is never the answer")
+p_acts = {a.kind: a.arg for a in VeteranAI().decide(pressed)}
+check(p_acts.get("set_move_mode") == "group",
+      f"under fire the squad must stay together, got {p_acts.get('set_move_mode')}")
+check(p_acts.get("set_stance") == "kneel",
+      f"…and get low rather than run upright, got {p_acts.get('set_stance')}")
+check(p_acts.get("set_behaviour") == "evasive",
+      f"…and not charge into it, got {p_acts.get('set_behaviour')}")
+check("search" in p_acts, "…but must still keep moving, or this is the old deadlock again")
+
+# The ordinary hunt keeps the aggressive sweep: an empty map is not a threat.
+calm = Observation(mine=[U(1, 10, 10, 0), U(2, 12, 10, 0)], foes=[], view_z=0, stalls=9,
+                   mission_type="ufo_recovery", mode="rt", hard_pressed=False)
+c_acts = {a.kind: a.arg for a in VeteranAI().decide(calm)}
+check(c_acts.get("set_move_mode") == "individual", "an unthreatened sweep still spreads out")
+check(c_acts.get("set_stance") == "run", "…and still covers ground at a run")
+check(c_acts.get("set_behaviour") == "aggressive", "…and still seeks contact")
+
+# The executor must not split a squad that was told to move as one.
+from oa_executor import execute as _execute
+
+
+class SweepCaps(FakeCaps):
+    def __init__(self):
+        super().__init__({"mine_at": "-", "foe_at": "-"})
+        self.splits = []
+
+    def sweep(self, step, split=True):
+        self.splits.append(split)
+        return True
+
+    def set_move_mode(self, m):
+        return True
+
+    def set_stance(self, m):
+        return True
+
+    def set_fire_mode(self, m):
+        return True
+
+    def set_behaviour(self, m):
+        return True
+
+    def show_floor(self, z):
+        return None
+
+    def select_units(self, n):
+        return n
+
+
+cap = SweepCaps()
+_execute(cap, VeteranAI().decide(pressed))
+check(cap.splits == [False],
+      f"a grouped squad must get ONE destination, not two corners: {cap.splits}")
+cap2 = SweepCaps()
+_execute(cap2, VeteranAI().decide(calm))
+check(cap2.splits == [True], f"an individual sweep still splits: {cap2.splits}")
+
 # Seeing a hostile again must end the hunt and resume fighting.
 seen = Observation(mine=[U(1, 10, 10, 0)], foes=[U(9, 10, 16, 0, hostile=True)], view_z=0,
                    mission_type="x", mode="rt")
