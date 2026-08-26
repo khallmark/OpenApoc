@@ -35,8 +35,22 @@ was never traced. No code written.
 
 ### Still open, honestly
 
-B5 type 1-vs-3 · K1 (20 candidate functions unexamined) · U1(b) field semantics ·
-B2/B4 (depend on B1) · MultiTracker's downstream meaning
+**Nothing on this list survived the third pass.** It is kept, struck through, because it was
+quoted as evidence that parity was unassured after every one of its entries had been resolved --
+by findings sitting in this same directory, and in one case by the pass-3 table further down THIS
+FILE.
+
+| Pass-2 "open" | Resolved by | Outcome |
+|---|---|---|
+| B5 type 1-vs-3 | `B5-enzyme-pass3.md` | The question was malformed. Types 1 and 3 are treated identically by all 11 consumers across 17 call sites. Closed negative. |
+| K1 (20 functions unexamined) | `K1-cloak.md` | All 19 readers of the type field examined. Three recognise `0x0a`; none implements concealment. Closed negative. |
+| U1(b) field semantics | `U1b-gate-consumer.md`, `U1-arrived-flag-and-0x168.md` | Overturned, then implemented. |
+| B2 | `unitaihelper.cpp:255` | Implemented, and labelled PRIOR-ART at the code rather than presented as recovered. |
+| B4 | depends on B3 | B3 is a closed negative (no recovered heal threshold). Blocked on an absence, which effort cannot lift. |
+| MultiTracker downstream | `G1-multitracker-downstream.md` | **BOUND**, and shown not to be a multi-target Motion Scanner. |
+
+**There is no parity row left that effort can close.** Every remaining one is either done, shown
+absent from the binaries, or blocked on a row shown absent.
 
 ### What "still open" does and does not license
 
