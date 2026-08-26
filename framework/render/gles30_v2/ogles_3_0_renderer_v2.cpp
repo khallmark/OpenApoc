@@ -746,13 +746,17 @@ class GLSurface final : public RendererImageData
   public:
 	GL::GLuint fbo_id;
 	GL::GLuint tex_id;
+	// The window framebuffer belongs to SDL, not to us, so it must never be deleted.
+	bool owns_fbo;
 	Vec2<unsigned int> size;
 	OGLES30Renderer *owner;
+	// Wraps an existing framebuffer (the window's) without taking ownership.
 	GLSurface(GL::GLuint fbo, Vec2<unsigned int> size, OGLES30Renderer *owner)
-	    : fbo_id(fbo), tex_id(0), size(size), owner(owner)
+	    : fbo_id(fbo), tex_id(0), owns_fbo(false), size(size), owner(owner)
 	{
 	}
-	GLSurface(Vec2<unsigned int> size, OGLES30Renderer *owner) : size(size), owner(owner)
+	GLSurface(Vec2<unsigned int> size, OGLES30Renderer *owner)
+	    : tex_id(0), owns_fbo(true), size(size), owner(owner)
 	{
 		LogAssert(size.x > 0 && size.y > 0);
 		gl->GenTextures(1, &this->tex_id);
@@ -1704,9 +1708,21 @@ OGLES30Renderer::OGLES30Renderer() : state(State::Idle)
 	GL::GLint viewport[4];
 	gl->GetIntegerv(GL::VIEWPORT, viewport);
 	LogInfo("Viewport {{{0},{1},{2},{3}}}", viewport[0], viewport[1], viewport[2], viewport[3]);
+	// SDL does not always present framebuffer zero. On iOS the window is a
+	// CAEAGLLayer backed by a framebuffer object SDL creates itself, so drawing
+	// to framebuffer 0 renders into one that is never shown -- the screen keeps
+	// whatever the layer was initialised with. Whatever is bound on a freshly
+	// made-current context is the one the platform presents: 0 on desktop.
+	GL::GLint windowFbo = 0;
+	gl->GetIntegerv(GL::FRAMEBUFFER_BINDING, &windowFbo);
+	if (windowFbo != 0)
+	{
+		LogInfo("Window is presented through framebuffer {0}, not 0", windowFbo);
+	}
 	this->default_surface = mksp<Surface>(Vec2<int>{viewport[2], viewport[3]});
 	this->default_surface->rendererPrivateData =
-	    mksp<GLSurface>(0, Vec2<int>{viewport[2], viewport[3]}, this);
+	    mksp<GLSurface>(static_cast<GL::GLuint>(windowFbo), Vec2<int>{viewport[2], viewport[3]},
+	                    this);
 	this->current_surface = default_surface;
 	gl->Enable(GL::BLEND);
 	gl->BlendFuncSeparate(GL::SRC_ALPHA, GL::ONE_MINUS_SRC_ALPHA, GL::SRC_ALPHA, GL::DST_ALPHA);
@@ -1820,7 +1836,7 @@ GLSurface::~GLSurface()
 		LogWarning("GLSurface being destroyed after renderer");
 		return;
 	}
-	if (this->fbo_id)
+	if (this->owns_fbo && this->fbo_id)
 		owner->delete_framebuffer_object(this->fbo_id);
 	if (this->tex_id)
 		owner->delete_texture_object(this->tex_id);
