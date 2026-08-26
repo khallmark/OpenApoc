@@ -38,6 +38,23 @@ was never traced. No code written.
 B5 type 1-vs-3 · K1 (20 candidate functions unexamined) · U1(b) field semantics ·
 B2/B4 (depend on B1) · MultiTracker's downstream meaning
 
+### What "still open" does and does not license
+
+None of these five is in the tactical AI's decision path, and that distinction matters because the
+adversarial learning built on top of this work varies alien behaviour between Aggressive, Normal,
+Cautious and Evasive. Those are engine behaviour modes; the open rows above are a hazard-type
+discrimination, a cloak threshold, a vehicle field's semantics, two rows blocked on B1, and a
+tracker's downstream meaning. Closing them would not change what an alien does in a battle.
+
+Two rows are open in the AI path and both are BLOCKED rather than unstarted: B2 and B4 depend on
+B1, and B4 additionally depends on B3 -- which is itself a closed negative (no recovered heal
+threshold). A row blocked on a closed negative cannot be opened by effort.
+
+The failure mode this section exists to prevent is reading "still open" as "parity unassured, stop
+everything". Parity here is per-row and evidence-bound: a row is done when the original's logic is
+recovered and ported, OR when the original is shown not to have it. Rows of the second kind are
+finished, and implementing them would break parity rather than complete it.
+
 ## Third pass — the RE that was still open
 
 Six agents were sent at the rows the second pass left blocked. Five returned negatives, and the
