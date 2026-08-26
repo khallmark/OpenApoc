@@ -174,7 +174,7 @@ class CampaignEvaluator(Evaluator):
                 except Exception as exc:
                     rec.setdefault("advance_errors", []).append(f"{type(exc).__name__}: {exc}")
                     if not d.dismiss_modal(d.status()):
-                        d.h.key("Escape")
+                        d.escape_key()
                     time.sleep(0.5)
                     continue
 

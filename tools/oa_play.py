@@ -598,6 +598,30 @@ class Driver:
         self.act_counts: dict[str, int] = {}
         self.act_reset_at = time.time()
 
+    # Screens where Escape does NOT mean "back". CityView and BattleView both PUSH InGameOptions
+    # on SDLK_ESCAPE (cityview.cpp:4156, battleview.cpp:3380), so pressing it there OPENS the
+    # settings menu instead of closing anything -- and the harness used Escape as its universal
+    # "stuck, get out of this" fallback. One run reached InGameOptions thirteen times without ever
+    # asking for it, each visit costing a round to notice and another to close.
+    #
+    # These two are also the screens with nothing to escape FROM: they are where the game lives.
+    # leave_battle() still opens InGameOptions on purpose, because BUTTON_EXIT_BATTLE is inside it
+    # -- that one is a destination, not a fallback.
+    ESCAPE_OPENS_OPTIONS = ("CityView", "BattleView")
+
+    def escape_key(self, stage: str = "") -> bool:
+        """Press Escape, unless we are somewhere Escape would open the options menu.
+
+        Returns whether the key was actually sent, so a caller can tell "I tried and it did not
+        help" from "there was nothing here to escape".
+        """
+        stage = stage or self.status().stage
+        if stage in self.ESCAPE_OPENS_OPTIONS:
+            return False
+        # The one place in the file that may press Escape unguarded, besides leave_battle.
+        self.h.key("Escape")
+        return True
+
     def say(self, msg: str) -> None:
         self.events.append(msg)
         if self.verbose:
@@ -894,7 +918,7 @@ class Driver:
                          + (f", {selected} units selected" if selected else "") + f") -> {after}")
                 return True
         # Nothing moved us off the screen; Escape rather than deadlock the run.
-        self.h.key("Escape")
+        self.escape_key(st.stage)
         self.responses[f"{st.stage}:escape"] = self.responses.get(f"{st.stage}:escape", 0) + 1
         self.say(f"  [event] {st.stage} -> Escape (no control advanced the stage)")
         time.sleep(0.35)
@@ -1136,11 +1160,11 @@ def return_to_city(d: Driver, tries: int = 12) -> bool:
                 except (HarnessError, OSError):
                     continue
             else:
-                d.h.key("Escape")
+                d.escape_key(stage)
         time.sleep(0.6)
         if d.status().stage == stage:
             # That exit did nothing; fall back to the keyboard before trying again.
-            d.h.key("Escape")
+            d.escape_key(stage)
             time.sleep(0.4)
     return d.status().stage == "CityView"
 
@@ -1909,7 +1933,7 @@ def build_facility(d: Driver, want: str = "FACILITYTYPE_ADVANCED_WORKSHOP") -> b
                 if stt.stage == "CityView":
                     break
                 if not d.click_id("BUTTON_OK", stt):
-                    d.h.key("Escape")
+                    d.escape_key()
                 time.sleep(0.5)
             return True
 
@@ -1919,7 +1943,7 @@ def build_facility(d: Driver, want: str = "FACILITYTYPE_ADVANCED_WORKSHOP") -> b
         if stt.stage == "CityView":
             break
         if not d.click_id("BUTTON_OK", stt):
-            d.h.key("Escape")
+            d.escape_key()
         time.sleep(0.5)
     return False
 
@@ -2021,7 +2045,7 @@ def manufacture(d: Driver, want: str = "MANUFACTURE_DIMENSION_SHIFTER", qty: int
         if st.stage in ("ResearchSelect", "ResearchScreen", "BaseScreen"):
             d.click_id("BUTTON_OK", st)
         elif not d.dismiss_modal(st):
-            d.h.key("Escape")
+            d.escape_key()
         time.sleep(0.5)
 
     after = d.h.gs("stores").get("vehicle_top", "-")
@@ -2224,7 +2248,7 @@ def visit_economy(d: Driver) -> bool:
         if st.stage in ("BuyAndSellScreen", "TransactionScreen", "BaseScreen"):
             d.click_id("BUTTON_OK", st); time.sleep(0.6)
         elif not d.dismiss_modal(st):
-            d.h.key("Escape"); time.sleep(0.5)
+            d.escape_key(); time.sleep(0.5)
     return ok
 
 
@@ -2241,7 +2265,7 @@ def visit_ufopaedia(d: Driver) -> bool:
         st = d.status()
         if st.stage == "CityView":
             break
-        d.h.key("Escape"); time.sleep(0.5)
+        d.escape_key(); time.sleep(0.5)
     return ok
 
 
@@ -2304,7 +2328,7 @@ def intercept_ufos(d: Driver) -> int:
         # run: craft_lost reached -440 while incursions, the penalty for letting UFOs alone, stood
         # at -311. Losing craft was costing more than the thing it was meant to prevent.
         d.say("  [intercept] no armed fighter free; leaving the transport out of it")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
     # "Crewed" marks the craft currently carrying the squad, not a craft that cannot fight -- a
     # Valkyrie Interceptor with agents aboard is still an interceptor. Counting it as a transport
@@ -2313,7 +2337,7 @@ def intercept_ufos(d: Driver) -> int:
     # armed fleet and send the uncrewed ones.
     if len(fighters) + len(crewed_fighters) < 2:
         d.say("  [intercept] only one armed flier in the whole fleet; holding it back")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
 
     d.h.send("keydown Left Ctrl")
@@ -2347,7 +2371,7 @@ def intercept_ufos(d: Driver) -> int:
     # attack order at a screen corner where the click hit nothing.
     if d.h.gs("centre_on_ufo").get("centred") != "1":
         d.say("  [intercept] no UFO on the city map")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
     time.sleep(0.5)
     w, h = d.h.display_size()
@@ -2360,7 +2384,7 @@ def intercept_ufos(d: Driver) -> int:
         live = [min(live, key=lambda p: (p[0] - w // 2) ** 2 + (p[1] - h // 2) ** 2)]
     if not live:
         d.say("  [intercept] UFO centred but not resolvable on screen")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
 
     ux, uy = live[0]
@@ -2755,7 +2779,7 @@ def verify_battle_capabilities(d: Driver) -> dict:
         battle_inventory(d, False)
         d.wait_for("BattleView", 15)
     results["hand_icon"] = hand_icon(d, "RIGHT")
-    d.h.key("Escape")
+    d.escape_key()
     time.sleep(0.3)
 
     layout = battle_layout(d)
@@ -3187,7 +3211,7 @@ def close_buysell(d: Driver, commit: bool) -> bool:
     if commit:
         d.click_id("BUTTON_OK", d.status())
     else:
-        d.h.key("Escape")
+        d.escape_key()
     time.sleep(1.0)
     for _ in range(8):
         st = d.status()
@@ -3198,7 +3222,7 @@ def close_buysell(d: Driver, commit: bool) -> bool:
         elif st.stage in ("BuyAndSellScreen", "BaseScreen"):
             d.click_id("BUTTON_OK", st)
         else:
-            d.h.key("Escape")
+            d.escape_key()
         time.sleep(0.6)
     return d.status().stage == "CityView"
 
@@ -3660,7 +3684,7 @@ def hire_staff(d: Driver, want: int = 6, role: str = "BUTTON_SOLDIERS",
     time.sleep(1.2)
     if d.status().stage != "RecruitScreen":
         d.say(f"  [hire] expected RecruitScreen, got {d.status().stage}")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
 
     d.click_id(role, d.status())  # role filter
@@ -3718,7 +3742,7 @@ def hire_staff(d: Driver, want: int = 6, role: str = "BUTTON_SOLDIERS",
                 d.h.key("Return")
             time.sleep(1.0)
     else:
-        d.h.key("Escape")
+        d.escape_key()
 
     for _ in range(8):
         st = d.status()
@@ -3729,7 +3753,7 @@ def hire_staff(d: Driver, want: int = 6, role: str = "BUTTON_SOLDIERS",
         elif st.stage in ("RecruitScreen", "BaseScreen"):
             d.click_id("BUTTON_OK", st)
         else:
-            d.h.key("Escape")
+            d.escape_key()
         time.sleep(0.6)
 
     after = int(d.h.gs("agents").get(counter, "0") or 0)
@@ -3968,7 +3992,7 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
     time.sleep(1.4)
     if d.status().stage != "AEquipScreen":
         d.say(f"  [equip] expected AEquipScreen, got {d.status().stage}")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
 
     def capture(row: int) -> int:
@@ -4025,7 +4049,7 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
             if st.stage in ("AEquipScreen", "BaseScreen"):
                 d.click_id("BUTTON_OK", st)
             elif not d.dismiss_modal(st):
-                d.h.key("Escape")
+                d.escape_key()
             time.sleep(0.5)
         return 0
 
@@ -4038,7 +4062,7 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
             if st.stage in ("AEquipScreen", "BaseScreen"):
                 d.click_id("BUTTON_OK", st)
             elif not d.dismiss_modal(st):
-                d.h.key("Escape")
+                d.escape_key()
             time.sleep(0.5)
         return 0
 
@@ -4054,7 +4078,7 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
             if st.stage in ("AEquipScreen", "BaseScreen"):
                 d.click_id("BUTTON_OK", st)
             elif not d.dismiss_modal(st):
-                d.h.key("Escape")
+                d.escape_key()
             time.sleep(0.5)
         return 0
 
@@ -4090,7 +4114,7 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
         if st.stage in ("AEquipScreen", "BaseScreen"):
             d.click_id("BUTTON_OK", st)
         elif not d.dismiss_modal(st):
-            d.h.key("Escape")
+            d.escape_key()
         time.sleep(0.5)
 
     after = int(d.h.gs("agents").get("armed", "0") or 0)
@@ -4348,11 +4372,11 @@ def crew_transport(d: Driver) -> int:
     st = d.status()
     if st.stage != "BuildingScreen":
         d.say(f"  [crew] expected BuildingScreen, got {st.stage}")
-        d.h.key("Escape")
+        d.escape_key()
         return 0
     box = d.controls(st).get("AGENT_ASSIGNMENT")
     if box is None or box.w <= 0:
-        d.h.key("Escape")
+        d.escape_key()
         return 0
 
     ROW_H, FIRST_ROW, AGENT_DX, VEHICLE_DX = 26, 63, 103, 383
@@ -4375,7 +4399,7 @@ def crew_transport(d: Driver) -> int:
         picked += 1
         time.sleep(0.1)
     if not picked:
-        d.h.key("Escape")
+        d.escape_key()
         return 0
 
     for row in range(6):
@@ -4406,7 +4430,7 @@ def crew_transport(d: Driver) -> int:
         if st.stage == "CityView":
             break
         if not d.click_id("BUTTON_QUIT", st):
-            d.h.key("Escape")
+            d.escape_key()
         time.sleep(0.4)
     crewed = _flying_crewed(d)
     d.say(f"  [crew] flying crewed craft {before} -> {crewed}")
@@ -4733,7 +4757,7 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
                 if d.status().stage == "CityView":
                     break
                 if not d.dismiss_modal(d.status()):
-                    d.h.key("Escape")
+                    d.escape_key()
                 time.sleep(0.5)
 
         log_leg(d, run_id, elapsed, "leg", {"battles": battles, **d.checks})
