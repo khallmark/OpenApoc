@@ -1,6 +1,7 @@
 #include "game/state/battle/ai/unitaihelper.h"
 #include "game/state/battle/ai/aidecision.h"
 #include "game/state/battle/battleunit.h"
+#include "framework/configfile.h"
 #include "game/state/gamestate.h"
 #include "game/state/tilemap/tileobject_battleunit.h"
 #include "game/state/shared/aequipment.h"
@@ -168,8 +169,17 @@ sp<AIMovement> UnitAIHelper::getTakeCoverMovement(GameState &state, BattleUnit &
 	// Chance to take cover is 33% * sqrt(num_enemies_seen), if no one is seen then assume 3
 	if (!forced)
 	{
+		// Adversarial-training knob. -1 (the shipped default) leaves the recovered 33% exactly
+		// as it is; anything else scales it. This selects among behaviours the original already
+		// has rather than adding one, so a run that never sets it is unchanged.
+		float coverChance = 33.0f;
+		const int bias = config().getInt("OpenApoc.AlienAI.CoverBiasPercent");
+		if (bias >= 0)
+		{
+			coverChance = (float)bias;
+		}
 		if (randBoundsExclusive(state.rng, 0, 100) >=
-		    33.0f * sqrtf(u.visibleEnemies.empty() ? 3 : (int)u.visibleEnemies.size()))
+		    coverChance * sqrtf(u.visibleEnemies.empty() ? 3 : (int)u.visibleEnemies.size()))
 		{
 			return nullptr;
 		}

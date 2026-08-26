@@ -112,6 +112,8 @@ extern ConfigOptionBool optionSkipTurbo;
 extern ConfigOptionBool optionRunAndKneel;
 extern ConfigOptionBool optionSeedRng;
 extern ConfigOptionInt optionRngSeed;
+extern ConfigOptionString optionAlienBehaviour;
+extern ConfigOptionInt optionAlienCoverBias;
 extern ConfigOptionInt optionOpponentBehaviorMode;
 extern ConfigOptionBool optionAutoReload;
 extern ConfigOptionBool optionLeftClickIcon;

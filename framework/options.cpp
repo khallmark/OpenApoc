@@ -137,6 +137,8 @@ void dumpOptionsToLog()
 	dumpOption(optionRunAndKneel);
 	dumpOption(optionSeedRng);
 	dumpOption(optionRngSeed);
+	dumpOption(optionAlienBehaviour);
+	dumpOption(optionAlienCoverBias);
 	dumpOption(optionAutoReload);
 	dumpOption(optionLeftClickIcon);
 	dumpOption(optionBattlescapeVertScroll);
@@ -447,6 +449,22 @@ ConfigOptionBool optionSeedRng("OpenApoc.NewFeature", "SeedRng", tr("Seed RNG on
 ConfigOptionInt optionRngSeed("OpenApoc.NewFeature", "RngSeed",
                               tr("Explicit RNG seed (0 = use SeedRng behaviour)"), 0);
 
+
+// Alien AI tunables. The engine's behaviour set is fixed and faithful (ai.txt: Default, Vanilla,
+// Normal, Cautious, Aggressive, plus the morale states) - these do NOT add new behaviours, they
+// select and weight the ones the original already has, so the alien side can be varied for
+// adversarial training without diverging from recovered logic.
+//
+// Empty / -1 means "leave the engine's own choice alone", which is the shipped default, so a
+// player who never sets these gets exactly the original behaviour.
+ConfigOptionString optionAlienBehaviour("OpenApoc.AlienAI", "Behaviour",
+                                        tr("Force alien behaviour mode (aggressive/normal/"
+                                           "cautious, empty = engine default)"),
+                                        "");
+ConfigOptionInt optionAlienCoverBias("OpenApoc.AlienAI", "CoverBiasPercent",
+                                     tr("Alien take-cover chance scaling, percent "
+                                        "(-1 = engine default)"),
+                                     -1);
 // Opponent doctrine for the adversarial training arena. -1 leaves every unit on whatever the
 // game itself chose, which is the shipped behaviour and the default. 0/1/2 pin non-player units
 // to Aggressive/Normal/Evasive at battle start.
