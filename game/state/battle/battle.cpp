@@ -570,14 +570,33 @@ void Battle::initialMapPartLinkUp()
 		} while (foundSupport);
 	}
 
-	// Report unlinked parts
+	// Report unlinked parts.
+	//
+	// mp->tileObject->getOwningTile()->position was an unguarded three-deep dereference, and a
+	// map part that is not in the tile map has no tileObject at all -- which is exactly the
+	// population this loop selects for, since willCollapse() is asking about parts nothing is
+	// holding up. It segfaulted the engine during battle generation on a UFO map: the log shows
+	// this warning printing for {9,0,5} through {9,5,5} and then the process dies, having walked
+	// into the first part with no tile.
+	//
+	// A diagnostic that kills the process is worse than no diagnostic. Report what is known and
+	// say so when the position is not.
 	for (auto &mp : this->map_parts)
 	{
-		if (mp->willCollapse())
+		if (!mp || !mp->willCollapse())
 		{
-			auto pos = mp->tileObject->getOwningTile()->position;
+			continue;
+		}
+		const auto *tile = mp->tileObject ? mp->tileObject->getOwningTile() : nullptr;
+		if (tile)
+		{
 			LogWarning("MP {0} SBT {1} at {2} is going to fall", mp->type.id,
-			           (int)mp->type->getVanillaSupportedById(), pos);
+			           (int)mp->type->getVanillaSupportedById(), tile->position);
+		}
+		else
+		{
+			LogWarning("MP {0} SBT {1} is going to fall, and is not in the tile map",
+			           mp->type.id, (int)mp->type->getVanillaSupportedById());
 		}
 	}
 
