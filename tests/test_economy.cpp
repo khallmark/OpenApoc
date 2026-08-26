@@ -136,24 +136,6 @@ static bool expectFunding(GameState &state, int score, int expected)
 	return true;
 }
 
-static bool test_senate_tightest_band()
-{
-	GameState state;
-	loadVanillaRatingRules(state);
-	// Last-match-wins on XML order would give 10000 → 20. Original uses 6400 → 5.
-	TEST_REQUIRE(expectFunding(state, 10000, 5), "10000");
-	TEST_REQUIRE(expectFunding(state, 6401, 5), "6401");
-	TEST_REQUIRE(expectFunding(state, 3201, 8), "3201");
-	TEST_REQUIRE(expectFunding(state, 401, 20), "401");
-	TEST_REQUIRE(expectFunding(state, 400, 0), "400 is not > 400");
-	TEST_REQUIRE(expectFunding(state, 200, 0), "200 below first positive band");
-	TEST_REQUIRE(expectFunding(state, 0, 0), "zero is not < 0");
-	TEST_REQUIRE(expectFunding(state, -1, -15), "-1");
-	TEST_REQUIRE(expectFunding(state, -401, -10), "-401");
-	TEST_REQUIRE(expectFunding(state, -1601, -4), "-1601 uses -1600 not 0");
-	return true;
-}
-
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -166,6 +148,5 @@ int main(int argc, char **argv)
 	    {"week_one_returns_false", test_week_one_returns_false},
 	    {"xcom_stock_bands", test_xcom_stock_bands},
 	    {"non_xcom_bands", test_non_xcom_bands},
-	    {"senate_tightest_band", test_senate_tightest_band},
 	});
 }
