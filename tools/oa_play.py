@@ -2930,6 +2930,22 @@ def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) 
                              seconds=round(time.time() - t0, 1))
         raise
     d.last_battle.update(outcome=outcome, seconds=round(time.time() - t0, 1))
+    # A LOST mission had no conscious unit left, by the engine's own rule: checkMissionEnd sets
+    # playerWon=false exactly when the player is absent from orgsAlive, and a human soldier
+    # qualifies for that set whenever it is conscious (battle.cpp:2160-2205). So "lost" and
+    # "somebody was still standing" cannot both be true.
+    #
+    # survivors is otherwise the last MID-BATTLE sample, because current_battle is torn down
+    # before the debriefing and there is nothing left to query. That made a squad stunned
+    # unconscious on an alien ship report 6 of 6 survivors on a mission it had just lost, and the
+    # arena scored it 0.30 -- full marks for survival. They are not survivors in any sense the
+    # campaign cares about; they are lost with the mission.
+    #
+    # Deliberately NOT applied to "returned": a withdrawal really does bring people home, and
+    # those are the survivors the whole withdraw-early doctrine exists to preserve.
+    if outcome == "lost":
+        d.last_battle["survivors_last_seen"] = d.last_battle.get("survivors")
+        d.last_battle["survivors"] = 0
     return outcome
 
 

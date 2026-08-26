@@ -135,6 +135,29 @@ opts = oa_play.RESPONSES.get("InGameOptions", {})
 check("BUTTON_QUIT" not in opts.values(),
       f"InGameOptions must never be acked with BUTTON_QUIT, got {opts}")
 
+# --- a lost mission has no survivors ------------------------------------------
+# survivors is the last MID-BATTLE sample; current_battle is torn down before the debriefing, so
+# there is nothing left to query. A squad stunned unconscious therefore reported 6 of 6 on a
+# mission it had just LOST, and the arena scored that 0.30 -- full marks for survival.
+# checkMissionEnd sets playerWon=false exactly when no player unit is conscious
+# (battle.cpp:2160-2205), so "lost" and "somebody still standing" cannot both be true.
+src_wb = inspect.getsource(oa_play.win_battle)
+check('if outcome == "lost"' in src_wb, "win_battle must zero survivors on a loss")
+check('survivors_last_seen' in src_wb, "…and keep the stale reading under its own name")
+check('"returned"' in src_wb,
+      "…and say why a withdrawal is exempt -- those really are survivors")
+
+import oa_adversarial_arena as _A
+scores = {
+    "won intact":   _A.utility("resolved", 6, 6),
+    "won pyrrhic":  _A.utility("resolved", 6, 1),
+    "withdrew":     _A.utility("returned", 6, 4),
+    "lost":         _A.utility("lost", 6, 0),
+}
+check(scores["won intact"] > scores["won pyrrhic"] > scores["withdrew"] > scores["lost"],
+      f"scoring must order outcomes as a campaign would: {scores}")
+check(scores["lost"] == 0.0, f"a wipe scores zero, got {scores['lost']}")
+
 if FAILED:
     print(f"FAILED {len(FAILED)}:")
     for m in FAILED:
