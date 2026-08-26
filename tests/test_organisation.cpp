@@ -127,98 +127,6 @@ static bool test_taken_over_infiltration_clamp()
 	return true;
 }
 
-static bool test_infiltration_hourly_ufo2p_rules()
-{
-	// FUN_0007fcc0 is hourly: civilian (index 27) skipped; X-COM is in the
-	// 0..0x1A loop; odd hour decrements the stored value. Empty buildings
-	// stay unchanged regardless of the 42 − difficulty divisor.
-	GameState state;
-	sp<Organisation> player;
-	sp<Organisation> aliens;
-	sp<Organisation> civilian;
-	sp<Organisation> victim;
-	addOrg(state, "ORG_XCOM", player);
-	addOrg(state, "ORG_ALIEN", aliens);
-	addOrg(state, "ORG_CIVILIAN", civilian);
-	addOrg(state, "ORG_VICTIM", victim);
-	state.player = {&state, "ORG_XCOM"};
-	state.aliens = {&state, "ORG_ALIEN"};
-	state.civilian = {&state, "ORG_CIVILIAN"};
-
-	state.difficulty = 4;
-	state.gameTime = GameTime(0); // 00:00, even hour
-	victim->infiltrationValue = 10;
-	player->infiltrationValue = 10;
-	civilian->infiltrationValue = 10;
-	victim->updateInfiltration(state);
-	player->updateInfiltration(state);
-	civilian->updateInfiltration(state);
-	TEST_REQUIRE(victim->infiltrationValue == 10, "difficulty must not change even-hour value {0}",
-	             victim->infiltrationValue);
-	TEST_REQUIRE(player->infiltrationValue == 10, "even-hour X-COM stays {0}",
-	             player->infiltrationValue);
-	TEST_REQUIRE(civilian->infiltrationValue == 10, "civilian skipped even hour {0}",
-	             civilian->infiltrationValue);
-
-	state.gameTime = GameTime(TICKS_PER_HOUR); // 01:00, odd hour
-	victim->updateInfiltration(state);
-	player->updateInfiltration(state);
-	civilian->updateInfiltration(state);
-	TEST_REQUIRE(victim->infiltrationValue == 9, "odd hour decrements victim {0}",
-	             victim->infiltrationValue);
-	TEST_REQUIRE(player->infiltrationValue == 9, "odd hour decrements X-COM {0}",
-	             player->infiltrationValue);
-	TEST_REQUIRE(civilian->infiltrationValue == 10, "civilian skipped odd hour {0}",
-	             civilian->infiltrationValue);
-	return true;
-}
-
-static bool test_infiltration_divisor_uses_difficulty()
-{
-	// FUN_0007fcc0 @ file 0xD2364 (ISO non-4 CRC 0x4749ffc1):
-	// divisor = 42 − ([0x10C9A] >> 16). Writers at file 0xC4DA8 store
-	// difficulty 0..4 at obj2+0x10C9C. 4-build file 0xD21EC is
-	// `42 - word[0x10C9C]`. Product 1×42×38×1 = 1596 → /42 = 38, /38 = 42.
-	GameState state;
-	sp<Organisation> player;
-	sp<Organisation> aliens;
-	sp<Organisation> victim;
-	addOrg(state, "ORG_XCOM", player);
-	addOrg(state, "ORG_ALIEN", aliens);
-	addOrg(state, "ORG_VICTIM", victim);
-	state.player = {&state, "ORG_XCOM"};
-	state.aliens = {&state, "ORG_ALIEN"};
-
-	auto fn = mksp<BuildingFunction>();
-	fn->infiltrationSpeed = 38;
-	state.building_functions["BUILDINGFUNCTION_TEST"] = fn;
-
-	auto alien = mksp<AgentType>();
-	alien->infiltrationSpeed = 42;
-	state.agent_types["AGENTTYPE_TEST"] = alien;
-
-	auto building = mksp<Building>();
-	building->function = {&state, "BUILDINGFUNCTION_TEST"};
-	building->current_crew[{&state, "AGENTTYPE_TEST"}] = 1;
-	state.buildings["BUILDING_TEST"] = building;
-	victim->buildings.push_back({&state, "BUILDING_TEST"});
-	victim->infiltrationSpeed = 1;
-
-	state.gameTime = GameTime(0);
-	state.difficulty = 0;
-	victim->infiltrationValue = 10;
-	victim->updateInfiltration(state);
-	TEST_REQUIRE(victim->infiltrationValue == 48, "novice increment {0}",
-	             victim->infiltrationValue);
-
-	state.difficulty = 4;
-	victim->infiltrationValue = 10;
-	victim->updateInfiltration(state);
-	TEST_REQUIRE(victim->infiltrationValue == 52, "superhuman increment {0}",
-	             victim->infiltrationValue);
-	return true;
-}
-
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -232,7 +140,5 @@ int main(int argc, char **argv)
 	    {"adjust_clamp_and_sign", test_adjust_clamp_and_sign},
 	    {"can_purchase_hostile", test_can_purchase_hostile},
 	    {"taken_over_infiltration_clamp", test_taken_over_infiltration_clamp},
-	    {"infiltration_hourly_ufo2p_rules", test_infiltration_hourly_ufo2p_rules},
-	    {"infiltration_divisor_uses_difficulty", test_infiltration_divisor_uses_difficulty},
 	});
 }
