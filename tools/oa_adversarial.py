@@ -69,6 +69,34 @@ ALIEN_GENES = {
 }
 
 
+# WHICH GENES THE GAME CAN ACTUALLY SEE.
+#
+# This is the difference between a search and a performance. Of the ten X-COM genes, win_battle
+# applies exactly two -- fire_mode and stance -- and ignores the rest. Of the five alien genes, the
+# engine exposes exactly two config options, OpenApoc.AlienAI.Behaviour and .CoverBiasPercent;
+# morale_floor, grenade_bias and advance_bias have no option to bind to.
+#
+# Left unmarked, the learner evolves all fifteen. Two policies differing only in an unwired gene
+# are THE SAME POLICY as far as the game is concerned, but they get different names, separate UCB
+# pairings and separate Hall-of-Fame slots. Elo moves, populations turn over, and none of it means
+# anything -- apparent progress manufactured out of noise. A search space that lies about its own
+# dimensionality is worse than a small one, because a small one is honest.
+#
+# So the unwired genes stay in the tables (they are the list of what still needs connecting) but
+# take no part in the search: they are held at a fixed value, excluded from the name, and skipped
+# by mutation and crossover. Wiring one up is a one-word change here, and it starts varying.
+XCOM_EFFECTIVE = ("fire_mode", "stance")
+ALIEN_EFFECTIVE = ("behaviour_mix", "cover_bias")
+
+
+def gene_table(side: str) -> dict:
+    return XCOM_GENES if side == "xcom" else ALIEN_GENES
+
+
+def effective_genes(side: str) -> tuple:
+    return XCOM_EFFECTIVE if side == "xcom" else ALIEN_EFFECTIVE
+
+
 @dataclass
 class Policy:
     side: str                       # "xcom" | "alien"
@@ -80,7 +108,13 @@ class Policy:
 
     @property
     def name(self) -> str:
-        bits = ",".join(f"{k}={self.genes[k]}" for k in sorted(self.genes))
+        """Identity is what the GAME can tell apart, not what the dataclass holds.
+
+        Naming a policy by all its genes made effect-identical policies look distinct, which is
+        how duplicates got separate UCB pairings and separate Hall-of-Fame slots.
+        """
+        keys = [k for k in effective_genes(self.side) if k in self.genes]
+        bits = ",".join(f"{k}={self.genes[k]}" for k in sorted(keys))
         return f"{self.side}[{bits}]"
 
     @property
@@ -89,24 +123,28 @@ class Policy:
 
 
 def random_policy(side: str, rng: random.Random, generation: int = 0) -> Policy:
-    table = XCOM_GENES if side == "xcom" else ALIEN_GENES
-    return Policy(side=side, genes={k: rng.choice(v) for k, v in table.items()}, born=generation)
+    """Randomise only the genes the game reads; hold the rest at a fixed, visible default."""
+    table = gene_table(side)
+    live = effective_genes(side)
+    genes = {k: (rng.choice(v) if k in live else v[0]) for k, v in table.items()}
+    return Policy(side=side, genes=genes, born=generation)
 
 
 def mutate(p: Policy, rng: random.Random, generation: int, rate: float = 0.34) -> Policy:
     """Change a few genes. Deliberately coarse: with battles this expensive, a fine-grained
     search wastes evaluations exploring differences too small for a noisy signal to resolve."""
-    table = XCOM_GENES if p.side == "xcom" else ALIEN_GENES
+    table = gene_table(p.side)
+    live = effective_genes(p.side)
     genes = dict(p.genes)
     changed = False
-    for k, options in table.items():
+    for k in live:
         if rng.random() < rate:
-            alt = [o for o in options if o != genes[k]]
+            alt = [o for o in table[k] if o != genes[k]]
             if alt:
                 genes[k] = rng.choice(alt)
                 changed = True
     if not changed:                                  # never emit a pure clone
-        k = rng.choice(list(table))
+        k = rng.choice(list(live))
         alt = [o for o in table[k] if o != genes[k]]
         if alt:
             genes[k] = rng.choice(alt)
@@ -118,7 +156,9 @@ def crossover(a: Policy, b: Policy, rng: random.Random, generation: int) -> Poli
     that beats both -- the whole reason to keep a population rather than hill-climb a single
     incumbent."""
     assert a.side == b.side, "cannot cross policies from opposing sides"
-    genes = {k: (a.genes[k] if rng.random() < 0.5 else b.genes[k]) for k in a.genes}
+    live = effective_genes(a.side)
+    genes = {k: ((a.genes[k] if rng.random() < 0.5 else b.genes[k]) if k in live else a.genes[k])
+             for k in a.genes}
     return Policy(side=a.side, genes=genes, elo=(a.elo + b.elo) / 2.0, born=generation)
 
 

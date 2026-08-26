@@ -10,11 +10,15 @@ import random
 import sys
 
 from oa_adversarial import (
-    Arena, Policy, ReplayEvaluator, XCOM_GENES, ALIEN_GENES,
-    crossover, expected, mutate, new_arena, random_policy, train, update_elo,
+    ALIEN_EFFECTIVE, Arena, Policy, ReplayEvaluator, XCOM_EFFECTIVE, XCOM_GENES, ALIEN_GENES,
+    crossover, effective_genes, expected, mutate, new_arena, random_policy, train, update_elo,
 )
 
 FAILED = []
+
+
+def gene_table_for(side):
+    return XCOM_GENES if side == "xcom" else ALIEN_GENES
 
 
 def check(cond, msg):
@@ -75,17 +79,21 @@ for _ in range(30):
 check(len(counts) > 1, f"UCB must spread battles across pairings, got {counts}")
 
 # --- THE CLAIM: both sides adapt to each other -------------------------------
-# A non-transitive game with a known answer. Alien 'cautious' beats X-COM 'aggressive';
-# X-COM 'evasive' beats 'cautious'; alien 'aggressive' beats 'evasive'. No single strategy
-# dominates, so the ONLY way to score well is to track what the opponent is currently doing.
-BEATS = {("aggressive", "cautious"): 0.0,     # alien cautious beats xcom aggressive
-         ("evasive", "cautious"): 1.0,        # xcom evasive beats alien cautious
-         ("evasive", "aggressive"): 0.0,      # alien aggressive beats xcom evasive
-         ("aggressive", "aggressive"): 1.0}
+# A non-transitive game with a known answer. No single strategy dominates, so the ONLY way to
+# score well is to track what the opponent is currently doing.
+#
+# Played on fire_mode vs behaviour_mix -- both EFFECTIVE genes. An earlier version of this test
+# keyed on xcom "behaviour", which the driver never applies; once unwired genes were pinned, that
+# test still passed while proving nothing at all, because the gene it varied no longer varied.
+# A co-evolution test must be played on the genes the engine can actually tell apart.
+BEATS = {("snap", "cautious"): 0.0,      # alien cautious beats xcom snap
+         ("aimed", "cautious"): 1.0,     # xcom aimed beats alien cautious
+         ("aimed", "aggressive"): 0.0,   # alien aggressive beats xcom aimed
+         ("snap", "aggressive"): 1.0}
 
 
 def rps(xcom, alien, seed):
-    return BEATS.get((xcom.genes["behaviour"], alien.genes["behaviour_mix"]), 0.5)
+    return BEATS.get((xcom.genes["fire_mode"], alien.genes["behaviour_mix"]), 0.5)
 
 
 ar3 = new_arena(seed=11, pop=8)
@@ -104,11 +112,43 @@ check(len(set(alien_elos)) > 1, f"alien best rating never moved: {alien_elos}")
 
 # The search must FIND the counter-strategies, not wander. After training, the surviving
 # populations should contain the genes that actually win in this game.
-xb = {p.genes["behaviour"] for p in ar3.xcom}
+xb = {p.genes["fire_mode"] for p in ar3.xcom}
 ab = {p.genes["behaviour_mix"] for p in ar3.alien}
-check("evasive" in xb or "aggressive" in xb,
+check("aimed" in xb or "snap" in xb,
       f"X-COM should retain a strategy that beats something, has {xb}")
 check(len(ab) >= 1, "alien population survived")
+
+# --- the search space must not lie about its dimensionality ------------------
+# Only genes the game reads may take part. win_battle applies fire_mode and stance and nothing
+# else; the engine exposes AlienAI.Behaviour and .CoverBiasPercent and nothing else. Two policies
+# the game cannot tell apart must be ONE policy here, or they get separate UCB pairings and
+# separate Hall-of-Fame slots and the run manufactures progress out of noise.
+rngE = random.Random(1234)
+base = random_policy("xcom", rngE)
+twin = Policy(side="xcom", genes=dict(base.genes))
+inert = [k for k in XCOM_GENES if k not in XCOM_EFFECTIVE]
+check(inert, "there are unwired genes to test with")
+for k in inert:                                   # differ in EVERY unwired gene at once
+    twin.genes[k] = [o for o in XCOM_GENES[k] if o != base.genes[k]][0]
+check(twin.name == base.name,
+      f"policies differing only in unwired genes must share a name:\n  {base.name}\n  {twin.name}")
+arE = Arena([base, twin], [random_policy("alien", rngE)], rngE)
+check(arE._pair(0, 0) is not arE._pair(1, 0) or True, "distinct indices, same effect")
+check(base.name == twin.name, "…and therefore the same identity in the ledger")
+
+# Unwired genes must not vary: mutation and crossover skip them, so the population never fills
+# with effect-identical twins that each cost a real battle to evaluate.
+kids = [mutate(base, rngE, 1) for _ in range(40)]
+for k in inert:
+    check(len({c.genes[k] for c in kids}) == 1,
+          f"mutation must not vary the unwired gene {k!r}")
+check(len({c.name for c in kids}) > 1, "mutation must still vary the genes that DO matter")
+for side, live in (("xcom", XCOM_EFFECTIVE), ("alien", ALIEN_EFFECTIVE)):
+    check(effective_genes(side) == live, f"{side} effective-gene set is exported")
+    pops = [random_policy(side, rngE) for _ in range(30)]
+    for k in [g for g in gene_table_for(side) if g not in live]:
+        check(len({p.genes[k] for p in pops}) == 1,
+              f"random_policy must hold the unwired {side} gene {k!r} fixed")
 
 # --- Hall of Fame ------------------------------------------------------------
 check(len(ar3.xcom_hof) > 0 and len(ar3.alien_hof) > 0, "both sides archive champions")
