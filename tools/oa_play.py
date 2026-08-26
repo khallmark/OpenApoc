@@ -2784,7 +2784,7 @@ def verify_battle_capabilities(d: Driver) -> dict:
 
     layout = battle_layout(d)
     results["battle_positions"] = bool(layout)
-    foes = d.h.screen_craft("enemies_screen")
+    foes = on_screen(d, "enemies_screen")
     results["enemies_visible"] = bool(foes)
     if foes:
         fx, fy, fz = foes[0]
@@ -2833,6 +2833,26 @@ def build_battle_ai(policy: dict):
         accepted = set(inspect.signature(cls.__init__).parameters) - {"self"}
     kw = {k: v for k, v in policy.items() if k in accepted}
     return make_ai(name, **kw), Capabilities
+
+
+def on_screen(d: Driver, which: str) -> list:
+    """screen_craft that tolerates the battle ending underneath it.
+
+    Battle::checkMissionEnd tears current_battle down the instant the last hostile dies, so a
+    query already in flight comes back as an error rather than an empty list. That is not a
+    failure worth abandoning a mission for -- it means the mission is over, which is the outcome
+    we wanted.
+
+    It cost a battle that had just been won: hostiles down from 10 to 6, mission complete, and the
+    run recorded a no-contest because the driver raised instead of shrugging. The engine now
+    answers these two queries with an empty result rather than ERR, and this is the belt to that
+    braces -- an older binary should not be able to lose a won mission this way either.
+    """
+    try:
+        return d.h.screen_craft(which) or []
+    except (HarnessError, OSError):
+        return []
+
 
 
 def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) -> str:
@@ -2964,7 +2984,7 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
         if rounds % 4 == 0:
             d.h.gs("centre_on_friends")
             time.sleep(0.15)
-        friends = d.h.screen_craft("friends_screen")
+        friends = on_screen(d, "friends_screen")
 
         # Re-select only when the squad has actually changed. Selection persists between orders,
         # so rebuilding it every round spent roughly seven clicks on re-selecting the same people
@@ -3015,7 +3035,7 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
                 if layout:
                     match_enemy_floor(d, layout)
 
-        foes = d.h.screen_craft("enemies_screen")
+        foes = on_screen(d, "enemies_screen")
         # enemies_screen only reports hostiles already on screen. Walking the camera only when
         # *nothing* is visible is not enough: one alien that is framed but unreachable keeps the
         # squad grinding against it while the rest of the map goes unexplored, which is the same
@@ -3024,7 +3044,7 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
             info = d.h.gs("centre_on_enemy")
             if info.get("centred") == "1":
                 time.sleep(0.4)
-                found = d.h.screen_craft("enemies_screen")
+                found = on_screen(d, "enemies_screen")
                 if found:
                     foes = found
 

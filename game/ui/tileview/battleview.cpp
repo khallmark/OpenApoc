@@ -1617,9 +1617,19 @@ void BattleView::registerBattleViewIntrospection()
 			                  mine.empty() ? UString("-") : mine, view->getZLevel(), unseen,
 			                  bystanders);
 		    }
-		    if (gameState && gameState->current_battle &&
-		        (q == "enemies_screen" || q == "friends_screen"))
+		    if (q == "enemies_screen" || q == "friends_screen")
 		    {
+			    // Answer even with no battle in progress, because "no battle" has an obvious
+			    // and true answer: nothing is on screen. Guarding the whole query on
+			    // current_battle instead let it fall through to ERR unknown query, and a
+			    // mission ending between one poll and the next turned into a hard error in the
+			    // driver. Observed killing a battle that had just been WON -- hostiles down
+			    // from 10 to 6, mission complete, and the run recorded a no-contest because
+			    // checkMissionEnd tore current_battle down while a query was in flight.
+			    if (!gameState || !gameState->current_battle)
+			    {
+				    return UString("count=0 unarmed=0 bystanders=0 unseen=0 at=-");
+			    }
 			    const bool wantFoes = (q == "enemies_screen");
 			    const auto player = gameState->getPlayer();
 			    const auto size = fw().displayGetSize();
