@@ -1,0 +1,6 @@
+{
+  "schema": "openapoc.timing_source_capture_test_expectation.v1",
+  "kind": "pr",
+  "required_collections": ["issue_comments", "reviews", "review_comments", "commits", "files"],
+  "missing_file_patch": "fail"
+}

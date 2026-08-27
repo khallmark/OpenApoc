@@ -1,0 +1,120 @@
+{
+  "schema": "openapoc.timing_source_capture_spec.v1",
+  "repository": "OpenApoc/OpenApoc",
+  "sources": [
+    {
+      "id": "pr-1166",
+      "kind": "pr",
+      "number": 1166,
+      "expected": {
+        "updated_at": "2026-04-16T02:42:28Z",
+        "head_sha": "e08b67b8cbf19fc65ad37c08251bd8678325f843",
+        "base_sha": "8eada59c480210170dbd0d4ef7fee63964f3d38e",
+        "commit_count": 5,
+        "changed_file_count": 18,
+        "issue_comment_ids": [1503311025, 1503641730],
+        "review_ids": [],
+        "review_comment_ids": []
+      }
+    },
+    {
+      "id": "pr-1237",
+      "kind": "pr",
+      "number": 1237,
+      "expected": {
+        "updated_at": "2026-08-26T03:03:54Z",
+        "head_sha": "53d2da5f5177303e3a1a56732be77c54414ef566",
+        "base_sha": "8eada59c480210170dbd0d4ef7fee63964f3d38e",
+        "commit_count": 3,
+        "changed_file_count": 4,
+        "issue_comment_ids": [1667631082, 1848612767, 1848645753, 1848651727, 1848668721, 5419988588],
+        "review_ids": [],
+        "review_comment_ids": []
+      }
+    },
+    {
+      "id": "pr-1270",
+      "kind": "pr",
+      "number": 1270,
+      "expected": {
+        "updated_at": "2026-04-16T02:42:28Z",
+        "head_sha": "b9d5aca1b13e76e28b8ba976d0e7bbe5569bfbf3",
+        "base_sha": "8eada59c480210170dbd0d4ef7fee63964f3d38e",
+        "commit_count": 1,
+        "changed_file_count": 6,
+        "issue_comment_ids": [],
+        "review_ids": [],
+        "review_comment_ids": []
+      }
+    },
+    {
+      "id": "issue-997",
+      "kind": "issue",
+      "number": 997,
+      "expected": {
+        "updated_at": "2023-04-10T14:29:26Z",
+        "issue_comment_ids": [1501886912],
+        "review_ids": [],
+        "review_comment_ids": []
+      }
+    },
+    {
+      "id": "issue-1216",
+      "kind": "issue",
+      "number": 1216,
+      "expected": {
+        "updated_at": "2024-04-14T15:33:46Z",
+        "issue_comment_ids": [1560726498, 1560861860, 1560877770, 1561684197, 2054099554],
+        "review_ids": [],
+        "review_comment_ids": []
+      }
+    },
+    {
+      "id": "issue-1336",
+      "kind": "issue",
+      "number": 1336,
+      "expected": {
+        "updated_at": "2024-02-29T14:15:11Z",
+        "issue_comment_ids": [1951369703],
+        "review_ids": [],
+        "review_comment_ids": []
+      }
+    }
+  ],
+  "attachments": [
+    {
+      "id": "issue-1336-settings",
+      "url": "https://github.com/OpenApoc/OpenApoc/files/14184710/settings.zip",
+      "sha256": "8bede02dd208b86a5249382d3a7d554db7dc29abab98c26c340538f175af5fb5",
+      "disposition": "hash_only_never_commit_or_extract"
+    },
+    {
+      "id": "issue-1336-save-test-10",
+      "url": "https://github.com/OpenApoc/OpenApoc/files/14184711/save_test.10.zip",
+      "sha256": "dc612b0aabe6a003889c04c1a5203a1edd4d1a40d4bdd376789016be24dafa31",
+      "disposition": "hash_only_never_commit_or_extract"
+    },
+    {
+      "id": "issue-1336-save-85",
+      "url": "https://github.com/OpenApoc/OpenApoc/files/14323263/save_85.zip",
+      "sha256": "260aefee28e5a50237b6fc29e87c7dd1585dad60463c63c9451db9480d5ec12c",
+      "disposition": "hash_only_never_commit_or_extract"
+    }
+  ],
+  "mutable_non_authoritative_locators": [
+    {
+      "id": "issue-1336-body-youtube-video",
+      "url": "https://youtu.be/U8FNmmOGJZg?t=5312",
+      "disposition": "mutable_locator_only_cannot_authorize_code_or_parity"
+    },
+    {
+      "id": "issue-1336-comment-youtube-video",
+      "url": "https://youtu.be/eFp_RWWfxdY?t=1269",
+      "disposition": "mutable_locator_only_cannot_authorize_code_or_parity"
+    }
+  ],
+  "unavailable_locators": [
+    "issue-997-linked-discord-threads",
+    "issue-997-linked-trello-board"
+  ]
+}

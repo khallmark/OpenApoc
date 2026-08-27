@@ -1,0 +1,130 @@
+{
+  "schema": "openapoc.timing_source_disposition_map.v1",
+  "source_snapshot_manifest": "docs/timing/source-snapshots/v1/manifest.json",
+  "source_disposition_ledger": "docs/timing/source-disposition.md",
+  "sources": {
+    "pr-1166": {
+      "expected": {"file_count": 18, "hunk_count": 22, "body_count": 1, "issue_comment_count": 2, "review_count": 0, "review_comment_count": 0},
+      "body_segments": [
+        {"line_index": 0, "line_text": "This pull request attempts to address https://github.com/OpenApoc/OpenApoc/issues/997.  First, in framework.cpp, a new whileloop is added around currentstage.update() which runs on a ticks per second basis, rather than being in lockstep with stage.render().  The code also includes various changes related to ticks_per_second and related constants, throughout a number of files.  The code also moves the ticks_per_second constants into framework.h, in order to allow the state update loop to run on a ticks_per_second basis.  This assumes a 1:1 correspondence between in-game seconds at the slowest speed and real-time seconds.  Later, we might consider moving the time constants back into gametime.h and having a single number that is ticks per real second (or something), as well as ticks_per_sim_second, with a relation between the two.", "kind": "requirement", "disposition_rows": ["R1166-01", "R1166-02", "R1166-03"]},
+        {"line_index": 2, "line_text": "Re the change to doodad, it now has a magic number which is bad.  I'm not sure what it should be, though...  It was originally ticks_multiplier, which I thought I knew what it meant but now I'm not so sure.", "kind": "requirement", "disposition_rows": ["R1166-08"]}
+      ],
+      "issue_comment_dispositions": {"1503311025": ["R1166-08"], "1503641730": ["R1166-08"]},
+      "hunk_dispositions": [
+        {"filename": "framework/framework.cpp", "hunk_header": "@@ -311,10 +311,14 @@ void Framework::run(sp<Stage> initialStage)", "occurrence": 1, "disposition_rows": ["R1166-01", "R1166-02"]},
+        {"filename": "framework/framework.cpp", "hunk_header": "@@ -346,8 +350,19 @@ void Framework::run(sp<Stage> initialStage)", "occurrence": 1, "disposition_rows": ["R1166-01", "R1166-02"]},
+        {"filename": "framework/framework.h", "hunk_header": "@@ -10,6 +10,17 @@", "occurrence": 1, "disposition_rows": ["R1166-02", "R1166-03", "R1166-12", "R1166-13"]},
+        {"filename": "framework/framework.h", "hunk_header": "@@ -24,8 +35,6 @@ class StageCmd;", "occurrence": 1, "disposition_rows": ["R1166-03"]},
+        {"filename": "framework/framework.h", "hunk_header": "@@ -111,11 +120,13 @@ class Framework", "occurrence": 1, "disposition_rows": ["R1166-03"]},
+        {"filename": "game/state/battle/ai/tacticalai.cpp", "hunk_header": "@@ -1,12 +1,13 @@", "occurrence": 1, "disposition_rows": ["R1166-04"]},
+        {"filename": "game/state/battle/battle.h", "hunk_header": "@@ -1,5 +1,6 @@", "occurrence": 1, "disposition_rows": ["R1166-03"]},
+        {"filename": "game/state/battle/battleexplosion.cpp", "hunk_header": "@@ -71,7 +71,7 @@ void BattleExplosion::update(GameState &state, unsigned int ticks)", "occurrence": 1, "disposition_rows": ["R1166-05"]},
+        {"filename": "game/state/battle/battleexplosion.h", "hunk_header": "@@ -7,6 +7,8 @@", "occurrence": 1, "disposition_rows": ["R1166-05"]},
+        {"filename": "game/state/battle/battlehazard.h", "hunk_header": "@@ -15,7 +15,7 @@", "occurrence": 1, "disposition_rows": ["R1166-06"]},
+        {"filename": "game/state/battle/battlemappart.h", "hunk_header": "@@ -8,12 +8,14 @@", "occurrence": 1, "disposition_rows": ["R1166-07", "R1166-13"]},
+        {"filename": "game/state/battle/battleunit.h", "hunk_header": "@@ -2,6 +2,7 @@", "occurrence": 1, "disposition_rows": ["R1166-13"]},
+        {"filename": "game/state/city/building.h", "hunk_header": "@@ -1,5 +1,6 @@", "occurrence": 1, "disposition_rows": ["R1166-03"]},
+        {"filename": "game/state/gametime.cpp", "hunk_header": "@@ -1,4 +1,5 @@", "occurrence": 1, "disposition_rows": ["R1166-03"]},
+        {"filename": "game/state/gametime.h", "hunk_header": "@@ -6,14 +6,6 @@", "occurrence": 1, "disposition_rows": ["R1166-02", "R1166-03"]},
+        {"filename": "game/state/shared/agent.h", "hunk_header": "@@ -1,5 +1,6 @@", "occurrence": 1, "disposition_rows": ["R1166-03"]},
+        {"filename": "game/state/shared/doodad.cpp", "hunk_header": "@@ -20,7 +20,7 @@ Doodad::Doodad(Vec3<float> position, Vec2<int> imageOffset, bool temporary, int", "occurrence": 1, "disposition_rows": ["R1166-08"]},
+        {"filename": "game/state/shared/doodad.h", "hunk_header": "@@ -6,6 +6,8 @@", "occurrence": 1, "disposition_rows": ["R1166-08"]},
+        {"filename": "game/state/shared/organisation.h", "hunk_header": "@@ -1,5 +1,6 @@", "occurrence": 1, "disposition_rows": ["R1166-03"]},
+        {"filename": "game/state/shared/projectile.h", "hunk_header": "@@ -19,6 +19,9 @@", "occurrence": 1, "disposition_rows": ["R1166-09"]},
+        {"filename": "game/state/tilemap/tilemap.h", "hunk_header": "@@ -1,5 +1,6 @@", "occurrence": 1, "disposition_rows": ["R1166-03"]},
+        {"filename": "game/state/tilemap/tilemap.h", "hunk_header": "@@ -28,7 +29,7 @@ namespace OpenApoc", "occurrence": 1, "disposition_rows": ["R1166-10"]}
+      ],
+      "retired_dispositions_with_no_source_artifact": ["R1166-11"]
+    },
+    "pr-1237": {
+      "expected": {"file_count": 4, "hunk_count": 7, "body_count": 1, "issue_comment_count": 6, "review_count": 0, "review_comment_count": 0},
+      "body_segments": [
+        {"line_index": 0, "line_text": "Addresses #997, #1216 so far.", "kind": "context_no_requirement", "disposition_rows": []},
+        {"line_index": 2, "line_text": "The following is a list of what appears to have been fixed, many are very lightly tested and the changes could very easily have affected things in other parts of the game that I don't yet know about. This is just a running list to help me keep track of what has been done.", "kind": "context_no_requirement", "disposition_rows": []},
+        {"line_index": 4, "line_text": "### Battlescape", "kind": "context_no_requirement", "disposition_rows": []},
+        {"line_index": 6, "line_text": "- Walking speed seems to be a bit faster, closer to the original.", "kind": "requirement", "disposition_rows": ["R1237-05"]},
+        {"line_index": 7, "line_text": "- Explosive hazard type doesn't leave smoke behind anymore, it stayed around way too long. Was this a feature?", "kind": "requirement", "disposition_rows": ["R1237-10"]},
+        {"line_index": 8, "line_text": "- Explosions now expand faster to more closely match the OG game.", "kind": "requirement", "disposition_rows": ["R1237-08"]},
+        {"line_index": 9, "line_text": "- Explosions seem to be the correct radius now, although this needs more testing. I have only tried a couple items.", "kind": "requirement", "disposition_rows": ["R1237-08"]},
+        {"line_index": 11, "line_text": "### Cityscape", "kind": "context_no_requirement", "disposition_rows": []},
+        {"line_index": 12, "line_text": "NA", "kind": "context_no_requirement", "disposition_rows": []},
+        {"line_index": 14, "line_text": "### Both", "kind": "context_no_requirement", "disposition_rows": []},
+        {"line_index": 16, "line_text": "- Projectile speed has been increased, it seems much closer to the OG game. TICK_SCALE was set to 18 instead of 36 in this case. This has not been tested in cityscape, likely will cause issues somewhere.", "kind": "requirement", "disposition_rows": ["R1237-03", "R1237-06"]},
+        {"line_index": 18, "line_text": "### Problems", "kind": "context_no_requirement", "disposition_rows": []},
+        {"line_index": 20, "line_text": "- [ ] Rate of fire is now too fast. Should seperate speed from ROF if that is what is happening.", "kind": "requirement", "disposition_rows": ["R1237-07", "R1237-11"]}
+      ],
+      "issue_comment_dispositions": {
+        "1667631082": ["R1237-08", "R1237-10"],
+        "1848612767": ["R1237-07", "R1237-08", "R1237-09", "R1237-10", "R1237-11", "R1237-13"],
+        "1848645753": ["R1237-01", "R1237-11", "R1237-13"],
+        "1848651727": ["R1237-13"],
+        "1848668721": ["R1237-11", "R1237-14"],
+        "5419988588": ["R1237-01", "R1237-02", "R1237-04", "R1237-11", "R1237-15"]
+      },
+      "hunk_dispositions": [
+        {"filename": "game/state/battle/battleexplosion.cpp", "hunk_header": "@@ -23,7 +23,7 @@ namespace OpenApoc", "occurrence": 1, "disposition_rows": ["R1237-08"]},
+        {"filename": "game/state/battle/battleexplosion.cpp", "hunk_header": "@@ -69,7 +69,7 @@ void BattleExplosion::update(GameState &state, unsigned int ticks)", "occurrence": 1, "disposition_rows": ["R1237-08"]},
+        {"filename": "game/state/battle/battleexplosion.cpp", "hunk_header": "@@ -88,11 +88,11 @@ void BattleExplosion::damage(GameState &state, const TileMap &map, Vec3<int> pos", "occurrence": 1, "disposition_rows": ["R1237-10", "R1237-12"]},
+        {"filename": "game/state/battle/battleexplosion.cpp", "hunk_header": "@@ -280,7 +280,7 @@ void BattleExplosion::expand(GameState &state, const TileMap &map, const Vec3<in", "occurrence": 1, "disposition_rows": ["R1237-08", "R1237-09"]},
+        {"filename": "game/state/city/vehicle.h", "hunk_header": "@@ -53,7 +53,7 @@ static const int FV_CHANCE_TO_RECOVER_EQUIPMENT = 90;", "occurrence": 1, "disposition_rows": ["R1237-04"]},
+        {"filename": "game/state/gametime.h", "hunk_header": "@@ -7,7 +7,7 @@ namespace OpenApoc", "occurrence": 1, "disposition_rows": ["R1237-02"]},
+        {"filename": "game/state/tilemap/tilemap.h", "hunk_header": "@@ -28,7 +28,7 @@ namespace OpenApoc", "occurrence": 1, "disposition_rows": ["R1237-03"]}
+      ],
+      "retired_dispositions_with_no_source_artifact": []
+    },
+    "pr-1270": {
+      "expected": {"file_count": 6, "hunk_count": 11, "body_count": 1, "issue_comment_count": 0, "review_count": 0, "review_comment_count": 0},
+      "body_segments": [
+        {"line_index": 0, "line_text": "Proof-of-concept decoupling render and update loops", "kind": "requirement", "disposition_rows": ["R1270-01"]},
+        {"line_index": 2, "line_text": "Uses timers to trigger events rather than a loop - should allow (pretty much) arbitrary intervals between render and update steps.", "kind": "requirement", "disposition_rows": ["R1270-01", "R1270-09"]},
+        {"line_index": 4, "line_text": "TODO before we can even *consider* merging this:", "kind": "context_no_requirement", "disposition_rows": []},
+        {"line_index": 5, "line_text": " - Drag the GameState update out of the \"owning\" UI element", "kind": "requirement", "disposition_rows": ["R1270-02"]},
+        {"line_index": 6, "line_text": " - Fixup the hardcoded timings for each time", "kind": "requirement", "disposition_rows": ["R1270-09"]},
+        {"line_index": 7, "line_text": " - Find a decent way of aligning frame rate to running screens?", "kind": "requirement", "disposition_rows": ["R1270-03"]},
+        {"line_index": 8, "line_text": " - Should UI update and render be a single event anyway?", "kind": "requirement", "disposition_rows": ["R1270-03"]},
+        {"line_index": 9, "line_text": " - Use existing TICKS_PER_SECOND etc. constants rather than hardcoded test values", "kind": "requirement", "disposition_rows": ["R1270-09"]},
+        {"line_index": 10, "line_text": " - Are SDL timers accurate enough? The documentation doesn't really guarantee much, but is this fine for a game?", "kind": "requirement", "disposition_rows": ["R1270-12"]},
+        {"line_index": 11, "line_text": " - locked_queue is a quick dirty untested wrapper around std::queue to add a mutex, doesn't instantly crash at least...", "kind": "requirement", "disposition_rows": ["R1270-04"]},
+        {"line_index": 12, "line_text": " - What happens on exit? Race conditions with locked_queue?", "kind": "requirement", "disposition_rows": ["R1270-04", "R1270-06"]},
+        {"line_index": 13, "line_text": " - What happens if we can't keep up? I think the locked_queue will just drop events over it's arbitrary limit if non blocking. Would this happen to starve one event?", "kind": "requirement", "disposition_rows": ["R1270-05", "R1270-07"]},
+        {"line_index": 14, "line_text": " - Everything running in a single thread could cause issues, especially if ahead in the render queue so the swap blocks", "kind": "requirement", "disposition_rows": ["R1270-07", "R1270-08"]}
+      ],
+      "issue_comment_dispositions": {},
+      "hunk_dispositions": [
+        {"filename": "framework/CMakeLists.txt", "hunk_header": "@@ -30,7 +30,7 @@ set (FRAMEWORK_SOURCE_FILES", "occurrence": 1, "disposition_rows": ["R1270-10"]},
+        {"filename": "framework/CMakeLists.txt", "hunk_header": "@@ -68,7 +68,8 @@ set (FRAMEWORK_HEADER_FILES", "occurrence": 1, "disposition_rows": ["R1270-10"]},
+        {"filename": "framework/CMakeLists.txt", "hunk_header": "@@ -196,7 +197,7 @@ add_library(OpenApoc_Framework STATIC", "occurrence": 1, "disposition_rows": ["R1270-10"]},
+        {"filename": "framework/framework.cpp", "hunk_header": "@@ -8,13 +8,15 @@", "occurrence": 1, "disposition_rows": ["R1270-04"]},
+        {"filename": "framework/framework.cpp", "hunk_header": "@@ -318,101 +320,124 @@ void Framework::run(sp<Stage> initialStage)", "occurrence": 1, "disposition_rows": ["R1270-01", "R1270-02", "R1270-03", "R1270-06", "R1270-07", "R1270-08", "R1270-09", "R1270-11"]},
+        {"filename": "framework/framework.h", "hunk_header": "@@ -1,11 +1,13 @@", "occurrence": 1, "disposition_rows": ["R1270-02"]},
+        {"filename": "framework/framework.h", "hunk_header": "@@ -23,7 +25,6 @@ class JukeBox;", "occurrence": 1, "disposition_rows": ["R1270-02"]},
+        {"filename": "framework/framework.h", "hunk_header": "@@ -46,6 +47,11 @@ class Framework", "occurrence": 1, "disposition_rows": ["R1270-02"]},
+        {"filename": "framework/locked_queue.h", "hunk_header": "@@ -0,0 +1,85 @@", "occurrence": 1, "disposition_rows": ["R1270-04", "R1270-05"]},
+        {"filename": "framework/timer.cpp", "hunk_header": "@@ -0,0 +1,39 @@", "occurrence": 1, "disposition_rows": ["R1270-02", "R1270-04"]},
+        {"filename": "framework/timer.h", "hunk_header": "@@ -0,0 +1,17 @@", "occurrence": 1, "disposition_rows": ["R1270-04"]}
+      ],
+      "retired_dispositions_with_no_source_artifact": []
+    }
+  },
+  "required_disposition_row_sets": {
+    "R1166": {"first": 1, "last": 13},
+    "R1237": {"first": 1, "last": 15},
+    "R1270": {"first": 1, "last": 12},
+    "TA": {"first": 1, "last": 41},
+    "TS": {"first": 1, "last": 47}
+  },
+  "required_supplemental_cross_links": {
+    "TS-44": ["TS-33", "TS-36", "TS-43"],
+    "TS-45": ["TS-38", "TS-43"],
+    "TS-46": ["TS-43"],
+    "TS-47": ["TS-41"]
+  },
+  "completeness": {
+    "every_non_whitespace_body_line_must_have_exactly_one_requirement_or_context_segment": true,
+    "every_captured_issue_comment_and_patch_hunk_must_resolve_to_existing_rows": true,
+    "parsed_hunk_locator_set_must_exactly_equal_mapped_locator_set": true,
+    "artifact_mapped_rows_plus_explicit_retired_rows_must_equal_each_exact_upstream_row_set": true,
+    "reviews_and_review_comments_must_remain_zero": true,
+    "upstream_architecture_is_evidence_only_and_local_plan_is_authoritative": true
+  }
+}

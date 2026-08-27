@@ -1,0 +1,3049 @@
+{
+  "schema": "openapoc.train_scope.v1",
+  "source_plan": "docs/plans/2026-08-26-001-render-simulation-decoupling-plan.md",
+  "planning_delivery": {
+    "bootstrap_slice_id": "P0",
+    "planning_slice_id": "P",
+    "trust_root": {
+      "owner": "landed_default_branch_P0_only",
+      "owned_artifacts": [".github/workflows/cmake.yml", ".github/workflows/harness.yml", ".github/workflows/lint.yml", ".github/workflows/planning-scope.yml", "docs/timing/pr-p-policy-v1.json", "tools/validate_pr_p_scope.py"],
+      "P_may_modify_any_owned_artifact": false,
+      "bootstrap_genesis": "P0_cannot_validate_itself_and_lands_only_after_separate_exact_head_human_and_independent_review_existing_required_gates_and_explicit_merge_authorization",
+      "later_trust_root_change": "new_separately_reviewed_P0_style_bootstrap_never_self_validated",
+      "post_land_trust_root_receipt_required_fields": ["bootstrap_operation_id", "P0_commit_sha", "P0_tree_sha", "cmake_workflow_blob_sha", "harness_workflow_blob_sha", "lint_workflow_blob_sha", "planning_scope_workflow_blob_sha", "validator_blob_sha", "policy_blob_sha", "complete_workflow_tree_jcs_sha256", "tag_ruleset_receipt_jcs_sha256", "trust_tag_object_oid", "receipt_tag_object_oid", "peeled_P0_commit_sha", "provider_actor", "provider_atomic_push_receipt_jcs_sha256", "independent_review_set_jcs_sha256"],
+      "bootstrap_sequence": ["P0_explicitly_authorized_merge", "install_and_read_back_zero_bypass_create_allowed_update_delete_forbidden_tag_ruleset", "prove_both_fixed_tag_refs_absent", "atomically_create_only_push_direct_annotated_trust_and_receipt_tags", "verify_remote_tag_object_OIDs_direct_commit_peels_tree_actor_provider_and_ruleset_receipt", "sacrificial_non_P_exact_head_check", "install_and_read_back_strict_required_branch_protection", "P_admission_enabled"],
+      "bootstrap_crash_mismatch_or_preexisting_ref": "hard_red_no_delete_recreate_retarget_or_bypass_recovery",
+      "trust_tag_ref": "refs/tags/planning-scope-trust-v1",
+      "receipt_tag_ref": "refs/tags/planning-scope-trust-v1-receipt",
+      "tag_authority_direction": "external_create_only_receipt_binds_tag_object_OID_and_peeled_P0_commit_tree_without_any_P_or_P0_reciprocal_digest"
+    },
+    "trusted_workflow": {
+      "event": "pull_request_target",
+      "workflow_and_validator_source": "latest_default_develop_containing_exact_P0_trust_root_receipt",
+      "required_job_context": "Planning Scope / trusted-pr-p-scope",
+      "always_run": true,
+      "path_branch_or_job_skip_neutral_or_fail_open": "forbidden",
+      "runner": "github_hosted_ephemeral",
+      "permissions": ["contents:read"],
+      "secrets_oidc_environments_caches_or_untrusted_artifacts": "forbidden",
+      "third_party_actions": "forbidden_or_full_commit_sha_pinned_and_frozen_in_P0_receipt",
+      "untrusted_checkout_import_execution_shell_action_build_test_submodule_lfs_filter_or_hook": "forbidden",
+      "candidate_data_handling": "inspect_bounded_git_objects_bytes_utf8_json_and_ast_only_with_P0_validator",
+      "event_values_enter_shell": "environment_only_then_strict_type_and_identity_validation",
+      "tagged_validator_execution": "inline_default_branch_wrapper_first_proves_its_own_workflow_SHA_and_exact_complete_workflow_tree_plus_six_trust_root_path_mode_type_blob_OIDs_equal_the_direct_annotated_P0_tag_then_materializes_only_tagged_regular_validator_and_policy_blobs_and_runs_python_-I_-S_-B_in_clean_cwd_env",
+      "fan_in": "one_always_running_job_succeeds_only_after_exact_validator_success_and_otherwise_fails",
+      "ordinary_workflow_hardening": {
+        "exact_paths": [".github/workflows/cmake.yml", ".github/workflows/harness.yml", ".github/workflows/lint.yml"],
+        "permissions": ["contents:read"],
+        "checkout_action": "actions_checkout_v7_0_1_full_commit_SHA",
+        "persist_credentials": false,
+        "workflow_bytes_frozen_by_P0": true,
+        "same_app_context_spoofing_via_candidate_token_or_workflow_mutation": "forbidden"
+      },
+      "ordinary_harness": {
+        "event": "push_or_pull_request_unprivileged",
+        "permissions": ["contents:read"],
+        "runner": "github_hosted_ephemeral",
+        "checkout_action": "full_commit_SHA_pinned",
+        "persist_credentials": false,
+        "secrets_oidc_environments_or_cache_trust": "forbidden",
+        "candidate_Python_execution": "defense_in_depth_only_after_exact_head_checkout_never_admission_authority",
+        "job_result": "fail_closed_on_any_executed_step"
+      }
+    },
+    "immutable_event_and_git_binding": {
+      "required_values": ["numeric_pull_request_number", "event_base_repo_node_id", "event_base_ref", "event_base_sha", "event_head_repo_node_id", "event_head_ref", "event_head_sha", "GITHUB_WORKFLOW_SHA", "pull_request_target_GITHUB_SHA", "trust_tag_object_oid", "receipt_tag_object_oid"],
+      "P_identity_from_P0_policy": {
+        "base_repository_node_id": "R_kgDOUBJ-Dg",
+        "base_ref": "develop",
+        "head_repository_node_id": "R_kgDOUBJ-Dg",
+        "head_ref": "khallmark/render-simulation-design"
+      },
+      "head_manifest_or_changed_path_detection_selects_P": "forbidden",
+      "isolated_repository": "fresh_bare_repo_with_system_global_and_local_git_config_disabled_no_hooks_replacements_ext_diff_textconv_filters_or_file_protocol",
+      "fetch": "fetch_only_refs_pull_numeric_PR_head_into_private_ref_then_require_resolved_commit_byte_equal_to_event_head_sha",
+      "required_git_predicates": ["GITHUB_WORKFLOW_SHA_equals_pull_request_target_GITHUB_SHA_equals_event_base_sha_equals_fetched_default_develop", "both_tag_refs_are_direct_annotated_tag_objects_pointing_to_same_P0_commit", "canonical_receipt_tag_binds_exact_trust_tag_object_OID_peeled_commit_tree_actor_provider_and_ruleset_receipt", "P0_anchor_commit_is_ancestor_of_event_base", "base_and_head_are_commit_objects", "event_base_sha_is_ancestor_of_event_head_sha", "event_base_and_head_contain_exact_P0_trust_root_path_mode_type_blob_OIDs", "complete_event_base_and_head_workflow_tree_equals_P0_anchor_and_required_context_markers_are_unique", "target_is_default_develop"],
+      "comparison": "event_base_sha_dot_dot_event_head_sha_only_never_moving_ref_or_changed_files_API",
+      "history_rule": "exactly_one_nonmerge_commit_whose_parent_is_event_base_and_whose_final_delta_and_tree_obey_the_complete_P0_policy"
+    },
+    "P0_canonical_policy": {
+      "head_manifest_role": "untrusted_claim_compared_byte_for_byte_with_base_authority_fields_fixed_to_the_P0_schema_never_authority",
+      "missing_changed_or_non_added_head_manifest": "hard_failure",
+      "exact_changed_path_count": 22,
+      "change_types": ["A", "M"],
+      "object_type_and_mode": "regular_non_symlink_non_gitlink_100644_blob_only",
+      "reject": ["delete", "rename", "copy", "mode_change", "control_path", "non_utf8", "duplicate_path", "unknown_path", "per_file_or_total_byte_ceiling_exceeded"],
+      "artifact_authority": "P0_policy_contains_the_exact_22_path_mode_type_schema_normalized_manifest_and_sha256_by_path_map_for_the_unexecuted_reviewed_P_bytes",
+      "any_P_artifact_byte_change_after_P0_freeze": "requires_a_new_reviewed_P0_style_policy_bootstrap_before_P_can_be_admitted",
+      "candidate_local_AST_and_workflow_checks": "defense_in_depth_only_never_authority",
+      "non_P_closed_state_machine": {
+        "pre_P_base": "all_22_P_artifacts_absent_and_head_preserves_absence",
+        "post_P_base": "all_22_P_artifacts_equal_frozen_final_bytes_and_head_preserves_them",
+        "partial_mixed_or_foreign_base_or_head": "reject",
+        "result": "explicit_success_out_of_scope_preserved_never_skipped_or_neutral"
+      },
+      "protected_workflow_tree": "every_.github/workflows_regular_blob_path_mode_type_and_OID_equal_P0_anchor_for_base_and_head_until_a_new_P0_style_bootstrap"
+    },
+    "required_check_and_protection_activation": {
+      "sacrificial_post_P0_run": "before_P_opens_prove_native_check_run_head_sha_equals_event_head_sha_and_context_app_workflow_and_trust_root_blobs_equal_P0_receipt",
+      "custom_status_publisher": "forbidden_unless_the_sacrificial_native_head_binding_fails_and_a_new_P0_review_authorizes_the_minimum_write_permission_publisher",
+      "ruleset_receipt_required_fields": ["ruleset_id", "ruleset_jcs_sha256", "target_develop", "required_context", "required_workflow_source_identity_when_supported", "expected_GitHub_Actions_app_id", "strict_up_to_date_or_merge_queue", "admin_enforced", "no_bypass", "no_force_push", "no_delete", "no_direct_push", "all_default_workflow_context_collision_scan_jcs_sha256", "complete_default_workflow_tree_jcs_sha256", "trust_tag_ruleset_receipt_jcs_sha256", "trust_and_receipt_tag_object_OIDs"],
+      "protection_read_back_after_configuration": true,
+      "revalidate_immediately_before_P_admission_and_landing": ["ruleset_receipt", "latest_event_base_sha", "latest_event_head_sha", "successful_exact_head_check_run", "P0_trust_root_blob_identity"],
+      "skipped_neutral_stale_prior_head_wrong_app_or_context_collision": "reject"
+    }
+  },
+  "completion": {
+    "schema": "openapoc.train_completion.v1",
+    "validator_id": "validate_train_completion_v1",
+    "record_type": "train-completed",
+    "scope_change": "reviewed_strict_superset_only",
+    "required_bindings": [
+      "active_train_scope_jcs_sha256",
+      "ordinary_admission_spec_jcs_sha256",
+      "ordinary_admission_chain_jcs_sha256",
+      "active_effective_campaign_oracle_chain_jcs_sha256",
+      "active_effective_replay_oracle_chain_jcs_sha256",
+      "live_admission_jcs_sha256",
+      "remote_develop_sha",
+      "remote_develop_tree",
+      "preledger_ancestry_proof_set_jcs_sha256",
+      "required_integrated_repeat_landing_set_jcs_sha256",
+      "required_integrated_repeat_completed_record_set_jcs_sha256",
+      "successor_release_spec_jcs_sha256",
+      "all_required_gate_terminal_records_jcs_sha256",
+      "effective_G_subject_admission_jcs_sha256",
+      "effective_G_gate_success_record_set_jcs_sha256",
+      "all_due_nightly_terminal_records_jcs_sha256",
+      "nightly_schedule_spec_jcs_sha256",
+      "fresh_rfc3161_challenge_jcs_sha256",
+      "completion_cutoff_token_jcs_sha256",
+      "completion_cutoff_bound_transaction_payload_jcs_sha256"
+    ],
+    "predicate": {
+      "active_required_slice_ids": "exact_transitive_closure_from_active_scope",
+      "slice_proof_partition": {
+        "preledger_ancestry_proof_slice_ids": [
+          "Z", "P0", "P", "R0", "A", "B", "R1v", "R1a", "R1c", "R1p", "R1o"
+        ],
+        "land_exact_terminal_slice_ids": [
+          "R1b", "C0", "C1", "C", "C2", "D0", "D1", "D2", "D3", "D5", "E0", "E", "F", "G",
+          "P-movement", "P-projectile", "P-ROF", "P-explosion", "P-fire", "P-MAC", "P-physics",
+          "P-smoke", "P-save", "T-calendar", "T-animation", "T-180"
+        ],
+        "sets_are_disjoint_and_exactly_cover_active_required_slice_ids": true
+      },
+      "preledger_proof": "one_R1b_epoch_init_preledger_ancestry_proof_per_preledger_slice_binding_frozen_source_head_tree_remote_landing_review_and_CI_with_source_head_ancestor_of_R1b_genesis",
+      "postledger_proof": "land_exact_completed_or_land_exact_reconciled",
+      "required_integrated_repeat_landing_set": {
+        "resolver_id": "resolve_required_integrated_repeat_landing_set_v1",
+        "members": "every_landing_whose_integrated_repeat_completed_release_digest_is_cited_by_any_successor_branch_authorized_record_or_later_non_recovery_candidate_or_landing_union_current_live_final_landing",
+        "recovery_candidate_or_landing": "cites_recovery_authority_and_remediates_set_never_successor_release_authority_from_the_failed_landing",
+        "resolved_revoked_no_child_landings": "retain_immutable_red_records_but_exclude_from_required_green_set",
+        "unresolved_revocation_or_red": "fail_completion",
+        "canonical_order": "ascending_landing_ordinal_then_landed_sha_tree",
+        "digest_field": "required_integrated_repeat_landing_set_jcs_sha256"
+      },
+      "every_required_landing_has_one_green_integrated_repeat_bound_to_that_exact_landing": true,
+      "later_landings_do_not_invalidate_an_already_green_earlier_landing_repeat": true,
+      "remote_develop_equals_unique_live_admitted_sha_tree": true,
+      "open_intent_attempt_claim_reconcile_delta_or_schema_upgrade_count": 0,
+      "unresolved_red_or_parent_audit_count": 0,
+      "every_admitted_delta_authorization_has_exactly_one_atomic_dual_overlay_activation": true,
+      "due_nightly_ordinals_derived_from_schedule_are_gap_free": true,
+      "current_live_head_has_green_nightly_after_its_latest_admission_or_effective_campaign_or_replay_chain_transition": true,
+      "required_gate_ids": [
+        "desktop-presentation-v1",
+        "desktop-performance-v1",
+        "activation-100-v1",
+        "soak-24h-v1"
+      ],
+      "effective_G_subject_resolver": {
+        "resolver_id": "resolve_effective_G_subject_admission_v1",
+        "search_domain": "logical_parent_and_recovery_remediates_ancestry_of_current_live_final_admission",
+        "eligible_subject": "admission_for_slice_G_or_G_recovery_generation_that_reran_all_G_gates_and_is_not_revoked",
+        "selection": "unique_latest_eligible_subject_whose_land_exact_terminal_binds_its_ordered_four_gate_success_set",
+        "historical_G_failure": "retained_and_allowed_only_when_same_atomic_transaction_revoked_that_historical_subject_and_current_recovery_ancestry_resolves_it",
+        "zero_or_multiple_effective_subjects": "fail_completion",
+        "digest_field": "effective_G_subject_admission_jcs_sha256"
+      },
+      "exact_success_count_per_required_gate_for_effective_G_subject": 1,
+      "required_gate_failure_or_open_count_for_effective_G_subject": 0,
+      "historical_gate_records_never_count_toward_effective_subject_success_or_failure_cardinality": true,
+      "train_completed_record_count_bound_to_cutoff": 1,
+      "train_abandoned_record_count": 0,
+      "cutoff": "fresh_RFC3161_genTime_is_the_normative_linearization_point_only_if_its_exact_bound_completion_envelope_commits_under_the_same_uninterrupted_global_lock_otherwise_no_transition_exists"
+    }
+  },
+  "contracts": {
+    "oracle_calibration": {
+      "schema": "openapoc.oracle_calibration.v1",
+      "id": "oracle-calibration-v1",
+      "attempt_protocol_id": "common-intent-attempt-fence-v1",
+      "preledger_sequence_ref": "/contracts/batch_attempt_protocol/preledger_oracle_sequence",
+      "authority_slice_id": "R1v",
+      "must_precede_slice_id": "R1o",
+      "validator_id": "validate_oracle_calibration_v1",
+      "artifact_id": "oracle-calibration-v1",
+      "digest_field": "oracle_calibration_jcs_sha256",
+      "key_manifest_source": "r1v.oracle_key_registry",
+      "key_manifest_partition": {
+        "oracle_v1_slot_ids": ["oracle-v1"],
+        "oracle_v1_recipe_count": 5,
+        "merge_3_slot_ids": ["merge-3"],
+        "merge_3_recipe_ids": [
+          "victory-standard-mixed-v1",
+          "victory-high-mixed-v1",
+          "victory-realtime-heavy-v1"
+        ],
+        "activation_slot_ids": ["activation-a", "activation-b"],
+        "activation_recipe_count": 5,
+        "partition_counts": [5, 3, 10],
+        "disjoint_and_complete": true,
+        "activation_subset_must_equal_topology_oracle_keys_by_jcs_digest": true
+      },
+      "exact_key_count": 18,
+      "replicates_per_key": 3,
+      "exact_replica_ordinals": [0, 1, 2],
+      "exact_campaign_count": 54,
+      "execution_cell_manifest": {
+        "schema": "openapoc.oracle_calibration_execution_cell_manifest.v1",
+        "digest_field": "oracle_calibration_execution_cell_manifest_jcs_sha256",
+        "canonical_key_order_source": "oracle_key_manifest_jcs_sha256",
+        "canonical_replica_ordinal_order": [0, 1, 2],
+        "exact_row_set": "cartesian_product_of_all_18_canonical_oracle_keys_and_all_3_replica_ordinals",
+        "exact_row_count": 54,
+        "cell_id_derivation": "sha256_rfc8785_of_phase_id_oracle_key_jcs_sha256_and_replica_ordinal",
+        "unique_fields": ["cell_id", "oracle_key_jcs_sha256_and_replica_ordinal"],
+        "bijections_required": ["manifest_rows_to_initial_process_launch_rows", "manifest_rows_to_campaign_terminal_receipts", "manifest_rows_to_acceptance_projections"],
+        "duplicate_missing_remapped_cross_phase_or_unmanifested_row": "oracle-calibration-failed",
+        "validation_sentinels": {
+          "canonical_18_key_by_3_replica_cartesian_workset": "accept_exactly_54_rows",
+          "missing_duplicate_remapped_cross_phase_or_unmanifested_cell": "reject_complete_attempt"
+        }
+      },
+      "full_new_game_to_classified_victory_per_campaign": true,
+      "campaign_root_game_load_or_prior_save_input": "forbidden",
+      "projection_stability_probe": {
+        "id": "pre-oracle-projection-stability-36-v1",
+        "must_complete_before_oracle_calibration_intent": true,
+        "exact_key_source": "same_exact_18_key_manifest_as_oracle_calibration",
+        "exact_key_count": 18,
+        "execution_profiles": [
+          {
+            "scheduler": "legacy",
+            "target_fps": 240,
+            "swap_interval": 0,
+            "control_profile": "automatic-simulation"
+          },
+          {
+            "scheduler": "legacy",
+            "target_fps": 1000,
+            "swap_interval": 0,
+            "control_profile": "automatic-simulation"
+          }
+        ],
+        "exact_campaign_count": 36,
+        "execution_cell_manifest": {
+          "schema": "openapoc.oracle_projection_stability_execution_cell_manifest.v1",
+          "digest_field": "oracle_projection_stability_execution_cell_manifest_jcs_sha256",
+          "canonical_key_order_source": "same_exact_18_key_manifest_as_oracle_calibration",
+          "canonical_execution_profile_order_source": "execution_profiles_array_order",
+          "exact_row_set": "cartesian_product_of_all_18_canonical_oracle_keys_and_both_execution_profiles",
+          "exact_row_count": 36,
+          "cell_id_derivation": "sha256_rfc8785_of_phase_id_oracle_key_jcs_sha256_and_execution_profile_jcs_sha256",
+          "unique_fields": ["cell_id", "oracle_key_jcs_sha256_and_execution_profile_jcs_sha256"],
+          "bijections_required": ["manifest_rows_to_initial_process_launch_rows", "manifest_rows_to_campaign_terminal_receipts", "manifest_rows_to_acceptance_projections"],
+          "duplicate_missing_remapped_cross_phase_or_unmanifested_row": "oracle-stability-failed",
+          "validation_sentinels": {
+            "canonical_18_key_by_2_profile_cartesian_workset": "accept_exactly_36_rows",
+            "missing_duplicate_remapped_cross_phase_or_unmanifested_cell": "reject_complete_attempt"
+          }
+        },
+        "fresh_process_per_campaign": true,
+        "full_new_game_to_classified_victory_per_campaign": true,
+        "campaign_root_game_load_or_prior_save_input": "forbidden",
+        "all_victory_and_coverage_required": true,
+        "two_acceptance_projections_per_key_must_be_jcs_identical": true,
+        "full_attempt_restart_on_infrastructure_failure": true,
+        "required_bindings": [
+          "oracle_stability_intent_jcs_sha256",
+          "attempt_started_jcs_sha256",
+          "attempt_claim_jcs_sha256",
+          "attempt_fence_jcs_sha256",
+          "runtime_launch_template_jcs_sha256",
+          "process_launch_plan_authority_jcs_sha256",
+          "planned_process_launch_set_jcs_sha256",
+          "realized_runtime_closure_receipt_set_jcs_sha256",
+          "input_closure_jcs_sha256",
+          "campaign_control_raw_receipt_set_jcs_sha256",
+          "campaign_control_receipt_bijection_jcs_sha256",
+          "oracle_key_manifest_jcs_sha256",
+          "oracle_projection_stability_execution_cell_manifest_jcs_sha256",
+          "preledger_oracle_subject_key_jcs_sha256",
+          "all_36_terminal_receipt_digests_jcs_sha256",
+          "all_18_projection_pair_digests_jcs_sha256"
+        ]
+      },
+      "manifest_frozen_before_first_worker": true,
+      "fresh_process_per_replicate": true,
+      "distinct_process_nonce_claim_port_and_output_root_per_campaign": true,
+      "all_victory_and_coverage_required": true,
+      "identical_projection_jcs_per_key": true,
+      "r1o_freeze_required_bindings": [
+        "preledger_oracle_subject_key_jcs_sha256",
+        "oracle_stability_completed_jcs_sha256",
+        "oracle_calibration_completed_jcs_sha256",
+        "exhaustive_preledger_oracle_attempt_history_jcs_sha256"
+      ],
+      "campaign_control_coverage_receipts": {
+        "authority_slice_id": "R1c",
+        "must_precede_slice_ids": ["R1p", "R1o"],
+        "scope": "shared_raw_campaign_control_authority_for_every_whole_game_attempt_on_the_exact_tested_head",
+        "applies_to_whole_game_attempt_kinds": ["oracle-projection-stability", "oracle-calibration", "ordinary-admission", "compatibility-delta", "parent-audit", "integrated-repeat", "nightly", "activation", "soak"],
+        "intent_ownership": "leaf_artifacts_of_the_same_whole_game_intent_attempt_fence_and_campaign_never_a_new_intent_kind",
+        "every_full_game_campaign_requires_raw_categories": ["battle_turnbased", "save_reload"],
+        "normalized_coverage_row_without_one_exact_same_campaign_raw_receipt": "logical_failure",
+        "whole_game_success_terminal_required_bindings": ["campaign_control_raw_receipt_set_jcs_sha256", "campaign_control_receipt_bijection_jcs_sha256"],
+        "bijection": "every_manifest_campaign_and_each_required_raw_category_maps_to_exactly_one_same_tested_sha_tree_intent_attempt_fence_campaign receipt_and_every_raw_receipt_maps_back_with_no_extra_duplicate_cross_attempt_cross_fence_or_cross_campaign_receipt",
+        "validation_sentinels": {
+          "one_true_turnbased_and_one_cross_process_save_reload_receipt_per_manifest_campaign": "accept",
+          "normalized_only_missing_duplicate_cross_attempt_cross_fence_or_cross_campaign_raw_receipt": "logical_failure"
+        },
+        "implementation_ownership": {
+          "R1c": "campaign_control_state_machine_fresh_process_request_contract_and_raw_receipt_schemas_only",
+          "R1p": "runtime_launch_template_process_launch_plan_authority_finite_set_or_soak_prefix_policy_subprocess_launch_PID_start_identity_port_output_claim_realized_runtime_closure_orderly_wait_reap_and_relaunch",
+          "save_handoff": "R1p_seals_attempt_local_continuation_input_closure_from_R1c_requested_acknowledged_save_output",
+          "R1c_direct_subprocess_or_runtime_closure_implementation": "forbidden"
+        },
+        "raw_receipt_schemas": {
+          "battle_turnbased": {
+            "schema": "openapoc.battle_mode_coverage_receipt.v1",
+            "required_bindings": [
+              "attempt_jcs_sha256",
+              "attempt_claim_jcs_sha256",
+              "attempt_fence_jcs_sha256",
+              "tested_sha",
+              "tested_tree",
+              "process_launch_plan_authority_jcs_sha256",
+              "campaign_root_planned_process_launch_entry_jcs_sha256",
+              "campaign_root_realized_runtime_closure_receipt_jcs_sha256",
+              "campaign_id",
+              "recipe_id",
+              "recipe_jcs_sha256",
+              "slot_id",
+              "derived_seed",
+              "obligation_id",
+              "battle_ordinal",
+              "mission_type",
+              "requested_mode",
+              "observed_engine_mode",
+              "accepted_direct_control_reply_jcs_sha256",
+              "complete_visible_hidden_visible_epoch_count",
+              "confirmation_popup_trace_jcs_sha256",
+              "engine_battle_terminal_jcs_sha256",
+              "player_won",
+              "result_class"
+            ],
+            "predicate": {
+              "requested_mode": "tb",
+              "observed_engine_mode": "tb",
+              "complete_visible_hidden_visible_epoch_count_min": 1,
+              "player_actions_while_end_turn_not_live_visible": 0,
+              "static_geometry_click_fallback_count": 0,
+              "all_confirmation_popups_resolved_by_bounded_direct_control": true,
+              "player_won": 1,
+              "result_class": "satisfied",
+              "wrong_mode_realtime_loss_return_timeout_transport_or_process_failure": "fail"
+            }
+          },
+          "save_reload": {
+            "schema": "openapoc.planned_save_reload_receipt.v1",
+            "required_bindings": [
+              "attempt_jcs_sha256",
+              "attempt_claim_jcs_sha256",
+              "attempt_fence_jcs_sha256",
+              "tested_sha",
+              "tested_tree",
+              "process_launch_plan_authority_jcs_sha256",
+              "campaign_root_planned_process_launch_entry_jcs_sha256",
+              "campaign_root_realized_runtime_closure_receipt_jcs_sha256",
+              "continuation_planned_process_launch_entry_jcs_sha256",
+              "continuation_realized_runtime_closure_receipt_jcs_sha256",
+              "campaign_id",
+              "recipe_id",
+              "recipe_jcs_sha256",
+              "slot_id",
+              "derived_seed",
+              "obligation_id",
+              "checkpoint_ordinal",
+              "trigger_class",
+              "pre_build_info_jcs_sha256",
+              "post_build_info_jcs_sha256",
+              "pre_process_claim_jcs_sha256",
+              "post_process_claim_jcs_sha256",
+              "pre_process_pid_start_identity_jcs_sha256",
+              "post_process_pid_start_identity_jcs_sha256",
+              "pre_process_nonce",
+              "post_process_nonce",
+              "pre_runtime_image_receipt_jcs_sha256",
+              "post_runtime_image_receipt_jcs_sha256",
+              "immutable_executable_bundle_jcs_sha256",
+              "pre_city_view_jcs_sha256",
+              "paused_tick_witness_jcs_sha256",
+              "save_acknowledgement_jcs_sha256",
+              "save_path_identity_jcs_sha256",
+              "save_sha256",
+              "save_size",
+              "save_production_receipt_jcs_sha256",
+              "continuation_input_closure_jcs_sha256",
+              "quit_acknowledgement_jcs_sha256",
+              "orderly_wait_reap_receipt_jcs_sha256",
+              "process_return_code",
+              "forced_termination",
+              "effective_game_load_path_jcs_sha256",
+              "pre_post_port_and_output_root_identity_jcs_sha256",
+              "relaunch_delta_set_jcs_sha256",
+              "post_city_view_jcs_sha256",
+              "post_game_state_health_jcs_sha256",
+              "post_reload_campaign_action_jcs_sha256",
+              "eventual_classified_victory_jcs_sha256",
+              "result_class"
+            ],
+            "predicate": {
+              "trigger_class": "recipe_planned",
+              "pre_city_view_paused_with_two_equal_tick_samples": true,
+              "save_acknowledged_nonempty_and_hash_bound": true,
+              "quit_acknowledged": true,
+              "process_return_code": 0,
+              "forced_termination": false,
+              "terminate_kill_or_escalation_count": 0,
+              "orderly_wait_and_reap_required": true,
+              "pre_and_post_process_nonce_pid_port_and_output_root_distinct": true,
+              "immutable_executable_bundle_digest_equal": true,
+              "allowed_relaunch_delta_fields_exactly": [
+                "Game.Load",
+                "Framework.Harness.Port",
+                "Game.Save.Directory",
+                "process_nonce_transport"
+              ],
+              "all_other_normalized_launch_argv_environment_and_input_fields_byte_equal": true,
+              "effective_game_load_path_equals_continuation_input_path": true,
+              "continuation_input_closure_save_hash_equals_save_production_receipt": true,
+              "continuation_input_closure_is_attempt_local_read_only_and_same_fence": true,
+              "post_city_equals_pre_city": true,
+              "post_game_state_healthy": true,
+              "post_ticks_greater_than_or_equal_saved_ticks": true,
+              "post_reload_campaign_action_and_eventual_victory_required": true,
+              "result_class": "satisfied",
+              "recovery_restart_in_process_load_snapshot_fallback_changed_binary_forced_exit_copied_progress_or_double_credit": "fail"
+            }
+          }
+        },
+        "acceptance_projection_normalization": {
+          "fields_exactly": ["obligation_id", "category", "result_class"],
+          "category_domain": ["battle_turnbased", "save_reload"],
+          "raw_timing_path_process_battle_and_trace_fields_excluded": true
+        }
+      },
+      "acceptance_projection_schema": {
+        "schema": "openapoc.campaign_acceptance_projection.v1",
+        "validator_id": "validate_campaign_acceptance_projection_v1",
+        "authority_slice_id": "R1v",
+        "must_precede_slice_id": "R1o",
+        "root_fields_exactly": [
+          "schema_id",
+          "recipe_id",
+          "slot_id",
+          "derived_seed",
+          "terminal",
+          "ordered_milestones",
+          "coverage"
+        ],
+        "terminal_fields_exactly": ["classification", "ending_asset_id"],
+        "terminal_required_value": {
+          "classification": "victory",
+          "ending_asset_id": "wingame2.smk"
+        },
+        "milestone_fields_exactly": [
+          "milestone_id",
+          "event_type",
+          "stable_subject_id",
+          "result_class"
+        ],
+        "coverage_fields_exactly": [
+          "obligation_id",
+          "category",
+          "result_class"
+        ],
+        "milestone_event_types_exactly": [
+          "advanced_workshop_construction_started",
+          "dimension_shifter_started",
+          "crossed_to_alien_dimension",
+          "alien_building_raided",
+          "campaign_terminal"
+        ],
+        "milestone_normalization": {
+          "advanced_workshop_construction_started": {
+            "stable_subject_id": "FACILITYTYPE_ADVANCED_WORKSHOP",
+            "result_class": "construction_started"
+          },
+          "dimension_shifter_started": {
+            "stable_subject_id": "MANUFACTURE_DIMENSION_SHIFTER",
+            "result_class": "manufacture_started"
+          },
+          "crossed_to_alien_dimension": {
+            "stable_subject_id": "CITYMAP_ALIEN",
+            "result_class": "arrived",
+            "record_only_after_query_confirms_current_city": true
+          },
+          "alien_building_raided": {
+            "stable_subject_id_source": "query_confirmed_alien_building_rules_or_state_id",
+            "result_class": "player_won",
+            "append_every_distinct_building_raid": true
+          },
+          "campaign_terminal": {
+            "stable_subject_id": "wingame2.smk",
+            "result_class": "victory"
+          },
+          "milestone_id_derivation": "event_type_plus_stable_subject_id",
+          "duplicate_milestone_id": "fail"
+        },
+        "coverage_categories_exactly": [
+          "city",
+          "research",
+          "invasion",
+          "dimension",
+          "battle_realtime",
+          "battle_turnbased",
+          "save_reload",
+          "ending"
+        ],
+        "ordering": {
+          "ordered_milestones": "recipe_declared_partial_order_then_stable_milestone_id",
+          "coverage": "recipe_declared_obligation_order",
+          "duplicate_milestone_or_obligation_id": "fail"
+        },
+        "excluded_fields_exactly": [
+          "wall_timestamp",
+          "monotonic_timestamp",
+          "game_tick",
+          "game_date",
+          "game_day",
+          "duration",
+          "attempt_id",
+          "process_nonce",
+          "port",
+          "path",
+          "scheduler",
+          "target_fps",
+          "control_profile",
+          "runtime_entity_id",
+          "raw_status_detail",
+          "log_text",
+          "screenshot_path",
+          "battles_count",
+          "wins_count",
+          "ufos_down_count",
+          "recoveries_count",
+          "restarts_count"
+        ],
+        "excluded_cadence_sensitive_observations": [
+          "alien_buildings_taken",
+          "infil_raids",
+          "research_complete",
+          "bases",
+          "funding_lost",
+          "capabilities",
+          "shifter_started",
+          "built_workshop",
+          "survivors",
+          "score",
+          "money",
+          "relations",
+          "roster_or_craft_counts",
+          "research_order_or_count",
+          "optional_base_path",
+          "cooldown_or_action_attempt_counts",
+          "coordinates"
+        ],
+        "coverage_receipts": "separate_query_confirmed_obligation_receipts_normalized_only_to_satisfied",
+        "unknown_missing_extra_or_retyped_field": "fail",
+        "candidate_observation_driven_field_removal": "forbidden"
+      },
+      "subset_majority_tolerance_or_field_dropping": "forbidden",
+      "infrastructure_retry": "only_common_pre_execution_window_before_attempt-execution-began_may_restart_all_54_under_new_attempt",
+      "victory_oracle_required_bindings": [
+        "pre_oracle_projection_stability_completed_jcs_sha256",
+        "pre_oracle_projection_stability_receipt_set_jcs_sha256",
+        "oracle_calibration_intent_jcs_sha256",
+        "attempt_started_jcs_sha256",
+        "attempt_fence_jcs_sha256",
+        "runtime_launch_template_jcs_sha256",
+        "process_launch_plan_authority_jcs_sha256",
+        "planned_process_launch_set_jcs_sha256",
+        "realized_runtime_closure_receipt_set_jcs_sha256",
+        "input_closure_jcs_sha256",
+        "campaign_control_raw_receipt_set_jcs_sha256",
+        "campaign_control_receipt_bijection_jcs_sha256",
+        "oracle_calibration_jcs_sha256",
+        "oracle_key_manifest_jcs_sha256",
+        "oracle_calibration_execution_cell_manifest_jcs_sha256",
+        "all_54_terminal_receipt_digests_jcs_sha256",
+        "all_18_consensus_projection_digests_jcs_sha256",
+        "r1v_recipe_schema_seed_authority_jcs_sha256",
+        "r1p_producer_source_tree_jcs_sha256"
+      ]
+    },
+    "activation_oracle_topology": {
+      "schema": "openapoc.activation_oracle_topology.v1",
+      "id": "activation-oracle-topology-v1",
+      "authority": {
+        "slice_id": "R1v",
+        "artifact_path": "tools/fixtures/robot_campaigns/activation-oracle-topology-v1.json",
+        "must_precede_slice_id": "R1o",
+        "digest_field": "activation_oracle_topology_jcs_sha256",
+        "digest_algorithm": "sha256-rfc8785",
+        "closed_schema": true,
+        "expectation_fields_allowed": false
+      },
+      "oracle_keys": {
+        "recipe_ids": [
+          "victory-standard-mixed-v1",
+          "victory-high-mixed-v1",
+          "victory-realtime-heavy-v1",
+          "victory-turnbased-heavy-v1",
+          "victory-alien-dimension-v1"
+        ],
+        "slot_ids": ["activation-a", "activation-b"],
+        "seed_derivation_id": "openapoc-robot-v1",
+        "key_fields": [
+          "recipe_id",
+          "recipe_jcs_sha256",
+          "slot_id",
+          "seed_derivation_id",
+          "derived_seed"
+        ],
+        "exact_key_count": 10,
+        "unique_keys": true,
+        "must_equal_oracle_calibration_activation_subset_by_jcs_digest": true
+      },
+      "execution_topology": {
+        "scheduler_values": ["legacy", "fixed"],
+        "target_fps_values": [0, 1, 30, 60, 240, 1000],
+        "row_key_fields": [
+          "oracle_key_jcs_sha256",
+          "scheduler",
+          "target_fps",
+          "control_profile",
+          "execution_replica_ordinal"
+        ],
+        "control_profile_rules": [
+          {
+            "scheduler": "legacy",
+            "target_fps": [1000],
+            "control_profile": "automatic-simulation",
+            "execution_replica_ordinal": 0
+          },
+          {
+            "scheduler": "fixed",
+            "target_fps": [0, 1, 30, 60, 240],
+            "control_profile": "automatic-simulation",
+            "execution_replica_ordinal": 0
+          },
+          {
+            "scheduler": "fixed",
+            "target_fps": [0, 1, 60, 240],
+            "control_profile": "manual-step-campaign-v1",
+            "execution_replica_ordinal": 0
+          }
+        ],
+        "exact_rows_per_oracle_key": 10,
+        "exact_row_count": 100,
+        "unique_rows": true,
+        "automatic_realtime_diagnostics": {
+          "admission_or_oracle_cardinality": "excluded",
+          "scheduler_values": ["legacy", "fixed"],
+          "target_fps_values": [0, 1, 30, 60, 240],
+          "bounded_scenario_ids": [
+            "city-pulse-throughput-v1",
+            "realtime-battle-pulse-throughput-v1",
+            "turnbased-battle-control-v1"
+          ],
+          "legacy_low_fps_realtime_and_manual_are_bounded_diagnostics_never_whole_campaigns": true,
+          "fixed_scheduler_must_satisfy_deadline_and_render_invariance_predicates": true
+        }
+      },
+      "f_extension": {
+        "authority_slice_id": "F",
+        "authority_record_type": "gate-spec-frozen",
+        "artifact_id": "activation-100-template-v1",
+        "digest_field": "activation_100_extension_jcs_sha256",
+        "validator_id": "validate_activation_topology_extension_v1",
+        "overlay_key_field": "execution_row_jcs_sha256",
+        "exact_overlay_row_count": 100,
+        "required_extension_fields": [
+          "launch_profile_jcs_sha256",
+          "protocol_schema_jcs_sha256",
+          "controller_preconditions_jcs_sha256",
+          "budget_jcs_sha256"
+        ],
+        "exact_execution_profile_multiset_per_oracle_key_source": "activation_oracle_topology.execution_topology.control_profile_rules",
+        "every_oracle_key_must_cover_the_exact_profile_multiset": true,
+        "base_fields_repeated_in_overlay": false,
+        "expectation_fields_allowed": false,
+        "base_projection_digest_field": "activation_oracle_topology_jcs_sha256",
+        "active_effective_campaign_oracle_chain_digest_field": "active_effective_campaign_oracle_chain_jcs_sha256",
+        "active_effective_campaign_oracle_chain_mutation": "forbidden",
+        "missing_extra_duplicate_or_remapped_row": "fail"
+      }
+    },
+    "replay_schema_upgrade": {
+      "schema": "openapoc.replay_schema_upgrade.v1",
+      "id": "replay-schema-upgrade-v1",
+      "validator_id": "validate_replay_schema_upgrade_v1",
+      "attempt_protocol_id": "common-intent-attempt-fence-v1",
+      "record_types": {
+        "intent": "replay-schema-intent",
+        "authorized": "replay-schema-authorized",
+        "failed": "replay-schema-failed",
+        "activated": "replay-schema-activated",
+        "invalidated": "replay-schema-invalidated"
+      },
+      "upgrades": [
+        {
+          "schema_id": "control-epoch-v2",
+          "after_slice_id": "C",
+          "must_activate_before_descendant_slice_ids": ["C2", "D0", "D1"]
+        },
+        {
+          "schema_id": "manual-step-v3",
+          "after_slice_id": "F",
+          "must_activate_before_descendant_slice_ids": ["G", "T-180"]
+        }
+      ],
+      "subject": "exact_newly_admitted_and_land_exact_completed_or_reconciled_sha_tree",
+      "required_before_successor_release_by_slice": {
+        "C": "control-epoch-v2",
+        "F": "manual-step-v3"
+      },
+      "global_serialization": {
+        "authority_ref": "/contracts/batch_attempt_protocol/global_serialized_operations",
+        "operation_owned_from_intent_through_activated_or_failed_terminal": true,
+        "activation_must_precede_same_landing_integrated_repeat": true,
+        "later_replay_chain_activation_makes_prior_same_head_repeat_or_nightly_ineligible_for_release_or_completion": true
+      },
+      "pre_observation_authority": {
+        "schema_definition_and_component_owner_map_frozen_before_first_worker": true,
+        "expected_checkpoint_values_allowed": false,
+        "independent_review_required": true
+      },
+      "calibration": {
+        "execute_every_declared_schema_cell": true,
+        "replicates_per_cell": 3,
+        "exact_replica_ordinals": [0, 1, 2],
+        "fresh_process_per_replicate": true,
+        "identical_projection_jcs_per_cell": true,
+        "majority_tolerance_subset_selection_or_field_dropping": "forbidden",
+        "infrastructure_retry": "only_common_pre_execution_window_before_attempt-execution-began_may_restart_every_cell_and_replica_under_new_attempt"
+      },
+      "activation": {
+        "replay_schema_authorized_is_intermediate_and_attempt_remains_open_through_independent_review_and_activation": true,
+        "replay_schema_activated_is_the_attempt_success_terminal": true,
+        "atomic_append_only_extension_of_active_effective_replay_schema_and_oracle_chain": true,
+        "base_schema_or_expectation_mutation": "forbidden",
+        "global_visibility_before_replay_schema_activated": "forbidden",
+        "failure_or_invalidation_blocks_descendants": true,
+        "invalidation_revokes_dependent_candidates_admissions_and_overlays": true
+      },
+      "required_bindings": [
+        "schema_definition_jcs_sha256",
+        "component_owner_map_jcs_sha256",
+        "replay_schema_intent_jcs_sha256",
+        "attempt_started_jcs_sha256",
+        "attempt_claim_jcs_sha256",
+        "subject_admission_jcs_sha256",
+        "subject_land_exact_record_jcs_sha256",
+        "subject_sha",
+        "subject_tree",
+        "parent_effective_replay_oracle_chain_jcs_sha256",
+        "attempt_fence_jcs_sha256",
+        "all_terminal_receipt_digests_jcs_sha256",
+        "cell_consensus_projection_set_jcs_sha256",
+        "replay_schema_overlay_jcs_sha256",
+        "resulting_effective_replay_oracle_chain_jcs_sha256",
+        "independent_review_receipt_jcs_sha256"
+      ]
+    },
+    "batch_attempt_protocol": {
+      "schema": "openapoc.batch_attempt_protocol.v1",
+      "id": "common-intent-attempt-fence-v1",
+      "validator_id": "validate_common_intent_attempt_fence_v1",
+      "attempt_record_types": {
+        "started": "attempt-started",
+        "infrastructure_failed": "attempt-infrastructure-failed"
+      },
+      "authority_domains": {
+        "preledger_calibration_log": {
+          "authority_slice_id": "R1p",
+          "must_exist_before_slice_id": "R1o",
+          "append_only_content_addressed_and_independently_reviewed": true,
+          "imported_by_R1b_epoch_init_without_rewriting": true
+        },
+        "admission_ledger": {
+          "authority_slice_id": "R1b",
+          "all_post_R1b_intents": true
+        }
+      },
+      "preledger_oracle_sequence": {
+        "schema": "openapoc.preledger_oracle_sequence.v1",
+        "authority_domain": "preledger_calibration_log",
+        "subject_key_fields": [
+          "source_sha",
+          "source_tree",
+          "runtime_launch_template_jcs_sha256",
+          "input_closure_jcs_sha256",
+          "collector_jcs_sha256",
+          "launcher_jcs_sha256",
+          "driver_jcs_sha256",
+          "recipe_set_jcs_sha256",
+          "milestone_schema_jcs_sha256",
+          "oracle_key_manifest_jcs_sha256",
+          "projection_stability_manifest_jcs_sha256",
+          "oracle_calibration_manifest_jcs_sha256"
+        ],
+        "subject_key_digest_field": "preledger_oracle_subject_key_jcs_sha256",
+        "serialization": "one_global_preledger_sequence_operation_and_at_most_one_open_intent_for_any_subject_key",
+        "ordered_phase_intent_kinds": ["oracle-projection-stability", "oracle-calibration"],
+        "oracle_calibration_intent_requires_same_subject_key_and_exact_stability_success": true,
+        "parallel_duplicate_or_overlapping_phase_intents_for_same_subject_key": "forbidden",
+        "second_intent_of_same_phase_for_same_subject_key": "forbidden_even_after_terminal",
+        "same_intent_retry": "only_after_common_protocol_attempt-infrastructure-failed_before_attempt-execution-began_and_restarts_complete_phase_manifest_under_new_attempt_and_fence",
+        "logical_failure_records": ["oracle-stability-failed", "oracle-calibration-failed"],
+        "logical_failure_effect": "permanently_burn_subject_key_and_forbid_any_later_success_or_intent_for_that_key",
+        "success_after_logical_failure_for_same_subject_key": "invalid_preledger_log",
+        "new_subject_after_logical_failure": "requires_distinct_subject_key_plus_reviewed_causal_subject_change_receipt_binding_failed_sequence_and_restarts_36_then_54",
+        "operator_cancel_abandon_or_timeout_selection": "logical_failure_never_silent_retry",
+        "r1o_must_bind_exhaustive_attempt_history": true,
+        "r1b_epoch_init_import_required_bindings": [
+          "preledger_oracle_subject_key_jcs_sha256",
+          "oracle_stability_completed_jcs_sha256",
+          "oracle_calibration_completed_jcs_sha256",
+          "exhaustive_preledger_oracle_attempt_history_jcs_sha256"
+        ],
+        "exhaustive_history_includes": [
+          "every_intent",
+          "every_attempt-started",
+          "every_infrastructure_failure_attempt_record",
+          "every_logical_failure",
+          "every_success",
+          "every_reviewed_subject_change"
+        ]
+      },
+      "intent_kind_table": [
+        {
+          "kind": "oracle-projection-stability",
+          "authority_domain": "preledger_calibration_log",
+          "intent_record_type": "oracle-stability-intent",
+          "success_record_types": ["oracle-stability-completed"],
+          "logical_failure_record_types": ["oracle-stability-failed"]
+        },
+        {
+          "kind": "oracle-calibration",
+          "authority_domain": "preledger_calibration_log",
+          "intent_record_type": "oracle-calibration-intent",
+          "success_record_types": ["oracle-calibration-completed"],
+          "logical_failure_record_types": ["oracle-calibration-failed"]
+        },
+        {
+          "kind": "ordinary-admission",
+          "authority_domain": "admission_ledger",
+          "intent_record_type": "admission-intent",
+          "success_record_types": ["admitted"],
+          "logical_failure_record_types": ["admission-failed"]
+        },
+        {
+          "kind": "replay-schema-upgrade",
+          "authority_domain": "admission_ledger",
+          "intent_record_type": "replay-schema-intent",
+          "success_record_types": ["replay-schema-activated"],
+          "logical_failure_record_types": ["replay-schema-failed"]
+        },
+        {
+          "kind": "compatibility-delta",
+          "authority_domain": "admission_ledger",
+          "intent_record_type": "compatibility-delta-intent",
+          "success_record_types": ["compatibility-delta-authorized"],
+          "logical_failure_record_types": ["compatibility-delta-failed", "parent-reference-mismatch"]
+        },
+        {
+          "kind": "parent-reference-audit",
+          "authority_domain": "admission_ledger",
+          "intent_record_type": "parent-audit-intent",
+          "success_record_types": ["parent-audit-reproduced", "parent-audit-not-reproduced"],
+          "logical_failure_record_types": ["parent-audit-escalated"]
+        },
+        {
+          "kind": "integrated-repeat",
+          "authority_domain": "admission_ledger",
+          "intent_record_type": "integrated-repeat-intent",
+          "success_record_types": ["integrated-repeat-completed"],
+          "logical_failure_record_types": ["integrated-repeat-failed"]
+        },
+        {
+          "kind": "nightly",
+          "authority_domain": "admission_ledger",
+          "intent_record_type": "nightly-intent",
+          "success_record_types": ["nightly-completed"],
+          "logical_failure_record_types": ["nightly-failed"]
+        },
+        {
+          "kind": "desktop-presentation",
+          "authority_domain": "admission_ledger",
+          "intent_record_type": "desktop-presentation-intent",
+          "success_record_types": ["desktop-presentation-completed"],
+          "logical_failure_record_types": ["desktop-presentation-failed"]
+        },
+        {
+          "kind": "desktop-performance",
+          "authority_domain": "admission_ledger",
+          "intent_record_type": "desktop-performance-intent",
+          "success_record_types": ["desktop-performance-completed"],
+          "logical_failure_record_types": ["desktop-performance-failed"]
+        },
+        {
+          "kind": "activation",
+          "authority_domain": "admission_ledger",
+          "intent_record_type": "activation-intent",
+          "success_record_types": ["activation-completed"],
+          "logical_failure_record_types": ["activation-failed"]
+        },
+        {
+          "kind": "soak",
+          "authority_domain": "admission_ledger",
+          "intent_record_type": "soak-intent",
+          "success_record_types": ["soak-completed"],
+          "logical_failure_record_types": ["soak-failed"]
+        }
+      ],
+      "closed_intent_kind_table": true,
+      "one_current_attempt_per_intent": true,
+      "attempt_started_before_any_worker_or_receipt": true,
+      "attempt_started_required_bindings": [
+        "intent_jcs_sha256",
+        "manifest_jcs_sha256",
+        "batch_attempt_id",
+        "fencing_ordinal",
+        "coordinator_host_pid_start_nonce_jcs_sha256",
+        "tested_sha",
+        "tested_tree",
+        "runtime_launch_template_jcs_sha256",
+        "process_launch_plan_authority_jcs_sha256",
+        "input_closure_jcs_sha256"
+      ],
+      "runtime_execution_closure": {
+        "schema_family": "openapoc.runtime_execution_closure.v1",
+        "authority_slice_id": "R1p",
+        "runtime_launch_template": {
+          "schema": "openapoc.runtime_launch_template.v1",
+          "digest_field": "runtime_launch_template_jcs_sha256",
+          "scope": "process_invariant_exact_executable_bundle_static_runtime_image_policy_normalized_option_schema_environment_allowlist_path_policy_collector_launcher_driver_and_platform_device_contract",
+          "must_be_frozen_before_intent_and_attempt": true,
+          "process_nonce_port_output_root_HOME_TMPDIR_save_directory_PID_start_identity_actual_argv_actual_environment_and_runtime_image_observation": "forbidden",
+          "forbidden_fields": ["pid", "process_start_identity", "process_nonce", "leased_port", "output_root_instance", "HOME_instance", "TMPDIR_instance", "cwd_instance", "actual_argv", "actual_environment", "observed_runtime_images", "observed_presentation_device", "terminal_seal", "realized_outputs"],
+          "closed_authorized_substitution_slots": ["cell_id", "campaign_id", "process_role", "recipe_id", "slot_id", "derived_seed", "scheduler", "target_fps", "control_profile", "game_load", "process_instance_nonce", "harness_port", "output_root", "home_root", "tmpdir_root", "controlled_cwd"],
+          "runtime_invariant_projection_schema_is_closed_and_candidate_cannot_widen_exclusions": true,
+          "equivalence_authority": "subject_keys_and_cross_process_equivalence_bind_this_template_plus_input_closure_and_compare_only_the_closed_runtime_invariant_projection_never_a_full_process_realization"
+        },
+        "process_launch_plan_authority": {
+          "schema": "openapoc.process_launch_plan_authority.v1",
+          "digest_field": "process_launch_plan_authority_jcs_sha256",
+          "closed_variants": {
+            "finite_exact": "binds_one_immutable_planned_process_launch_set_jcs_sha256_complete_before_attempt-started",
+            "deterministic_gap_free_prefix": "binds_one_immutable_planned_process_launch_prefix_policy_jcs_sha256_complete_before_attempt-started"
+          },
+          "exactly_one_variant_required": true,
+          "attempt_started_and_attempt_execution_began_bind_only_this_immutable_discriminated_authority": true,
+          "variant_payload_digest_cannot_change_after_attempt_started": true
+        },
+        "planned_process_launch_set": {
+          "schema": "openapoc.planned_process_launch_set.v1",
+          "digest_field": "planned_process_launch_set_jcs_sha256",
+          "planning_mode": "finite_exact",
+          "must_be_bound_by_attempt_started_before_execution": true,
+          "scope": "all_non_soak_attempts_predeclare_one_row_per_initial_or_continuation_process_in_the_frozen_recipe_process_DAG",
+          "entry_required_fields": [
+            "process_launch_id",
+            "execution_cell_or_soak_ordinal",
+            "campaign_id",
+            "process_role",
+            "parent_process_launch_id",
+            "runtime_launch_template_jcs_sha256",
+            "exact_executable_jcs_sha256",
+            "cwd_jcs_sha256",
+            "environment_jcs_sha256",
+            "process_nonce_transport_jcs_sha256",
+            "port_claim_jcs_sha256",
+            "output_root_jcs_sha256",
+            "HOME_jcs_sha256",
+            "TMPDIR_jcs_sha256",
+            "save_directory_jcs_sha256"
+          ],
+          "launch_binding_variants": {
+            "campaign_initial": {
+              "required_fields": ["argv_template_substitution_jcs_sha256", "input_closure_jcs_sha256"],
+              "campaign_root_game_load_or_prior_save_input": "forbidden"
+            },
+            "continuation_from_receipt": {
+              "required_fields": ["producer_process_launch_id", "required_save_production_receipt_schema", "producer_output_selector_jcs_sha256", "allowed_relaunch_delta_policy_jcs_sha256"],
+              "preexecution_forbidden_future_fields": ["produced_save_jcs_sha256", "continuation_input_closure_jcs_sha256", "concrete_game_load", "concrete_argv_jcs_sha256"],
+              "materialization_rule": "resolve_the_exact_producer_save_receipt_and_seal_the_attempt_local_read_only_continuation_input_only_after_acknowledged_clean_exit_and_orderly_reap",
+              "same_campaign_only": true
+            }
+          },
+          "exactly_one_launch_binding_variant_required": true,
+          "unique_per_entry_fields": [
+            "process_nonce_transport_jcs_sha256",
+            "port_claim_jcs_sha256",
+            "output_root_jcs_sha256",
+            "HOME_jcs_sha256",
+            "TMPDIR_jcs_sha256",
+            "save_directory_jcs_sha256"
+          ],
+          "oracle_36_and_54_rule": "same_runtime_launch_template_and_input_closure_but_distinct_phase_launch_sets_and_distinct_per_process_entries",
+          "campaign_count_and_total_process_count_are_distinct": true,
+          "continuation_row_never_claims_future_save_or_argv_bytes": true
+        },
+        "planned_process_launch_prefix_policy": {
+          "schema": "openapoc.planned_process_launch_prefix_policy.v1",
+          "digest_field": "planned_process_launch_prefix_policy_jcs_sha256",
+          "planning_mode": "deterministic_gap_free_prefix",
+          "immutable_before_attempt_started_fields": [
+            "soak_schedule_policy_jcs_sha256",
+            "row_generator_jcs_sha256",
+            "transport_allocator_policy_jcs_sha256",
+            "duration_ns",
+            "campaign_first_ordinal",
+            "process_launch_first_ordinal",
+            "minimum_completed_campaigns"
+          ],
+          "attempt_specific_origin_cutoff_or_clock_domain": "forbidden_materialized_only_in_soak_execution_window_at_attempt-execution-began",
+          "closed_prefix_chains": {
+            "campaign_root": {
+              "ordinal_field": "campaign_ordinal",
+              "append_rule": "after_attempt-execution-began_and_before_cutoff_append_exactly_one_hash_chained_campaign-root-planned_artifact_for_the_next_gap_free_ordinal_before_each_new_campaign_root_spawn",
+              "finalized_digest_field": "finalized_campaign_root_prefix_jcs_sha256",
+              "finalized_terminal_required_fields": ["finalized_campaign_root_prefix_jcs_sha256", "finalized_campaign_root_prefix_count", "finalized_campaign_root_prefix_head_jcs_sha256"]
+            },
+            "process_launch": {
+              "ordinal_field": "process_launch_ordinal",
+              "append_rule": "after_attempt-execution-began_append_exactly_one_hash_chained_process-launch-planned_artifact_for_the_next_gap_free_ordinal_before_every_root_or_continuation_process_spawn",
+              "root_binding": "campaign_root_process_entry_binds_the_same_campaign_ordinal_and_campaign-root-planned_digest",
+              "continuation_binding": "continuation_process_entry_binds_the_same_existing_campaign_ordinal_and_never_allocates_a_campaign_ordinal",
+              "finalized_digest_field": "finalized_process_launch_prefix_jcs_sha256",
+              "finalized_terminal_required_fields": ["finalized_process_launch_prefix_jcs_sha256", "finalized_process_launch_prefix_count", "finalized_process_launch_prefix_head_jcs_sha256"]
+            }
+          },
+          "append_linearization": "serialize_prefix_append_and_root_cutoff_admission_under_one_attempt_fence_before_spawn_without_mutating_policy_or_authority_digest",
+          "finalized_prefix_digest_field": "finalized_process_launch_prefix_jcs_sha256",
+          "finalized_prefix_terminal_required_fields": ["finalized_campaign_root_prefix_jcs_sha256", "finalized_campaign_root_prefix_count", "finalized_campaign_root_prefix_head_jcs_sha256", "finalized_process_launch_prefix_jcs_sha256", "finalized_process_launch_prefix_count", "finalized_process_launch_prefix_head_jcs_sha256"],
+          "terminal_rule": "success_or_logical_failure_binds_both_finalized_gap_free_prefix_digests_and_no_later_ordinal_may_be_planned_or_spawned",
+          "receipt_bijections": {
+            "campaign": "campaign_root_prefix_entries_exactly_biject_campaign_terminal_receipts",
+            "process": "process_launch_prefix_entries_exactly_biject_realized_runtime_closure_receipts"
+          },
+          "every_prefix_entry_required_binding": "soak_execution_window_jcs_sha256",
+          "gap_duplicate_caller_selected_row_spawn_before_plan_root_launch_at_cutoff_or_unplanned_continuation": "logical_failure"
+        },
+        "soak_execution_window": {
+          "schema": "openapoc.soak_execution_window.v1",
+          "digest_field": "soak_execution_window_jcs_sha256",
+          "publication": "embedded_atomically_in_soak_attempt-execution-began_or_neither_is_visible",
+          "required_bindings": [
+            "intent_jcs_sha256",
+            "attempt_started_jcs_sha256",
+            "attempt_fence_jcs_sha256",
+            "soak_schedule_policy_jcs_sha256",
+            "soak_workload_schedule_jcs_sha256",
+            "process_launch_plan_authority_jcs_sha256",
+            "planned_process_launch_prefix_policy_jcs_sha256",
+            "monotonic_clock_domain_jcs_sha256",
+            "origin_monotonic_ns",
+            "duration_ns",
+            "launch_cutoff_monotonic_ns"
+          ],
+          "origin_rule": "byte_equal_to_attempt-execution-began_execution_linearization_monotonic_ns",
+          "duration_rule": "byte_equal_to_F_frozen_duration_ns",
+          "cutoff_rule": "checked_uint64_add_origin_plus_duration_before_atomic_publication",
+          "window": "half_open_origin_inclusive_cutoff_exclusive",
+          "pre_execution_retry": "unchanged_intent_may_create_a_new_attempt_fence_fresh_window_fresh_dual_prefix_chains_and_full_duration",
+          "post_publication_interruption": "logical_soak_failure_and_never_retryable",
+          "every_plan_materialization_receipt_prefix_and_terminal_binds_this_digest": true
+        },
+        "soak_campaign_root_start_receipt": {
+          "schema": "openapoc.soak_campaign_root_start_receipt.v1",
+          "digest_field": "soak_campaign_root_start_receipt_jcs_sha256",
+          "set_digest_field": "soak_campaign_root_start_receipt_set_jcs_sha256",
+          "publication": "no_clobber_immediately_after_successful_spawn_and_pid_start_identity_capture_at_one_coordinator_linearization_before_the_root_is_eligible_as_started",
+          "required_bindings": [
+            "intent_jcs_sha256",
+            "attempt_started_jcs_sha256",
+            "attempt_execution_began_jcs_sha256",
+            "attempt_fence_jcs_sha256",
+            "soak_execution_window_jcs_sha256",
+            "monotonic_clock_domain_jcs_sha256",
+            "campaign_ordinal",
+            "process_launch_ordinal",
+            "campaign_root_prefix_entry_jcs_sha256",
+            "process_launch_prefix_entry_jcs_sha256",
+            "materialized_process_launch_jcs_sha256",
+            "pid_start_identity_jcs_sha256",
+            "process_instance_nonce",
+            "root_start_monotonic_ns"
+          ],
+          "timestamp_authority": "coordinator_samples_root_start_monotonic_ns_from_the_execution_window_clock_domain_at_the_successful_spawn_pid_start_identity_capture_linearization_never_child_caller_or_wall_clock_supplied",
+          "cutoff_predicate": "origin_monotonic_ns_less_than_or_equal_to_root_start_monotonic_ns_and_root_start_monotonic_ns_strictly_less_than_launch_cutoff_monotonic_ns",
+          "drain_deadline_rule": "checked_uint64_add_root_start_monotonic_ns_plus_F_frozen_per_campaign_drain_timeout_ns",
+          "success_bijection": "campaign_root_prefix_entries_exactly_biject_root_start_receipts_and_campaign_terminal_receipts_with_matching_campaign_ordinals",
+          "missing_duplicate_cross_attempt_cross_fence_cross_clock_or_pid_identity_mismatch": "logical_failure"
+        },
+        "campaign_cardinality_bindings": {
+          "pre_oracle_projection_stability": {
+            "campaign_count": 36,
+            "initial_process_launch_row_count": 36
+          },
+          "oracle_calibration": {
+            "campaign_count": 54,
+            "initial_process_launch_row_count": 54
+          },
+          "ordinary_candidate_admission": {
+            "campaign_count": 3,
+            "initial_process_launch_row_count": 3
+          },
+          "integrated_landed_head_repeat": {
+            "campaign_count": 20,
+            "initial_process_launch_row_count": 20
+          },
+          "independent_nightly_batch": {
+            "campaign_count": 20,
+            "initial_process_launch_row_count": 20
+          },
+          "activation": {
+            "campaign_count": 100,
+            "initial_process_launch_row_count": 100
+          },
+          "save_reload_continuation_process_rows": "additional_to_campaign_and_initial_process_counts_and_predeclared_in_each_finite_exact_recipe_process_DAG",
+          "soak_campaign_root_rows": "deterministic_gap_free_campaign_ordinal_prefix_not_a_predeclared_final_count",
+          "soak_process_rows": "separate_deterministic_gap_free_process_launch_ordinal_prefix_including_each_root_and_continuation_process"
+        },
+        "materialized_process_launch": {
+          "schema": "openapoc.materialized_process_launch.v1",
+          "publication": "no_clobber_immediately_before_one_spawn_after_attempt-execution-began",
+          "required_bindings": ["intent_jcs_sha256", "attempt_started_jcs_sha256", "attempt_execution_began_jcs_sha256", "attempt_fence_jcs_sha256", "process_launch_plan_authority_jcs_sha256", "process_plan_row_or_prefix_entry_jcs_sha256", "process_launch_id", "input_closure_jcs_sha256", "concrete_argv_jcs_sha256", "concrete_environment_jcs_sha256", "concrete_cwd_jcs_sha256", "process_instance_nonce", "port_claim_jcs_sha256", "output_root_jcs_sha256"],
+          "soak_launch_additionally_requires": ["soak_execution_window_jcs_sha256", "process_launch_ordinal", "campaign_ordinal"],
+          "continuation_materialization_requires_same_attempt_producer_clean_save_and_reap_receipt": true,
+          "failure_after_execution_began": "logical_failure_never_infrastructure_retry"
+        },
+        "realized_runtime_closure_receipt": {
+          "schema": "openapoc.realized_runtime_closure_receipt.v1",
+          "set_digest_field": "realized_runtime_closure_receipt_set_jcs_sha256",
+          "one_receipt_per_actually_spawned_process": true,
+          "spawned_entry_required_fields": [
+            "planned_process_launch_entry_jcs_sha256",
+            "materialized_process_launch_jcs_sha256",
+            "pid_start_identity_jcs_sha256",
+            "process_nonce",
+            "queried_build_info_jcs_sha256",
+            "observed_runtime_image_journal_jcs_sha256",
+            "actual_argv_jcs_sha256",
+            "actual_environment_jcs_sha256",
+            "actual_cwd_jcs_sha256",
+            "runtime_invariant_projection_jcs_sha256",
+            "orderly_exit_wait_reap_jcs_sha256",
+            "terminal_artifact_set_jcs_sha256"
+          ],
+          "soak_receipt_additionally_requires": ["soak_execution_window_jcs_sha256", "soak_campaign_root_start_receipt_jcs_sha256", "process_launch_ordinal", "campaign_ordinal"],
+          "soak_root_start_binding_rule": "the_root_process_receipt_binds_its_own_start_receipt_and_every_continuation_process_receipt_binds_the_same_campaign_root_start_receipt",
+          "actual_mismatch_from_planned_entry_or_template": "logical_failure",
+          "full_realized_closure_expected_to_differ_per_process": true,
+          "required_equality_surface": "closed_runtime_invariant_projection_only",
+          "success_receipt_set_rule": "exact_bijection_between_the_finite_exact_planned_set_or_separately_finalized_soak_prefix_and_realized_receipts_with_no_missing_extra_duplicate_cross_attempt_or_cross_fence_receipt",
+          "logical_failure_evidence": "bind_partial_realized_runtime_closure_evidence_set_jcs_sha256_and_unfulfilled_process_launch_id_set_jcs_sha256_never_fabricate_a_complete_set"
+        },
+        "execution_terminal_binding": {
+          "success_after_attempt_execution_began_requires": "realized_runtime_closure_receipt_set_jcs_sha256",
+          "logical_failure_after_attempt_execution_began_requires": ["partial_realized_runtime_closure_evidence_set_jcs_sha256", "unfulfilled_process_launch_id_set_jcs_sha256"],
+          "attempt_infrastructure_failed_forbids": ["realized_runtime_closure_receipt_set_jcs_sha256", "partial_realized_runtime_closure_evidence_set_jcs_sha256", "unfulfilled_process_launch_id_set_jcs_sha256"],
+          "every_worker_process_claim_progress_campaign_cell_and_terminal_receipt_binds": "exact_planned_process_launch_entry_jcs_sha256",
+          "every_execution_terminal_must_bind": [
+            "runtime_launch_template_jcs_sha256",
+            "process_launch_plan_authority_jcs_sha256"
+          ],
+          "finite_exact_success_additionally_requires": "planned_process_launch_set_jcs_sha256",
+          "deterministic_gap_free_prefix_terminal_additionally_requires": ["planned_process_launch_prefix_policy_jcs_sha256", "soak_execution_window_jcs_sha256", "soak_campaign_root_start_receipt_set_jcs_sha256", "finalized_campaign_root_prefix_jcs_sha256", "finalized_campaign_root_prefix_count", "finalized_campaign_root_prefix_head_jcs_sha256", "finalized_process_launch_prefix_jcs_sha256", "finalized_process_launch_prefix_count", "finalized_process_launch_prefix_head_jcs_sha256"]
+        }
+      },
+      "shared_campaign_control_coverage": {
+        "schema": "openapoc.shared_campaign_control_coverage.v1",
+        "authority_slice_id": "R1c",
+        "raw_receipt_schema_registry_ref": "/contracts/oracle_calibration/campaign_control_coverage_receipts/raw_receipt_schemas",
+        "applies_to_whole_game_attempt_kinds_ref": "/contracts/oracle_calibration/campaign_control_coverage_receipts/applies_to_whole_game_attempt_kinds",
+        "required_raw_categories_ref": "/contracts/oracle_calibration/campaign_control_coverage_receipts/every_full_game_campaign_requires_raw_categories",
+        "same_attempt_fence_campaign_bijection_required": true,
+        "every_whole_game_success_terminal_requires": ["campaign_control_raw_receipt_set_jcs_sha256", "campaign_control_receipt_bijection_jcs_sha256"],
+        "normalized_acceptance_projection_is_not_raw_proof": true,
+        "candidate_parent_prior_head_or_oracle_receipt_substitution": "forbidden"
+      },
+      "every_claim_receipt_consensus_and_terminal_binds_current_attempt_and_fence": true,
+      "terminal_record_requires_complete_no_mix_receipt_set_from_one_attempt_fence": true,
+      "post_success_lifecycle_transitions": {
+        "record_types": ["revoked", "replay-schema-invalidated", "compatibility-delta-invalidated"],
+        "outside_attempt_terminal_table": true,
+        "must_bind_prior_success_trigger_record_pretransition_ledger_head_policy_digest_and_operation_id": true,
+        "serialized_under_global_ledger_and_landing_lock": true,
+        "cannot_reterminalize_or_reuse_the_successful_attempt": true
+      },
+      "parent_reference_mismatch_terminalizes_compatibility_attempt_before_parent_audit_or_fresh_parent_first_intent": true,
+      "ledger_transaction_envelope": {
+        "schema": "openapoc.admission_ledger_transaction.v1",
+        "physical_append_unit": "one_rfc8785_hash_chained_transaction_envelope_per_atomic_no_replace_rename",
+        "required_envelope_fields": [
+          "transaction_id",
+          "operation_id",
+          "ordinal",
+          "previous_transaction_sha256",
+          "logical_records",
+          "logical_record_vector_jcs_sha256"
+        ],
+        "logical_record_vector": "ordered_nonempty_closed_record_type_and_payload_entries",
+        "logical_record_reference": "jcs_sha256_of_transaction_sha256_logical_index_and_logical_record_sha256",
+        "single_transition_operations": "one_logical_record_inside_the_same_envelope_schema",
+        "visibility": "flatten_only_complete_valid_renamed_envelopes_never_a_prefix_of_logical_records",
+        "closed_logical_record_types": [
+          "epoch-init", "candidate", "candidate-ref-published", "candidate-publication-failed",
+          "admission-intent", "attempt-started", "attempt-execution-began", "attempt-infrastructure-failed", "intent-abandoned",
+          "admitted", "admission-failed", "revoked", "superseded",
+          "baseline-invalidated", "baseline-replacement", "train-scope-extended",
+          "compatibility-delta-intent", "compatibility-delta-authorized", "compatibility-delta-failed", "compatibility-delta-invalidated",
+          "parent-reference-mismatch", "parent-audit-intent", "parent-audit-reproduced", "parent-audit-not-reproduced", "parent-reference-cleared", "parent-audit-escalated",
+          "replay-schema-intent", "replay-schema-authorized", "replay-schema-failed", "replay-schema-activated", "replay-schema-invalidated",
+          "integrated-repeat-intent", "integrated-repeat-completed", "integrated-repeat-failed", "successor-branch-authorized",
+          "nightly-intent", "nightly-completed", "nightly-failed",
+          "desktop-presentation-intent", "desktop-presentation-completed", "desktop-presentation-failed",
+          "desktop-performance-intent", "desktop-performance-completed", "desktop-performance-failed",
+          "activation-intent", "activation-completed", "activation-failed",
+          "soak-intent", "soak-completed", "soak-failed",
+          "g-gates-pending", "gate-spec-frozen",
+          "land-exact-intent", "land-exact-completed", "land-exact-aborted",
+          "land-exact-reconcile-intent", "land-exact-reconciled", "land-exact-reconcile-not-applied", "land-exact-reconcile-failed", "land-recovery-authorized", "land-recovery-reauthorized",
+          "train-abandon-requested", "train-completed", "train-abandoned"
+        ],
+        "compound_transition_sets": {
+          "candidate-epoch-ledger-open-v1": {
+            "when": "candidate_epoch_publication_after_parent_resolution_and_before_remote_epoch_ref_creation",
+            "ordered_logical_record_types": ["epoch-init", "candidate"]
+          },
+          "baseline-only-noop-land-v1": {
+            "when": "land_exact_for_baseline_only_noop_construction_mode_where_candidate_sha_tree_equals_transport_sha_tree",
+            "ordered_logical_record_types": ["land-exact-intent", "land-exact-completed"]
+          },
+          "land-abort-reconcile-open-v1": {
+            "when": "pending_reviewed_source_merge_land_intent_cannot_complete_or_retry_same_CAS",
+            "ordered_logical_record_types": ["land-exact-aborted", "land-exact-reconcile-intent"]
+          },
+          "land-reconcile-failure-revocation-recovery-authority-v1": {
+            "when": "land_exact_reconciliation_cannot_prove_exact_authorized_update_or_observes_any_other_remote_sha_tree",
+            "ordered_logical_record_types": ["land-exact-reconcile-failed", "revoked", "land-recovery-authorized"]
+          },
+          "land-recovery-reauthorization-v1": {
+            "when": "one_consumed_land_recovery_authority_has_one_terminal_failed_recovery_candidate_generation_and_independent_review_derives_one_causal_replacement_authority",
+            "ordered_logical_record_types": ["land-recovery-reauthorized"]
+          },
+          "G-admission-pending-v1": {
+            "when": "ordinary_admission_success_for_subject_slice_G",
+            "ordered_logical_record_types": ["admitted", "g-gates-pending"]
+          },
+          "admitted-subject-logical-red-revocation-v1": {
+            "when": "admitted_subject_logical_red_and_train_abandonment_not_selected",
+            "failure_record_type_domain": [
+              "integrated-repeat-failed",
+              "nightly-failed",
+              "desktop-presentation-failed",
+              "desktop-performance-failed",
+              "activation-failed",
+              "soak-failed"
+            ],
+            "ordered_logical_record_types": ["selected_failure_record_type", "revoked"]
+          },
+          "parent-audit-reproduction-revocation-v1": {
+            "ordered_logical_record_types": ["parent-audit-reproduced", "revoked"]
+          },
+          "authority-invalidation-revocation-v1": {
+            "invalidation_record_type_domain": [
+              "baseline-invalidated",
+              "replay-schema-invalidated",
+              "compatibility-delta-invalidated"
+            ],
+            "when": "invalidation_dependency_closure_contains_one_or_more_admitted_subjects",
+            "ordered_logical_record_types": ["selected_invalidation_record_type", "revoked"]
+          },
+          "pre-execution-intent-abandon-train-v1": {
+            "when": "train_owner_abandons_while_the_only_open_postledger_non_G_pending_intent_has_no_attempt_or_a_latest_attempt-infrastructure-failed_terminal_and_no_execution-began_or_live_process",
+            "ordered_logical_record_types": ["intent-abandoned", "train-abandoned"]
+          },
+          "G-pending-idle-abandon-v1": {
+            "when": "train_owner_abandons_while_G_gates_pending_and_no_gate_land_or_reconcile_operation_is_open_including_before_first_gate_between_gates_after_soak_or_after_reconcile_not_applied",
+            "ordered_logical_record_types": ["revoked", "train-abandoned"]
+          },
+          "G-pending-pre-execution-gate-abandon-v1": {
+            "when": "train_owner_abandons_while_G_gates_pending_and_the_exact_next_gate_intent_has_no_attempt_or_only_a_terminal_pre_execution_infrastructure_attempt_and_no_execution_began_or_live_process",
+            "ordered_logical_record_types": ["intent-abandoned", "revoked", "train-abandoned"]
+          },
+          "G-pending-live-pre-execution-gate-abandon-v1": {
+            "when": "train_owner_abandons_while_G_gates_pending_and_the_exact_next_gate_has_one_live_attempt_with_proof_that_attempt-execution-began_worker_spawn_candidate_observation_and_descendant_artifacts_do_not_exist",
+            "ordered_logical_record_types": ["attempt-infrastructure-failed", "intent-abandoned", "revoked", "train-abandoned"]
+          },
+          "G-pending-land-success-abandon-v1": {
+            "when": "train_abandonment_requested_while_G_land_is_open_and_exact_authorized_CAS_or_exact_authorized_update_receipt_proves_success",
+            "ordered_logical_record_types": ["land-exact-completed", "train-abandoned"]
+          },
+          "G-pending-land-abort-reconcile-abandon-request-v1": {
+            "when": "train_abandonment_requested_while_G_land_is_open_and_the_land_cannot_complete",
+            "ordered_logical_record_types": ["land-exact-aborted", "land-exact-reconcile-intent", "train-abandon-requested"]
+          },
+          "G-pending-reconcile-applied-abandon-v1": {
+            "when": "G_reconciliation_with_train-abandon-requested_proves_exact_authorized_application",
+            "ordered_logical_record_types": ["land-exact-reconciled", "train-abandoned"]
+          },
+          "G-pending-reconcile-not-applied-abandon-v1": {
+            "when": "G_reconciliation_with_train-abandon-requested_proves_remote_remained_at_pre_intent_transport",
+            "ordered_logical_record_types": ["land-exact-reconcile-not-applied", "revoked", "train-abandoned"]
+          },
+          "G-pending-reconcile-failed-abandon-v1": {
+            "when": "G_reconciliation_with_train-abandon-requested_fails_closed",
+            "ordered_logical_record_types": ["land-exact-reconcile-failed", "revoked", "train-abandoned"]
+          },
+          "unadmitted-logical-red-train-abandon-v1": {
+            "when": "train_owner_abandons_an_open_unadmitted_executing_intent_after_all_processes_are_terminalized",
+            "ordered_logical_record_types": ["selected_intent_kind_logical_failure_record_type", "train-abandoned"]
+          },
+          "admitted-logical-red-revocation-train-abandon-v1": {
+            "when": "train_owner_abandons_an_open_admitted_subject_executing_intent_after_all_processes_are_terminalized",
+            "ordered_logical_record_types": ["selected_intent_kind_logical_failure_record_type", "revoked", "train-abandoned"]
+          }
+        },
+        "compound_transition_selection_is_context_total_and_mutually_exclusive": true,
+        "compound_member_outside_exact_envelope": "invalid_ledger_and_block_all_mutation",
+        "operation_mutex_release": "only_after_the_operation_terminal_envelope_is_durably_renamed_fsynced_and_revalidated_intermediate_compound_envelopes_never_release_an_open_operation",
+        "attempt_terminal_inside_compound_envelope_does_not_release_mutex_early": true,
+        "crash_before_rename": "zero_logical_records_visible_and_same_operation_id_may_rebuild_and_retry",
+        "crash_after_rename": "all_logical_records_visible_and_idempotent_replay_must_observe_exact_transaction_sha256",
+        "startup_validation": "reject_temp_or_partial_visibility_gap_duplicate_bad_hash_unknown_vector_or_missing_compound_member"
+      },
+      "global_serialized_operations": {
+        "lock": "ledger_and_landing_lock",
+        "closed_operation_kinds": [
+          "candidate-epoch-publication",
+          "ordinary-admission",
+          "land-exact",
+          "land-exact-reconcile",
+          "replay-schema-upgrade",
+          "compatibility-delta",
+          "parent-reference-audit",
+          "integrated-repeat",
+          "successor-branch-authorization",
+          "nightly",
+          "desktop-presentation",
+          "desktop-performance",
+          "activation",
+          "soak",
+          "baseline-or-lifecycle-transition",
+          "train-terminal"
+        ],
+        "mutual_exclusion": "only_one_open_or_atomic_operation_from_intent_or_transition_start_through_terminal_or_required_atomic_transaction_commit",
+        "allowed_same_operation_kind_transitions": {
+          "land-exact_to_land-exact-reconcile": "only_via_land-abort-reconcile-open-v1_same_operation_id_with_continuous_mutex_ownership",
+          "any_open_operation_to_train_terminal_branch": "only_via_context_selected_exact_train_abandonment_compound_transaction_same_operation_id_after_process_terminalization",
+          "G_land_to_reconcile_abandonment": "only_via_G-pending-land-abort-reconcile-abandon-request-v1_with_same_G_pending_operation_id_and_continuous_mutex_ownership",
+          "open_G_reconciliation_to_abandonment": "append_train-abandon-requested_under_the_same_reconciliation_operation_id_then_only_a_G-pending-reconcile-*-abandon-v1_terminal_is_legal"
+        },
+        "all_other_operation_kind_transitions": "forbidden",
+        "worker_execution_does_not_release_operation_ownership": true,
+        "G_gates_pending_state": "one_outer_g_pending_operation_id_from_G-admission-pending-v1_to_G_land_or_revocation_every_gate_land_reconcile_and_abandonment_child_binds_it_only_exact_next_gate_or_its_full_retry_may_open_then_after_soak_success_only_land_exact_then_after_land_abort_only_land_exact_reconcile_then_after_land_exact_reconcile_not_applied_only_fresh_land_exact_or_one_context_exclusive_G_abandonment_vector",
+        "all_contract_specific_serialization_rules_reference_this_object": true
+      },
+      "train_abandonment": {
+        "record_type": "train-abandoned",
+        "authority_role": "train_owner",
+        "reviewed_decision_artifact_required": true,
+        "never_inferred_from_inactivity_crash_closed_PR_or_missed_nightly": true,
+        "when_no_operation_is_open": "if_G_gates_pending_use_G-pending-idle-abandon-v1_else_open_train-terminal_and_append_one_train-abandoned_envelope_after_proving_zero_live_processes_and_zero_open_attempts",
+        "when_one_operation_is_open": "terminal_branch_of_that_same_mutex_owned_operation_and_operation_id_never_a_second_overlapping_train-terminal_operation",
+        "live_execution_abandonment": "stop_and_orderly_reap_every_process_then_select_the_intent_kind_logical_failure_never_use_the_infrastructure_terminal",
+        "pre_execution_open_intent_terminal": "intent-abandoned",
+        "pre_execution_live_attempt_rule": "after_proving_no_attempt-execution-began_worker_or_subject_spawn_or_candidate_observation_stop_coordinator_and_for_a_G_gate_atomically_use_G-pending-live-pre-execution-gate-abandon-v1_otherwise_terminalize_attempt-infrastructure-failed_without_releasing_mutex_then_use_pre-execution-intent-abandon-train-v1",
+        "pre_execution_intent_abandonment_compound_transaction_id": "pre-execution-intent-abandon-train-v1",
+        "unadmitted_executing_intent_compound_transaction_id": "unadmitted-logical-red-train-abandon-v1",
+        "admitted_executing_intent_compound_transaction_id": "admitted-logical-red-revocation-train-abandon-v1",
+        "G_pending_dispatch": {
+          "selection_order": ["open_reconciliation", "open_land", "open_gate_partitioned_by_attempt-execution-began", "idle_G_pending"],
+          "selection_is_total_and_mutually_exclusive": true,
+          "idle_positions": ["before_desktop_presentation", "after_desktop_presentation", "after_desktop_performance", "after_activation", "after_soak_before_land", "after_land_exact_reconcile_not_applied"],
+          "idle_compound_transaction_id": "G-pending-idle-abandon-v1",
+          "pre_execution_gate_compound_transaction_id": "G-pending-pre-execution-gate-abandon-v1",
+          "live_pre_execution_gate_compound_transaction_id": "G-pending-live-pre-execution-gate-abandon-v1",
+          "post_execution_gate_compound_transaction_id": "admitted-logical-red-revocation-train-abandon-v1",
+          "open_land_vectors": ["G-pending-land-success-abandon-v1", "G-pending-land-abort-reconcile-abandon-request-v1"],
+          "already_open_reconciliation": "append_train-abandon-requested_under_same_operation_id_without_releasing_mutex",
+          "reconciliation_after_request_vectors": ["G-pending-reconcile-applied-abandon-v1", "G-pending-reconcile-not-applied-abandon-v1", "G-pending-reconcile-failed-abandon-v1"],
+          "normal_reconciliation_terminal_after_train-abandon-requested": "invalid_ledger",
+          "every_abandonment_path_closes_g_gates_pending_by_G_land_or_revocation": true
+        },
+        "non_intent_open_operation_rule": "first_resume_its_defined_crash_recovery_to_success_failure_abort_or_reconcile_terminal_or_atomic_failure_revocation_recovery_authority_then_apply_the_G_pending_dispatch_or_open_train-terminal_no_direct_abandonment_transition",
+        "all_processes_and_attempts_terminal_before_transaction": true,
+        "intent-abandoned_outside_exact_train_abandonment_envelope": "invalid_ledger",
+        "retry_resume_or_new_success_after_train-abandoned": "forbidden"
+      },
+      "late_or_cross_fence_artifact": "reject",
+      "attempt_execution_began_record_type": "attempt-execution-began",
+      "attempt_execution_began_publication": "durable_under_current_intent_attempt_fence_immediately_before_any_worker_subject_process_or_candidate_observing_execution_may_start",
+      "attempt_execution_began_required_bindings": [
+        "intent_jcs_sha256",
+        "attempt_started_jcs_sha256",
+        "attempt_claim_jcs_sha256",
+        "attempt_fence_jcs_sha256",
+        "manifest_jcs_sha256",
+        "tested_sha",
+        "tested_tree",
+        "runtime_launch_template_jcs_sha256",
+        "process_launch_plan_authority_jcs_sha256",
+        "execution_linearization_monotonic_ns"
+      ],
+      "every_worker_spawn_claim_receipt_progress_and_terminal_requires_attempt_execution_began_jcs_sha256": true,
+      "attempt_infrastructure_failed_forbids_attempt_execution_began_or_descendant_artifact": true,
+      "retryable_infrastructure_window": "only_before_attempt-execution-began_and_before_any_worker_or_subject_process_spawn_or_candidate_observation",
+      "infrastructure_failure_proof": "all_coordinator_and_worker_identities_dead_no_attempt-execution-began_no_worker_or_subject_process_spawn_receipt_no_candidate_observation_and_no_durable_logical_red",
+      "execution_began_or_ambiguous_spawn_effect": "any_crash_reboot_sleep_discontinuity_lost_lease_host_loss_coordinator_loss_worker_loss_process_loss_forced_exit_timeout_or_ambiguous_terminal_selects_the_intent_kind_logical_failure_and_never_infrastructure_retry",
+      "crash_after_execution_began_before_actual_spawn": "logical_failure_by_conservative_linearization",
+      "infrastructure_retry": "only_inside_retryable_pre_execution_window_terminalize_old_fence_then_restart_complete_manifest_under_new_attempt",
+      "partial_resume_receipt_reuse_or_cross_attempt_consensus": "forbidden",
+      "schema_consistency_predicate": {
+        "exact_executable_intent_kind_count": 12,
+        "every_executable_contract_resolves_to_exactly_one_intent_kind_row": true,
+        "every_success_and_logical_failure_record_type_matches_its_owner_row": true,
+        "post_success_lifecycle_transitions_are_not_attempt_terminals": true,
+        "every_claim_receipt_consensus_and_terminal_binds_current_attempt_and_fence": true,
+        "sole_infrastructure_terminal": "attempt-infrastructure-failed",
+        "infrastructure_terminal_is_legal_only_before_attempt_execution_began": true,
+        "execution_began_interruption_is_logical_failure": true,
+        "retry_restarts_complete_immutable_manifest": true,
+        "partial_or_cross_fence_reuse_rejected_for_all_twelve_kinds": true,
+        "R1c_campaign_control_receipts_are_oracle_attempt_leaves_not_a_new_intent_kind": true
+      }
+    },
+    "nightly_schedule": {
+      "schema": "openapoc.nightly_schedule.v1",
+      "id": "nightly-20-v1",
+      "validator_id": "validate_nightly_schedule_v1",
+      "attempt_protocol_id": "common-intent-attempt-fence-v1",
+      "active_interval": {
+        "begins": "first_successful_R1b_admission",
+        "ends_only_after": ["train-completed_at_its_successfully_committed_signed_cutoff", "train-abandoned_at_its_durable_append"],
+        "period_ns": 86400000000000,
+        "ordinal_zero_due_immediately": true,
+        "night_ordinal_domain": "canonical_uint64_rendered_as_exactly_20_decimal_digits",
+        "later_deadline_formula": "authenticated_origin_ns_plus_night_ordinal_times_period_ns",
+        "deadline_arithmetic": "checked_and_overflow_is_manifest_generation_failure",
+        "ordinal_source": "ledger_derived_next_gap_free_unsigned_integer",
+        "caller_clock_date_or_ordinal": "forbidden"
+      },
+      "completion_cutoff_linearization": {
+        "schema": "openapoc.train_completion_cutoff.v1",
+        "authority": "R1b_frozen_RFC3161_TSA_identity_and_policy",
+        "lock": "ledger_and_landing_lock_held_continuously_from_challenge_materialization_through_atomic_completion_envelope_fsync_and_revalidation",
+        "fresh_challenge_binds": [
+          "operation_id",
+          "completion_operation_fencing_ordinal",
+          "current_ledger_head_jcs_sha256",
+          "next_transaction_ordinal",
+          "active_train_scope_jcs_sha256",
+          "schedule_epoch_ns",
+          "schedule_period_ns",
+          "live_admission_jcs_sha256",
+          "remote_develop_sha",
+          "remote_develop_tree",
+          "non_time_completion_predicate_set_jcs_sha256",
+          "exact_train_completion_payload_without_token_jcs_sha256",
+          "all_due_nightly_terminal_records_jcs_sha256",
+          "nightly_schedule_spec_jcs_sha256"
+        ],
+        "normative_linearization_point": "verified_RFC3161_token_genTime_only_if_the_exact_bound_train-completed_transaction_envelope_is_atomically_renamed_fsynced_and_revalidated_under_the_same_uninterrupted_lock",
+        "genTime_normalization": "DER_generalized_time_is_verified_against_frozen_TSA_policy_then_converted_once_to_checked_UTC_nanoseconds_with_rejected_fraction_precision_loss_leap_second_or_overflow",
+        "active_interval_end_for_successful_completion": "that_normative_signed_cutoff_genTime_not_local_rename_fsync_or_observation_time",
+        "due_ordinal_range": "all_and_only_deadlines_less_than_or_equal_to_the_normative_signed_cutoff_genTime",
+        "post_token_revalidation": "lock_fence_ledger_head_next_ordinal_remote_live_admission_scope_schedule_and_every_bound_payload_digest_must_be_unchanged_before_atomic_rename",
+        "append_after_a_later_nightly_deadline": "does_not_add_an_ordinal_because_the_successfully_committed_signed_cutoff_is_the_schedule_end_and_linearization_point",
+        "crash_lock_loss_or_payload_change_before_durable_commit": "token_and_provisional_envelope_are_void_no_transition_linearized_schedule_remains_active_and_a_fresh_challenge_must_include_every_newly_due_ordinal",
+        "token_reuse_rebinding_or_commit_under_different_ledger_head": "forbidden",
+        "train_abandoned": "uses_its_durable_atomic_append_as_end_and_does_not_claim_successful_nightly_completeness"
+      },
+      "record_types": {
+        "intent": "nightly-intent",
+        "success": "nightly-completed",
+        "failure": "nightly-failed",
+        "infrastructure_failure": "attempt-infrastructure-failed"
+      },
+      "global_serialization": {
+        "authority_ref": "/contracts/batch_attempt_protocol/global_serialized_operations",
+        "only_one_open_nightly_intent": true,
+        "nightly_and_integrated_repeat_are_always_distinct_attempts": true
+      },
+      "manifest": {
+        "resolver_id": "resolve_phase_nightly_20_v1",
+        "exact_campaign_count": 20,
+        "fresh_process_per_campaign": true,
+        "full_new_game_to_classified_victory_per_campaign": true,
+        "campaign_root_game_load_or_prior_save_input": "forbidden",
+        "candidate_diagnostic_partial_or_prior_head_substitution": "forbidden",
+        "subject": "exact_current_live_admitted_sha_tree",
+        "required_bindings": [
+          "night_ordinal",
+          "authenticated_origin_and_deadline_receipt_jcs_sha256",
+          "live_admission_jcs_sha256",
+          "live_sha",
+          "live_tree",
+          "active_effective_campaign_oracle_chain_jcs_sha256",
+          "active_effective_replay_oracle_chain_jcs_sha256",
+          "runtime_launch_template_jcs_sha256",
+          "process_launch_plan_authority_jcs_sha256",
+          "planned_process_launch_set_jcs_sha256",
+          "realized_runtime_closure_receipt_set_jcs_sha256",
+          "input_closure_jcs_sha256",
+          "campaign_control_raw_receipt_set_jcs_sha256",
+          "campaign_control_receipt_bijection_jcs_sha256",
+          "phase_template_jcs_sha256",
+          "nightly_manifest_jcs_sha256",
+          "latest_effective_oracle_chain_transition_jcs_sha256",
+          "attempt_started_jcs_sha256",
+          "attempt_claim_jcs_sha256",
+          "attempt_fence_jcs_sha256",
+          "all_20_terminal_receipt_digests_jcs_sha256"
+        ],
+        "phase_templates": [
+          {
+            "when_subject_capabilities_absent": ["fixed-scheduler-v1", "manual-step-controller-v1"],
+            "template_id": "nightly-pre-fixed-five-by-four-v1",
+            "key_count": 20,
+            "recipe_rotation": "all_five_recipes_exactly_four_times",
+            "execution_cell_index_range": [0, 19],
+            "recipe_index_formula": "execution_cell_index_mod_5",
+            "seed_slot_id_format": "nightly-<zero_padded_20_digit_night_ordinal>-<zero_padded_2_digit_execution_cell_index>",
+            "execution_cell_id_format": "same_as_seed_slot_id",
+            "profiles_per_key": 1,
+            "profile_rules": [
+              {
+                "scheduler": "legacy",
+                "target_fps": [1000],
+                "swap_interval": 0,
+                "control_profile": "automatic-simulation",
+                "execution_replica_ordinals": [0]
+              }
+            ]
+          },
+          {
+            "when_subject_capabilities_include": ["fixed-scheduler-v1"],
+            "when_subject_capabilities_exclude": ["manual-step-controller-v1"],
+            "template_id": "nightly-fixed-pre-step-two-by-ten-v1",
+            "key_count": 2,
+            "key_index_range": [0, 1],
+            "recipe_index_formula": "(night_ordinal_plus_2_times_key_index)_mod_5",
+            "seed_slot_id_format": "nightly-<zero_padded_20_digit_night_ordinal>-key-<zero_padded_2_digit_key_index>",
+            "execution_cell_id_format": "<seed_slot_id>-profile-<zero_padded_2_digit_profile_index>",
+            "same_recipe_slot_seed_key_reused_across_its_ten_profiles": true,
+            "profiles_per_key": 10,
+            "profile_rules": [
+              {
+                "scheduler": "legacy",
+                "target_fps": [1000],
+                "swap_interval": 0,
+                "control_profile": "automatic-simulation",
+                "execution_replica_ordinals": [0]
+              },
+              {
+                "scheduler": "fixed",
+                "target_fps": [0, 1, 30, 60, 240],
+                "swap_interval": 0,
+                "control_profile": "automatic-simulation",
+                "execution_replica_ordinals": [0]
+              },
+              {
+                "scheduler": "fixed",
+                "target_fps": [0, 1, 60, 240],
+                "swap_interval": 0,
+                "control_profile": "automatic-simulation",
+                "execution_replica_ordinals": [1]
+              }
+            ]
+          },
+          {
+            "when_subject_capabilities_include": ["fixed-scheduler-v1", "manual-step-controller-v1"],
+            "template_id": "nightly-post-step-two-by-ten-v1",
+            "key_count": 2,
+            "key_index_range": [0, 1],
+            "recipe_index_formula": "(night_ordinal_plus_2_times_key_index)_mod_5",
+            "seed_slot_id_format": "nightly-<zero_padded_20_digit_night_ordinal>-key-<zero_padded_2_digit_key_index>",
+            "execution_cell_id_format": "<seed_slot_id>-profile-<zero_padded_2_digit_profile_index>",
+            "same_recipe_slot_seed_key_reused_across_its_ten_profiles": true,
+            "profiles_per_key": 10,
+            "profile_set_source": "activation_oracle_topology.execution_topology.control_profile_rules"
+          }
+        ],
+        "profile_index_canonical_flattening": "listed_profile_rule_order_then_listed_target_fps_order_then_listed_execution_replica_ordinal_order_assigning_zero_based_profile_indexes",
+        "noncanonical_ordinal_overflow_duplicate_id_or_seed_collision": "manifest_generation_failure",
+        "phase_template_selection_is_total_exclusive_and_capability_resolved": true,
+        "operator_supplied_recipe_seed_profile_or_phase": "forbidden"
+      },
+      "predicate": {
+        "exact_terminal_receipt_count": 20,
+        "all_campaigns_victorious": true,
+        "all_schema_and_recipe_coverage_obligations_satisfied": true,
+        "cross_axis_phase_all_ten_acceptance_projections_per_key_jcs_equal": true,
+        "active_campaign_and_replay_schema_compatibility_required": true,
+        "extra_duplicate_partial_or_stale_receipt_count": 0,
+        "infrastructure_retry": "only_common_pre_execution_window_before_attempt-execution-began_may_restart_all_twenty_under_new_attempt_fence",
+        "logical_failure": "commit_nightly_failed_and_revoked_in_one_admitted-subject-logical-red-revocation-v1_transaction_then_block_successors",
+        "may_share_integrated_repeat_evidence": "forbidden_distinct_intent_attempt_and_fence_required",
+        "due_ordinal_range_must_be_gap_free_at_train_completion": true,
+        "current_live_head_requires_a_successful_nightly_intent_after_its_latest_admission_or_effective_campaign_or_replay_chain_transition": true
+      }
+    },
+    "ordinary_admission": {
+      "schema": "openapoc.ordinary_admission.v1",
+      "id": "ordinary-admission-v1",
+      "attempt_protocol_id": "common-intent-attempt-fence-v1",
+      "global_serialization_ref": "/contracts/batch_attempt_protocol/global_serialized_operations",
+      "spec_authority": {
+        "slice_id": "P",
+        "source_json_pointer": "/contracts/ordinary_admission",
+        "digest_field": "ordinary_admission_spec_jcs_sha256",
+        "digest_algorithm": "sha256-rfc8785",
+        "first_binding_record_type": "epoch-init",
+        "must_precede_record_type": "candidate"
+      },
+      "applies_to": ["genesis", "recovery-root", "ordinary-recovery", "integration-merge"],
+      "candidate_parent_resolution": {
+        "resolver_id": "resolve_logical_and_transport_parents_v1",
+        "variant_tag_source": "ledger_derived_admission_mode",
+        "live_admission_resolution": {
+          "resolver_id": "resolve_unique_live_admission_tip_v1",
+          "node_set": "every_append_only_admitted_record",
+          "edge_set": "each_nonroot_admission_to_its_bound_logical_parent_admission",
+          "permanently_ineligible_nodes": "every_admission_targeted_by_any_valid_revoked_record",
+          "eligible_nodes": "admitted_nodes_minus_permanently_ineligible_nodes",
+          "live_set": "eligible_nodes_with_no_transitive_eligible_admitted_descendant",
+          "allowed_live_set_cardinality": [0, 1],
+          "more_than_one_live_tip": "ledger_invalid_and_all_admission_land_and_branch_authorization_operations_blocked",
+          "child_admission_effect": "derived_nonlive_parent_without_mutating_or_superseding_parent_record",
+          "descendant_revocation_effect": "recompute_live_set_so_nearest_unique_unrevoked_ancestor_revives_or_zero_remains",
+          "recovery_root_effect": "new_root_becomes_unique_live_tip_only_from_prestate_zero_live_tips",
+          "resolution_digest_field": "live_admission_resolution_jcs_sha256",
+          "resolution_digest_is_input_to_candidate_parent_resolution": true
+        },
+        "transition_variants": {
+          "genesis": {
+              "prior_admission_count": 0,
+              "live_admission_count": 0,
+              "logical_parent_fields": "forbidden",
+              "acceptance_oracle_authority": "exact_active_reviewed_R1o_original_or_pre_admission_replacement_baseline_and_chains",
+              "transport_parent": "exact_current_remote_develop_sha_tree_at_candidate_creation",
+              "allowed_candidate_construction_modes": ["reviewed-source-merge"]
+          },
+          "recovery-root": {
+              "prior_admission_count": "positive",
+              "live_admission_count": 0,
+              "logical_parent_fields": "forbidden",
+              "acceptance_oracle_authority": "exact_active_original_or_reviewed_replacement_baseline_and_chains",
+              "transport_parent": "exact_current_remote_develop_sha_tree_including_all_revoked_history",
+              "old_revoked_root_sha_tree_role": "oracle_provenance_only_never_transport",
+              "allowed_candidate_construction_modes": ["reviewed-source-merge", "baseline-only-noop"]
+          },
+          "ordinary-recovery": {
+              "logical_parent": "last_unique_live_admitted_ancestor_selected_by_ledger_dependency_closure",
+              "transport_parent": "exact_current_remote_develop_sha_tree_even_when_revoked",
+              "remote_transport_must_descend_from_logical_parent": true,
+              "acceptance_oracle_parent": "logical_parent",
+              "allowed_candidate_construction_modes": ["reviewed-source-merge", "baseline-only-noop"]
+          },
+          "integration-merge": {
+              "logical_parent": "unique_live_admission",
+              "transport_parent": "exact_current_remote_develop_sha_tree",
+              "logical_and_transport_parent_must_match": true,
+              "acceptance_oracle_parent": "logical_parent",
+              "allowed_candidate_construction_modes": ["reviewed-source-merge"]
+          }
+        },
+        "transition_variant_ids_must_exactly_equal_applies_to": true,
+        "candidate_construction_modes": {
+          "reviewed-source-merge": {
+            "exact_parent_count": 2,
+            "ordered_parents": ["transport_parent", "exact_reviewed_source_head"],
+            "transport_parent_must_be_ancestor_of_exact_reviewed_source_head": true,
+            "ancestry_validator": "full_clone_without_shallow_grafts_or_replace_refs_git_merge_base_is_ancestor_transport_parent_exact_reviewed_source_head",
+            "reviewed_source_pr_diff_base_must_equal_transport_parent": true,
+            "every_source_tree_delta_from_transport_must_be_in_exact_reviewed_pr_patch": true,
+            "stale_sibling_source_head_not_descending_from_current_transport": "reject_before_candidate_creation",
+            "candidate_tree_must_equal_reviewed_source_tree": true,
+            "land_compare_and_swap_base": "transport_parent",
+            "land_compare_and_swap_expected_old_sha_tree": "transport_parent",
+            "remote_transport_or_source_movement": "stale_candidate_and_attempt",
+            "non_fast_forward_history_rewrite_or_parent_reordering": "forbidden"
+          },
+        "baseline-only-noop": {
+            "allowed_transition_variants": ["recovery-root", "ordinary-recovery"],
+            "authorization_condition": "ledger_derived_unresolved_trigger_union_contains_one_or_more_baseline_invalidated_records_or_one_live_unconsumed_land_recovery_authority_jcs_sha256_of_either_closed_variant_with_effective_recovery_mode_receipt-authority-only_and_zero_robot_red_records_requiring_code_correction",
+            "independent_review_must_prove_code_tree_sound_and_only_expectations_or_exact_remote_update_evidence_authority_was_wrong_or_unavailable": true,
+            "any_robot_red_member": "forbid_noop_and_require_reviewed_code_corrected_source_tree",
+            "land_recovery_authority_any_remote_divergence_code_mismatch_or_non_evidence_failure": "forbid_noop_and_require_reviewed_source_merge",
+            "baseline_only_noop_authority": {
+              "schema": "openapoc.baseline_only_noop_authority.v1",
+              "exactly_one_closed_variant_required": true,
+              "closed_variants": {
+                "baseline-invalidation": "binds_the_exact_unresolved_baseline_invalidated_record_set_jcs_sha256",
+                "land-recovery": "binds_the_exact_live_unconsumed_land_recovery_authority_jcs_sha256_and_openapoc.land_recovery_authority_reference.v1_projection"
+              }
+            },
+            "candidate_sha_tree_must_exactly_equal_transport_parent": true,
+            "source_or_candidate_commit_creation": "forbidden",
+            "develop_ref_mutation": "forbidden",
+          "immutable_epoch_ref_create_only_publication_at_transport_sha_tree": "required",
+          "epoch_ref_update_delete_force_or_other_remote_mutation": "forbidden",
+          "land_operation": "after_full_authority_revalidation_append_baseline-only-noop-land-v1_atomic_intent_and_completion_with_no_remote_mutation",
+          "pending_land_intent_or_reconciliation": "forbidden"
+        }
+        },
+        "recovery_candidate_authority_bindings": {
+          "applies_to_construction_modes": ["reviewed-source-merge", "baseline-only-noop"],
+          "condition": "one_unresolved_land_recovery_authority_participates_in_candidate_construction",
+          "required_fields": ["land_recovery_authority_jcs_sha256", "land_recovery_authority_variant", "lineage_root_land_recovery_authorized_jcs_sha256", "authority_generation", "recovery_mode", "derived_remediates_set_jcs_sha256"],
+          "must_exactly_match_live_unconsumed_authority_reference": true,
+          "when_condition_is_false": "all_fields_forbidden"
+        },
+        "variant_required_digest_fields": {
+          "genesis": ["zero_prior_and_live_admission_state_proof_jcs_sha256", "active_R1o_original_or_pre_admission_replacement_baseline_and_chain_authority_jcs_sha256"],
+          "recovery-root": ["prior_admission_closure_and_zero_live_state_proof_jcs_sha256", "active_original_or_replacement_baseline_and_chain_authority_jcs_sha256"],
+          "ordinary-recovery": ["logical_parent_admission_jcs_sha256", "logical_parent_sha", "logical_parent_tree"],
+          "integration-merge": ["logical_parent_admission_jcs_sha256", "logical_parent_sha", "logical_parent_tree"]
+        },
+        "construction_mode_required_digest_fields": {
+          "reviewed-source-merge": ["reviewed_source_sha", "reviewed_source_tree", "transport_parent_sha", "transport_parent_tree", "candidate_sha", "candidate_tree"],
+          "baseline-only-noop": ["transport_parent_sha", "transport_parent_tree", "candidate_sha", "candidate_tree", "baseline_only_noop_authority_jcs_sha256"]
+        },
+        "selected_variant_and_construction_mode_fields_only": true,
+        "resolution_digest_field": "candidate_parent_resolution_jcs_sha256",
+        "resolution_digest_binds_every_candidate_intent_attempt_claim_receipt_admission_failure_revocation_and_land_surface": true,
+        "caller_supplied_parent_role": "forbidden"
+      },
+      "candidate_epoch_publication": {
+        "operation_kind": "candidate-epoch-publication",
+        "global_serialization_ref": "/contracts/batch_attempt_protocol/global_serialized_operations",
+        "ownership_start": "ledger_and_landing_lock_acquisition_before_parent_resolution_and_remote_ruleset_preflight",
+        "ledger_open_compound_transaction_id": "candidate-epoch-ledger-open-v1",
+        "ledger_open_ordered_logical_record_types": ["epoch-init", "candidate"],
+        "remote_ref_step": "after_atomic_ledger_open_create_exactly_one_create_only_remote_epoch_ref_at_recorded_candidate_sha_tree",
+        "success_terminal_record_type": "candidate-ref-published",
+        "failure_terminal_record_type": "candidate-publication-failed",
+        "success_terminal_digest_field": "candidate_ref_published_jcs_sha256",
+        "success_terminal_required_bindings": [
+          "candidate_epoch_ledger_open_transaction_jcs_sha256",
+          "candidate_parent_resolution_jcs_sha256",
+          "provider_ref_creation_receipt_jcs_sha256",
+          "immutable_candidate_ref_and_ruleset_revalidation_jcs_sha256"
+        ],
+        "candidate_cannot_start_any_attempt_before_success_terminal": true,
+        "land_recovery_authority_consumption": {
+          "accepted_authority_reference_schema": "openapoc.land_recovery_authority_reference.v1",
+          "candidate_binding_field": "land_recovery_authority_jcs_sha256",
+          "precondition": "authority_exists_is_live_unconsumed_and_exactly_matches_candidate_recovery_mode_and_remediates_set",
+          "consumption_linearization": "durable_candidate-epoch-ledger-open-v1_envelope_containing_the_candidate_binding",
+          "single_consumer": "exactly_one_candidate_epoch_per_authority_digest",
+          "outcome_independent": true,
+          "crash_before_atomic_envelope": "authority_remains_unconsumed",
+          "crash_after_atomic_envelope": "authority_is_consumed_even_before_remote_ref_step"
+        },
+        "success_terminal_required_downstream_binding_surfaces": [
+          "admission-intent",
+          "attempt-started",
+          "attempt-execution-began",
+          "attempt-claim",
+          "cell-claim",
+          "campaign-terminal",
+          "cell-terminal",
+          "admitted",
+          "admission-failed",
+          "revoked",
+          "land-exact-intent",
+          "land-exact-completed",
+          "land-exact-aborted",
+          "land-exact-reconcile-intent",
+      "land-exact-reconciled",
+      "land-exact-reconcile-not-applied",
+      "land-exact-reconcile-failed",
+      "land-recovery-authorized"
+        ],
+        "ownership_end": "candidate-ref-published_or_candidate-publication-failed_terminal_envelope_durable_and_revalidated",
+        "idempotent_operation_id_required": true,
+        "may_not_overlap_any_other_closed_operation_kind": true,
+        "crash_recovery": {
+          "before_ledger_open_envelope_rename": "zero_logical_records_visible_rebuild_same_operation_id",
+          "after_ledger_open_and_remote_ref_absent": "under_same_operation_id_revalidate_current_transport_source_parent_resolution_ruleset_and_authority_then_create_only_ref_or_append_candidate-publication-failed",
+          "after_exact_authorized_remote_ref_create_before_success_terminal": "verify_exact_provider_create_receipt_and_current_immutable_ref_ruleset_then_append_candidate-ref-published",
+          "remote_ref_mismatched_preexisting_unauthorized_or_transport_source_authority_moved": "append_candidate-publication-failed_and_permanently_forbid_attempt_admission_or_land_for_visible_candidate_records",
+          "partial_epoch_init_without_candidate": "impossible_inside_candidate-epoch-ledger-open-v1_atomic_envelope"
+        }
+      },
+      "required_tier_ids": ["cold-lifecycle", "active-schema-replay", "merge-3-v1"],
+      "tier_definitions": {
+        "cold-lifecycle": {
+          "resolver_id": "resolve_cold_lifecycle_v1",
+          "required_route_ids": ["cold-main-menu", "existing-game"],
+          "manifest_digest_field": "cold_lifecycle_manifest_jcs_sha256"
+        },
+        "active-schema-replay": {
+          "resolver_id": "resolve_active_schema_replay_v1",
+          "schema_set_source": "resolved_candidate_effective_replay_oracle.replay_schema_set",
+          "expectation_source": "resolved_candidate_effective_replay_oracle",
+          "schema_set_semantics": "exact",
+          "schema_set_digest_field": "active_replay_schema_set_jcs_sha256",
+          "effective_replay_oracle_chain_digest_field": "active_effective_replay_oracle_chain_jcs_sha256",
+          "manifest_set_digest_field": "active_schema_replay_manifest_set_jcs_sha256"
+        },
+        "merge-3-v1": {
+          "resolver_id": "resolve_merge_3_v1",
+          "manifest_source": "resolved_candidate_effective_campaign_oracle.merge_3_manifest",
+          "effective_campaign_oracle_chain_digest_field": "active_effective_campaign_oracle_chain_jcs_sha256",
+          "exact_campaign_count": 3,
+          "initial_state_per_campaign": "new_game",
+          "full_new_game_to_classified_victory_per_campaign": true,
+          "campaign_root_game_load_or_prior_save_input": "forbidden",
+          "fresh_process_per_campaign": true,
+          "distinct_process_claim_pid_start_nonce_port_and_output_root_per_campaign": true,
+          "exactly_one_terminal_receipt_per_campaign": true,
+          "all_campaigns_victorious": true,
+          "required_campaign_control_bindings": ["campaign_control_raw_receipt_set_jcs_sha256", "campaign_control_receipt_bijection_jcs_sha256"],
+          "every_campaign_requires_same_attempt_fence_campaign_true_turnbased_and_cross_process_save_reload_raw_receipts": true,
+          "all_campaigns_schema_and_recipe_coverage_required": true,
+          "partial_timeout_crash_forced_exit_prior_head_or_receipt_reuse": "fail",
+          "complete_terminal_receipt_set_digest_field": "merge_3_terminal_receipt_set_jcs_sha256",
+          "manifest_digest_field": "merge_3_manifest_jcs_sha256"
+        }
+      },
+      "effective_oracle_resolution": {
+        "resolver_id": "resolve_candidate_effective_oracles_v1",
+        "genesis_without_live_parent": "exact_active_reviewed_R1o_original_or_pre_admission_replacement_campaign_and_replay_oracle_chains",
+        "recovery_root_without_live_parent": "exact_active_original_or_reviewed_replacement_campaign_and_replay_oracle_chains",
+        "ordinary_without_compatibility_delta": "exact_active_logical_parent_campaign_and_replay_oracle_chains",
+        "authorized_compatibility_delta": "exact_candidate_scoped_prospective_campaign_and_replay_oracle_chains",
+        "candidate_or_operator_supplied_chain_digest": "forbidden",
+        "campaign_and_replay_chain_pair_must_share_one_authorization": true,
+        "resolved_chain_digests_bind_every_candidate_attempt_receipt_admission_and_land_surface": true
+      },
+      "execution_profile_resolution": {
+        "resolver_id": "resolve_ordinary_admission_execution_profile_v1",
+        "candidate_or_operator_supplied_profile": "forbidden",
+        "phase_rules": [
+          {
+            "when_subject_capabilities_absent": ["fixed-scheduler-v1", "manual-step-controller-v1"],
+            "scheduler": "legacy",
+            "target_fps": 1000,
+            "swap_interval": 0,
+            "control_profile": "automatic-simulation",
+            "profile_id": "pre-step-legacy-1000-v1"
+          },
+          {
+            "when_subject_capabilities_include": ["fixed-scheduler-v1"],
+            "when_subject_capabilities_exclude": ["manual-step-controller-v1"],
+            "scheduler": "fixed",
+            "target_fps": 60,
+            "swap_interval": 0,
+            "control_profile": "automatic-simulation",
+            "profile_id": "fixed-realtime-60-v1"
+          },
+          {
+            "when_subject_capabilities_include": ["fixed-scheduler-v1", "manual-step-controller-v1"],
+            "scheduler": "fixed",
+            "target_fps": 60,
+            "swap_interval": 0,
+            "control_profile": "manual-step-campaign-v1",
+            "profile_id": "post-step-fixed-manual-v1"
+          }
+        ],
+        "profile_digest_field": "ordinary_execution_profile_jcs_sha256"
+      },
+      "materialization": {
+        "validator_id": "validate_ordinary_admission_materialization_v1",
+        "caller_supplied_tiers": "forbidden",
+        "ordinary_operator": "exact_required_tier_ids",
+        "recovery_operator": "exact_union_with_ledger_derived_unresolved_required_tiers",
+        "canonical_tier_order_fields": [
+          "requirement_id",
+          "tier_id",
+          "tier_spec_jcs_sha256",
+          "resolved_manifest_jcs_sha256"
+        ],
+        "canonical_tier_order_comparator": "ascending_utf8_bytes_of_rfc8785_scalar_values_in_field_order",
+        "resolved_cell_ids_order": "ascending_unique_utf8_bytes",
+        "digest_schema": "openapoc.materialized_required_tiers.v1",
+        "digest_field": "materialized_required_tiers_jcs_sha256",
+        "tier_entry_fields": [
+          "requirement_id",
+          "tier_id",
+          "tier_spec_jcs_sha256",
+          "resolved_manifest_jcs_sha256",
+          "resolved_cell_ids"
+        ],
+        "missing_duplicate_unresolved_or_unledgered_extra": "fail",
+        "same_intent_retry_requires_identical_digest": true,
+        "same_intent_retry_restarts_all_cells": true
+      },
+      "candidate_binding_surfaces": [
+        "epoch-init",
+        "candidate",
+        "candidate-ref-published",
+        "candidate-publication-failed",
+        "admission-intent",
+        "attempt-started",
+        "attempt-infrastructure-failed",
+        "attempt-claim",
+        "cell-claim",
+        "campaign-terminal",
+        "cell-terminal",
+        "admitted",
+        "admission-failed",
+        "revoked",
+        "land-exact-intent",
+        "land-exact-completed",
+        "land-exact-aborted",
+        "land-exact-reconcile-intent",
+        "land-exact-reconciled",
+        "land-exact-reconcile-not-applied",
+        "land-exact-reconcile-failed",
+        "land-recovery-authorized"
+      ],
+      "land_exact_construction_mode_dispatch": {
+        "dispatch_precedes_remote_sha_tree_outcome_comparison": true,
+        "reviewed-source-merge": {
+          "transport_and_candidate_sha_tree_must_differ": true,
+          "remote_compare_and_swap_required": true,
+          "pending_land_intent_recovery_and_reconciliation_contracts_apply": true
+        },
+        "baseline-only-noop": {
+          "transport_and_candidate_sha_tree_must_equal": true,
+          "full_current_authority_revalidation_required": true,
+          "compound_transaction_id": "baseline-only-noop-land-v1",
+          "remote_compare_and_swap_or_update_receipt": "forbidden",
+          "pending_land_intent_or_reconciliation": "forbidden"
+        },
+        "construction_mode_missing_or_equality_predicate_collision": "fail_before_land_intent"
+      },
+      "pending_land_intent_recovery": {
+        "applies_only_to_construction_mode": "reviewed-source-merge",
+        "transport_and_candidate_sha_tree_must_differ": true,
+        "global_lock": "ledger_and_landing_lock",
+        "same_operation_id_and_original_land_intent_required": true,
+        "sha_tree_equality_alone_never_proves_authority_or_success": true,
+        "full_authority_revalidation_required": [
+          "active_scope_chain",
+          "candidate_and_live_admission",
+          "candidate_parent_resolution",
+          "no_revocation_or_unresolved_logical_red",
+          "immutable_candidate_ref_and_ruleset",
+          "source_head_and_transport_tuple",
+          "source_pr_exact_head_and_state",
+          "required_approvals",
+          "required_checks_and_gate_digests",
+          "authorized_actor_and_no_bypass_policy"
+        ],
+        "remote_update_receipt_required_when_remote_equals_intended": {
+          "required_fields": [
+            "provider_update_id",
+            "old_sha",
+            "new_sha",
+            "actor_identity",
+            "ruleset_id",
+            "ruleset_digest",
+            "observed_at"
+          ],
+          "old_sha_must_equal_pre_intent_transport": true,
+          "new_sha_must_equal_exact_intended_candidate": true,
+          "actor_must_equal_authorized_land_operator": true,
+          "ruleset_and_no_bypass_policy_must_validate_at_update_and_recovery": true,
+          "missing_ambiguous_or_unauthorized": "append_land-abort-reconcile-open-v1_then_reconciliation_must_select_land-exact-reconcile-failed"
+        },
+        "outcomes": {
+          "remote_equals_pre_intent_sha_tree": "after_full_current_authority_revalidation_retry_same_bounded_compare_and_swap_under_same_operation_id",
+          "remote_equals_exact_intended_sha_tree": "append_recovered_land_exact_completed_only_after_full_authority_revalidation_and_exact_authorized_remote_update_receipt_else_atomically_append_land-abort-reconcile-open-v1_and_reconciliation_must_fail_closed",
+          "remote_is_any_other_sha_tree": "atomically_append_land-abort-reconcile-open-v1"
+        },
+        "abort_and_reconcile_open_compound_transaction_id": "land-abort-reconcile-open-v1",
+        "mutex_release_between_abort_and_reconcile_intent": "forbidden",
+        "completion_from_candidate_sha_tree_without_receipt_or_authority_revalidation": "forbidden"
+      },
+      "land_exact_reconciliation": {
+        "applies_only_to_construction_mode": "reviewed-source-merge",
+        "transport_and_candidate_sha_tree_must_differ": true,
+        "global_lock": "ledger_and_landing_lock",
+        "land_exact_aborted_closes_original_intent": true,
+        "opened_atomically_with_abort_compound_transaction_id": "land-abort-reconcile-open-v1",
+        "reconcile_intent_required_bindings": [
+          "original_land_exact_intent_jcs_sha256",
+          "land_exact_aborted_jcs_sha256",
+          "shared_operation_id",
+          "pretransition_ledger_head_jcs_sha256",
+          "candidate_parent_resolution_jcs_sha256",
+          "candidate_ref_published_jcs_sha256"
+        ],
+        "startup_resume_after_open_envelope": "same_reconciliation_operation_id_under_same_global_lock_until_one_reconcile_terminal",
+        "reconcile_record_types": [
+          "land-exact-reconcile-intent",
+          "land-exact-reconciled",
+          "land-exact-reconcile-not-applied",
+          "land-exact-reconcile-failed"
+        ],
+        "remote_ref_reread_required": true,
+        "full_authority_revalidation_required": [
+          "active_scope_chain",
+          "candidate_and_live_admission",
+          "candidate_parent_resolution",
+          "no_revocation_or_unresolved_logical_red",
+          "immutable_candidate_ref_and_ruleset",
+          "source_head_and_transport_tuple",
+          "source_pr_exact_head_and_state",
+          "required_approvals",
+          "required_checks_and_gate_digests",
+          "authorized_actor_and_no_bypass_policy"
+        ],
+        "remote_update_receipt_required_when_remote_equals_intended": {
+          "required_fields": [
+            "provider_update_id",
+            "old_sha",
+            "new_sha",
+            "actor_identity",
+            "ruleset_id",
+            "ruleset_digest",
+            "observed_at"
+          ],
+          "old_sha_must_equal_pre_intent_transport": true,
+          "new_sha_must_equal_exact_intended_candidate": true,
+          "actor_must_equal_authorized_land_operator": true,
+          "ruleset_and_no_bypass_policy_must_validate_at_update_and_reconciliation": true,
+          "missing_or_nonconflictingly_ambiguous_provider_receipt_with_all_non_provider_authority_valid": "land-reconcile-failure-revocation-recovery-authority-v1_with_receipt-authority-only_mode",
+          "unauthorized_actor_ruleset_bypass_conflicting_provider_evidence_or_any_non_provider_authority_invalid": "land-reconcile-failure-revocation-recovery-authority-v1_with_reviewed-source-required_mode"
+        },
+        "outcomes": {
+          "remote_equals_exact_intended_sha_tree_with_exact_authorized_update_receipt_and_full_authority": "append_land_exact_reconciled",
+          "remote_equals_exact_intended_sha_tree_with_only_missing_or_nonconflictingly_ambiguous_provider_receipt": "atomically_append_land-reconcile-failure-revocation-recovery-authority-v1_with_receipt-authority-only_mode",
+          "remote_equals_exact_intended_sha_tree_with_unauthorized_actor_ruleset_bypass_conflicting_provider_evidence_or_any_other_authority_defect": "atomically_append_land-reconcile-failure-revocation-recovery-authority-v1_with_reviewed-source-required_mode",
+          "remote_equals_pre_intent_sha_tree": "append_land_exact_reconcile_not_applied_then_allow_new_land_exact_intent_only_after_full_current_authority_revalidation",
+          "remote_is_any_other_sha_tree": "atomically_append_land-reconcile-failure-revocation-recovery-authority-v1_with_reviewed-source-required_mode"
+        },
+        "G_train_abandon_requested_outcomes_override": {
+          "remote_equals_exact_intended_with_full_authority": "G-pending-reconcile-applied-abandon-v1",
+          "remote_equals_pre_intent_transport": "G-pending-reconcile-not-applied-abandon-v1",
+          "missing_ambiguous_unauthorized_or_any_other_remote": "G-pending-reconcile-failed-abandon-v1",
+          "normal_reconciliation_terminal_or_land_recovery_authority": "forbidden_after_train-abandon-requested"
+        },
+        "failure_compound_transaction_id": "land-reconcile-failure-revocation-recovery-authority-v1",
+        "open_original_or_reconcile_intent_after_terminal": "forbidden"
+      },
+      "land_reconciliation_failure_recovery": {
+        "failure_compound_transaction_id": "land-reconcile-failure-revocation-recovery-authority-v1",
+        "ordered_logical_record_types": ["land-exact-reconcile-failed", "revoked", "land-recovery-authorized"],
+        "atomic_effect": "terminalize_reconciliation_revoke_subject_close_any_G_gates_pending_and_issue_one_machine_derived_single_use_recovery_authority",
+        "land_recovery_authority_reference": {
+          "schema": "openapoc.land_recovery_authority_reference.v1",
+          "authority_digest_field": "land_recovery_authority_jcs_sha256",
+          "authority_digest_location": "stored_only_on_later_reference_consumption_and_reauthorization_surfaces_never_inside_the_originating_authority_record_payload",
+          "reference_projection_fields": ["authority_variant", "authority_record_jcs_sha256", "authority_generation", "lineage_root_land_recovery_authorized_jcs_sha256"],
+          "authority_digest_rule": "rfc8785_sha256_of_domain_separated_reference_projection_after_the_complete_originating_logical_record_digest_exists",
+          "exactly_one_variant_required": true,
+          "closed_variants": {
+            "original": {
+              "record_type": "land-recovery-authorized",
+              "record_digest_field": "land_recovery_authorized_jcs_sha256",
+              "authority_generation": 0,
+              "predecessor_authority": "forbidden",
+              "record_payload_forbidden_derived_fields": ["land_recovery_authority_jcs_sha256", "lineage_root_land_recovery_authorized_jcs_sha256", "authority_generation"],
+              "reference_derivation": "after_record_digest_exists_set_generation_zero_and_lineage_root_to_land_recovery_authorized_jcs_sha256_then_hash_the_external_reference_projection"
+            },
+            "reauthorized": {
+              "record_type": "land-recovery-reauthorized",
+              "record_digest_field": "land_recovery_reauthorized_jcs_sha256",
+              "required_record_bindings": ["predecessor_land_recovery_authority_jcs_sha256", "lineage_root_land_recovery_authorized_jcs_sha256", "authority_generation"],
+              "record_payload_forbidden_derived_fields": ["land_recovery_authority_jcs_sha256"],
+              "reference_derivation": "after_record_digest_exists_hash_the_external_reference_projection_using_the_record_bound_checked_generation_and_predecessor_lineage_root"
+            }
+          },
+          "generation_rule": "generation_zero_is_external_original_variant_metadata_otherwise_checked_uint64_successor_of_predecessor_generation",
+          "lineage_root_rule": "generation_zero_is_derived_from_the_completed_original_logical_record_digest_otherwise_byte_equal_to_predecessor_reference_lineage_root",
+          "caller_selected_variant_generation_or_root": "forbidden",
+          "live_authority_rule": "issued_not_consumed_not_superseded_and_no_sibling_successor",
+          "all_candidate_construction_publication_consumption_and_reauthorization_surfaces_use_this_reference": true
+        },
+        "original_authority_record_required_bindings": [
+          "land_exact_reconcile_intent_jcs_sha256",
+          "failed_reconciliation_jcs_sha256",
+          "revoked_subject_admission_jcs_sha256",
+          "original_operation_id",
+          "candidate_parent_resolution_jcs_sha256",
+          "candidate_ref_published_jcs_sha256",
+          "pre_intent_transport_sha_tree_jcs_sha256",
+          "intended_candidate_sha_tree_jcs_sha256",
+          "observed_remote_sha_tree_jcs_sha256",
+          "provider_evidence_query_receipt_set_jcs_sha256",
+          "pretransition_ledger_head_jcs_sha256",
+          "active_train_scope_jcs_sha256",
+          "ordinary_admission_spec_jcs_sha256",
+          "materialized_required_tiers_jcs_sha256",
+          "active_effective_campaign_oracle_chain_jcs_sha256",
+          "active_effective_replay_oracle_chain_jcs_sha256",
+          "runtime_launch_template_jcs_sha256",
+          "input_closure_jcs_sha256",
+          "recovery_mode",
+          "independent_reviewed_recovery_decision_jcs_sha256",
+          "derived_remediates_set_jcs_sha256"
+        ],
+        "recovery_modes": {
+          "receipt-authority-only": "remote_exactly_equals_intended_candidate_sha_tree_code_and_all_non_provider_authority_revalidate_but_exact_authorized_update_receipt_is_missing_ambiguous_or_temporarily_unavailable",
+          "reviewed-source-required": "remote_differs_from_intended_candidate_or_any_code_source_ruleset_approval_check_actor_or_non_provider_authority_is_invalid"
+        },
+        "receipt_authority_only_baseline_noop": "after_independent_review_proves_exact_current_remote_tree_sound_a_new_ordinary-recovery_subject_may_use_baseline-only-noop_at_that_same_transport_sha_tree_then_rerun_every_ordinary_tier_and_for_G_all_four_gates_from_zero",
+        "reviewed_source_required": "new_ordinary-recovery_or_recovery-root_subject_must_use_a_fresh_exact_reviewed_source_head_descending_from_current_transport",
+        "single_use": true,
+        "consumption_point": "first_candidate_epoch_publication_binding_this_authority_regardless_of_candidate_publication_or_admission_outcome",
+        "later_candidate_after_consumption": "requires_one_land-recovery-reauthorization-v1_record_or_a_new_later_reconciliation_failure_authority_never_implicit_reuse",
+        "reauthorization": {
+          "compound_transaction_id": "land-recovery-reauthorization-v1",
+          "record_type": "land-recovery-reauthorized",
+          "required_predecessors": ["predecessor_land_recovery_authority_jcs_sha256", "predecessor_consuming_candidate_epoch_ledger_open_transaction_jcs_sha256", "failed_recovery_candidate_epoch_jcs_sha256"],
+          "failed_candidate_terminal_authority": {
+            "exactly_one_closed_variant_required": true,
+            "closed_variants": {
+              "candidate-publication-failed": "failed_before_any_attempt_started_and_candidate_epoch_ref_was_never_authoritatively_published",
+              "admission-failed": "ordinary_admission_attempt_terminalized_logical_red",
+              "revoked": "candidate_was_admitted_then_one_exact_causally_bound_post_admission_logical_red_revoked_that_admission"
+            },
+            "terminal_must_bind_failed_recovery_candidate_epoch_and_consumed_authority": true
+          },
+          "required_bindings": ["lineage_root_land_recovery_authorized_jcs_sha256", "authority_generation", "recovery_mode", "derived_remediates_set_jcs_sha256", "prior_recovery_mode", "prior_derived_remediates_set_jcs_sha256", "failed_candidate_sha_tree_jcs_sha256", "failed_candidate_terminal_evidence_jcs_sha256", "current_remote_sha_tree_jcs_sha256", "current_authority_revalidation_jcs_sha256", "independent_reviewed_reauthorization_decision_jcs_sha256", "pretransition_ledger_head_jcs_sha256", "operation_id"],
+          "derived_remediates_set_rule": "one_canonical_field_equal_to_the_ledger_derived_exact_union_of_every_unresolved_trigger_at_reauthorization_linearization_and_byte_bound_by_current_authority_revalidation_and_independent_review_never_caller_selected_or_narrowable",
+          "predecessor_consumption_rule": "predecessor_authority_was_consumed_exactly_once_by_the_named_failed_candidate_epoch",
+          "generation_rule": "checked_uint64_successor_of_predecessor_generation_or_fail_before_publication",
+          "lineage_rule": "lineage_root_is_byte_equal_to_predecessor_lineage_root_and_each_failed_generation_has_at_most_one_successor",
+          "causal_chain": "arbitrary_finite_original_then_reauthorized_generations_allowed_without_sibling_successors",
+          "reviewed_source_required_never_downgrades": true,
+          "receipt_authority_only_mode_may_survive_only_candidate_publication_failure_before_attempt_started_with_unchanged_sound_tree_and_zero_execution_or_robot_red": true,
+          "admission_failure_revocation_execution_or_tree_change_forces_reviewed-source-required_mode": true,
+          "one_reauthorization_per_failed_candidate_terminal": true,
+          "successful_unterminated_or_train_abandoned_candidate_successor_authority": "forbidden",
+          "reauthorization_record_must_precede_next_candidate_epoch_publication": true,
+          "single_use_and_consumed_at_next_candidate_epoch_publication": true,
+          "failed_candidate_or_prior_authority_receipt_attempt_gate_or_land_evidence_reuse": "forbidden"
+        },
+        "candidate_must_bind_and_remediate_exact_authority": true,
+        "new_candidate_attempt_or_land_without_authority": "forbidden",
+        "successful_recovery_consumes_authority_and_never_rewrites_original_failed_records": true,
+        "completion_rejects_unresolved_issued_authority_or_lineage_with_sibling_successors": true,
+          "lineage_validation_sentinels": {
+          "original_record_payload_contains_authority_digest_lineage_root_or_generation": "reject_circular_or_self_describing_original_authority",
+          "original_failure_reauthorized_failure_reauthorized": "accept_one_linear_generation_zero_one_two_chain",
+          "reviewed_reauthorization_set_differs_from_derived_remediates_set": "reject_before_publication",
+          "two_successors_for_one_predecessor_and_failed_terminal": "reject_sibling_issuance",
+          "two_candidates_consume_one_authority_digest": "reject_double_consumption",
+          "reauthorized_receipt_authority_only_baseline_noop": "accept_when_live_unconsumed_sound_tree_and_zero_robot_red",
+          "reviewed_source_required_to_receipt_authority_only": "reject_downgrade",
+          "authority_generation_uint64_overflow": "reject_before_publication",
+          "train_completion_with_live_unconsumed_authority": "reject_completion"
+        }
+      },
+      "completion_binding": {
+        "record_type": "train-completed",
+        "active_spec_digest_field": "ordinary_admission_spec_jcs_sha256",
+        "validated_chain_digest_field": "ordinary_admission_chain_jcs_sha256"
+      }
+    },
+    "successor_release": {
+      "schema": "openapoc.successor_release.v1",
+      "id": "integrated-repeat-20-v1",
+      "validator_id": "validate_integrated_repeat_20_v1",
+      "attempt_protocol_id": "common-intent-attempt-fence-v1",
+      "applies_after_slice_ids": [
+        "R1b", "C0", "C1", "C", "C2", "D0", "D1", "D2", "D3", "D5", "E0", "E", "F", "G",
+        "P-movement", "P-projectile", "P-ROF", "P-explosion", "P-fire", "P-MAC", "P-physics",
+        "P-smoke", "P-save", "T-calendar", "T-animation", "T-180"
+      ],
+      "subject_state": "exact_live_admitted_land_exact_completed_or_reconciled_develop_sha_tree",
+      "required_active_replay_schema_by_slice": {
+        "C": "control-epoch-v2",
+        "F": "manual-step-v3"
+      },
+      "same_landing_schema_activation_order": "land_exact_terminal_then_required_replay_schema_activation_then_integrated_repeat_intent",
+      "intent_must_postdate_latest_effective_campaign_or_replay_chain_transition_for_subject": true,
+      "must_complete_before": "any_descendant_non_recovery_runtime_source_branch_or_any_later_non_recovery_runtime_candidate_or_landing_exists",
+      "recovery_exception": "a_repeat_failure_may_start_only_the_ledger_derived_recovery_path_bound_to_the_red_and_remediates_set_without_successor_release_authority",
+      "successor_branch_authorization": {
+        "record_type": "successor-branch-authorized",
+        "required_before_non_recovery_runtime_source_branch_creation": true,
+        "required_bindings": [
+          "land_exact_completed_or_reconciled_record_jcs_sha256",
+          "integrated_repeat_completed_jcs_sha256",
+          "source_slice_id",
+          "source_branch_ref",
+          "source_branch_base_sha",
+          "source_branch_base_tree",
+          "operation_id",
+          "pretransition_ledger_head_jcs_sha256"
+        ],
+        "source_branch_base_must_equal_released_landing": true,
+        "authorization_usable_only_while_bound_base_is_current_unique_live_landed_transport": true,
+        "source_head_must_descend_from_authorized_base_and_current_transport": true,
+        "source_pr_review_diff_base_must_equal_current_transport": true,
+        "current_live_landing_or_remote_transport_movement_stales_authorization_and_review": true,
+        "stale_sibling_reentry": "rebase_or_merge_slice_onto_new_current_transport_then_obtain_fresh_exact_head_review_and_fresh_successor_branch_authorized_record_after_new_landing_repeat",
+        "recovery_branch": "forbidden_uses_recovery_authority_and_remediates_set_instead",
+        "candidate_and_landing_must_cite_this_record": true
+      },
+      "sibling_rule": "sibling_work_branches_may_coexist_after_common_predecessor_repeat_but_only_a_source_head_descending_from_current_live_transport_with_current_authorization_and_exact_head_review_may_form_a_candidate",
+      "two_sibling_accumulation_sentinel": {
+        "test_id": "two-sibling-candidate-preserves-prior-landing-v1",
+        "initial_released_landing": "C2",
+        "sibling_source_heads": ["D0_from_C2", "D1_from_C2"],
+        "first_landing": "D0",
+        "old_D1_source_after_D0_lands": "reject_not_descendant_of_current_D0_transport",
+        "required_D1_reentry": "D1_rebased_or_merged_onto_D0_then_fresh_review_repeat_release_authorization_and_candidate",
+        "final_candidate_tree_must_contain_markers": ["C2", "D0", "D1"]
+      },
+      "global_serialization": {
+        "authority_ref": "/contracts/batch_attempt_protocol/global_serialized_operations",
+        "only_one_open_integrated_repeat_intent": true,
+        "a_green_repeat_is_per_exact_landing_and_remains_historical_evidence_after_later_landings": true
+      },
+      "intent_record_type": "integrated-repeat-intent",
+      "success_record_type": "integrated-repeat-completed",
+      "failure_record_type": "integrated-repeat-failed",
+      "manifest_resolver_id": "resolve_phase_integrated_repeat_20_v1",
+      "manifest_resolution": {
+        "candidate_or_operator_supplied_execution_axes": "forbidden",
+        "exact_seed_slots": [
+          "repeat-00", "repeat-01", "repeat-02", "repeat-03", "repeat-04",
+          "repeat-05", "repeat-06", "repeat-07", "repeat-08", "repeat-09",
+          "repeat-10", "repeat-11", "repeat-12", "repeat-13", "repeat-14",
+          "repeat-15", "repeat-16", "repeat-17", "repeat-18", "repeat-19"
+        ],
+        "recipe_rotation": "all_five_recipes_exactly_four_times",
+        "phase_profiles": [
+          {
+            "when_subject_capabilities_absent": ["fixed-scheduler-v1", "manual-step-controller-v1"],
+            "profile_id": "pre-step-legacy-1000-v1",
+            "scheduler": "legacy",
+            "target_fps": 1000,
+            "swap_interval": 0,
+            "control_profile": "automatic-simulation"
+          },
+          {
+            "when_subject_capabilities_include": ["fixed-scheduler-v1"],
+            "when_subject_capabilities_exclude": ["manual-step-controller-v1"],
+            "profile_id": "fixed-realtime-60-v1",
+            "scheduler": "fixed",
+            "target_fps": 60,
+            "swap_interval": 0,
+            "control_profile": "automatic-simulation"
+          },
+          {
+            "when_subject_capabilities_include": ["fixed-scheduler-v1", "manual-step-controller-v1"],
+            "profile_id": "post-step-fixed-manual-v1",
+            "scheduler": "fixed",
+            "target_fps": 60,
+            "swap_interval": 0,
+            "control_profile": "manual-step-campaign-v1"
+          }
+        ]
+      },
+      "exact_campaign_count": 20,
+      "fresh_process_per_campaign": true,
+      "full_new_game_to_classified_victory_per_campaign": true,
+      "campaign_root_game_load_or_prior_save_input": "forbidden",
+      "all_victory_schema_and_recipe_coverage_required": true,
+      "equivalent_cell_acceptance_projection_equality_required": true,
+      "candidate_or_diagnostic_substitution": "forbidden",
+      "full_attempt_restart_on_infrastructure_failure": true,
+      "may_also_satisfy_due_nightly": "forbidden_distinct_intent_attempt_and_fence_required",
+      "required_bindings": [
+        "land_exact_completed_or_reconciled_record_jcs_sha256",
+        "live_admission_jcs_sha256",
+        "landed_develop_sha",
+        "landed_develop_tree",
+        "active_effective_campaign_oracle_chain_jcs_sha256",
+        "active_effective_replay_oracle_chain_jcs_sha256",
+        "runtime_launch_template_jcs_sha256",
+        "process_launch_plan_authority_jcs_sha256",
+        "planned_process_launch_set_jcs_sha256",
+        "realized_runtime_closure_receipt_set_jcs_sha256",
+        "input_closure_jcs_sha256",
+        "campaign_control_raw_receipt_set_jcs_sha256",
+        "campaign_control_receipt_bijection_jcs_sha256",
+        "integrated_repeat_manifest_jcs_sha256",
+        "latest_effective_oracle_chain_transition_jcs_sha256",
+        "intent_jcs_sha256",
+        "attempt_started_jcs_sha256",
+        "attempt_claim_jcs_sha256",
+        "attempt_fence_jcs_sha256",
+        "all_20_terminal_receipt_digests_jcs_sha256"
+      ],
+      "logical_failure": "commit_integrated-repeat-failed_and_revoked_in_one_admitted-subject-logical-red-revocation-v1_transaction_then_block_successors"
+    },
+    "compatibility_delta": {
+      "schema": "openapoc.compatibility_delta.v1",
+      "id": "compatibility-delta-v1",
+      "validator_id": "validate_compatibility_delta_v1",
+      "reference_materializer_id": "materialize_compatibility_delta_reference_v1",
+      "attempt_protocol_id": "common-intent-attempt-fence-v1",
+      "global_serialization_ref": "/contracts/batch_attempt_protocol/global_serialized_operations",
+      "intent_record_type": "compatibility-delta-intent",
+      "success_record_type": "compatibility-delta-authorized",
+      "failure_record_type": "compatibility-delta-failed",
+      "invalidation_record_type": "compatibility-delta-invalidated",
+      "must_precede_candidate": true,
+      "single_use": true,
+      "reference_heads": [
+        "current_live_admitted_parent",
+        "sealed_delta_only_source"
+      ],
+      "reference_evidence_sources": {
+        "allowed": [
+          "paired_parent_replay_consensus",
+          "paired_delta_source_replay_consensus",
+          "paired_parent_campaign_consensus",
+          "paired_delta_source_campaign_consensus"
+        ],
+        "candidate_record_ref_binary_log_receipt_or_output": "forbidden"
+      },
+      "candidate_without_authorization": {
+        "campaign_acceptance_projection": "exact_parent_effective_campaign_oracle",
+        "active_replay_expectations": "exact_parent_effective_replay_oracle"
+      },
+      "prospective_effective_oracle": {
+        "materializer_id": "materialize_prospective_effective_oracle_pair_v1",
+        "campaign_chain": "exact_parent_active_effective_campaign_chain_plus_exact_authorized_campaign_overlay",
+        "replay_chain": "exact_parent_active_effective_replay_chain_plus_exact_authorized_replay_overlay",
+        "visibility": "private_to_exact_compatibility_delta_authorization_and_its_single_candidate",
+        "global_visibility_before_successful_admission": "forbidden",
+        "candidate_ordinary_replay_and_merge_tiers_resolve_against_prospective_chains": true,
+        "required_binding_surfaces": [
+          "compatibility-delta-authorized",
+          "compatibility-delta-invalidated",
+          "candidate",
+          "admission-intent",
+          "attempt-started",
+          "attempt-infrastructure-failed",
+          "attempt-claim",
+          "cell-claim",
+          "campaign-terminal",
+          "cell-terminal",
+          "admitted",
+          "admission-failed",
+          "revoked",
+          "land-exact-intent",
+          "land-exact-completed",
+          "land-exact-aborted",
+          "land-exact-reconcile-intent",
+          "land-exact-reconciled",
+          "land-exact-reconcile-not-applied",
+          "land-exact-reconcile-failed"
+        ],
+        "required_digest_fields": [
+          "prospective_effective_campaign_oracle_chain_jcs_sha256",
+          "prospective_effective_replay_oracle_chain_jcs_sha256"
+        ],
+        "successful_admission_transition": "atomically_compare_and_swap_both_prospective_chain_digests_to_active",
+        "failure_revocation_or_invalidation": "burn_both_prospective_chain_digests_and_authorization",
+        "partial_promotion_reuse_or_cross_candidate_binding": "forbidden"
+      },
+      "component_policy_authority": {
+        "slice_id": "R1v",
+        "artifact_id": "compatibility-delta-component-policy-v1",
+        "must_precede_slice_id": "R1o",
+        "closed_schema": true,
+        "projection_surfaces": [
+          "campaign_acceptance_projection",
+          "active_replay_expectations"
+        ],
+        "owner_function": {
+          "total_over_every_declared_component_on_each_surface": true,
+          "nullable_for_unowned_components": true,
+          "nonnull_owner_domain_exactly": ["CD-03", "CD-12", "CD-16"],
+          "every_eligible_row_has_explicit_set_on_each_surface": true,
+          "explicit_empty_sets_allowed": true
+        },
+        "wildcards_or_overlapping_owners": "forbidden",
+        "expected_old_or_new_values_allowed": false
+      },
+      "eligible_rows_by_slice": {
+        "C2": ["CD-03", "CD-12", "CD-16"]
+      },
+      "no_oracle_delta_authorized_rows": [
+        "CD-01", "CD-02", "CD-04", "CD-05", "CD-06", "CD-07", "CD-08", "CD-09",
+        "CD-10", "CD-11", "CD-13", "CD-14", "CD-15", "CD-17", "CD-18", "CD-19",
+        "CD-20", "CD-21", "CD-22", "CD-23", "CD-24", "CD-25", "CD-26", "CD-27",
+        "CD-28"
+      ],
+      "surface_component_sources": {
+        "campaign_acceptance_projection": {
+          "schema_source": "active_baseline.milestone_schema",
+          "component_map_source": "compatibility-delta-component-policy-v1.campaign_component_owners",
+          "component_ids_closed": true
+        },
+        "active_replay_expectations": {
+          "schema_set_source": "active_effective_replay_oracle.replay_schema_set",
+          "component_map_field": "compatibility_delta_component_owners",
+          "component_map_schema_authority": "compatibility-delta-component-policy-v1",
+          "component_map_must_be_frozen_with_each_replay_schema": true,
+          "component_ids_closed_per_schema": true,
+          "missing_map_unknown_component_wildcard_or_overlap": "fail"
+        }
+      },
+      "component_comparison": {
+        "changed_component": "must_have_exactly_one_nonnull_owner",
+        "unowned_component": "rfc8785_byte_equal_to_live_parent",
+        "missing_extra_retyped_unknown_or_unmapped_component": "fail",
+        "overlay_entries": "exactly_all_and_only_changed_owned_components",
+        "overlay_entry_fields": [
+          "projection_surface",
+          "instance_key_jcs_sha256",
+          "component_id",
+          "owner_cd_row_id",
+          "parent_value_jcs_sha256",
+          "delta_source_value_jcs_sha256"
+        ],
+        "campaign_instance_key": "oracle_key_jcs_sha256",
+        "replay_instance_key": "schema_cell_checkpoint_identity_jcs_sha256"
+      },
+      "reference": {
+        "parent": "current_live_admitted",
+        "source_scope": "only_authorized_eligible_rows",
+        "required_projection_surfaces": [
+          "campaign_acceptance_projection",
+          "active_replay_expectations"
+        ],
+        "active_replay_execution": {
+          "manifest_set_source": "ordinary_admission.active-schema-replay",
+          "execute_every_active_schema_and_cell": true,
+          "replicates_per_schema_cell": 3,
+          "fresh_process_per_replicate": true,
+          "identical_replay_projection_jcs_per_schema_cell": true,
+          "parent_consensus_must_equal_active_effective_replay_oracle": true,
+          "parent_logical_mismatch_disposition": "append_parent_reference_mismatch_and_block_delta_without_revoking_parent",
+          "parent_and_delta_source_receipts_required": true,
+          "subset_schema_cell_or_expectation_field_dropping": "forbidden"
+        },
+        "exact_key_count_per_head": 18,
+        "replicates_per_key_per_head": 3,
+        "exact_campaign_count_per_head": 54,
+        "exact_paired_campaign_count": 108,
+        "fresh_process_per_replicate": true,
+        "all_victory_and_coverage_required": true,
+        "every_campaign_on_both_heads_requires_same_attempt_fence_campaign_true_turnbased_and_cross_process_save_reload_raw_receipts": true,
+        "identical_projection_jcs_per_key": true,
+        "parent_consensus_must_equal_active_effective_campaign_oracle": true,
+        "parent_logical_mismatch_disposition": "append_parent_reference_mismatch_and_block_delta_without_revoking_parent",
+        "all_unowned_components_equal_parent_on_every_required_surface": true,
+        "candidate_created_after_authorization": true
+      },
+      "parent_reference_audit": {
+        "attempt_protocol_id": "common-intent-attempt-fence-v1",
+        "global_serialization_ref": "/contracts/batch_attempt_protocol/global_serialized_operations",
+        "mismatch_record_type": "parent-reference-mismatch",
+        "intent_record_type": "parent-audit-intent",
+        "reproduced_record_type": "parent-audit-reproduced",
+        "not_reproduced_record_type": "parent-audit-not-reproduced",
+        "cleared_record_type": "parent-reference-cleared",
+        "escalated_record_type": "parent-audit-escalated",
+        "infrastructure_failure_record_type": "attempt-infrastructure-failed",
+        "immediate_effect": "terminalize_and_burn_current_compatibility_delta_intent_attempt_and_fence_then_block_new_compatibility_intent_and_successors_but_keep_parent_live",
+        "audit_workset": {
+          "active_replay_schema_cell_count": "exact_ledger_resolved_active_schema_cell_count",
+          "replay_replicates_per_cell": 3,
+          "oracle_key_count": 18,
+          "campaign_replicates_per_key": 3,
+          "exact_campaign_count": 54,
+          "fresh_process_per_replicate": true,
+          "complete_replay_and_campaign_workset_required": true,
+          "every_campaign_requires_same_attempt_fence_campaign_true_turnbased_and_cross_process_save_reload_raw_receipts": true
+        },
+        "campaign_control_terminal_required_bindings": ["campaign_control_raw_receipt_set_jcs_sha256", "campaign_control_receipt_bijection_jcs_sha256"],
+        "maximum_full_parent_audits_per_mismatch_chain": 2,
+        "fresh_compatibility_attempt_after_not_reproduced": {
+          "execution_order": "complete_and_decide_parent_replay_and_campaign_halves_before_launching_delta_source_half",
+          "parent_matches_active_effective_oracles": "append_parent_reference_cleared_then_launch_delta_source_half_under_same_intent_attempt_and_fence",
+          "parent_mismatches": "terminalize_fresh_compatibility_attempt_with_parent_reference_mismatch_before_any_delta_source_launch_then_open_second_parent_audit",
+          "delta_source_succeeds_after_clear": "complete_compatibility_delta_authorized",
+          "delta_source_logical_failure_after_clear": "complete_compatibility_delta_failed_burn_reference_keep_parent_clear_and_permit_later_corrected_source_under_new_intent",
+          "infrastructure_failure": "only_common_pre_execution_window_before_attempt-execution-began_may_restart_entire_parent_first_then_delta_source_workset_under_new_attempt_with_no_receipt_reuse"
+        },
+        "transitions": {
+          "durable_reproduction": "commit_parent-audit-reproduced_and_revoked_in_one_parent-audit-reproduction-revocation-v1_transaction",
+          "not_reproduced": "append_parent_audit_not_reproduced_keep_mismatch_open_and_permit_one_new_parent_first_compatibility_delta_intent_attempt",
+          "fresh_parent_confirmation_matches_active_oracles": "append_parent_reference_cleared_binding_mismatch_audit_fresh_attempt_and_complete_parent_receipts_and_consensus_before_delta_source_launch",
+          "fresh_parent_confirmation_mismatches_again_before_limit": "terminalize_fresh_compatibility_intent_and_attempt_with_new_parent_reference_mismatch_before_delta_source_launch_then_run_next_full_parent_audit",
+          "second_audit_without_clear_or_reproduction": "append_parent_audit_escalated_and_block_train",
+          "after_escalated": "only_train_abandoned_or_separately_reviewed_strict_scope_contract_extension_may_transition_never_human_pass"
+        },
+        "cleared_record_required_bindings": [
+          "parent_reference_mismatch_jcs_sha256",
+          "parent_audit_not_reproduced_jcs_sha256",
+          "fresh_parent_first_compatibility_intent_jcs_sha256",
+          "fresh_parent_first_attempt_started_jcs_sha256",
+          "fresh_parent_first_attempt_claim_jcs_sha256",
+          "fresh_parent_first_attempt_fence_jcs_sha256",
+          "fresh_parent_replay_complete_terminal_receipt_set_jcs_sha256",
+          "fresh_parent_campaign_complete_terminal_receipt_set_jcs_sha256",
+          "fresh_parent_campaign_control_raw_receipt_set_jcs_sha256",
+          "fresh_parent_campaign_control_receipt_bijection_jcs_sha256",
+          "fresh_parent_replay_consensus_set_jcs_sha256",
+          "fresh_parent_campaign_consensus_set_jcs_sha256"
+        ],
+        "logical_red_reclassification_as_infrastructure": "forbidden",
+        "all_attempts_and_receipts_retained": true
+      },
+      "retry": {
+        "infrastructure_failure": "only_common_pre_execution_window_before_attempt-execution-began_may_restart_entire_paired_replay_and_108_campaign_workset_under_new_attempt",
+        "receipt_or_consensus_reuse": "forbidden",
+        "durable_logical_red_reclassification_as_infrastructure": "forbidden"
+      },
+      "authorization_bindings": [
+        "compatibility_delta_component_policy_jcs_sha256",
+        "ordinary_admission_spec_jcs_sha256",
+        "live_parent_admission_jcs_sha256",
+        "live_parent_sha",
+        "live_parent_tree",
+        "active_replay_schema_set_jcs_sha256",
+        "active_replay_parent_receipt_set_jcs_sha256",
+        "active_replay_delta_source_receipt_set_jcs_sha256",
+        "compatibility_delta_reference_manifest_jcs_sha256",
+        "reference_attempt_fence_jcs_sha256",
+        "campaign_reference_manifest_jcs_sha256",
+        "parent_campaign_reference_receipt_set_jcs_sha256",
+        "delta_source_campaign_reference_receipt_set_jcs_sha256",
+        "parent_campaign_control_raw_receipt_set_jcs_sha256",
+        "parent_campaign_control_receipt_bijection_jcs_sha256",
+        "delta_source_campaign_control_raw_receipt_set_jcs_sha256",
+        "delta_source_campaign_control_receipt_bijection_jcs_sha256",
+        "parent_effective_campaign_oracle_chain_jcs_sha256",
+        "parent_effective_replay_oracle_chain_jcs_sha256",
+        "parent_campaign_consensus_set_jcs_sha256",
+        "delta_source_campaign_consensus_set_jcs_sha256",
+        "parent_replay_consensus_set_jcs_sha256",
+        "delta_source_replay_consensus_set_jcs_sha256",
+        "parent_runtime_launch_template_jcs_sha256",
+        "delta_source_runtime_launch_template_jcs_sha256",
+        "parent_planned_process_launch_set_jcs_sha256",
+        "delta_source_planned_process_launch_set_jcs_sha256",
+        "parent_realized_runtime_closure_receipt_set_jcs_sha256",
+        "delta_source_realized_runtime_closure_receipt_set_jcs_sha256",
+        "input_closure_jcs_sha256",
+        "delta_source_sha",
+        "delta_source_tree",
+        "delta_source_diff_manifest_jcs_sha256",
+        "campaign_overlay_old_new_component_values_jcs_sha256",
+        "replay_overlay_old_new_component_values_jcs_sha256",
+        "campaign_overlay_jcs_sha256",
+        "replay_overlay_jcs_sha256",
+        "combined_dual_overlay_jcs_sha256",
+        "prospective_effective_campaign_oracle_chain_jcs_sha256",
+        "prospective_effective_replay_oracle_chain_jcs_sha256",
+        "unowned_component_equality_proof_jcs_sha256",
+        "no_candidate_record_ref_integration_commit_or_artifact_exists_proof_jcs_sha256",
+        "independent_review_receipt_jcs_sha256"
+      ],
+      "activation": {
+        "candidate_and_admission_bind_authorization_digest": true,
+        "candidate_source_sha_tree_must_equal_authorized_delta_source": true,
+        "integration_tree_must_equal_authorized_delta_source_tree": true,
+        "candidate_and_admission_bind_both_overlay_and_prospective_chain_digests": true,
+        "admission_atomically_promotes_both_prospective_chains_and_activates_both_overlays_for_descendants": true,
+        "partial_overlay_activation_or_invalidation": "forbidden",
+        "effective_campaign_oracle": "campaign_base_plus_ordered_active_campaign_overlays",
+        "effective_replay_oracle": "replay_base_plus_ordered_active_replay_overlays",
+        "authorization_reuse": "forbidden",
+        "base_invalidation_invalidates_dependent_overlays": true,
+        "delta_only_invalidation_preserves_base": true
+      }
+    }
+  },
+  "slices": [
+    {"id": "Z", "depends_on": []},
+    {"id": "P0", "depends_on": ["Z"]},
+    {"id": "P", "depends_on": ["P0"]},
+    {"id": "R0", "depends_on": ["Z"]},
+    {"id": "A", "depends_on": ["Z"]},
+    {"id": "B", "depends_on": ["Z"]},
+    {"id": "R1v", "depends_on": ["R0"]},
+    {"id": "R1a", "depends_on": ["P", "B"]},
+    {"id": "R1c", "depends_on": ["R1a", "R1v"]},
+    {"id": "R1p", "depends_on": ["P", "A", "B", "R0", "R1a", "R1v", "R1c"]},
+    {"id": "R1o", "depends_on": ["R1p"]},
+    {"id": "R1b", "depends_on": ["R1o"]},
+    {"id": "C0", "depends_on": ["P", "R1b"]},
+    {"id": "C1", "depends_on": ["C0"]},
+    {"id": "C", "depends_on": ["C1"]},
+    {"id": "C2", "depends_on": ["C"]},
+    {"id": "D0", "depends_on": ["C2"]},
+    {"id": "D1", "depends_on": ["C2"]},
+    {"id": "D2", "depends_on": ["D0"]},
+    {"id": "D3", "depends_on": ["D0"]},
+    {"id": "D5", "depends_on": ["D1", "D3"]},
+    {"id": "E0", "depends_on": ["D3"]},
+    {"id": "E", "depends_on": ["E0", "D5"]},
+    {"id": "F", "depends_on": ["E"]},
+    {
+      "id": "G",
+      "depends_on": ["F", "D0", "D2", "D3", "D5"],
+      "admission_gate_land_order": {
+        "validator_id": "validate_G_admission_gate_land_order_v1",
+        "global_serialization_ref": "/contracts/batch_attempt_protocol/global_serialized_operations",
+        "ordinary_admission_must_succeed_before_first_gate_intent": true,
+        "pending_record_type": "g-gates-pending",
+        "admission_pending_compound_transaction_id": "G-admission-pending-v1",
+        "pending_record_appended_in_same_atomic_transaction_as_G_admission_and_closed_only_by_G_land_or_revocation": true,
+        "g_pending_operation_id": "allocated_by_G-admission-pending-v1_and_bound_by_every_gate_land_reconciliation_abandonment_and_terminal_record_until_land_or_revocation",
+        "gate_execution_order": [
+          "desktop-presentation-v1",
+          "desktop-performance-v1",
+          "activation-100-v1",
+          "soak-24h-v1"
+        ],
+        "each_gate_intent_must_bind_subject_admission_and_postdate_previous_gate_success": true,
+        "land_exact_intent_must_postdate_and_bind_all_four_gate_success_records": true,
+        "gate_failure": "commit_selected_gate_failure_and_revoked_in_one_admitted-subject-logical-red-revocation-v1_transaction_for_unlanded_G_admission",
+        "gate_failure_or_subject_revocation_blocks_later_gates_and_land": true,
+        "train_abandonment_dispatch_ref": "/contracts/batch_attempt_protocol/train_abandonment/G_pending_dispatch",
+        "recovery_generation_policy": {
+          "trigger": "ledger_derived_recovery_remediation_closure_contains_slice_G_admission_or_any_G_gate_failure_or_G_subject_revocation",
+          "new_G_recovery_subject_must_first_complete_ordinary_admission": true,
+          "all_four_gate_intents_restart_from_zero_in_canonical_order": true,
+          "fresh_attempt_fence_manifest_and_evidence_required_per_gate": true,
+          "historical_gate_success_receipt_attempt_manifest_or_cardinality_reuse": "forbidden",
+          "land_exact_binds_only_the_new_G_recovery_subject_and_its_new_ordered_four_gate_success_set": true
+        },
+        "success_chain_shared_bindings": [
+          "candidate_sha",
+          "candidate_tree",
+          "candidate_ref_jcs_sha256",
+          "subject_admission_jcs_sha256",
+          "support_map_digest",
+          "runtime_launch_template_jcs_sha256",
+          "input_closure_digest",
+          "active_effective_campaign_oracle_chain_jcs_sha256",
+          "active_effective_replay_oracle_chain_jcs_sha256"
+        ],
+        "canonical_ordered_gate_success_set_digest_field": "all_required_G_gate_success_records_jcs_sha256",
+        "land_exact_required_bindings": ["subject_admission_jcs_sha256", "all_required_G_gate_success_records_jcs_sha256"]
+      },
+      "required_gates": [
+        {
+          "id": "desktop-presentation-v1",
+          "spec_authority": {
+            "slice_id": "F",
+            "record_type": "gate-spec-frozen",
+            "must_precede_candidate_slice": "G"
+          },
+          "spec_digest_field": "spec_jcs_sha256",
+          "intent_record_type": "desktop-presentation-intent",
+          "success_record_type": "desktop-presentation-completed",
+          "failure_record_type": "desktop-presentation-failed",
+          "subject_slice_id": "G",
+          "attempt_protocol_id": "common-intent-attempt-fence-v1",
+          "required_predecessor_record_binding": "subject_admission_jcs_sha256",
+          "required_bindings": [
+            "candidate_sha",
+            "candidate_tree",
+            "candidate_ref_jcs_sha256",
+            "subject_admission_jcs_sha256",
+            "support_map_digest",
+            "runtime_launch_template_jcs_sha256",
+            "process_launch_plan_authority_jcs_sha256",
+            "planned_process_launch_set_jcs_sha256",
+            "realized_runtime_closure_receipt_set_jcs_sha256",
+            "campaign_control_raw_receipt_set_jcs_sha256",
+            "campaign_control_receipt_bijection_jcs_sha256",
+            "input_closure_digest",
+            "spec_jcs_sha256",
+            "admitted_f_gate_spec_frozen_record_jcs_sha256",
+            "active_effective_campaign_oracle_chain_jcs_sha256",
+            "active_effective_replay_oracle_chain_jcs_sha256",
+            "intent_jcs_sha256",
+            "attempt_started_jcs_sha256",
+            "attempt_claim_jcs_sha256",
+            "attempt_fence_jcs_sha256",
+            "profile_manifest_digest",
+            "checkpoint_manifest_digest",
+            "complete_terminal_receipt_set_jcs_sha256",
+            "all_attempt_terminal_records_jcs_sha256"
+          ],
+          "predicate": {
+            "validator_id": "validate_desktop_presentation_v1",
+            "common_attempt_fence_validator_must_pass": true,
+            "profile_set": "exact_support_map",
+            "checkpoint_set": "exact_gate_spec",
+            "explicit_fixed_and_default_runs": true,
+            "restore_resize_max_ns": 2000000000,
+            "all_surface_hashes_equal_spec": true,
+            "exact_success_count": 1,
+            "failure_count": 0,
+            "open_intent_count": 0,
+            "open_attempt_count": 0,
+            "unresolved_failure_count": 0
+          }
+        },
+        {
+          "id": "desktop-performance-v1",
+          "spec_authority": {
+            "slice_id": "F",
+            "record_type": "gate-spec-frozen",
+            "must_precede_candidate_slice": "G"
+          },
+          "spec_digest_field": "spec_jcs_sha256",
+          "intent_record_type": "desktop-performance-intent",
+          "success_record_type": "desktop-performance-completed",
+          "failure_record_type": "desktop-performance-failed",
+          "subject_slice_id": "G",
+          "attempt_protocol_id": "common-intent-attempt-fence-v1",
+          "required_predecessor_record_binding": "desktop_presentation_completed_jcs_sha256",
+          "required_bindings": [
+            "candidate_sha",
+            "candidate_tree",
+            "candidate_ref_jcs_sha256",
+            "subject_admission_jcs_sha256",
+            "desktop_presentation_completed_jcs_sha256",
+            "support_map_digest",
+            "runtime_launch_template_jcs_sha256",
+            "process_launch_plan_authority_jcs_sha256",
+            "planned_process_launch_set_jcs_sha256",
+            "realized_runtime_closure_receipt_set_jcs_sha256",
+            "campaign_control_raw_receipt_set_jcs_sha256",
+            "campaign_control_receipt_bijection_jcs_sha256",
+            "input_closure_digest",
+            "spec_jcs_sha256",
+            "admitted_f_gate_spec_frozen_record_jcs_sha256",
+            "active_effective_campaign_oracle_chain_jcs_sha256",
+            "active_effective_replay_oracle_chain_jcs_sha256",
+            "intent_jcs_sha256",
+            "attempt_started_jcs_sha256",
+            "attempt_claim_jcs_sha256",
+            "attempt_fence_jcs_sha256",
+            "reference_desktop_profile_digest",
+            "profiler_schema_digest",
+            "scenario_save_seed_digest",
+            "admitted_f_performance_comparison_receipts_digest",
+            "sample_and_thresholds_digest",
+            "host_health_and_preemption_schema_digest",
+            "complete_terminal_receipt_set_jcs_sha256",
+            "all_attempt_terminal_records_jcs_sha256"
+          ],
+          "predicate": {
+            "validator_id": "validate_desktop_performance_v1",
+            "common_attempt_fence_validator_must_pass": true,
+            "independent_run_count": 3,
+            "exact_samples_per_class_per_run": 10000,
+            "exact_retained_samples_per_class": 30000,
+            "classes": [
+              "late-city",
+              "realtime-battle",
+              "turn-based-battle"
+            ],
+            "percentile_method": "nearest_rank_separately_over_each_10000_sample_run_per_class_and_over_all_30000_samples_per_class",
+            "all_percentile_tail_hard_ceiling_zero_count_and_turbo_ratio_predicates_apply_to": [
+              "each_independent_run_per_class",
+              "aggregate_all_three_runs_per_class"
+            ],
+            "control_p99_9_max_ns": 8000000,
+            "non_turbo_pulse_p99_9_max_ns": 8000000,
+            "non_turbo_control_opportunity_completion_lag_p99_9_max_ns": 15000000,
+            "non_turbo_control_opportunity_completion_lag_over_15ms_max_fraction": 0.001,
+            "non_turbo_control_opportunity_completion_lag_hard_max_ns": 100000000,
+            "urgent_service_p99_9_max_ns": 16666666,
+            "urgent_service_over_16_666666ms_max_fraction": 0.001,
+            "urgent_service_hard_max_ns": 100000000,
+            "non_turbo_debt_drop_count": 0,
+            "code_attributable_control_deadline_missed_count": 0,
+            "forbidden_work_drop_count": 0,
+            "turbo_p99_and_p99_9_max_parent_ratio": 1.25,
+            "host_contamination_policy": {
+              "classification_requires_independent_host_health_and_preemption_receipt": true,
+              "candidate_self_explanation": "forbidden",
+              "classified_attempt_is_retained_and_cannot_contribute_samples": true,
+              "after_attempt_execution_began": "desktop-performance-failed_logical_red_even_with_valid_host_contamination_receipt",
+              "retry_after_execution_began": "forbidden",
+              "pre_execution_infrastructure_failure": "only_common_attempt_protocol_pre_execution_window_may_retry"
+            },
+            "exact_success_count": 1,
+            "failure_count": 0,
+            "open_intent_count": 0,
+            "open_attempt_count": 0,
+            "unresolved_failure_count": 0
+          }
+        },
+        {
+          "id": "activation-100-v1",
+          "spec_authority": {
+            "slice_id": "F",
+            "record_type": "gate-spec-frozen",
+            "must_precede_candidate_slice": "G"
+          },
+          "spec_digest_field": "spec_jcs_sha256",
+          "intent_record_type": "activation-intent",
+          "success_record_type": "activation-completed",
+          "failure_record_type": "activation-failed",
+          "subject_slice_id": "G",
+          "attempt_protocol_id": "common-intent-attempt-fence-v1",
+          "required_predecessor_record_binding": "desktop_performance_completed_jcs_sha256",
+          "required_bindings": [
+            "candidate_sha",
+            "candidate_tree",
+            "candidate_ref_jcs_sha256",
+            "subject_admission_jcs_sha256",
+            "desktop_performance_completed_jcs_sha256",
+            "support_map_digest",
+            "runtime_launch_template_jcs_sha256",
+            "process_launch_plan_authority_jcs_sha256",
+            "planned_process_launch_set_jcs_sha256",
+            "realized_runtime_closure_receipt_set_jcs_sha256",
+            "campaign_control_raw_receipt_set_jcs_sha256",
+            "campaign_control_receipt_bijection_jcs_sha256",
+            "input_closure_digest",
+            "spec_jcs_sha256",
+            "admitted_f_gate_spec_frozen_record_jcs_sha256",
+            "active_effective_campaign_oracle_chain_jcs_sha256",
+            "active_effective_replay_oracle_chain_jcs_sha256",
+            "intent_jcs_sha256",
+            "attempt_started_jcs_sha256",
+            "attempt_claim_jcs_sha256",
+            "attempt_fence_jcs_sha256",
+            "activation_oracle_topology_jcs_sha256",
+            "activation_100_extension_jcs_sha256",
+            "recipe_slot_seed_manifest_digest",
+            "exact_campaign_count",
+            "complete_terminal_receipt_set_jcs_sha256",
+            "all_attempt_terminal_records_jcs_sha256"
+          ],
+          "predicate": {
+            "validator_id": "validate_activation_100_v1",
+            "common_attempt_fence_validator_must_pass": true,
+            "topology_validator_id": "validate_activation_topology_extension_v1",
+            "exact_oracle_key_count": 10,
+            "exact_execution_row_count": 100,
+            "exact_rows_per_oracle_key": 10,
+            "every_oracle_key_execution_profile_multiset_equals_activation_topology": true,
+            "base_projection_digest_matches": true,
+            "oracle_join": "exactly_one_base_R1o_join_by_oracle_key_then_apply_ordered_active_campaign_overlays",
+            "exact_terminal_receipt_count": 100,
+            "fresh_process_per_execution_row": true,
+            "full_new_game_to_classified_victory_per_execution_row": true,
+            "campaign_root_game_load_or_prior_save_input": "forbidden",
+            "all_ten_acceptance_projections_per_oracle_key_are_jcs_identical": true,
+            "each_key_projection_equals_resolved_active_effective_campaign_oracle": true,
+            "all_outcomes_equal_active_effective_campaign_oracle": true,
+            "all_ordered_milestones_equal_active_effective_campaign_oracle": true,
+            "all_retained_projection_components_equal_active_effective_campaign_oracle": true,
+            "every_campaign_has_same_attempt_fence_campaign_true_turnbased_and_cross_process_save_reload_raw_receipts": true,
+            "extra_or_duplicate_receipt_count": 0,
+            "exact_success_count": 1,
+            "failure_count": 0,
+            "open_intent_count": 0,
+            "open_attempt_count": 0,
+            "unresolved_failure_count": 0
+          }
+        },
+        {
+          "id": "soak-24h-v1",
+          "spec_authority": {
+            "slice_id": "F",
+            "record_type": "gate-spec-frozen",
+            "must_precede_candidate_slice": "G"
+          },
+          "spec_digest_field": "spec_jcs_sha256",
+          "intent_record_type": "soak-intent",
+          "success_record_type": "soak-completed",
+          "failure_record_type": "soak-failed",
+          "subject_slice_id": "G",
+          "attempt_protocol_id": "common-intent-attempt-fence-v1",
+          "required_predecessor_record_binding": "activation_completed_jcs_sha256",
+          "required_bindings": [
+            "candidate_sha",
+            "candidate_tree",
+            "candidate_ref_jcs_sha256",
+            "subject_admission_jcs_sha256",
+            "activation_completed_jcs_sha256",
+            "support_map_digest",
+            "runtime_launch_template_jcs_sha256",
+            "process_launch_plan_authority_jcs_sha256",
+            "planned_process_launch_prefix_policy_jcs_sha256",
+            "soak_execution_window_jcs_sha256",
+            "soak_campaign_root_start_receipt_set_jcs_sha256",
+            "finalized_campaign_root_prefix_jcs_sha256",
+            "finalized_campaign_root_prefix_count",
+            "finalized_campaign_root_prefix_head_jcs_sha256",
+            "finalized_process_launch_prefix_jcs_sha256",
+            "finalized_process_launch_prefix_count",
+            "finalized_process_launch_prefix_head_jcs_sha256",
+            "realized_runtime_closure_receipt_set_jcs_sha256",
+            "campaign_control_raw_receipt_set_jcs_sha256",
+            "campaign_control_receipt_bijection_jcs_sha256",
+            "input_closure_digest",
+            "spec_jcs_sha256",
+            "admitted_f_gate_spec_frozen_record_jcs_sha256",
+            "active_effective_campaign_oracle_chain_jcs_sha256",
+            "active_effective_replay_oracle_chain_jcs_sha256",
+            "intent_jcs_sha256",
+            "attempt_started_jcs_sha256",
+            "attempt_claim_jcs_sha256",
+            "attempt_fence_jcs_sha256",
+            "soak_schedule_policy_jcs_sha256",
+            "soak_workload_schedule_jcs_sha256",
+            "activation_oracle_topology_jcs_sha256",
+            "activation_100_extension_jcs_sha256",
+            "capacity_receipt_digest",
+            "minimum_completed_campaigns",
+            "drain_timeout_ns",
+            "duration_ns",
+            "complete_terminal_receipt_set_jcs_sha256",
+            "all_attempt_terminal_records_jcs_sha256"
+          ],
+          "predicate": {
+            "validator_id": "validate_soak_24h_v1",
+            "common_attempt_fence_validator_must_pass": true,
+            "continuous_launch_window_ns": 86400000000000,
+            "schedule_policy": {
+              "schema": "openapoc.soak_schedule_policy.v1",
+              "authority": "admitted_F_gate_spec_frozen_before_G_candidate",
+              "candidate_subject_runtime_input_or_oracle_bindings": "forbidden",
+              "fixed_fields": [
+                "duration_ns",
+                "campaign_ordinal_domain",
+                "process_launch_ordinal_domain",
+                "row_index_formula",
+                "cycle_ordinal_formula",
+                "concurrency_and_replenishment_policy_jcs_sha256",
+                "minimum_completed_campaigns",
+                "drain_policy_jcs_sha256",
+                "coordinator_interruption_rule"
+              ],
+              "digest_field": "soak_schedule_policy_jcs_sha256"
+            },
+            "workload_schedule": {
+              "schema": "openapoc.soak_workload_schedule.v1",
+              "authority": "G_soak_intent_materialized_after_activation_success_for_exact_subject_admission_and_attempt_independent",
+              "policy_source": "exact_admitted_F_gate_spec_soak_schedule_policy",
+              "policy_digest_field": "soak_schedule_policy_jcs_sha256",
+              "ordered_row_source": "exact_activation_100_topology_rows_in_canonical_oracle_key_then_profile_order",
+              "campaign_ordinal_domain": "canonical_uint64_starting_at_zero",
+              "process_launch_ordinal_domain": "separate_canonical_uint64_starting_at_zero_for_every_root_and_continuation_process",
+              "campaign_root_ordinals": "one_gap_free_prefix_zero_through_N_minus_one_with_exactly_one_root_start_and_campaign_terminal_per_campaign_ordinal",
+              "process_launch_ordinals": "one_gap_free_prefix_zero_through_M_minus_one_with_exactly_one_process_start_and_realized_runtime_receipt_per_process_launch_ordinal",
+              "dual_prefix_finalization": "campaign_and_process_prefix_count_head_and_digest_each_match_every_corresponding_hash_chained_planned_artifact",
+              "receipt_bijections": "root_start_receipts_and_campaign_terminal_receipts_each_biject_campaign_prefix_and_realized_process_receipts_biject_process_prefix_neither_receipt_set_may_self_describe_authority",
+              "row_index_formula": "campaign_ordinal_mod_100",
+              "cycle_ordinal_formula": "campaign_ordinal_integer_divide_100",
+              "recipe_slot_seed_and_profile": "exact_row_at_row_index",
+              "oracle_resolution": "exact_active_effective_campaign_and_replay_chains_for_subject_admission",
+              "attempt_time_authority": "attempt_specific_openapoc.soak_execution_window.v1_embedded_atomically_in_attempt-execution-began_with_checked_monotonic_origin_plus_exact_duration",
+              "launch_cutoff": "half_open_origin_through_origin_plus_86400000000000ns_no_new_campaign_root_plan_or_spawn_at_or_after_cutoff",
+              "root_start_receipt_authority": "openapoc.soak_campaign_root_start_receipt.v1_binds_materialization_pid_start_identity_nonce_and_coordinator_sampled_root_start_monotonic_ns_in_the_execution_window_clock_domain",
+              "root_cutoff_boundaries": "authoritative_root_start_receipt_at_cutoff_minus_1ns_is_eligible_and_at_cutoff_is_logical_failure",
+              "root_plan_start_atomicity": "root_planned_before_cutoff_without_an_authoritative_same_clock_pid_bound_start_receipt_before_cutoff_is_logical_failure_and_cannot_spawn_during_drain",
+              "drain_deadline": "checked_root_start_receipt_root_start_monotonic_ns_plus_F_frozen_per_campaign_drain_timeout",
+              "drain_process_rule": "only_predeclared_same_campaign_continuations_for_roots_started_before_cutoff_may_allocate_process_launch_ordinals_and_spawn_during_bounded_drain",
+              "parallelism_and_replenishment": "exact_F_frozen_concurrency_and_immediate_replenishment_policy_with_no_avoidable_idle_slot",
+              "minimum_completed_campaigns": "F_frozen_multiple_of_100_at_least_100",
+              "minimum_complete_topology_cycles": 1,
+              "fresh_process_per_campaign": true,
+              "full_new_game_to_classified_victory_per_campaign": true,
+              "campaign_root_game_load_or_prior_save_input": "forbidden",
+              "same_campaign_save_reload_continuation_is_additional_process_not_a_campaign_root": true,
+              "unique_campaign_claim_per_campaign_ordinal_and_unique_process_claim_port_and_output_root_per_process_launch_ordinal": true,
+              "clock_rollback_or_domain_change_after_execution_began": "logical_failure",
+              "crash_after_window_commit_before_campaign_ordinal_zero": "logical_failure_with_finalized_empty_campaign_and_process_prefix_evidence",
+              "intentional_seed_profile_reuse_only_through_ordinal_mod_100": true,
+              "coordinator_interruption": "after_attempt-execution-began_select_soak-failed_logical_red_with_no_retry_before_execution_common_pre_execution_infrastructure_rule_applies",
+              "operator_supplied_row_recipe_seed_or_profile": "forbidden",
+              "digest_inputs": [
+                "soak_schedule_policy_jcs_sha256",
+                "activation_oracle_topology_jcs_sha256",
+                "activation_100_extension_jcs_sha256",
+                "support_map_digest",
+                "runtime_launch_template_jcs_sha256",
+                "input_closure_digest",
+                "active_effective_campaign_oracle_chain_jcs_sha256",
+                "active_effective_replay_oracle_chain_jcs_sha256",
+                "capacity_receipt_digest"
+              ],
+              "digest_field": "soak_workload_schedule_jcs_sha256"
+            },
+            "execution_window_retry_semantics": "each_legal_pre_execution_retry_under_the_same_immutable_intent_gets_a_new_attempt_fence_fresh_24h_window_and_fresh_dual_prefixes_while_any_post_window_publication_interruption_is_non_retryable_logical_red",
+            "execution_window_validation_sentinels": {
+              "same_intent_two_pre_execution_attempts": "accept_distinct_fence_window_and_prefix_digests_each_with_duration_86400000000000ns",
+              "post_execution_interruption_then_retry": "reject_retry",
+              "root_start_at_cutoff_minus_1ns": "accept_root",
+              "root_plan_or_start_at_cutoff": "logical_failure",
+              "root_start_receipt_missing_pid_identity_or_cross_clock_timestamp": "logical_failure",
+              "drain_deadline_not_exact_checked_add_from_bound_root_start_receipt": "logical_failure",
+              "continuation_for_pre_cutoff_root_during_bounded_drain": "accept_process_ordinal_without_new_campaign_ordinal",
+              "new_root_or_unplanned_continuation_during_drain": "logical_failure",
+              "campaign_or_process_prefix_gap_duplicate_or_wrong_receipt_bijection": "logical_failure"
+            },
+            "minimum_completed_campaigns": "positive_value_from_gate_spec",
+            "minimum_completed_campaigns_must_be_at_least_100_and_divisible_by_100": true,
+            "all_started_campaigns_terminal_by_drain_deadline": true,
+            "every_campaign_has_same_attempt_fence_campaign_true_turnbased_and_cross_process_save_reload_raw_receipts": true,
+            "all_decided_outcomes_and_milestones_equal_active_effective_campaign_oracle": true,
+            "all_active_replay_checkpoints_equal_active_effective_replay_oracle": true,
+            "unresolved_accepted_work_count": 0,
+            "exact_success_count": 1,
+            "failure_count": 0,
+            "open_intent_count": 0,
+            "open_attempt_count": 0,
+            "unresolved_failure_count": 0
+          }
+        }
+      ]
+    },
+    {"id": "P-movement", "depends_on": ["A", "R1b"]},
+    {"id": "P-projectile", "depends_on": ["A", "R1b"]},
+    {"id": "P-ROF", "depends_on": ["A", "R1b"]},
+    {"id": "P-explosion", "depends_on": ["A", "R1b"]},
+    {"id": "P-fire", "depends_on": ["A", "R1b"]},
+    {"id": "P-MAC", "depends_on": ["A", "R1b"]},
+    {"id": "P-physics", "depends_on": ["A", "R1b"]},
+    {"id": "P-smoke", "depends_on": ["A", "R1b", "P-explosion"]},
+    {"id": "P-save", "depends_on": ["A", "R1b"]},
+    {"id": "T-calendar", "depends_on": ["A", "R1b"]},
+    {"id": "T-animation", "depends_on": ["A", "R1b"]},
+    {
+      "id": "T-180",
+      "depends_on": [
+        "G",
+        "A",
+        "P-movement",
+        "P-projectile",
+        "P-ROF",
+        "P-explosion",
+        "P-fire",
+        "P-MAC",
+        "P-smoke",
+        "P-physics",
+        "P-save",
+        "T-calendar",
+        "T-animation"
+      ]
+    }
+  ]
+}

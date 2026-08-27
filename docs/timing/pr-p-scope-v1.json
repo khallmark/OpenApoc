@@ -1,0 +1,253 @@
+{
+  "schema": "openapoc.pr_p_scope.v1",
+  "base_authority": {
+    "ci": "immutable_event_base_sha_from_landed_P0_workflow",
+    "local": "explicit_cli_base_sha",
+    "candidate_base_claim": "forbidden"
+  },
+  "purpose": "planning_source_evidence_machine_contract_and_validation_only",
+  "allowed_exact_paths": [
+    "docs/plans/2026-08-26-001-render-simulation-decoupling-plan.md",
+    "docs/timing/pr-p-scope-v1.json",
+    "docs/timing/source-disposition-map-v1.json",
+    "docs/timing/source-disposition.md",
+    "docs/timing/source-snapshots/source-snapshot-v1.schema.json",
+    "docs/timing/source-snapshots/sources.json",
+    "docs/timing/source-snapshots/v1/issue-1216.json",
+    "docs/timing/source-snapshots/v1/issue-1336.json",
+    "docs/timing/source-snapshots/v1/issue-997.json",
+    "docs/timing/source-snapshots/v1/manifest.json",
+    "docs/timing/source-snapshots/v1/pr-1166.json",
+    "docs/timing/source-snapshots/v1/pr-1237.json",
+    "docs/timing/source-snapshots/v1/pr-1270.json",
+    "docs/timing/train-scope-v1.json",
+    "tools/capture_timing_sources.py",
+    "tools/fixtures/timing_source_capture/v1/expected-issue.json",
+    "tools/fixtures/timing_source_capture/v1/expected-pr.json",
+    "tools/fixtures/timing_source_capture/v1/http-transcript.json",
+    "tools/test_capture_timing_sources.py",
+    "tools/test_pr_p_scope.py",
+    "tools/test_timing_source_disposition.py",
+    "tools/test_timing_train_scope.py"
+  ],
+  "allowed_change_types": [
+    "A",
+    "M"
+  ],
+  "required_blob_mode": "100644",
+  "trust_boundary": {
+    "authoritative_policy": "docs/timing/pr-p-policy-v1.json@event_base",
+    "authoritative_validator": "tools/validate_pr_p_scope.py@event_base",
+    "authoritative_workflow": ".github/workflows/planning-scope.yml@default_develop",
+    "candidate_manifest_role": "required_untrusted_claim_only",
+    "candidate_test_role": "defense_in_depth_only",
+    "candidate_may_modify_trust_root": false,
+    "exact_candidate_path_count": 22
+  },
+  "executable_python_policy": {
+    "mode": "closed_per_file_capability_grammar",
+    "inspection_scope": "all_changed_dot_py_files",
+    "local_content_source": "working_tree_including_untracked_files",
+    "ci_content_source": "exact_head_commit_tree",
+    "max_python_source_bytes": 1048576,
+    "imports_by_exact_path": {
+      "tools/capture_timing_sources.py": [
+        "from __future__ import annotations",
+        "from dataclasses import dataclass",
+        "from pathlib import Path",
+        "from typing import Any",
+        "from typing import Callable",
+        "import hashlib",
+        "import json",
+        "import os",
+        "import re",
+        "import shutil",
+        "import subprocess",
+        "import sys",
+        "import tempfile",
+        "import urllib.error",
+        "import urllib.parse",
+        "import urllib.request"
+      ],
+      "tools/test_capture_timing_sources.py": [
+        "from __future__ import annotations",
+        "from pathlib import Path",
+        "import capture_timing_sources as capture",
+        "import copy",
+        "import json",
+        "import shutil",
+        "import tempfile",
+        "import unittest"
+      ],
+      "tools/test_pr_p_scope.py": [
+        "from __future__ import annotations",
+        "from pathlib import Path",
+        "from pathlib import PurePosixPath",
+        "from typing import Any",
+        "import argparse",
+        "import ast",
+        "import json",
+        "import re",
+        "import stat",
+        "import subprocess",
+        "import sys"
+      ],
+      "tools/test_timing_source_disposition.py": [
+        "from __future__ import annotations",
+        "from pathlib import Path",
+        "from typing import Any",
+        "import json",
+        "import re",
+        "import unittest"
+      ],
+      "tools/test_timing_train_scope.py": [
+        "from __future__ import annotations",
+        "from pathlib import Path",
+        "from typing import Any",
+        "import hashlib",
+        "import json",
+        "import unittest"
+      ]
+    },
+    "capability_grammar": {
+      "capability_roots": [
+        "os",
+        "posix",
+        "pty",
+        "shutil",
+        "socket",
+        "subprocess",
+        "sys",
+        "tempfile",
+        "urllib"
+      ],
+      "closed_module_names_by_exact_path": {
+        "tools/capture_timing_sources.py": {},
+        "tools/test_capture_timing_sources.py": {
+          "capture_timing_sources": [
+            "capture_timing_sources.COMMITTED_ROOT",
+            "capture_timing_sources.COMMITTED_ROOT.glob",
+            "capture_timing_sources.DriftError",
+            "capture_timing_sources.GitHubClient",
+            "capture_timing_sources.IntegrityError",
+            "capture_timing_sources.Response",
+            "capture_timing_sources.SpecError",
+            "capture_timing_sources.TransportError",
+            "capture_timing_sources._ids",
+            "capture_timing_sources.build_manifest",
+            "capture_timing_sources.canonical_bytes",
+            "capture_timing_sources.capture_corpus_stable",
+            "capture_timing_sources.capture_once",
+            "capture_timing_sources.capture_to",
+            "capture_timing_sources.load_json",
+            "capture_timing_sources.load_spec",
+            "capture_timing_sources.main",
+            "capture_timing_sources.normalize_file",
+            "capture_timing_sources.parse_next_link",
+            "capture_timing_sources.sha256_file",
+            "capture_timing_sources.validate_snapshot",
+            "capture_timing_sources.verify_offline"
+          ]
+        },
+        "tools/test_pr_p_scope.py": {},
+        "tools/test_timing_source_disposition.py": {},
+        "tools/test_timing_train_scope.py": {}
+      },
+      "dynamic_indirection_calls": [
+        "__import__",
+        "breakpoint",
+        "compile",
+        "delattr",
+        "eval",
+        "exec",
+        "getattr",
+        "globals",
+        "locals",
+        "setattr",
+        "vars"
+      ],
+      "dunder_attribute_access": "forbidden",
+      "capability_module_or_callable_escape": "forbidden",
+      "capability_subscript_access": "forbidden_except_exact_bases",
+      "allowed_subscript_bases_by_exact_path": {
+        "tools/capture_timing_sources.py": [
+          "sys.argv"
+        ],
+        "tools/test_capture_timing_sources.py": [],
+        "tools/test_pr_p_scope.py": [],
+        "tools/test_timing_source_disposition.py": [],
+        "tools/test_timing_train_scope.py": []
+      },
+      "allowed_calls_by_exact_path": {
+        "tools/capture_timing_sources.py": [
+          "os.chmod",
+          "os.environ.get",
+          "shutil.rmtree",
+          "subprocess.run",
+          "sys.exit",
+          "tempfile.TemporaryDirectory",
+          "urllib.parse.parse_qs",
+          "urllib.parse.urlparse",
+          "urllib.request.Request",
+          "urllib.request.build_opener",
+          "urllib.request.urlopen"
+        ],
+        "tools/test_capture_timing_sources.py": [
+          "shutil.copytree",
+          "tempfile.TemporaryDirectory"
+        ],
+        "tools/test_pr_p_scope.py": [
+          "subprocess.run"
+        ],
+        "tools/test_timing_source_disposition.py": [],
+        "tools/test_timing_train_scope.py": []
+      },
+      "allowed_references_by_exact_path": {
+        "tools/capture_timing_sources.py": [
+          "subprocess.CalledProcessError",
+          "sys.argv",
+          "sys.stderr",
+          "urllib.error.URLError",
+          "urllib.request.HTTPRedirectHandler"
+        ],
+        "tools/test_capture_timing_sources.py": [],
+        "tools/test_pr_p_scope.py": [
+          "subprocess.PIPE",
+          "sys.stderr"
+        ],
+        "tools/test_timing_source_disposition.py": [],
+        "tools/test_timing_train_scope.py": []
+      },
+      "external_process_calls_by_exact_path": {
+        "tools/capture_timing_sources.py": {
+          "callable": "subprocess.run",
+          "argv_grammar": "exact_gh_auth_token_v1",
+          "keyword_literals_exact": {
+            "capture_output": true,
+            "check": true,
+            "text": true
+          }
+        },
+        "tools/test_pr_p_scope.py": {
+          "callable": "subprocess.run",
+          "argv_grammar": "runtime_validated_read_only_git_v1",
+          "enclosing_function": "git_result",
+          "keyword_literals_exact": {
+            "check": false,
+            "cwd": "name:ROOT",
+            "stderr": "attribute:subprocess.PIPE",
+            "stdout": "attribute:subprocess.PIPE"
+          }
+        }
+      },
+      "all_other_capability_calls_and_references": "forbidden",
+      "all_other_external_process_launches": "forbidden"
+    }
+  },
+  "runtime_implementation_forbidden": [
+    "engine_or_game_runtime_change",
+    "subprocess_or_socket_game_launcher",
+    "runtime_closure_collector_or_launcher",
+    "candidate_admission_or_landing_implementation"
+  ]
+}

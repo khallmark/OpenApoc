@@ -1,0 +1,5 @@
+{
+  "schema": "openapoc.timing_source_capture_test_expectation.v1",
+  "kind": "issue",
+  "required_empty_collections": ["reviews", "review_comments", "commits", "files"]
+}

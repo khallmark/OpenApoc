@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openapoc.example/schemas/github-source-snapshot-v1.json",
+  "title": "OpenApoc immutable GitHub source snapshot v1",
+  "oneOf": [{"$ref": "#/$defs/prSnapshot"}, {"$ref": "#/$defs/issueSnapshot"}],
+  "$defs": {
+    "nullableString": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+    "nullableInteger": {"oneOf": [{"type": "integer"}, {"type": "null"}]},
+    "user": {
+      "type": "object", "additionalProperties": false,
+      "required": ["login", "id", "node_id"],
+      "properties": {"login": {"type": "string"}, "id": {"type": "integer"}, "node_id": {"type": "string"}}
+    },
+    "nullableUser": {"oneOf": [{"$ref": "#/$defs/user"}, {"type": "null"}]},
+    "label": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "node_id", "name", "color", "description"],
+      "properties": {
+        "id": {"type": "integer"}, "node_id": {"type": "string"}, "name": {"type": "string"},
+        "color": {"type": "string"}, "description": {"$ref": "#/$defs/nullableString"}
+      }
+    },
+    "milestone": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "node_id", "number", "title", "description", "state", "due_on"],
+      "properties": {
+        "id": {"type": "integer"}, "node_id": {"type": "string"}, "number": {"type": "integer"},
+        "title": {"type": "string"}, "description": {"$ref": "#/$defs/nullableString"},
+        "state": {"type": "string"}, "due_on": {"$ref": "#/$defs/nullableString"}
+      }
+    },
+    "nullableMilestone": {"oneOf": [{"$ref": "#/$defs/milestone"}, {"type": "null"}]},
+    "issueComment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "node_id", "body", "created_at", "updated_at", "html_url", "author_association", "user"],
+      "properties": {
+        "id": {"type": "integer"}, "node_id": {"type": "string"}, "body": {"$ref": "#/$defs/nullableString"},
+        "created_at": {"type": "string"}, "updated_at": {"type": "string"}, "html_url": {"type": "string"},
+        "author_association": {"type": "string"}, "user": {"$ref": "#/$defs/nullableUser"}
+      }
+    },
+    "review": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "node_id", "state", "body", "commit_id", "submitted_at", "html_url", "author_association", "user"],
+      "properties": {
+        "id": {"type": "integer"}, "node_id": {"type": "string"}, "state": {"type": "string"},
+        "body": {"$ref": "#/$defs/nullableString"}, "commit_id": {"$ref": "#/$defs/nullableString"},
+        "submitted_at": {"$ref": "#/$defs/nullableString"}, "html_url": {"type": "string"},
+        "author_association": {"type": "string"}, "user": {"$ref": "#/$defs/nullableUser"}
+      }
+    },
+    "reviewComment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "node_id", "pull_request_review_id", "in_reply_to_id", "body", "created_at", "updated_at", "html_url", "author_association", "path", "line", "side", "start_line", "start_side", "original_line", "original_start_line", "commit_id", "original_commit_id", "diff_hunk", "subject_type", "user"],
+      "properties": {
+        "id": {"type": "integer"}, "node_id": {"type": "string"},
+        "pull_request_review_id": {"$ref": "#/$defs/nullableInteger"}, "in_reply_to_id": {"$ref": "#/$defs/nullableInteger"},
+        "body": {"$ref": "#/$defs/nullableString"}, "created_at": {"type": "string"}, "updated_at": {"type": "string"},
+        "html_url": {"type": "string"}, "author_association": {"type": "string"}, "path": {"type": "string"},
+        "line": {"$ref": "#/$defs/nullableInteger"}, "side": {"$ref": "#/$defs/nullableString"},
+        "start_line": {"$ref": "#/$defs/nullableInteger"}, "start_side": {"$ref": "#/$defs/nullableString"},
+        "original_line": {"$ref": "#/$defs/nullableInteger"}, "original_start_line": {"$ref": "#/$defs/nullableInteger"},
+        "commit_id": {"type": "string"}, "original_commit_id": {"type": "string"},
+        "diff_hunk": {"type": "string"}, "subject_type": {"type": "string"}, "user": {"$ref": "#/$defs/nullableUser"}
+      }
+    },
+    "gitPerson": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "email", "date"],
+      "properties": {"name": {"$ref": "#/$defs/nullableString"}, "email": {"$ref": "#/$defs/nullableString"}, "date": {"$ref": "#/$defs/nullableString"}}
+    },
+    "commit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sha", "parent_shas", "tree_sha", "author", "committer", "author_account", "committer_account", "message"],
+      "properties": {
+        "sha": {"type": "string"}, "parent_shas": {"type": "array", "items": {"type": "string"}}, "tree_sha": {"type": "string"},
+        "author": {"$ref": "#/$defs/gitPerson"}, "committer": {"$ref": "#/$defs/gitPerson"},
+        "author_account": {"$ref": "#/$defs/nullableUser"}, "committer_account": {"$ref": "#/$defs/nullableUser"}, "message": {"type": "string"}
+      }
+    },
+    "file": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sha", "filename", "status", "additions", "deletions", "changes", "blob_url", "raw_url", "contents_url", "patch", "previous_filename"],
+      "properties": {
+        "sha": {"type": "string"}, "filename": {"type": "string"}, "status": {"type": "string"},
+        "additions": {"type": "integer", "minimum": 0}, "deletions": {"type": "integer", "minimum": 0}, "changes": {"type": "integer", "minimum": 0},
+        "blob_url": {"type": "string"}, "raw_url": {"type": "string"}, "contents_url": {"type": "string"},
+        "patch": {"type": "string"}, "previous_filename": {"$ref": "#/$defs/nullableString"}
+      }
+    },
+    "repoIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "node_id", "full_name"],
+      "properties": {"id": {"type": "integer"}, "node_id": {"type": "string"}, "full_name": {"type": "string"}}
+    },
+    "refSide": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ref", "sha", "repo"],
+      "properties": {"ref": {"type": "string"}, "sha": {"type": "string"}, "repo": {"$ref": "#/$defs/repoIdentity"}}
+    },
+    "issueResource": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "node_id", "number", "state", "title", "body", "created_at", "updated_at", "closed_at", "html_url", "author_association", "locked", "comments", "user", "labels", "milestone", "assignees", "state_reason"],
+      "properties": {
+        "id": {"type": "integer"}, "node_id": {"type": "string"}, "number": {"type": "integer", "minimum": 1},
+        "state": {"type": "string"}, "title": {"type": "string"}, "body": {"$ref": "#/$defs/nullableString"},
+        "created_at": {"type": "string"}, "updated_at": {"type": "string"}, "closed_at": {"$ref": "#/$defs/nullableString"},
+        "html_url": {"type": "string"}, "author_association": {"type": "string"}, "locked": {"type": "boolean"},
+        "comments": {"type": "integer", "minimum": 0}, "user": {"$ref": "#/$defs/nullableUser"},
+        "labels": {"type": "array", "items": {"$ref": "#/$defs/label"}}, "milestone": {"$ref": "#/$defs/nullableMilestone"},
+        "assignees": {"type": "array", "items": {"$ref": "#/$defs/user"}}, "state_reason": {"$ref": "#/$defs/nullableString"}
+      }
+    },
+    "prResource": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "node_id", "number", "state", "title", "body", "created_at", "updated_at", "closed_at", "html_url", "author_association", "locked", "comments", "user", "labels", "milestone", "assignees", "merged_at", "merge_commit_sha", "draft", "review_comments", "commits", "additions", "deletions", "changed_files", "requested_reviewers", "base", "head"],
+      "properties": {
+        "id": {"type": "integer"}, "node_id": {"type": "string"}, "number": {"type": "integer", "minimum": 1},
+        "state": {"type": "string"}, "title": {"type": "string"}, "body": {"$ref": "#/$defs/nullableString"},
+        "created_at": {"type": "string"}, "updated_at": {"type": "string"}, "closed_at": {"$ref": "#/$defs/nullableString"},
+        "html_url": {"type": "string"}, "author_association": {"type": "string"}, "locked": {"type": "boolean"},
+        "comments": {"type": "integer", "minimum": 0}, "user": {"$ref": "#/$defs/nullableUser"},
+        "labels": {"type": "array", "items": {"$ref": "#/$defs/label"}}, "milestone": {"$ref": "#/$defs/nullableMilestone"},
+        "assignees": {"type": "array", "items": {"$ref": "#/$defs/user"}}, "merged_at": {"$ref": "#/$defs/nullableString"},
+        "merge_commit_sha": {"$ref": "#/$defs/nullableString"}, "draft": {"type": "boolean"},
+        "review_comments": {"type": "integer", "minimum": 0}, "commits": {"type": "integer", "minimum": 0},
+        "additions": {"type": "integer", "minimum": 0}, "deletions": {"type": "integer", "minimum": 0},
+        "changed_files": {"type": "integer", "minimum": 0},
+        "requested_reviewers": {"type": "array", "items": {"$ref": "#/$defs/user"}},
+        "base": {"$ref": "#/$defs/refSide"}, "head": {"$ref": "#/$defs/refSide"}
+      }
+    },
+    "issueSnapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "projection_id", "repository", "source_id", "kind", "number", "resource", "issue_comments", "reviews", "review_comments", "commits", "files"],
+      "properties": {
+        "schema": {"const": "openapoc.github_source_snapshot.v1"}, "projection_id": {"const": "openapoc-github-source-projection-v1"},
+        "repository": {"const": "OpenApoc/OpenApoc"}, "source_id": {"type": "string", "pattern": "^issue-[0-9]+$"},
+        "kind": {"const": "issue"}, "number": {"type": "integer", "minimum": 1}, "resource": {"$ref": "#/$defs/issueResource"},
+        "issue_comments": {"type": "array", "items": {"$ref": "#/$defs/issueComment"}},
+        "reviews": {"type": "array", "maxItems": 0, "items": {"$ref": "#/$defs/review"}},
+        "review_comments": {"type": "array", "maxItems": 0, "items": {"$ref": "#/$defs/reviewComment"}},
+        "commits": {"type": "array", "maxItems": 0, "items": {"$ref": "#/$defs/commit"}},
+        "files": {"type": "array", "maxItems": 0, "items": {"$ref": "#/$defs/file"}}
+      }
+    },
+    "prSnapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "projection_id", "repository", "source_id", "kind", "number", "resource", "issue_comments", "reviews", "review_comments", "commits", "files"],
+      "properties": {
+        "schema": {"const": "openapoc.github_source_snapshot.v1"}, "projection_id": {"const": "openapoc-github-source-projection-v1"},
+        "repository": {"const": "OpenApoc/OpenApoc"}, "source_id": {"type": "string", "pattern": "^pr-[0-9]+$"},
+        "kind": {"const": "pr"}, "number": {"type": "integer", "minimum": 1}, "resource": {"$ref": "#/$defs/prResource"},
+        "issue_comments": {"type": "array", "items": {"$ref": "#/$defs/issueComment"}},
+        "reviews": {"type": "array", "items": {"$ref": "#/$defs/review"}},
+        "review_comments": {"type": "array", "items": {"$ref": "#/$defs/reviewComment"}},
+        "commits": {"type": "array", "items": {"$ref": "#/$defs/commit"}},
+        "files": {"type": "array", "items": {"$ref": "#/$defs/file"}}
+      }
+    }
+  }
+}
