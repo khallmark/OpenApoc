@@ -16,8 +16,9 @@ regression baseline for master and becomes a feature port.
 ctest --test-dir build -LE known-master-bug
 ```
 
-That is the regression gate: **25 tests, all green**, verified stable across five
-consecutive runs. Plain `ctest` also runs three quarantined reproducers that fail
+That is the regression gate: **25 tests, all green**, verified against a
+`base_gamestate` produced by master's own extractor — see the note on extractor
+provenance below, which is the trap this suite fell into once already. Plain `ctest` also runs three quarantined reproducers that fail
 on purpose (see below).
 
 Both CI runners were updated to match: `.github/workflows/cmake.yml` and
@@ -136,6 +137,28 @@ is quarantined whole rather than split.
 | `test_game_end.cpp` | `GameEventType::AliensDefeated` / `::XComDefeated`, plus develop-only takeover strings — both cases dropped, leaving the file empty |
 
 ### Cases dropped from surviving files
+
+**Assert develop-only extractor output.** 7 cases in `test_city_rules`. These are a
+category of their own: they compile against master, they are not develop rule changes,
+and they are not master defects. They assert values that only develop's data extractor
+writes out of the UFO2P executable — each case names the EXE offset it was derived
+from — and master's extractor does not produce them.
+
+| Case | Reads |
+| --- | --- |
+| `ufo_mission_preference_loaded` | `GameState::ufo_mission_preference`, UFO2P 0x155164 |
+| `research_prereq_unknown2_any` | EXE `Any`-type research prerequisite graphs, FUN_000aa7a8 |
+| `alien_building_exe_rows` | `research_data` records 88–97 @ 0x13F820 |
+| `craft_ammo_manufacturers` | `applyCraftAmmoManufacturers`, UFO2P 0x13EB6A |
+| `disruptor_multibomb_fragment` | `vehicle_weapons[24]` split scalars @ 0x18B510 |
+| `dimension_probe_manufacturer` | `vehicle_data[20]` manufacturer @ 0x189C8C |
+| `research_item_prereq_gates` | `research_data` prereqType 1 item gates |
+
+They were originally kept because the worktree they were verified in symlinked
+`data/mods/base/base_gamestate` to a checkout on a develop-lineage branch, so they were
+reading that branch's extractor output. `base_gamestate` is generated and untracked, and
+CI builds it from `cd_minimal.iso` with master's extractor — where all seven fail. The
+gate was green only by accident of where the data came from.
 
 **Would not compile — develop-only API.** 51 cases, each naming the symbol master
 lacks:

@@ -88,71 +88,6 @@ static int countPref(const std::list<UFOIncursion::PrimaryMission> &list,
 	return n;
 }
 
-static bool test_ufo_mission_preference_loaded()
-{
-	auto &state = *g_state;
-	TEST_REQUIRE(!state.ufo_mission_preference.empty(),
-	             "ufo_mission_preference empty (re-extract common_gamestate)");
-
-	// UFO2P non-4 0x155164: 20×10 uint16. 3=Inf 1=Atk 2=Sub 5=Over. Last row DEFAULT.
-	auto defIt = state.ufo_mission_preference.find("UFO_MISSION_PREFERENCE_DEFAULT");
-	TEST_REQUIRE(defIt != state.ufo_mission_preference.end() && defIt->second, "DEFAULT missing");
-	const auto &def = *defIt->second;
-	TEST_REQUIRE(def.missionList.size() == 10, "DEFAULT slots {0}", def.missionList.size());
-	auto d = def.missionList.begin();
-	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Infiltration, "DEFAULT[0]");
-	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Attack, "DEFAULT[1]");
-	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Attack, "DEFAULT[2]");
-	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Subversion, "DEFAULT[3]");
-	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Subversion, "DEFAULT[4]");
-	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Subversion, "DEFAULT[5]");
-	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Subversion, "DEFAULT[6]");
-	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Overspawn, "DEFAULT[7]");
-	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Overspawn, "DEFAULT[8]");
-	TEST_REQUIRE(*d++ == UFOIncursion::PrimaryMission::Overspawn, "DEFAULT[9]");
-
-	auto w1It = state.ufo_mission_preference.find("UFO_MISSION_PREFERENCE_1");
-	TEST_REQUIRE(w1It != state.ufo_mission_preference.end() && w1It->second, "week1 missing");
-	TEST_REQUIRE(w1It->second->missionList.size() == 10, "week1 slots {0}",
-	             w1It->second->missionList.size());
-	TEST_REQUIRE(countPref(w1It->second->missionList, UFOIncursion::PrimaryMission::Infiltration) ==
-	                 10,
-	             "week1 all infiltration");
-
-	auto w4It = state.ufo_mission_preference.find("UFO_MISSION_PREFERENCE_4");
-	TEST_REQUIRE(w4It != state.ufo_mission_preference.end() && w4It->second, "week4 missing");
-	TEST_REQUIRE(countPref(w4It->second->missionList, UFOIncursion::PrimaryMission::Infiltration) ==
-	                 9,
-	             "week4 infiltration");
-	TEST_REQUIRE(countPref(w4It->second->missionList, UFOIncursion::PrimaryMission::Attack) == 1,
-	             "week4 attack");
-
-	auto w13It = state.ufo_mission_preference.find("UFO_MISSION_PREFERENCE_13");
-	TEST_REQUIRE(w13It != state.ufo_mission_preference.end() && w13It->second, "week13 missing");
-	TEST_REQUIRE(w13It->second->missionList.size() == 10, "week13 slots {0}",
-	             w13It->second->missionList.size());
-	TEST_REQUIRE(
-	    countPref(w13It->second->missionList, UFOIncursion::PrimaryMission::Infiltration) == 3,
-	    "week13 infiltration");
-	TEST_REQUIRE(countPref(w13It->second->missionList, UFOIncursion::PrimaryMission::Attack) == 3,
-	             "week13 attack");
-	TEST_REQUIRE(countPref(w13It->second->missionList, UFOIncursion::PrimaryMission::Subversion) ==
-	                 2,
-	             "week13 subversion");
-	TEST_REQUIRE(countPref(w13It->second->missionList, UFOIncursion::PrimaryMission::Overspawn) ==
-	                 2,
-	             "week13 overspawn");
-
-	// Week 7 is the first Overspawn slot (EXE 3×7,1,2,5).
-	auto w7It = state.ufo_mission_preference.find("UFO_MISSION_PREFERENCE_7");
-	TEST_REQUIRE(w7It != state.ufo_mission_preference.end() && w7It->second, "week7 missing");
-	TEST_REQUIRE(countPref(w7It->second->missionList, UFOIncursion::PrimaryMission::Overspawn) == 1,
-	             "week7 overspawn");
-	TEST_REQUIRE(countPref(w7It->second->missionList, UFOIncursion::PrimaryMission::Attack) == 1,
-	             "week7 attack");
-	return true;
-}
-
 static bool test_goto_building_fallback()
 {
 	auto &state = *g_state;
@@ -348,42 +283,6 @@ static bool test_research_prereq_all_graphs()
 	return true;
 }
 
-static bool test_research_prereq_unknown2_any()
-{
-	auto &state = *g_state;
-	// FUN_000aa7a8 @ VA 0xAA7A8 / file 0x10CE4C: JMP [unknown2*4+0x9A794] at
-	// file 0x10CF9F (table 0x10CE38). Case 1 is Any of prereqTech[3].
-	// Records 36 / 43 / 45. Fails if the extractor still emits All.
-	struct Case
-	{
-		const char *topic;
-		std::vector<UString> techs;
-	};
-	const Case cases[] = {
-	    {"RESEARCH_THE_ALIEN_GENETIC_STRUCTURE",
-	     {"RESEARCH_MULTIWORM_EGG_AUTOPSY", "RESEARCH_MULTIWORM_AUTOPSY",
-	      "RESEARCH_HYPERWORM_AUTOPSY"}},
-	    {"RESEARCH_ADVANCED_SECURITY_STATION",
-	     {"RESEARCH_LIGHT_DISRUPTOR_BEAM", "RESEARCH_MEDIUM_DISRUPTOR_BEAM",
-	      "RESEARCH_DISRUPTOR_INVERSION_BOMB"}},
-	    {"RESEARCH_ADVANCED_QUANTUM_PHYSICS_LAB",
-	     {"RESEARCH_ALIEN_PROPULSION_SYSTEM", "RESEARCH_ALIEN_CONTROL_SYSTEM",
-	      "RESEARCH_ALIEN_ENERGY_SOURCE"}},
-	};
-	for (const auto &c : cases)
-	{
-		auto it = state.research.topics.find(c.topic);
-		TEST_REQUIRE(it != state.research.topics.end() && it->second, "{0} missing", c.topic);
-		TEST_REQUIRE(hasExactDep(*it->second, ResearchDependency::Type::Any, c.techs),
-		             "{0} lost EXE Any graph", c.topic);
-		for (const auto &dep : it->second->dependencies.research)
-		{
-			TEST_REQUIRE(dep.type != ResearchDependency::Type::All, "{0} must not be All", c.topic);
-		}
-	}
-	return true;
-}
-
 static bool test_alien_building4_keeps_table_prereq()
 {
 	auto &state = *g_state;
@@ -410,54 +309,6 @@ static bool test_alien_building4_keeps_table_prereq()
 	// Patch adds the visit unlock; do not op=delete that list.
 	TEST_REQUIRE(sawDimension, "lost EXE prereq RESEARCH_THE_ALIEN_DIMENSION");
 	TEST_REQUIRE(sawUnlock, "lost patch unlock RESEARCH_UNLOCK_ALIEN_BUILDING_4");
-	return true;
-}
-
-static bool test_alien_building_exe_rows()
-{
-	auto &state = *g_state;
-	// UFO2P non-4 research_data records 88–97 @ 0x13F820. Ten "Alien building"
-	// names; each row keeps its own score / hours / prereqTech.
-	struct Row
-	{
-		const char *topic;
-		int hours;
-		int score;
-		bool wantsDimension;
-	};
-	const Row rows[] = {
-	    {"RESEARCH_ALIEN_BUILDING_0", 38000, 380, false},
-	    {"RESEARCH_ALIEN_BUILDING_1", 42000, 420, false},
-	    {"RESEARCH_ALIEN_BUILDING_2", 32000, 320, false},
-	    {"RESEARCH_ALIEN_BUILDING_3", 46000, 460, false},
-	    {"RESEARCH_ALIEN_BUILDING_4", 30000, 300, true},
-	    {"RESEARCH_ALIEN_BUILDING_5", 44000, 440, false},
-	    {"RESEARCH_ALIEN_BUILDING_6", 34000, 340, false},
-	    {"RESEARCH_ALIEN_BUILDING_7", 40000, 400, false},
-	    {"RESEARCH_ALIEN_BUILDING_8", 36000, 360, false},
-	    {"RESEARCH_ALIEN_BUILDING_9", 48000, 480, false},
-	};
-	for (const auto &row : rows)
-	{
-		auto it = state.research.topics.find(row.topic);
-		TEST_REQUIRE(it != state.research.topics.end() && it->second, "{0} missing", row.topic);
-		TEST_REQUIRE(it->second->man_hours == row.hours, "{0} hours {1}", row.topic,
-		             it->second->man_hours);
-		TEST_REQUIRE(it->second->score == row.score, "{0} score {1}", row.topic, it->second->score);
-		bool sawDimension = false;
-		for (const auto &dep : it->second->dependencies.research)
-		{
-			for (const auto &t : dep.topics)
-			{
-				if (t.id == "RESEARCH_THE_ALIEN_DIMENSION")
-				{
-					sawDimension = true;
-				}
-			}
-		}
-		TEST_REQUIRE(sawDimension == row.wantsDimension, "{0} Dimension gate {1}", row.topic,
-		             sawDimension);
-	}
 	return true;
 }
 
@@ -565,33 +416,6 @@ static bool test_manufacture_disruptor_armor_ids()
 	return true;
 }
 
-static bool test_craft_ammo_manufacturers()
-{
-	auto &state = *g_state;
-	// UFO2P non-4 craft_ammo_manufacturers_data at 0x13EB6A: uint16[15] org index.
-	// Zorium is org 0 (X-COM). Patch vehicle_ammo.xml must not carry
-	// <manufacturer> — applyCraftAmmoManufacturers writes the EXE org.
-	struct Case
-	{
-		const char *ammo;
-		const char *org;
-	};
-	const Case cases[] = {
-	    {"VEQUIPMENTAMMOTYPE_FUSION_POWERFUEL", "ORG_SUPERDYNAMICS"},
-	    {"VEQUIPMENTAMMOTYPE_ELERIUM_115", "ORG_SOLMINE"},
-	    {"VEQUIPMENTAMMOTYPE_ZORIUM", "ORG_X-COM"},
-	    {"VEQUIPMENTAMMOTYPE_DISRUPTOR_BOMB", "ORG_X-COM"},
-	};
-	for (const auto &c : cases)
-	{
-		auto it = state.vehicle_ammo.find(c.ammo);
-		TEST_REQUIRE(it != state.vehicle_ammo.end() && it->second, "{0} missing", c.ammo);
-		TEST_REQUIRE(it->second->manufacturer.id == c.org, "{0} manufacturer {1}", c.ammo,
-		             it->second->manufacturer.id);
-	}
-	return true;
-}
-
 static bool test_craft_ammo_economy_ids()
 {
 	auto &state = *g_state;
@@ -644,132 +468,6 @@ static bool test_vehicle_equipment_ammo_types()
 	auto bolter = state.vehicle_equipment.find("VEQUIPMENTTYPE_BOLTER_4000_LASER_GUN");
 	TEST_REQUIRE(bolter != state.vehicle_equipment.end() && bolter->second, "Bolter missing");
 	TEST_REQUIRE(!bolter->second->ammo_type, "Bolter ammo_type {0}", bolter->second->ammo_type.id);
-	return true;
-}
-
-static bool test_disruptor_multibomb_fragment()
-{
-	auto &state = *g_state;
-	// UFO2P non-4 vehicle_weapons[24] @ 0x18B510 (parent data_idx 15 split_idx 24).
-	// speed 22, accuracy raw 90 → 10, damage 65. Patch must not keep those scalars.
-	auto parent = state.vehicle_equipment.find("VEQUIPMENTTYPE_DISRUPTOR_MULTI-BOMB_LAUNCHER");
-	TEST_REQUIRE(parent != state.vehicle_equipment.end() && parent->second,
-	             "Multi-Bomb launcher missing");
-	TEST_REQUIRE(parent->second->splitIntoTypes.size() == 4, "parent split count {0}",
-	             parent->second->splitIntoTypes.size());
-	for (auto &ref : parent->second->splitIntoTypes)
-	{
-		TEST_REQUIRE(ref.id == "VEQUIPMENTTYPE_DISRUPTOR_MULTI-BOMB_FRAGMENT",
-		             "parent split id {0}", ref.id);
-	}
-	auto frag = state.vehicle_equipment.find("VEQUIPMENTTYPE_DISRUPTOR_MULTI-BOMB_FRAGMENT");
-	TEST_REQUIRE(frag != state.vehicle_equipment.end() && frag->second, "fragment missing");
-	TEST_REQUIRE(frag->second->speed == 22, "fragment speed {0}", frag->second->speed);
-	TEST_REQUIRE(frag->second->accuracy == 10, "fragment accuracy {0}", frag->second->accuracy);
-	TEST_REQUIRE(frag->second->damage == 65, "fragment damage {0}", frag->second->damage);
-	TEST_REQUIRE(frag->second->guided, "fragment must be guided");
-	TEST_REQUIRE(frag->second->turn_rate == 28, "fragment turn {0}", frag->second->turn_rate);
-	TEST_REQUIRE(frag->second->range == 400, "fragment range {0}", frag->second->range);
-	TEST_REQUIRE(frag->second->ttl == 2400, "fragment ttl {0}", frag->second->ttl);
-	TEST_REQUIRE(frag->second->tail_size == 20, "fragment tail {0}", frag->second->tail_size);
-	return true;
-}
-
-static bool test_dimension_probe_manufacturer()
-{
-	auto &state = *g_state;
-	// UFO2P non-4 vehicle_data[20] manufacturer uint16 at 0x189C8C + 20×126 = 5 (Marsec).
-	auto it = state.vehicle_types.find("VEHICLETYPE_DIMENSION_PROBE");
-	TEST_REQUIRE(it != state.vehicle_types.end() && it->second, "DIMENSION_PROBE missing");
-	TEST_REQUIRE(it->second->manufacturer.id == "ORG_MARSEC", "Dimension Probe manufacturer {0}",
-	             it->second->manufacturer.id);
-	return true;
-}
-
-static bool test_research_item_prereq_gates()
-{
-	auto &state = *g_state;
-	// UFO2P non-4 research_data prereqType 1 / prereq 41 → agent_equipment_names[41].
-	auto gun = state.research.topics.find("RESEARCH_DISRUPTOR_GUN");
-	TEST_REQUIRE(gun != state.research.topics.end() && gun->second, "DISRUPTOR_GUN missing");
-	StateRef<AEquipmentType> gunItem{&state, "AEQUIPMENTTYPE_DISRUPTOR_GUN"};
-	auto git = gun->second->dependencies.items.agentItemsRequired.find(gunItem);
-	TEST_REQUIRE(git != gun->second->dependencies.items.agentItemsRequired.end() &&
-	                 git->second == 1,
-	             "Disruptor Gun item gate");
-
-	// prereqType 0 / prereq 6 → vehicle_equipment_names[6] Light Disruptor Beam.
-	auto beam = state.research.topics.find("RESEARCH_LIGHT_DISRUPTOR_BEAM");
-	TEST_REQUIRE(beam != state.research.topics.end() && beam->second,
-	             "LIGHT_DISRUPTOR_BEAM missing");
-	StateRef<VEquipmentType> beamItem{&state, "VEQUIPMENTTYPE_LIGHT_DISRUPTOR_BEAM"};
-	auto bit = beam->second->dependencies.items.vehicleItemsRequired.find(beamItem);
-	TEST_REQUIRE(bit != beam->second->dependencies.items.vehicleItemsRequired.end() &&
-	                 bit->second == 1,
-	             "Light Disruptor Beam item gate");
-
-	// Patch only sets hidden; EXE research_data[60] type 1 / prereq 37.
-	auto dest = state.research.topics.find("RESEARCH_DIMENSION_DESTABILISER");
-	TEST_REQUIRE(dest != state.research.topics.end() && dest->second, "DESTABILISER missing");
-	StateRef<AEquipmentType> destItem{&state, "AEQUIPMENTTYPE_DIMENSION_DESTABILISER"};
-	auto dit = dest->second->dependencies.items.agentItemsRequired.find(destItem);
-	TEST_REQUIRE(dit != dest->second->dependencies.items.agentItemsRequired.end() &&
-	                 dit->second == 1,
-	             "Dimension Destabiliser item gate");
-
-	// EXE research_data[74] type 0 / prereq 48 → last vequip name (NUL at table end).
-	auto shift = state.research.topics.find("RESEARCH_DIMENSION_SHIFTER");
-	TEST_REQUIRE(shift != state.research.topics.end() && shift->second, "SHIFTER missing");
-	StateRef<VEquipmentType> shiftItem{&state, "VEQUIPMENTTYPE_DIMENSION_SHIFTER"};
-	auto sit = shift->second->dependencies.items.vehicleItemsRequired.find(shiftItem);
-	TEST_REQUIRE(sit != shift->second->dependencies.items.vehicleItemsRequired.end() &&
-	                 sit->second == 1,
-	             "Dimension Shifter item gate");
-
-	// prereqType 3: live slot 1 / dead slot 16 / pod slot 13 / Overspawn dead 29.
-	auto sucker = state.research.topics.find("RESEARCH_BRAINSUCKER");
-	TEST_REQUIRE(sucker != state.research.topics.end() && sucker->second, "BRAINSUCKER missing");
-	StateRef<AEquipmentType> liveSucker{&state, "AEQUIPMENTTYPE_BRAINSUCKER_ALIVE"};
-	auto lit = sucker->second->dependencies.items.agentItemsRequired.find(liveSucker);
-	TEST_REQUIRE(lit != sucker->second->dependencies.items.agentItemsRequired.end() &&
-	                 lit->second == 1,
-	             "Brainsucker live gate");
-	auto autopsy = state.research.topics.find("RESEARCH_BRAINSUCKER_AUTOPSY");
-	TEST_REQUIRE(autopsy != state.research.topics.end() && autopsy->second, "AUTOPSY missing");
-	StateRef<AEquipmentType> deadSucker{&state, "AEQUIPMENTTYPE_BRAINSUCKER_DEAD"};
-	auto ait = autopsy->second->dependencies.items.agentItemsRequired.find(deadSucker);
-	TEST_REQUIRE(ait != autopsy->second->dependencies.items.agentItemsRequired.end() &&
-	                 ait->second == 1,
-	             "Brainsucker autopsy gate");
-	auto pods = state.research.topics.find("RESEARCH_BRAINSUCKER_PODS");
-	TEST_REQUIRE(pods != state.research.topics.end() && pods->second, "PODS missing");
-	StateRef<AEquipmentType> podItem{&state, "AEQUIPMENTTYPE_BRAINSUCKER_POD"};
-	auto pit = pods->second->dependencies.items.agentItemsRequired.find(podItem);
-	TEST_REQUIRE(pit != pods->second->dependencies.items.agentItemsRequired.end() &&
-	                 pit->second == 1,
-	             "Brainsucker Pod gate");
-	auto over = state.research.topics.find("RESEARCH_OVERSPAWN_AUTOPSY");
-	TEST_REQUIRE(over != state.research.topics.end() && over->second, "OVERSPAWN_AUTOPSY missing");
-	StateRef<AEquipmentType> deadOver{&state, "AEQUIPMENTTYPE_OVERSPAWN_DEAD"};
-	auto oit = over->second->dependencies.items.agentItemsRequired.find(deadOver);
-	TEST_REQUIRE(oit != over->second->dependencies.items.agentItemsRequired.end() &&
-	                 oit->second == 1,
-	             "Overspawn dead gate");
-	TEST_REQUIRE(over->second->man_hours == 20000, "Overspawn Autopsy hours {0}",
-	             over->second->man_hours);
-	TEST_REQUIRE(over->second->score == 450, "Overspawn Autopsy score {0}", over->second->score);
-	auto overLive = state.research.topics.find("RESEARCH_OVERSPAWN_AUTOPSY_1");
-	TEST_REQUIRE(overLive != state.research.topics.end() && overLive->second,
-	             "OVERSPAWN_AUTOPSY_1 missing");
-	StateRef<AEquipmentType> liveOver{&state, "AEQUIPMENTTYPE_OVERSPAWN_ALIVE"};
-	auto litOver = overLive->second->dependencies.items.agentItemsRequired.find(liveOver);
-	TEST_REQUIRE(litOver != overLive->second->dependencies.items.agentItemsRequired.end() &&
-	                 litOver->second == 1,
-	             "Overspawn live gate");
-	TEST_REQUIRE(overLive->second->man_hours == 25000, "Overspawn Autopsy 1 hours {0}",
-	             overLive->second->man_hours);
-	TEST_REQUIRE(overLive->second->score == 450, "Overspawn Autopsy 1 score {0}",
-	             overLive->second->score);
 	return true;
 }
 
@@ -949,21 +647,14 @@ int main(int argc, char **argv)
 	}
 
 	return runTestSuite({
-	    {"ufo_mission_preference_loaded", test_ufo_mission_preference_loaded},
 	    {"goto_building_fallback", test_goto_building_fallback},
 	    {"manufacture_dimension_probe", test_manufacture_dimension_probe},
 	    {"research_prereq_all_graphs", test_research_prereq_all_graphs},
-	    {"research_prereq_unknown2_any", test_research_prereq_unknown2_any},
 	    {"alien_building4_keeps_table_prereq", test_alien_building4_keeps_table_prereq},
-	    {"alien_building_exe_rows", test_alien_building_exe_rows},
 	    {"manufacture_type02_ammo_ids", test_manufacture_type02_ammo_ids},
 	    {"manufacture_disruptor_armor_ids", test_manufacture_disruptor_armor_ids},
-	    {"craft_ammo_manufacturers", test_craft_ammo_manufacturers},
 	    {"craft_ammo_economy_ids", test_craft_ammo_economy_ids},
 	    {"vehicle_equipment_ammo_types", test_vehicle_equipment_ammo_types},
-	    {"disruptor_multibomb_fragment", test_disruptor_multibomb_fragment},
-	    {"dimension_probe_manufacturer", test_dimension_probe_manufacturer},
-	    {"research_item_prereq_gates", test_research_item_prereq_gates},
 	    {"ufopaedia_alien_craft_group", test_ufopaedia_alien_craft_group},
 	    {"org_raid_loot_table", test_org_raid_loot_table},
 	    {"alien_building_objectives_present", test_alien_building_objectives_present},
