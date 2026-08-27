@@ -20,6 +20,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 include(ccache)
+if(APPLE)
+	include(apple)
+	enable_language(OBJC)
+	enable_language(OBJCXX)
+endif()
 
 # check compiler
 INCLUDE(CheckCXXCompilerFlag)
@@ -33,6 +38,13 @@ option(MSVC_PDB "Always generate PDB files" ON)
 option(ENABLE_TESTS "Build some unit tests" ON)
 option(USE_PCH "Enable precompiled header use during build" OFF)
 option(EXTRACT_DATA "Run the data extractor as part of the default target" ON)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+	set(EXTRACT_DATA OFF CACHE BOOL "Extractor is a host tool" FORCE)
+	set(ENABLE_TESTS OFF CACHE BOOL "Tests are host-only" FORCE)
+	set(BUILD_LAUNCHER OFF CACHE BOOL "Qt launcher is not built for iOS" FORCE)
+	set(USE_PCH OFF CACHE BOOL "" FORCE)
+endif()
 
 set(CD_PATH ${CMAKE_SOURCE_DIR}/data/cd.iso CACHE STRING "Path to cd.iso (used
 by test and extractor")
@@ -114,7 +126,11 @@ add_subdirectory(framework)
 add_subdirectory(forms)
 add_subdirectory(game/state)
 add_subdirectory(game/ui)
-add_subdirectory(tools)
+set(OPENAPOC_SERIALIZE_GEN "" CACHE FILEPATH
+	"Host-built OpenApoc_GamestateSerializeGen, required when cross-compiling")
+if(NOT IOS)
+	add_subdirectory(tools)
+endif()
 add_subdirectory(dependencies)
 add_subdirectory(data/mods/crashing_vehicles)
 
@@ -174,6 +190,7 @@ file(GLOB_RECURSE FORMAT_SOURCES
 		${CMAKE_SOURCE_DIR}/framework/*.cpp
 		${CMAKE_SOURCE_DIR}/framework/*.c
 		${CMAKE_SOURCE_DIR}/framework/*.h
+		${CMAKE_SOURCE_DIR}/framework/*.mm
 		${CMAKE_SOURCE_DIR}/forms/*.cpp
 		${CMAKE_SOURCE_DIR}/forms/*.c
 		${CMAKE_SOURCE_DIR}/forms/*.h
@@ -266,6 +283,13 @@ string(REPLACE "heads/" "branch/" OPENAPOC_VERSION_STRING_RAW ${OPENAPOC_VERSION
 string(MAKE_C_IDENTIFIER "${OPENAPOC_VERSION_STRING_RAW}" OPENAPOC_VERSION_STRING )
 
 configure_file(version.h.in version.h)
+
+if(APPLE)
+	openapoc_configure_apple_app(${CMAKE_PROJECT_NAME})
+	openapoc_add_app_icon(${CMAKE_PROJECT_NAME})
+	openapoc_copy_app_data(${CMAKE_PROJECT_NAME})
+	openapoc_sign_mac_app(${CMAKE_PROJECT_NAME})
+endif()
 
 list(APPEND CLANG_TIDY_OPTIONS
 		-export-fixes=${CLANG_TIDY_FIXES_FILE})

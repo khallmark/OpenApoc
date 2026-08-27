@@ -89,6 +89,10 @@ nbproject/
 
 # Default "out-of-source build" directory
 build/
+# The CMake presets each use their own build directory
+build-ios/
+build-ios-sim/
+build-signed/
 [Tt]emp/
 
 save.zip

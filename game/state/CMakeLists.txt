@@ -218,21 +218,47 @@ endif()
 # the path
 target_include_directories(OpenApoc_GameState PUBLIC ${CMAKE_BINARY_DIR})
 
+# The generator runs on the build machine, so a cross-build cannot use the
+# target: CMakeLists.txt only adds tools/ when NOT IOS. Point
+# OPENAPOC_SERIALIZE_GEN at a host-built copy there.
+#
+# Deliberately not an if(TARGET) test. tools/ is added *after* game/state, so
+# the target does not exist yet at this point on any platform; only the
+# generator expression below, resolved at generate time, ever sees it.
+if(OPENAPOC_SERIALIZE_GEN)
+	set(SERIALIZE_GEN_COMMAND "${OPENAPOC_SERIALIZE_GEN}")
+	set(SERIALIZE_GEN_DEPENDS "${OPENAPOC_SERIALIZE_GEN}")
+elseif(NOT IOS)
+	set(SERIALIZE_GEN_COMMAND $<TARGET_FILE:OpenApoc_GamestateSerializeGen>)
+	set(SERIALIZE_GEN_DEPENDS OpenApoc_GamestateSerializeGen)
+else()
+	message(FATAL_ERROR
+		"OpenApoc_GamestateSerializeGen cannot be cross-compiled and no "
+		"-DOPENAPOC_SERIALIZE_GEN=<path> was given. Build it for the build "
+		"machine first (cmake --preset macos && cmake --build build --target "
+		"OpenApoc_GamestateSerializeGen), then pass the resulting binary.")
+endif()
+
 add_custom_command(OUTPUT
 		gamestate_serialize_generated.h
 		gamestate_serialize_generated.cpp
 		COMMAND
-		$<TARGET_FILE:OpenApoc_GamestateSerializeGen>
+		${SERIALIZE_GEN_COMMAND}
 		-x ${CMAKE_SOURCE_DIR}/game/state/gamestate_serialize.xml
 		-h gamestate_serialize_generated.h
 		-o gamestate_serialize_generated.cpp
 		DEPENDS
-		OpenApoc_GamestateSerializeGen
+		${SERIALIZE_GEN_DEPENDS}
 		${CMAKE_SOURCE_DIR}/game/state/gamestate_serialize.xml)
 
 add_custom_target(generated-source
 		DEPENDS
 		gamestate_serialize_generated.h gamestate_serialize_generated.cpp)
+
+# The generated sources belong to OpenApoc_GameState as well, so the command
+# above is attached to two targets. Xcode's build system rejects that unless one
+# is a dependency of the other.
+add_dependencies(OpenApoc_GameState generated-source)
 
 if (USE_PCH)
 	target_precompile_headers(OpenApoc_GameState PUBLIC gamestate_pch.h)
