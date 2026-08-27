@@ -794,11 +794,11 @@ void Framework::displayInitialise()
 		mode = ScreenMode::Windowed;
 	}
 
-#ifdef SDL_WINDOW_ALLOW_HIGHDPI
 	// Without this the drawable is the window size even on a Retina display, and the whole
 	// frame is upscaled by the compositor instead of rendered at native resolution.
+	// Not guarded: SDL_WINDOW_ALLOW_HIGHDPI is an SDL_WindowFlags enumerator, not a macro,
+	// so an #ifdef around it is always false and silently drops the flag.
 	display_flags |= SDL_WINDOW_ALLOW_HIGHDPI;
-#endif
 
 	int displayNumber = Options::screenDisplayNumberOption.get();
 	if (displayNumber >= SDL_GetNumVideoDisplays())
