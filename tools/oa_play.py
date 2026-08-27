@@ -403,6 +403,43 @@ def _disable_window_restore() -> None:
         pass
 
 
+def free_port(preferred: int) -> int:
+    """A harness port nobody else is using, starting from `preferred`.
+
+    Every driver used to default to one fixed port, and reap_stale_game kills whatever answers to
+    `Harness.Port=<port>` -- so two runs on one machine reaped each other's games on sight. That is
+    not a hypothetical: six attempts in a single generation died to SIGKILL, which cannot be caught,
+    leaves no crash report, and had been getting filed as an engine fault. Five agent sessions were
+    live in the same checkout at the time.
+
+    Binding is the only honest test of whether a port is free; asking pgrep races. Falls back to the
+    preferred port if the whole range is taken, because failing loudly at launch beats guessing.
+    """
+    import socket as _socket
+
+    # Start each PROCESS at its own offset. Probing alone is not enough: the probe socket closes
+    # before the game binds, so two runs launching at the same moment both see the same port free
+    # and both take it. Offsetting by pid means they begin looking in different places, and the
+    # probe then only has to settle the rare genuine overlap.
+    span = 40
+    start = preferred + (os.getpid() % span)
+    for candidate in [start + i - span if start + i >= preferred + span else start + i
+                      for i in range(span)]:
+        with _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM) as probe:
+            probe.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
+            try:
+                probe.bind(("127.0.0.1", candidate))
+            except OSError:
+                continue
+        # Nothing is listening AND nothing is mid-shutdown holding it as a stale game.
+        if not reap_stale_game.__globals__["subprocess"].run(
+            ["pgrep", "-f", f"Harness.Port={candidate}"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip():
+            return candidate
+    return preferred
+
+
 def reap_stale_game(port: int) -> int:
     """Kill any leftover game already using this port. Returns how many were killed.
 

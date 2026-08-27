@@ -36,6 +36,7 @@ from pathlib import Path
 
 from oa_adversarial import Arena, Evaluator, Policy, new_arena, train
 from oa_play import (
+    free_port,
     TICKS_PER_DAY, Driver, GameProcess, Harness, advance, assign_research, buy_interceptor,
     _flying_crewed, base_upkeep, crew_transport, hire_staff, new_game,
     raid_infiltrated_building, recover_crash_sites, return_to_city, sell_ground_fleet,
@@ -372,7 +373,8 @@ class CampaignEvaluator(Evaluator):
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--port", type=int, default=17960)
+    ap.add_argument("--port", type=int, default=0,
+                    help="harness port; 0 picks a free one near 17960")
     ap.add_argument("--repo", default=str(Path(__file__).resolve().parent.parent))
     ap.add_argument("--out", default=None)
     ap.add_argument("--generations", type=int, default=3)
@@ -384,6 +386,7 @@ def main() -> int:
     ap.add_argument("--quiet", action="store_true",
                     help="silence the driver's per-leg narration (default: narrate)")
     args = ap.parse_args()
+    args.port = args.port or free_port(17960)
 
     repo = Path(args.repo)
     out = Path(args.out) if args.out else repo / "build/adversarial"

@@ -275,7 +275,8 @@ def run_one(d: Driver, aliens: dict, map_row: int = 0, real_time: bool = True,
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--port", type=int, default=17900)
+    ap.add_argument("--port", type=int, default=0,
+                    help="harness port; 0 picks a free one near 17900")
     ap.add_argument("--repo", default=str(Path(__file__).resolve().parent.parent))
     ap.add_argument("--out", default=None)
     ap.add_argument("--rounds", type=int, default=5, help="how many battles to fight in a row")
@@ -284,6 +285,7 @@ def main() -> int:
     ap.add_argument("--map-row", type=int, default=0)
     ap.add_argument("--budget", type=float, default=300.0, help="seconds per battle")
     args = ap.parse_args()
+    args.port = args.port or free_port(17900)
 
     aliens = {}
     for spec in args.alien:

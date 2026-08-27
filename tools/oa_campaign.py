@@ -23,6 +23,7 @@ import time
 from pathlib import Path
 
 from oa_play import (
+    free_port,
     Driver,
     GameProcess,
     Harness,
@@ -215,13 +216,15 @@ class Campaign:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--port", type=int, default=17700)
+    ap.add_argument("--port", type=int, default=0,
+                    help="harness port; 0 picks a free one near 17700")
     ap.add_argument("--repo", default=str(Path(__file__).resolve().parent.parent))
     ap.add_argument("--out", default=None)
     ap.add_argument("--difficulty", type=int, default=1, help="1 = Novice")
     ap.add_argument("--hours", type=float, default=48.0)
     ap.add_argument("--leg", type=float, default=3.0, help="game-days per leg")
     args = ap.parse_args()
+    args.port = args.port or free_port(17700)
 
     repo = Path(args.repo)
     out = Path(args.out) if args.out else repo / "build/campaign"
