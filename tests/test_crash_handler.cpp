@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstring>
 #include <iostream>
+#include <csignal>
 #include <stdexcept>
 #include <string>
 
@@ -19,9 +20,17 @@
 #define pclose _pclose
 #endif
 
-static int child()
+static int child(bool segv)
 {
 	OpenApoc::installCrashHandler();
+	if (segv)
+	{
+		// A hard fault never reaches std::terminate, so this exercises the signal path rather
+		// than the exception path. Three segfaults this session produced no stack at all, and
+		// twice that led to fixing the wrong thing because the last log line is not the crash
+		// site.
+		std::raise(SIGSEGV);
+	}
 	throw std::out_of_range("map::at: key not found");
 }
 
@@ -31,7 +40,11 @@ int main(int argc, char **argv)
 	{
 		if (std::strcmp(argv[i], "--do-crash") == 0)
 		{
-			return child();
+			return child(false);
+		}
+		if (std::strcmp(argv[i], "--do-segv") == 0)
+		{
+			return child(true);
 		}
 	}
 
@@ -78,6 +91,29 @@ int main(int argc, char **argv)
 		std::cerr << "--- child output was ---\n" << out << "------------------------\n";
 		return 1;
 	}
-	std::cout << "crash handler reports type, message and a backtrace\n";
+	// Now the signal path.
+	const std::string segvCmd = std::string("\"") + argv[0] + "\" --do-segv 2>&1";
+	FILE *sp = popen(segvCmd.c_str(), "r");
+	if (!sp)
+	{
+		std::cerr << "could not run the segv child\n";
+		return 1;
+	}
+	std::string sout;
+	while (fgets(buf, sizeof(buf), sp))
+	{
+		sout += buf;
+	}
+	pclose(sp);
+	if (sout.find("FATAL: killed by SIGSEGV") == std::string::npos ||
+	    sout.find("FATAL: backtrace follows") == std::string::npos)
+	{
+		std::cerr << "FAILED: a hard fault must name the signal and emit a backtrace\n"
+		          << "--- segv child output ---\n"
+		          << sout << "------------------------\n";
+		return 1;
+	}
+
+	std::cout << "crash handler reports exceptions AND hard faults, with backtraces\n";
 	return 0;
 }
