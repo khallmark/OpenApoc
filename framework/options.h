@@ -23,6 +23,7 @@ extern ConfigOptionInt screenDisplayNumberOption;
 extern ConfigOptionInt screenScaleXOption;
 extern ConfigOptionInt screenScaleYOption;
 extern ConfigOptionBool screenAutoScale;
+extern ConfigOptionInt screenUiScaleOption;
 extern ConfigOptionString languageOption;
 extern ConfigOptionBool mouseCaptureOption;
 

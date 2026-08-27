@@ -45,6 +45,7 @@ void dumpOptionsToLog()
 	dumpOption(screenScaleXOption);
 	dumpOption(screenScaleYOption);
 	dumpOption(screenAutoScale);
+	dumpOption(screenUiScaleOption);
 	dumpOption(languageOption);
 	dumpOption(mouseCaptureOption);
 
@@ -218,9 +219,11 @@ ConfigOptionInt
     audioConcurrentSampleCount("Framework.Audio", "ConcurrentSamples",
                                tr("The number of concurrent samples to play at one time"), 10);
 ConfigOptionInt screenWidthOption("Framework.Screen", "Width",
-                                  tr("Initial screen width (in pixels)"), 1280);
+                                  tr("Initial screen width in pixels (0 = desktop width)"),
+                                  1280);
 ConfigOptionInt screenHeightOption("Framework.Screen", "Height",
-                                   tr("Initial screen height (in pixels)"), 720);
+                                   tr("Initial screen height in pixels (0 = desktop height)"),
+                                   720);
 ConfigOptionString screenModeOption("Framework.Screen", "Mode",
                                     tr("Mode: {windowed,fullscreen,borderless}"), "windowed");
 ConfigOptionInt screenDisplayNumberOption("Framework.Screen", "Display",
@@ -231,8 +234,13 @@ ConfigOptionInt screenScaleYOption("Framework.Screen", "ScaleY",
                                    tr("Scale screen in Y direction by (percent)"), 100);
 ConfigOptionBool screenAutoScale(
     "Framework.Screen", "AutoScale",
-    tr("Automatically scale up game viewport for modern screens (overrides ScaleX and ScaleY)"),
+    tr("Scale the whole game (world + UI) to ~1280-wide. Prefer UiScale to keep UI size and "
+       "expand the map."),
     false);
+ConfigOptionInt screenUiScaleOption(
+    "Framework.Screen", "UiScale",
+    tr("Integer UI scale (1-4). 0 = auto from window width. Does not scale city/battle tiles."),
+    0);
 ConfigOptionString languageOption("Framework", "Language",
                                   tr("The language used ingame (empty for system default)"), "");
 
