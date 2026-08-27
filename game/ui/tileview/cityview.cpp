@@ -3676,6 +3676,13 @@ bool CityView::handleKeyUp(Event *e)
 
 bool CityView::handleMouseDown(Event *e)
 {
+	if (e->mouse().TouchStartedAsPan)
+	{
+		// This touch had already moved past the tap threshold before Framework released the
+		// press (see translateSdlEvents) - it's driving EVENT_FINGER_MOVE panning already, so it
+		// must not also select/attack/move-order whatever was under the finger at press time.
+		return false;
+	}
 	static const std::set<TileObject::Type> sceneryPortalVehicleSet = {
 	    TileObject::Type::Scenery, TileObject::Type::Doodad, TileObject::Type::Vehicle};
 	static const std::set<TileObject::Type> projectileSet = {TileObject::Type::Projectile};

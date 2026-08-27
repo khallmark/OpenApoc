@@ -7,6 +7,10 @@
 #include "framework/sound.h"
 #include "game/state/battle/battle.h"
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
 namespace OpenApoc
 {
 
@@ -23,11 +27,25 @@ TileView::TileView(TileMap &map, Vec3<int> isoTileSize, Vec2<int> stratTileSize,
 
 TileView::~TileView() = default;
 
-void TileView::begin() { autoScroll = config().getBool("Options.Misc.AutoScroll"); }
+// Edge-of-screen "autoscroll" (see EVENT_MOUSE_MOVE below) latches a scroll direction until an
+// *opposing* mouse move arrives - a real pointer always eventually moves away from the edge, but
+// a touch just lifts. A tap or drag that lands or ends inside MOUSE_SCROLL_MARGIN would latch a
+// scroll nothing then clears, so it's meaningless - and actively broken - without a hovering
+// pointer. Touch pans by dragging instead (EVENT_FINGER_MOVE below).
+static bool defaultAutoScroll()
+{
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+	return false;
+#else
+	return config().getBool("Options.Misc.AutoScroll");
+#endif
+}
+
+void TileView::begin() { autoScroll = defaultAutoScroll(); }
 
 void TileView::pause() {}
 
-void TileView::resume() { autoScroll = config().getBool("Options.Misc.AutoScroll"); }
+void TileView::resume() { autoScroll = defaultAutoScroll(); }
 
 void TileView::finish() {}
 

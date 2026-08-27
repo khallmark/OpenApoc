@@ -198,84 +198,10 @@ void Control::eventOccured(Event *e)
 		mouseInside = newInside;
 	}
 
-	if (e->type() == EVENT_FINGER_DOWN || e->type() == EVENT_FINGER_UP ||
-	    e->type() == EVENT_FINGER_MOVE)
-	{
-		// This right now is a carbon copy of mouse event-handling. Maybe we should do something
-		// else?
-		// FIXME: Use something other than mouseInside? fingerInside maybe?
-		bool newInside = isPointInsideControlBounds(e->mouse().X, e->mouse().Y);
-		// (e->finger().X >= resolvedLocation.x && e->finger().X < resolvedLocation.x + Size.x &&
-		//  e->finger().Y >= resolvedLocation.y && e->finger().Y < resolvedLocation.y + Size.y);
-
-		// FIXME: Right now we'll just copy touch data to the mouse location. That's... not exactly
-		// right.
-		// FIXME: We're only doing event processing for the "primary" finger.
-		if (e->finger().IsPrimary || 1)
-		{
-			FrameworkMouseEvent FakeMouseData;
-			FakeMouseData.X = e->finger().X;
-			FakeMouseData.Y = e->finger().Y;
-			FakeMouseData.DeltaX = e->finger().DeltaX;
-			FakeMouseData.DeltaY = e->finger().DeltaY;
-			FakeMouseData.WheelHorizontal = 0;
-			FakeMouseData.WheelVertical = 0;
-			FakeMouseData.Button = 1; // Always left mouse button?
-
-			if (e->type() == EVENT_FINGER_MOVE)
-			{
-				MouseEvent fakeMouseEvent(EVENT_MOUSE_MOVE);
-				fakeMouseEvent.mouse() = FakeMouseData;
-				if (newInside)
-				{
-					if (!mouseInside)
-					{
-						this->pushFormEvent(FormEventType::MouseEnter, &fakeMouseEvent);
-					}
-					this->pushFormEvent(FormEventType::MouseMove, &fakeMouseEvent);
-					e->Handled = true;
-				}
-				else
-				{
-					if (mouseInside)
-					{
-						this->pushFormEvent(FormEventType::MouseLeave, &fakeMouseEvent);
-					}
-				}
-			}
-
-			if (e->type() == EVENT_FINGER_DOWN)
-			{
-				MouseEvent fakeMouseEvent(EVENT_MOUSE_DOWN);
-				fakeMouseEvent.mouse() = FakeMouseData;
-				if (newInside)
-				{
-					this->pushFormEvent(FormEventType::MouseDown, &fakeMouseEvent);
-					mouseDepressed = true;
-
-					// e->Handled = true;
-				}
-			}
-
-			if (e->type() == EVENT_FINGER_UP)
-			{
-				MouseEvent fakeMouseEvent(EVENT_MOUSE_UP);
-				fakeMouseEvent.mouse() = FakeMouseData;
-				if (newInside)
-				{
-					this->pushFormEvent(FormEventType::MouseUp, &fakeMouseEvent);
-
-					if (mouseDepressed)
-					{
-						this->pushFormEvent(FormEventType::MouseClick, &fakeMouseEvent);
-					}
-				}
-				// FIXME: This will result in collisions with real mouse events.
-				mouseDepressed = false;
-			}
-		}
-		mouseInside = newInside;
-	}
+	// EVENT_FINGER_* used to be bridged into fake EVENT_MOUSE_* here for touch support. Now that
+	// iOS has SDL_HINT_TOUCH_MOUSE_EVENTS enabled (see Framework::translateSdlEvents), a touch
+	// already arrives as a genuine EVENT_MOUSE_DOWN/UP/MOVE and is handled by the plain mouse
+	// block above; bridging EVENT_FINGER_* here too would deliver every touch twice.
 
 	if (e->type() == EVENT_KEY_DOWN || e->type() == EVENT_KEY_UP)
 	{

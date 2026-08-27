@@ -1,6 +1,15 @@
 #include "framework/os/display_size.h"
+#include "framework/configfile.h"
+#include "framework/logger.h"
+#include "framework/options.h"
+#include "framework/os/app_paths.h"
+#include "library/strings.h"
 #include <algorithm>
 #include <cstring>
+
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 
 namespace OpenApoc
 {
@@ -90,6 +99,58 @@ bool isFactoryWindowedDefault(int width, int height, const char *mode, bool auto
 		return false;
 	}
 	return mode && std::strcmp(mode, "windowed") == 0;
+}
+
+void applyAppBundleDisplayDefaults(const UString &programPath)
+{
+	if (isPortableMode())
+	{
+		return;
+	}
+
+#ifdef __APPLE__
+#if TARGET_OS_IPHONE
+	(void)programPath;
+	Options::screenWidthOption.set(0);
+	Options::screenHeightOption.set(0);
+	Options::screenModeOption.set("borderless");
+	Options::screenAutoScale.set(false);
+	// The auto rule only reaches 2x above 2560 points, which no iPad is, so a
+	// 640x480 UI would sit in a small box in the middle of a 13-inch screen with
+	// targets far under the ~44pt a finger needs. AutoScale must stay false:
+	// computeUiScale pins the scale back to 1 whenever it is set.
+	Options::screenUiScaleOption.set(2);
+	return;
+#endif
+#endif
+
+	if (!runningFromAppBundle(programPath))
+	{
+		return;
+	}
+	if (config().optionOverridden("Framework.Screen.Width") ||
+	    config().optionOverridden("Framework.Screen.Height") ||
+	    config().optionOverridden("Framework.Screen.Mode") ||
+	    config().optionOverridden("Framework.Screen.AutoScale") ||
+	    config().optionOverridden("Framework.Screen.ScaleX") ||
+	    config().optionOverridden("Framework.Screen.ScaleY") ||
+	    config().optionOverridden("Framework.Screen.UiScale"))
+	{
+		return;
+	}
+	if (!isFactoryWindowedDefault(Options::screenWidthOption.get(),
+	                             Options::screenHeightOption.get(),
+	                             Options::screenModeOption.get().c_str(),
+	                             Options::screenAutoScale.get()))
+	{
+		return;
+	}
+	LogInfo("App bundle: native borderless display with integer UI scale");
+	Options::screenWidthOption.set(0);
+	Options::screenHeightOption.set(0);
+	Options::screenModeOption.set("borderless");
+	Options::screenAutoScale.set(false);
+	Options::screenUiScaleOption.set(0);
 }
 
 } // namespace OpenApoc

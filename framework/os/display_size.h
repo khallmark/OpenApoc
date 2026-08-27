@@ -1,5 +1,6 @@
 #pragma once
 
+#include "library/strings.h"
 #include "library/vec.h"
 
 namespace OpenApoc
@@ -32,8 +33,11 @@ Vec2<int> uiLogicalSize(Vec2<int> displaySize, int uiScale);
 Vec2<int> uiToDisplay(Vec2<int> uiPoint, int uiScale);
 Vec2<int> displayToUi(Vec2<int> displayPoint, int uiScale);
 
-// Whether the screen options are still exactly the compiled-in defaults. Currently only
-// tested: the app-bundle display defaults that consumed it live on the macOS/iOS branch.
+// Whether the screen options are still exactly the compiled-in defaults.
 bool isFactoryWindowedDefault(int width, int height, const char *mode, bool autoScale);
+
+// Finder / iOS: native borderless + auto UI scale when the user has not set
+// Screen.Width/Height/Mode/AutoScale/ScaleX/ScaleY/UiScale. portable.txt skips.
+void applyAppBundleDisplayDefaults(const UString &programPath);
 
 } // namespace OpenApoc

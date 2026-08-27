@@ -4,6 +4,8 @@
 #include "library/sp.h"
 #include "library/strings.h"
 
+#include <cstdint>
+
 namespace OpenApoc
 {
 
@@ -68,6 +70,13 @@ typedef struct FrameworkMouseEvent
 	int DeltaX;
 	int DeltaY;
 	int Button;
+	// True only on the EVENT_MOUSE_DOWN that Framework::translateSdlEvents() releases once a
+	// touch has already moved past the tap-vs-drag threshold before being committed (see the
+	// touch gesture gate there). The same touch is already driving EVENT_FINGER_MOVE panning,
+	// so a screen that acts on MOUSE_DOWN alone (CityView/BattleView's handleMouseDown) must
+	// not also treat it as a select/attack/move-order. Ordinary Controls and press-move-release
+	// drag-and-drop (e.g. equip screens) don't need to look at this - a down is still a down.
+	bool TouchStartedAsPan = false;
 } FrameworkMouseEvent;
 
 typedef struct FrameworkFingerEvent
@@ -77,8 +86,9 @@ typedef struct FrameworkFingerEvent
 	int Y;
 	int DeltaX;
 	int DeltaY;
-	// Touch ID (system-specified)
-	int Id;
+	// Touch ID (system-specified). 64-bit: iOS derives it from a UITouch pointer,
+	// which does not fit in an int.
+	int64_t Id;
 	// Should this be considered a "primary" touch? (first finger?)
 	bool IsPrimary;
 } FrameworkFingerEvent;
