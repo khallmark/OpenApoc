@@ -474,8 +474,7 @@ void Framework::run(sp<Stage> initialStage)
 				profileDrawCalls += this->renderer->takeDrawCallCount();
 				if (++profileSamples >= profileFrames)
 				{
-					const auto avgMs = [profileSamples](std::chrono::steady_clock::duration d)
-					{
+					const auto avgMs = [profileSamples](std::chrono::steady_clock::duration d) {
 						return std::chrono::duration<double, std::milli>(d).count() /
 						       (double)profileSamples;
 					};
