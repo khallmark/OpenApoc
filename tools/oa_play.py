@@ -3288,22 +3288,26 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
         # not a forfeit here -- Battle::exitBattle force-completes the building's researchUnlock
         # on playerWon alone (battle.cpp:3511); only the loot is gated on not having retreated
         # (battle.cpp:2817), and the research is the part the campaign actually needs.
-        # Never leave a base defence voluntarily. Withdrawing forfeits the base itself: every
-        # facility reverts to "unbuilt", the labs, stores and staff go with it, and the campaign
-        # is lost within the hour. Observed exactly that -- five labs went from built and fully
-        # staffed to unbuilt with skill 0 between one research check and the next, the engine
-        # then crashed twice on the dangling base, and the defeat video played. A losing base
-        # defence fought to the end is still better than a conceded one.
-        # ...but "never" was too absolute, and it deadlocked a campaign: two survivors against one
-        # alien they could not reach, every exit blocked, spinning out a forty-minute budget
-        # having already decided the battle was over. Losing a base only ends the game when it is
-        # the LAST base (base.cpp:150-159), so once a second base exists, conceding one is a
-        # setback rather than a defeat -- and far better than burning the clock.
-        try:
-            bases_now = int(b.get("bases", "1") or 1)
-        except ValueError:
-            bases_now = 1
-        may_leave = mission_type != "base_defense" or bases_now > 1
+        # NEVER leave a base defence. Not when losing, not when stalled, not when a second base
+        # exists -- never.
+        #
+        # Withdrawing forfeits the base itself: every facility reverts to "unbuilt", and the labs,
+        # stores and staff go with it. Observed directly -- five labs went from built and fully
+        # staffed to unbuilt with skill 0 between one research check and the next, the engine then
+        # crashed twice on the dangling base, and the defeat video played.
+        #
+        # This rule was softened once, on the reasoning that losing a base only ends the game when
+        # it is the LAST base (base.cpp:150-159), so conceding one with a spare was "a setback
+        # rather than a defeat". That reasoning is wrong in a way the base.cpp citation hides: the
+        # aliens who take the base are still there, the facilities are still gone, and a squad that
+        # walks out has spent its soldiers' lives buying nothing. There is no line of retreat from
+        # your own home -- everything worth defending is behind you, and there is nowhere for it to
+        # go.
+        #
+        # A losing base defence fought to the end is better than a conceded one, and the deadlock
+        # that prompted the softening is a problem to solve by ENDING the battle faster -- hold the
+        # entries, clear the base -- not by leaving it.
+        may_leave = mission_type != "base_defense"
 
         try:
             alive_now = int(mine_alive or 0)

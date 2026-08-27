@@ -158,6 +158,19 @@ check(scores["won intact"] > scores["won pyrrhic"] > scores["withdrew"] > scores
       f"scoring must order outcomes as a campaign would: {scores}")
 check(scores["lost"] == 0.0, f"a wipe scores zero, got {scores['lost']}")
 
+# --- a base defence is never abandoned ---------------------------------------
+# Not when losing, not when stalled, not when a second base exists. Withdrawing forfeits the base:
+# every facility reverts to unbuilt and the labs, stores and staff go with it. The rule was
+# softened once -- "losing a base only ends the game when it is the LAST base" -- and that
+# reasoning is wrong in a way the citation hides: the aliens who take it are still there, the
+# facilities are still gone, and the squad has spent lives buying nothing.
+src_wb = inspect.getsource(oa_play)
+check('may_leave = mission_type != "base_defense"' in src_wb,
+      "a base defence must never be leavable")
+check("bases_now" not in src_wb,
+      "the base COUNT must not enter the decision at all -- owning a spare is not a reason to "
+      "concede your home")
+
 if FAILED:
     print(f"FAILED {len(FAILED)}:")
     for m in FAILED:
