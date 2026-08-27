@@ -955,6 +955,10 @@ void Framework::displayInitialise()
 	}
 	LogInfo("Init display");
 	int display_flags = SDL_WINDOW_OPENGL;
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+	// There is no window manager: the window is the screen, and nothing may letterbox it.
+	display_flags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_BORDERLESS;
+#endif
 #ifdef OPENAPOC_GLES
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 #else
@@ -1058,6 +1062,13 @@ void Framework::displayInitialise()
 	p->context = SDL_GL_CreateContext(p->window);
 	if (!p->context)
 	{
+#ifdef OPENAPOC_GLES
+		// Nothing to fall back to: this build compiles no GL 2.0 renderer at all, so lowering
+		// the requested version would only produce a context no registered renderer can use.
+		LogError("Failed to create OpenGL ES 3.0 context! [SDLerror: {0}]", SDL_GetError());
+		SDL_DestroyWindow(p->window);
+		exit(1);
+#else
 		LogWarning("Could not create GL context! [SDLError: {0}]", SDL_GetError());
 		LogWarning("Attempting to create context by lowering the requested version");
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
@@ -1069,6 +1080,7 @@ void Framework::displayInitialise()
 			SDL_DestroyWindow(p->window);
 			exit(1);
 		}
+#endif
 	}
 	// Output the context parameters
 	LogInfo("Created OpenGL context, parameters:");
@@ -1104,7 +1116,9 @@ void Framework::displayInitialise()
 	SDL_ShowCursor(SDL_DISABLE);
 
 	p->registeredRenderers["GLES_3_0"].reset(getGLES30RendererFactory());
-#ifndef __ANDROID__ // GL2 is not available on Android
+// GL2 is not available on Android, and iOS builds an ES-only framework that does not
+// compile render/gl20 at all (see framework/CMakeLists.txt).
+#if !defined(__ANDROID__) && !defined(OPENAPOC_GLES)
 	p->registeredRenderers["GL_2_0"].reset(getGL20RendererFactory());
 #endif
 

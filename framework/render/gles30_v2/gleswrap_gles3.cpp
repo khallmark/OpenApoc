@@ -25,6 +25,8 @@
 
 #elif defined(GLESWRAP_PLATFORM_MACHO)
 #include <mach-o/dyld.h>
+#elif defined(GLESWRAP_PLATFORM_SDL)
+#include <SDL.h>
 #else
 #error Unknown platform
 #endif
@@ -135,6 +137,10 @@ class Gles3::Gles3Loader
 				return true;
 			}
 			return false;
+#elif defined(GLESWRAP_PLATFORM_SDL)
+			func_pointer =
+			    reinterpret_cast<T>(SDL_GL_GetProcAddress(full_proc_name.c_str()));
+			return func_pointer != nullptr;
 #endif
 		}
 		else
@@ -156,6 +162,10 @@ class Gles3::Gles3Loader
 				if (func_pointer)
 					return true;
 			}
+#elif defined(GLESWRAP_PLATFORM_SDL)
+			func_pointer =
+			    reinterpret_cast<T>(SDL_GL_GetProcAddress(full_proc_name.c_str()));
+			return func_pointer != nullptr;
 #endif
 		}
 		return false;
