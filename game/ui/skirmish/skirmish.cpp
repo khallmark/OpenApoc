@@ -202,7 +202,7 @@ Skirmish::Skirmish(sp<GameState> gameState)
 		        menuform->findControlTyped<Label>("PLAYER_TECH")
 		            ->setText(
 		                menuform->findControlTyped<ScrollBar>("PLAYER_TECH_SLIDER")->getValue() == 0
-		                    ? "NO"
+		                    ? "None"
 		                    : format("{0}",
 		                             menuform->findControlTyped<ScrollBar>("PLAYER_TECH_SLIDER")
 		                                 ->getValue()));
