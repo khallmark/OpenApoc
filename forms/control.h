@@ -73,6 +73,15 @@ class Control : public std::enable_shared_from_this<Control>
 	bool Visible;
 	bool isClickable;
 	bool Removed;
+	// Whether align() was ever called on this axis, and with what. A top-level Form
+	// re-runs the alignment when the window or the UI scale changes, which is what keeps
+	// edge-anchored chrome pinned instead of drifting with its authored coordinates.
+	bool alignedX;
+	bool alignedY;
+	HorizontalAlignment alignmentX;
+	VerticalAlignment alignmentY;
+
+	int uiScale() const;
 
   public:
 	UString Name;
@@ -142,7 +151,11 @@ class Control : public std::enable_shared_from_this<Control>
 	void setParent(sp<Control> Parent);
 	sp<Control> getAncestor(sp<Control> Parent);
 
-	Vec2<int> getLocationOnScreen() const { return resolvedLocation; }
+	// Where this control actually lands on the display, in display pixels.
+	Vec2<int> getLocationOnScreen() const;
+	// The same point in UI space -- the coordinate system the .form files are authored in.
+	Vec2<int> getLocationInUi() const { return resolvedLocation; }
+	Vec2<int> getSizeOnDisplay() const;
 
 	void setRelativeWidth(float widthPercent);
 	void setRelativeHeight(float widthPercent);

@@ -814,6 +814,11 @@ class OGL20Renderer : public Renderer
 	{
 		drawScaledImage(image, position, size, scaler);
 	}
+	void drawScaledTinted(sp<Image> image, Vec2<float> position, Vec2<float> size, Colour tint,
+	                      Scaler scaler = Scaler::Nearest) override
+	{
+		drawScaledImage(image, position, size, scaler, tint);
+	}
 	void drawScaledImage(sp<Image> image, Vec2<float> position, Vec2<float> size,
 	                     Scaler scaler = Scaler::Linear, Colour tint = {255, 255, 255, 255})
 	{

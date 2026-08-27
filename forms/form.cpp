@@ -38,6 +38,27 @@ void Form::onRender() { Control::onRender(); }
 void Form::update()
 {
 	Control::update();
+	// A top-level form is anchored against the window, which can now change size or UI scale
+	// at any time. Re-run whichever alignments were originally requested; without this the
+	// form keeps the absolute Location computed at the size it was built for.
+	if (!getParent())
+	{
+		const Vec2<int> parent = getParentSize();
+		const int scale = uiScale();
+		if (parent != lastAlignParent || scale != lastAlignUiScale)
+		{
+			if (alignedX)
+			{
+				align(alignmentX);
+			}
+			if (alignedY)
+			{
+				align(alignmentY);
+			}
+			lastAlignParent = parent;
+			lastAlignUiScale = scale;
+		}
+	}
 	resolveLocation();
 }
 
