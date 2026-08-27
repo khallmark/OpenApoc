@@ -1003,9 +1003,19 @@ void Framework::displayInitialise()
 
 	// Without this the drawable is the window size even on a Retina display, and the whole
 	// frame is upscaled by the compositor instead of rendered at native resolution.
-	// Not guarded: SDL_WINDOW_ALLOW_HIGHDPI is an SDL_WindowFlags enumerator, not a macro,
-	// so an #ifdef around it is always false and silently drops the flag.
+	// The platform test below is on TARGET_OS_IPHONE, never on SDL_WINDOW_ALLOW_HIGHDPI
+	// itself: that is an SDL_WindowFlags enumerator, not a macro, so an #ifdef around it is
+	// always false and silently drops the flag.
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+	// iOS is the one platform where asking for it is a pure loss. The drawable is always
+	// exactly 2x the window in points, so displaySize (computed in points) can never equal
+	// drawableSize, and displayRefreshSize() therefore builds a scale surface and blits the
+	// whole frame up on every single frame -- {1376,1032} to {2752,2064} on an iPad Pro.
+	// There is nothing to gain in exchange: the art is a 1997 320x200-era tileset that
+	// UiScale is already magnifying 2x, so no Retina detail exists to render into.
+#else
 	display_flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+#endif
 
 	int displayNumber = Options::screenDisplayNumberOption.get();
 	if (displayNumber >= SDL_GetNumVideoDisplays())
