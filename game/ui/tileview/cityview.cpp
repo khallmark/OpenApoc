@@ -2003,11 +2003,11 @@ void CityView::renderCityScene()
 					Vec2<float> targetScreenPos = this->tileToOffsetScreenCoords(targetPos);
 					Vec2<float> attackerScreenPos = this->tileToOffsetScreenCoords(attackerPos);
 
-					fw().renderer->drawLine(
-					    attackerScreenPos, targetScreenPos,
-					    targetVehicle->missions.front().targetVehicle == v ? targetMutualColor
-					    : v->owner == state->getPlayer()                   ? targetXCOMColor
-					                                                       : targetOtherColor);
+					fw().renderer->drawLine(attackerScreenPos, targetScreenPos,
+					                        targetVehicle->missions.front().targetVehicle == v
+					                            ? targetMutualColor
+					                        : v->owner == state->getPlayer() ? targetXCOMColor
+					                                                         : targetOtherColor);
 				}
 			}
 		}
@@ -2025,9 +2025,8 @@ void CityView::renderCityScene()
 				continue;
 			}
 			// Connections
-			auto color = (s.connections.size() > 2 && s.tilePosition.size() > 1)
-			                 ? lineColorEnemy
-			                 : lineColorFriend;
+			auto color = (s.connections.size() > 2 && s.tilePosition.size() > 1) ? lineColorEnemy
+			                                                                     : lineColorFriend;
 			int count = 0;
 			for (auto &c : s.connections)
 			{
@@ -2035,8 +2034,8 @@ void CityView::renderCityScene()
 				    s.connections.front() == c ? s.tilePosition.front() : s.tilePosition.back();
 				thisPos += Vec3<float>{0.5f, 0.5f, 0.0f};
 				auto &s2 = state->current_city->roadSegments[c];
-				Vec3<float> tarPos = s2.connections.front() == i ? s2.tilePosition.front()
-				                                                 : s2.tilePosition.back();
+				Vec3<float> tarPos =
+				    s2.connections.front() == i ? s2.tilePosition.front() : s2.tilePosition.back();
 				tarPos += Vec3<float>{0.5f, 0.5f, 0.0f};
 				fw().renderer->drawLine(
 				    this->tileToOffsetScreenCoords(thisPos),

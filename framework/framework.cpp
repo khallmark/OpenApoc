@@ -841,8 +841,7 @@ void Framework::displayInitialise()
 	}
 
 	SDL_DisplayMode desktop{};
-	if (SDL_GetDesktopDisplayMode(displayNumber, &desktop) != 0 || desktop.w <= 0 ||
-	    desktop.h <= 0)
+	if (SDL_GetDesktopDisplayMode(displayNumber, &desktop) != 0 || desktop.w <= 0 || desktop.h <= 0)
 	{
 		LogWarning("Could not read desktop mode for display {0}: {1}", displayNumber,
 		           SDL_GetError());
@@ -1003,9 +1002,8 @@ void Framework::displayRefreshSize()
 	const bool autoScale = Options::screenAutoScale.get();
 	// Tiles and UI layout use window points. HiDPI backing-store pixels are an
 	// upscale blit, not extra world work.
-	const Vec2<int> newDisplay =
-	    computeDisplaySize(newLogical, Options::screenScaleXOption.get(),
-	                       Options::screenScaleYOption.get(), autoScale);
+	const Vec2<int> newDisplay = computeDisplaySize(newLogical, Options::screenScaleXOption.get(),
+	                                                Options::screenScaleYOption.get(), autoScale);
 	const int newUiScale =
 	    computeUiScale(newDisplay.x, Options::screenUiScaleOption.get(), autoScale);
 

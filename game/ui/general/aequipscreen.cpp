@@ -516,9 +516,9 @@ void AEquipScreen::render()
 			int wound = 0;
 			while (wound < ftw.second && wound < FATAL_WOUND_LOCATIONS[ftw.first].size())
 			{
-				fw().renderer->draw(
-				    woundImage, formMain->getLocationOnScreen() +
-				                    FATAL_WOUND_LOCATIONS[ftw.first][wound] * fw().uiGetScale());
+				fw().renderer->draw(woundImage, formMain->getLocationOnScreen() +
+				                                    FATAL_WOUND_LOCATIONS[ftw.first][wound] *
+				                                        fw().uiGetScale());
 				wound++;
 			}
 		}

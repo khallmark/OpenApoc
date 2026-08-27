@@ -377,9 +377,8 @@ void Control::eventOccured(Event *e)
 				int screenWidth = fw().displayGetWidth();
 				const int s = uiScale();
 
-				Vec2<int> tooltipPos =
-				    uiToDisplay(pos + resolvedLocation, s) -
-				    Vec2<int>{(int)surface->size.x / 2, (int)surface->size.y};
+				Vec2<int> tooltipPos = uiToDisplay(pos + resolvedLocation, s) -
+				                       Vec2<int>{(int)surface->size.x / 2, (int)surface->size.y};
 
 				// Check if the tooltip is off the screen
 				if (tooltipPos.x < 0)

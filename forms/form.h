@@ -13,7 +13,6 @@ class Form : public Control
 	Vec2<int> lastAlignParent{-1, -1};
 	int lastAlignUiScale = 0;
 
-
   protected:
 	void onRender() override;
 

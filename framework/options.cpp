@@ -222,11 +222,9 @@ ConfigOptionInt
     audioConcurrentSampleCount("Framework.Audio", "ConcurrentSamples",
                                tr("The number of concurrent samples to play at one time"), 10);
 ConfigOptionInt screenWidthOption("Framework.Screen", "Width",
-                                  tr("Initial screen width in pixels (0 = desktop width)"),
-                                  1280);
+                                  tr("Initial screen width in pixels (0 = desktop width)"), 1280);
 ConfigOptionInt screenHeightOption("Framework.Screen", "Height",
-                                   tr("Initial screen height in pixels (0 = desktop height)"),
-                                   720);
+                                   tr("Initial screen height in pixels (0 = desktop height)"), 720);
 ConfigOptionString screenModeOption("Framework.Screen", "Mode",
                                     tr("Mode: {windowed,fullscreen,borderless}"), "windowed");
 ConfigOptionInt screenDisplayNumberOption("Framework.Screen", "Display",
@@ -242,8 +240,7 @@ ConfigOptionBool screenAutoScale(
     false);
 ConfigOptionInt screenUiScaleOption(
     "Framework.Screen", "UiScale",
-    tr("Integer UI scale (1-4). 0 = auto from window width. Does not scale city/battle tiles."),
-    0);
+    tr("Integer UI scale (1-4). 0 = auto from window width. Does not scale city/battle tiles."), 0);
 ConfigOptionString languageOption("Framework", "Language",
                                   tr("The language used ingame (empty for system default)"), "");
 
