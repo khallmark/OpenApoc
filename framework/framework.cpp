@@ -965,8 +965,11 @@ void Framework::displayInitialise()
 	LogInfo("Init display");
 	int display_flags = SDL_WINDOW_OPENGL;
 #if defined(__APPLE__) && TARGET_OS_IPHONE
-	// There is no window manager: the window is the screen, and nothing may letterbox it.
-	display_flags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_BORDERLESS;
+	// There is no window manager: the window is the screen. Only BORDERLESS -- asking for
+	// SDL_WINDOW_FULLSCREEN makes SDL adopt the native display mode, which on iOS is the
+	// device's portrait framebuffer, so a landscape-only app gets a landscape drawable on a
+	// portrait screen and UIKit rotates the result ninety degrees.
+	display_flags |= SDL_WINDOW_BORDERLESS;
 #endif
 #ifdef OPENAPOC_GLES
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
