@@ -1857,14 +1857,43 @@ void CityView::resume()
 	refreshBaseView();
 }
 
+// Everything drawMiniBase() reads with the default highlight: the corridor grid and
+// each facility's identity, footprint and build state.
+static size_t miniBaseSignature(const Base &base)
+{
+	size_t hash = 1469598103934665603u;
+	auto mix = [&hash](size_t value) { hash = (hash ^ value) * 1099511628211u; };
+
+	mix(base.facilities.size());
+	for (const auto &column : base.corridors)
+	{
+		for (const bool corridor : column)
+		{
+			mix(corridor ? 1u : 0u);
+		}
+	}
+	for (const auto &facility : base.facilities)
+	{
+		mix(std::hash<const Facility *>{}(facility.get()));
+		mix((size_t)facility->pos.x);
+		mix((size_t)facility->pos.y);
+		mix((size_t)facility->type->size);
+		mix((size_t)facility->buildTime);
+	}
+	return hash;
+}
+
 void CityView::refreshBaseView()
 {
+	// Called every frame while the base tab is up. Rebinding a button re-registers its
+	// click handler, and drawMiniBase() allocates a fresh image that costs a permanent
+	// slot in the renderer's sprite atlas, so both are gated on an actual change.
 	if (miniViews.size() != state->player_bases.size())
 	{
 		this->uiTabs[0]
 		    ->findControlTyped<Label>("TEXT_BASE_NAME")
 		    ->setText(state->current_base->name);
-		for (auto view : miniViews)
+		for (auto &view : miniViews)
 		{
 			view->setData(nullptr);
 			view->setImage(nullptr);
@@ -1874,42 +1903,68 @@ void CityView::refreshBaseView()
 		}
 
 		miniViews.clear();
+		miniViewSignatures.clear();
+
+		int b = 0;
+		for (auto &pair : state->player_bases)
+		{
+			auto &viewBase = pair.second;
+			auto viewName = format("BUTTON_BASE_{0}", ++b);
+			auto view = this->uiTabs[0]->findControlTyped<GraphicButton>(viewName);
+			if (!view)
+			{
+				LogError("Failed to find UI control matching \"{0}\"", viewName);
+				continue;
+			}
+			view->setVisible(true);
+			view->setData(viewBase);
+			auto viewImage = BaseGraphics::drawMiniBase(*viewBase);
+			view->setImage(viewImage);
+			view->setDepressedImage(viewImage);
+			view->ToolTipText = viewBase->name;
+			if (miniViewsWithCallback.insert(view).second)
+			{
+				view->addCallback(
+				    FormEventType::ButtonClick,
+				    [this](FormsEvent *e)
+				    {
+					    auto clickedBase =
+					        StateRef<Base>(this->state.get(), e->forms().RaisedBy->getData<Base>());
+					    if (clickedBase == this->state->current_base)
+					    {
+						    this->setScreenCenterTile(clickedBase->building->crewQuarters);
+					    }
+					    else
+					    {
+						    this->state->current_base = clickedBase;
+						    this->uiTabs[0]
+						        ->findControlTyped<Label>("TEXT_BASE_NAME")
+						        ->setText(this->state->current_base->name);
+					    }
+				    });
+			}
+			miniViews.push_back(view);
+			miniViewSignatures.push_back(miniBaseSignature(*viewBase));
+		}
+		return;
 	}
 
-	int b = 0;
+	size_t index = 0;
 	for (auto &pair : state->player_bases)
 	{
-		auto &viewBase = pair.second;
-		auto viewName = format("BUTTON_BASE_{0}", ++b);
-		auto view = this->uiTabs[0]->findControlTyped<GraphicButton>(viewName);
-		if (!view)
+		if (index >= miniViews.size())
 		{
-			LogError("Failed to find UI control matching \"{0}\"", viewName);
+			break;
 		}
-		view->setVisible(true);
-		view->setData(viewBase);
-		auto viewImage = BaseGraphics::drawMiniBase(*viewBase);
-		view->setImage(viewImage);
-		view->setDepressedImage(viewImage);
-		view->ToolTipText = viewBase->name;
-		view->addCallback(FormEventType::ButtonClick,
-		                  [this](FormsEvent *e)
-		                  {
-			                  auto clickedBase = StateRef<Base>(
-			                      this->state.get(), e->forms().RaisedBy->getData<Base>());
-			                  if (clickedBase == this->state->current_base)
-			                  {
-				                  this->setScreenCenterTile(clickedBase->building->crewQuarters);
-			                  }
-			                  else
-			                  {
-				                  this->state->current_base = clickedBase;
-				                  this->uiTabs[0]
-				                      ->findControlTyped<Label>("TEXT_BASE_NAME")
-				                      ->setText(this->state->current_base->name);
-			                  }
-		                  });
-		miniViews.push_back(view);
+		const size_t signature = miniBaseSignature(*pair.second);
+		if (miniViewSignatures[index] != signature)
+		{
+			miniViewSignatures[index] = signature;
+			auto viewImage = BaseGraphics::drawMiniBase(*pair.second);
+			miniViews[index]->setImage(viewImage);
+			miniViews[index]->setDepressedImage(viewImage);
+		}
+		index++;
 	}
 }
 
