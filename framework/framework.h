@@ -81,6 +81,8 @@ class Framework
 	void displaySetTitle(UString NewTitle);
 	void displaySetIcon(sp<RGBImage> icon);
 	bool displayHasWindow() const;
+	// Read the last rendered frame back off the GPU and write it to a file.
+	bool writeScreenshot(const UString &path);
 	void *getWindowHandle() const;
 
 	// Map coordinates from window to display, for scaled displays

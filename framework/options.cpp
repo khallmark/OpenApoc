@@ -52,6 +52,9 @@ void dumpOptionsToLog()
 	dumpOption(targetFPS);
 	dumpOption(frameLimit);
 	dumpOption(swapInterval);
+	dumpOption(screenshotPath);
+	dumpOption(resizeOnFrame);
+	dumpOption(resizeTo);
 
 	dumpOption(autoScrollOption);
 	dumpOption(actionMusicOption);
@@ -253,6 +256,13 @@ ConfigOptionInt frameLimit("Framework", "FrameLimit",
                            tr("Quit after this many frames - 0 = unlimited"), 0);
 ConfigOptionInt swapInterval("Framework", "SwapInterval",
                              tr("Swap interval (0 = tear, 1 = wait for vsync"), 0);
+ConfigOptionString screenshotPath(
+    "Framework", "Screenshot",
+    tr("Write the last frame to this file before quitting on FrameLimit - empty = off"), "");
+ConfigOptionInt resizeOnFrame("Framework", "ResizeOnFrame",
+                              tr("Resize the window to ResizeTo at this frame - 0 = off"), 0);
+ConfigOptionString resizeTo("Framework", "ResizeTo",
+                            tr("Target size for ResizeOnFrame, as WIDTHxHEIGHT"), "");
 
 ConfigOptionBool autoScrollOption("Options.Misc", "AutoScroll", tr("Enable scrolling with mouse"),
                                   true);

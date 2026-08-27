@@ -30,6 +30,9 @@ extern ConfigOptionBool mouseCaptureOption;
 extern ConfigOptionInt frameLimit;
 extern ConfigOptionInt targetFPS;
 extern ConfigOptionInt swapInterval;
+extern ConfigOptionString screenshotPath;
+extern ConfigOptionInt resizeOnFrame;
+extern ConfigOptionString resizeTo;
 
 extern ConfigOptionBool autoScrollOption;
 extern ConfigOptionBool actionMusicOption;

@@ -331,6 +331,26 @@ void Framework::run(sp<Stage> initialStage)
 
 	bool frame_time_limited_warning_shown = false;
 
+	const UString screenshotFile = Options::screenshotPath.get();
+
+	// Framework.ResizeOnFrame / ResizeTo: drive displaySetSize from a scripted run, so the
+	// re-anchoring that a real drag triggers can be exercised without a human at the window.
+	const size_t resizeFrame = (size_t)std::max(0, Options::resizeOnFrame.get());
+	Vec2<int> resizeTarget{0, 0};
+	if (resizeFrame)
+	{
+		const auto parts = split(Options::resizeTo.get(), "x");
+		if (parts.size() == 2)
+		{
+			resizeTarget = {std::stoi(parts[0]), std::stoi(parts[1])};
+		}
+		else
+		{
+			LogWarning("ResizeOnFrame set but ResizeTo \"{0}\" is not WIDTHxHEIGHT",
+			           Options::resizeTo.get());
+		}
+	}
+
 	while (!p->quitProgram)
 	{
 		auto frame_time_now = std::chrono::steady_clock::now();
@@ -354,6 +374,13 @@ void Framework::run(sp<Stage> initialStage)
 		}
 
 		processEvents();
+
+		if (resizeFrame && frame == resizeFrame && resizeTarget.x > 0 && resizeTarget.y > 0)
+		{
+			LogWarning("ResizeOnFrame {0}: resizing window to {1}", (unsigned long long)frame,
+			           resizeTarget);
+			displaySetSize(resizeTarget);
+		}
 
 		if (p->ProgramStages.isEmpty())
 		{
@@ -416,6 +443,12 @@ void Framework::run(sp<Stage> initialStage)
 			}
 			{
 				this->renderer->flush();
+				// Read back before the swap: the back buffer's contents are undefined
+				// afterwards on some drivers.
+				if (frameCount && frame == frameCount && !screenshotFile.empty())
+				{
+					writeScreenshot(screenshotFile);
+				}
 				this->renderer->newFrame();
 				SDL_GL_SwapWindow(p->window);
 			}
@@ -1288,6 +1321,28 @@ UString Framework::textGetClipboard()
 void Framework::threadPoolTaskEnqueue(std::function<void()> task) { p->threadPool->enqueue(task); }
 
 void *Framework::getWindowHandle() const { return static_cast<void *>(p->window); }
+
+bool Framework::writeScreenshot(const UString &path)
+{
+	if (!p->defaultSurface || !p->defaultSurface->rendererPrivateData)
+	{
+		LogWarning("Screenshot requested before anything was drawn");
+		return false;
+	}
+	auto img = p->defaultSurface->rendererPrivateData->readBack();
+	if (!img)
+	{
+		LogWarning("Screenshot readBack returned no image");
+		return false;
+	}
+	if (!this->data->writeImage(path, img))
+	{
+		LogWarning("Failed to write screenshot \"{0}\"", path);
+		return false;
+	}
+	LogInfo("Wrote screenshot to \"{0}\"", path);
+	return true;
+}
 
 void Framework::setupModDataPaths()
 {
