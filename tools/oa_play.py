@@ -3176,7 +3176,12 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
                 _ai_execute(ai_caps, orders, say=(d.say if rounds % 10 == 0 else None))
                 if rounds % 10 == 0 and orders:
                     d.say(f"  [ai] {ai_brain.name}: "
-                          + ", ".join(f"{o.kind}({o.why})" for o in orders[:3]))
+                          # All of them, not the first three. The base-defence doctrine issues
+                          # seven orders and the decisive one -- choking the entry -- is last, so
+                          # a 3-item cap made it look as though the order was never given. The log
+                          # is the only evidence a run leaves behind; truncating it hides exactly
+                          # the part worth reading.
+                          + ", ".join(f"{o.kind}({o.why})" for o in orders))
             except Exception as exc:
                 ai_failures += 1
                 if ai_failures <= 3:
