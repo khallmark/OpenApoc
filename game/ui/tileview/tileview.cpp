@@ -119,6 +119,20 @@ void TileView::eventOccurred(Event *e)
 			this->setScreenCenterTile(newPos);
 		}
 	}
+	else if (e->type() == EVENT_WINDOW_RESIZE)
+	{
+		refreshDisplaySize();
+	}
+	else if (e->type() == EVENT_WINDOW_DEACTIVATE)
+	{
+		// These latch until an opposing event arrives. Switching away with the pointer at
+		// a screen edge, or with a scroll key held, would otherwise leave the map drifting
+		// in the background - the matching key release goes to whichever app took focus.
+		// Dragging a window edge parks the pointer exactly there, so a resizable window
+		// hits this constantly.
+		scrollLeftM = scrollRightM = scrollUpM = scrollDownM = false;
+		scrollLeftKB = scrollRightKB = scrollUpKB = scrollDownKB = false;
+	}
 	else if (e->type() == EVENT_MOUSE_MOVE)
 	{
 		scrollLeftM = autoScroll && e->mouse().X < MOUSE_SCROLL_MARGIN;
@@ -286,5 +300,11 @@ void TileView::renderStrategyOverlay(Renderer &r)
 	}
 }
 
-void TileView::update() { applyScrolling(); }
+void TileView::refreshDisplaySize() { dpySize = fw().displayGetSize(); }
+
+void TileView::update()
+{
+	refreshDisplaySize();
+	applyScrolling();
+}
 }; // namespace OpenApoc

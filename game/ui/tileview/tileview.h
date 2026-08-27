@@ -175,6 +175,7 @@ class TileView : public Stage, public TileTransform
 	virtual TileViewMode getViewMode() const;
 
 	void applyScrolling();
+	void refreshDisplaySize();
 	void renderStrategyOverlay(Renderer &r);
 };
 }; // namespace OpenApoc
