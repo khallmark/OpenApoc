@@ -586,6 +586,35 @@ _d = {a.kind: a.arg for a in VeteranAI().decide(defended)}
 check(_d.get("set_move_mode") == "group", "one rifle is enough to hold a chokepoint")
 check("move_group" in _d, "…and the civilians are moved out of the way again")
 
+
+# --- you cannot hunt your way out of being wiped out -------------------------
+# `hunting` is true whenever no hostile is VISIBLE -- exactly the state a squad is in while being
+# shot from cover. The withdrawal rule sat BELOW the hunt check, so it was unreachable in the one
+# situation it exists for. Cost a full squad: six out on a UFO recovery, four dead, seven hostiles
+# to two soldiers, and the AI's last decision was "advance together toward the threat".
+_two = [U(1, 10, 10, 0), U(2, 11, 10, 0)]
+_seven = [U(100 + i, 20 + i, 20, 0, hostile=True) for i in range(7)]
+
+visible = Observation(mine=_two, foes=_seven, view_z=0, mission_type="ufo_recovery", mode="rt",
+                      hard_pressed=True)
+check([a.kind for a in VeteranAI().decide(visible)] == ["withdraw"],
+      "7 to 2 with a third lost must withdraw, not manoeuvre")
+
+from_cover = Observation(mine=_two, foes=[], view_z=0, mission_type="ufo_recovery", mode="rt",
+                         hard_pressed=True)
+check([a.kind for a in VeteranAI().decide(from_cover)] == ["withdraw"],
+      "being shot by an enemy you cannot see is not a reason to go looking for it")
+
+home = Observation(mine=_two, foes=[], view_z=0, mission_type="base_defense", mode="rt",
+                   hard_pressed=True)
+check("withdraw" not in {a.kind for a in VeteranAI().decide(home)},
+      "a base defence is never abandoned, however bad it gets")
+
+intact = Observation(mine=[U(i, 10 + i, 10, 0) for i in range(6)], foes=[], view_z=0,
+                     mission_type="ufo_recovery", mode="rt", hard_pressed=False)
+check("search" in {a.kind for a in VeteranAI().decide(intact)},
+      "an unhurt squad with nothing in sight still searches")
+
 if FAILED:
     print(f"FAILED {len(FAILED)}:")
     for m in FAILED:

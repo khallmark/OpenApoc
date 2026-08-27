@@ -145,6 +145,19 @@ class Observation:
         """
         return self.foes_alive == 0 and self.hostiles_remain
 
+    def foes_remaining_ratio(self, mine: int) -> float:
+        """How badly outnumbered, using what is VISIBLE, or the engine's count when nothing is.
+
+        Being shot from cover means foes_alive is 0 while the squad dies, so a ratio built only on
+        what can be seen reads a losing fight as an empty map.
+        """
+        seen = self.foes_alive
+        if seen:
+            return seen / max(1, mine)
+        # Nothing visible but people are still dying: treat it as at least even odds so the
+        # casualty test decides, rather than a zero that says "no threat".
+        return 2.0 if self.hostiles_remain else 0.0
+
     def sweep_floor(self, step: int) -> int:
         """A floor to look at while hunting, cycling over the levels the squad occupies and one
         above them. A squad split across floors -- which is the usual state after a fight moves
@@ -412,6 +425,20 @@ class ScriptedAI(TacticalAI):
         acts: list[Action] = []
         if obs.is_base_defence and obs.entries:
             return self.hold_the_base(obs)
+        # A squad being wiped out cannot hunt its way out of it, and this check has to come
+        # BEFORE deciding how to search. `hunting` is true whenever no hostile is VISIBLE, which
+        # is exactly the state a squad is in while being shot from cover -- so the withdrawal rule
+        # below was unreachable in the one situation it exists for.
+        #
+        # Cost a full squad: six out on a UFO recovery, four dead, seven hostiles to two soldiers,
+        # and the AI's last decision was "advance together toward the threat". It never once
+        # considered leaving, because it never got that far down the function.
+        if (obs.hard_pressed and obs.mission_type != "base_defense"
+                and obs.mine_alive and (obs.foes_remaining_ratio(obs.mine_alive) >= 2.0)):
+            return [Action("withdraw", None,
+                           f"a third of the squad gone and still badly outnumbered -- "
+                           f"leaving with the rest")]
+
         if obs.hunting:
             return self.hunt(obs)
         if obs.foes_alive == 0:
@@ -538,6 +565,20 @@ class VeteranAI(ScriptedAI):
         live_foes = [u for u in obs.foes if u.alive]
         if obs.is_base_defence and obs.entries:
             return self.hold_the_base(obs)
+        # A squad being wiped out cannot hunt its way out of it, and this check has to come
+        # BEFORE deciding how to search. `hunting` is true whenever no hostile is VISIBLE, which
+        # is exactly the state a squad is in while being shot from cover -- so the withdrawal rule
+        # below was unreachable in the one situation it exists for.
+        #
+        # Cost a full squad: six out on a UFO recovery, four dead, seven hostiles to two soldiers,
+        # and the AI's last decision was "advance together toward the threat". It never once
+        # considered leaving, because it never got that far down the function.
+        if (obs.hard_pressed and obs.mission_type != "base_defense"
+                and obs.mine_alive and (obs.foes_remaining_ratio(obs.mine_alive) >= 2.0)):
+            return [Action("withdraw", None,
+                           f"a third of the squad gone and still badly outnumbered -- "
+                           f"leaving with the rest")]
+
         if obs.hunting:
             return self.hunt(obs)
         if not live_foes:
