@@ -308,15 +308,18 @@ void Skirmish::goToBattle(bool customAliens, std::map<StateRef<AgentType>, int> 
 	auto sourceBase = locBase ? locBase : StateRef<Base>(&state, "BASE_1");
 	auto city = sourceBase->building->city;
 
+	// Registered in GameState so the StateRefs below resolve, but deliberately not added
+	// to city->buildings: battle map generation never reads city coordinates, and a
+	// building with default bounds sitting in the city wins Battle::finishBattle's
+	// nearest-building search for retreated aliens.
 	auto newBuilding = mksp<Building>();
-	state.buildings["BUILDING_SKIRMISH"] = newBuilding;
-	city->buildings.emplace_back(&state, "BUILDING_SKIRMISH");
+	state.buildings[Battle::SKIRMISH_BUILDING_ID] = newBuilding;
 
 	auto newBase = mksp<Base>();
-	state.player_bases["BASE_SKIRMISH"] = newBase;
+	state.player_bases[Battle::SKIRMISH_BASE_ID] = newBase;
 
-	StateRef<Building> playerBuilding = {&state, "BUILDING_SKIRMISH"};
-	StateRef<Base> playerBase = {&state, "BASE_SKIRMISH"};
+	StateRef<Building> playerBuilding = {&state, Battle::SKIRMISH_BUILDING_ID};
+	StateRef<Base> playerBase = {&state, Battle::SKIRMISH_BASE_ID};
 
 	playerBuilding->owner = state.getPlayer();
 	playerBuilding->base = playerBase;
@@ -547,7 +550,7 @@ void Skirmish::goToBattle(bool customAliens, std::map<StateRef<AgentType>, int> 
 	sp<Agent> firstAgent;
 	for (auto &a : state.agents)
 	{
-		if (a.second->homeBuilding.id == "BUILDING_SKIRMISH")
+		if (a.second->homeBuilding.id == Battle::SKIRMISH_BUILDING_ID)
 		{
 			firstAgent = a.second;
 			break;
