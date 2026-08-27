@@ -1491,8 +1491,22 @@ class OGL20Renderer : public Renderer
 		{
 			BindTexture p(palTexID, 1);
 		}
-		BindTexture t(img.texID, 0);
-		Quad q(pos, Rect<float>{{0, 0}, {1, 1}});
+		// An atlas-packed sprite has no texture of its own -- texID is still 0 -- so this
+		// path has to sample the page it was packed into, over its sub-rect. Any draw the
+		// batch refuses lands here, a scaled one most of all.
+		GLuint spriteTexID = img.texID;
+		Rect<float> texRect{{0, 0}, {1, 1}};
+		if (img.atlasPage >= 0)
+		{
+			spriteTexID = paletteAtlas.pageTexture(img.atlasPage);
+			constexpr float pageSize = (float)PaletteAtlas::PAGE_SIZE;
+			texRect =
+			    Rect<float>{{(float)img.atlasPos.x / pageSize, (float)img.atlasPos.y / pageSize},
+			                {((float)img.atlasPos.x + img.size.x) / pageSize,
+			                 ((float)img.atlasPos.y + img.size.y) / pageSize}};
+		}
+		BindTexture t(spriteTexID, 0);
+		Quad q(pos, texRect);
 		q.draw(paletteProgram->posLoc, paletteProgram->texcoordLoc);
 	}
 
