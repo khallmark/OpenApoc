@@ -1,0 +1,175 @@
+name: Planning Scope
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  trusted-pr-p-scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate the untrusted head with protected P0 bytes
+        env:
+          EVENT_REPOSITORY: ${{ github.repository }}
+          EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_BASE_REPO_NODE_ID: ${{ github.event.pull_request.base.repo.node_id }}
+          EVENT_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVENT_HEAD_REPO_NODE_ID: ${{ github.event.pull_request.head.repo.node_id }}
+          EVENT_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          WORKFLOW_SOURCE_SHA: ${{ github.workflow_sha }}
+          PULL_REQUEST_TARGET_SHA: ${{ github.sha }}
+        run: |
+          readonly repository_url='https://github.com/khallmark/OpenApoc.git'
+          readonly trust_ref='refs/tags/planning-scope-trust-v1'
+          readonly receipt_ref='refs/tags/planning-scope-trust-v1-receipt'
+          readonly sha_pattern='^[0-9a-f]{40}$'
+
+          if [[ "$EVENT_REPOSITORY" != 'khallmark/OpenApoc' ||
+                "$EVENT_BASE_REPO_NODE_ID" != 'R_kgDOUBJ-Dg' ||
+                "$EVENT_BASE_REF" != 'develop' ||
+                ! "$EVENT_PR_NUMBER" =~ ^[1-9][0-9]{0,9}$ ||
+                ! "$EVENT_BASE_SHA" =~ $sha_pattern ||
+                ! "$EVENT_HEAD_SHA" =~ $sha_pattern ||
+                ! "$WORKFLOW_SOURCE_SHA" =~ $sha_pattern ||
+                ! "$PULL_REQUEST_TARGET_SHA" =~ $sha_pattern ]]; then
+            echo 'pull_request_target event identity is outside the trusted P0 grammar' >&2
+            exit 1
+          fi
+          if [[ "$WORKFLOW_SOURCE_SHA" != "$EVENT_BASE_SHA" ||
+                "$PULL_REQUEST_TARGET_SHA" != "$EVENT_BASE_SHA" ]]; then
+            echo 'workflow source, pull_request_target SHA, and event base are not identical' >&2
+            exit 1
+          fi
+
+          umask 077
+          bootstrap_root="$(mktemp -d "${RUNNER_TEMP}/openapoc-planning-scope.XXXXXX")"
+          readonly bootstrap_root
+          trap 'rm -rf -- "$bootstrap_root"' EXIT
+          readonly bare_repo="$bootstrap_root/trust.git"
+          readonly exec_root="$bootstrap_root/exec"
+          mkdir -p "$exec_root"
+
+          export GIT_CONFIG_NOSYSTEM=1
+          export GIT_CONFIG_GLOBAL=/dev/null
+          export GIT_NO_REPLACE_OBJECTS=1
+          export GIT_OPTIONAL_LOCKS=0
+          export GIT_PROTOCOL_FROM_USER=0
+          export GIT_TERMINAL_PROMPT=0
+
+          git init --bare --quiet "$bare_repo"
+          trusted_git=(
+            git --no-pager --no-replace-objects
+            -c core.hooksPath=/dev/null
+            -c protocol.file.allow=never
+            -c protocol.ext.allow=never
+            -c diff.external=
+            --git-dir "$bare_repo"
+          )
+          "${trusted_git[@]}" fetch --quiet --force --no-tags --no-write-fetch-head \
+            "$repository_url" \
+            '+refs/heads/develop:refs/trusted/event-base' \
+            "+${trust_ref}:refs/trusted/anchor-tag" \
+            "+${receipt_ref}:refs/trusted/anchor-receipt-tag"
+
+          resolved_base="$("${trusted_git[@]}" rev-parse 'refs/trusted/event-base^{commit}')"
+          readonly resolved_base
+          if [[ ! "$resolved_base" =~ $sha_pattern || "$resolved_base" != "$EVENT_BASE_SHA" ]]; then
+            echo 'fetched default branch is not the immutable event base' >&2
+            exit 1
+          fi
+
+          direct_tag_target() {
+            local ref="$1"
+            local expected_name="$2"
+            local object_id object_type target target_type tag_name
+            object_id="$("${trusted_git[@]}" rev-parse "$ref")"
+            object_type="$("${trusted_git[@]}" cat-file -t "$object_id")"
+            target="$("${trusted_git[@]}" cat-file -p "$object_id" | sed -n '1s/^object //p')"
+            target_type="$("${trusted_git[@]}" cat-file -p "$object_id" | sed -n '2s/^type //p')"
+            tag_name="$("${trusted_git[@]}" cat-file -p "$object_id" | sed -n '3s/^tag //p')"
+            if [[ ! "$object_id" =~ $sha_pattern || "$object_type" != 'tag' ||
+                  ! "$target" =~ $sha_pattern || "$target_type" != 'commit' ||
+                  "$tag_name" != "$expected_name" ||
+                  "$("${trusted_git[@]}" cat-file -t "$target")" != 'commit' ]]; then
+              echo "protected ref is not the exact direct annotated tag: $ref" >&2
+              exit 1
+            fi
+            printf '%s\n' "$target"
+          }
+
+          anchor_commit="$(direct_tag_target refs/trusted/anchor-tag planning-scope-trust-v1)"
+          readonly anchor_commit
+          receipt_commit="$(direct_tag_target refs/trusted/anchor-receipt-tag planning-scope-trust-v1-receipt)"
+          readonly receipt_commit
+          if [[ "$anchor_commit" != "$receipt_commit" ]]; then
+            echo 'trust and receipt tags do not target the same P0 commit' >&2
+            exit 1
+          fi
+          if ! "${trusted_git[@]}" merge-base --is-ancestor "$anchor_commit" "$resolved_base"; then
+            echo 'P0 trust anchor is not an ancestor of the event base' >&2
+            exit 1
+          fi
+
+          trust_paths=(
+            '.github/workflows/cmake.yml'
+            '.github/workflows/harness.yml'
+            '.github/workflows/lint.yml'
+            '.github/workflows/planning-scope.yml'
+            'docs/timing/pr-p-policy-v1.json'
+            'tools/validate_pr_p_scope.py'
+          )
+          for trust_path in "${trust_paths[@]}"; do
+            anchor_entry="$("${trusted_git[@]}" ls-tree "$anchor_commit" -- "$trust_path")"
+            base_entry="$("${trusted_git[@]}" ls-tree "$resolved_base" -- "$trust_path")"
+            anchor_metadata="${anchor_entry%%$'\t'*}"
+            anchor_path="${anchor_entry#*$'\t'}"
+            if [[ ! "$anchor_metadata" =~ ^100644\ blob\ [0-9a-f]{40}$ ||
+                  "$anchor_path" != "$trust_path" ||
+                  "$base_entry" != "$anchor_entry" ]]; then
+              echo "event-base trust-root blob differs from protected P0: $trust_path" >&2
+              exit 1
+            fi
+          done
+          "${trusted_git[@]}" ls-tree -r -z "$anchor_commit" -- '.github/workflows' > "$bootstrap_root/anchor-workflows"
+          "${trusted_git[@]}" ls-tree -r -z "$resolved_base" -- '.github/workflows' > "$bootstrap_root/base-workflows"
+          if ! cmp -s "$bootstrap_root/anchor-workflows" "$bootstrap_root/base-workflows"; then
+            echo 'event-base workflow tree differs from protected P0' >&2
+            exit 1
+          fi
+
+          validator_oid="$("${trusted_git[@]}" ls-tree "$anchor_commit" -- 'tools/validate_pr_p_scope.py' | awk '{print $3}')"
+          policy_oid="$("${trusted_git[@]}" ls-tree "$anchor_commit" -- 'docs/timing/pr-p-policy-v1.json' | awk '{print $3}')"
+          if [[ ! "$validator_oid" =~ $sha_pattern || ! "$policy_oid" =~ $sha_pattern ]]; then
+            echo 'trusted validator or policy blob is missing' >&2
+            exit 1
+          fi
+          "${trusted_git[@]}" cat-file blob "$validator_oid" > "$exec_root/validate_pr_p_scope.py"
+          "${trusted_git[@]}" cat-file blob "$policy_oid" > "$exec_root/pr-p-policy-v1.json"
+          chmod 0444 "$exec_root/validate_pr_p_scope.py" "$exec_root/pr-p-policy-v1.json"
+
+          cd "$exec_root"
+          env -i PATH="$PATH" LANG=C LC_ALL=C \
+            python3 -I -S -B validate_pr_p_scope.py --self-test
+          env -i PATH="$PATH" LANG=C LC_ALL=C \
+            python3 -I -S -B validate_pr_p_scope.py \
+              --policy pr-p-policy-v1.json \
+              --repository "$EVENT_REPOSITORY" \
+              --pr-number "$EVENT_PR_NUMBER" \
+              --event-base-repo-node-id "$EVENT_BASE_REPO_NODE_ID" \
+              --event-base-ref "$EVENT_BASE_REF" \
+              --event-base-sha "$EVENT_BASE_SHA" \
+              --event-head-repo-node-id "$EVENT_HEAD_REPO_NODE_ID" \
+              --event-head-ref "$EVENT_HEAD_REF" \
+              --event-head-sha "$EVENT_HEAD_SHA" \
+              --workflow-sha "$WORKFLOW_SOURCE_SHA" \
+              --github-sha "$PULL_REQUEST_TARGET_SHA"

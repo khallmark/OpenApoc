@@ -2,16 +2,55 @@ name: Harness
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   ignored-binaries:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out the exact pull-request head
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Check out the pushed head
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Confirm depot, ISO, and Ghidra DBs stay ignored
         run: ./tools/check_ignored_binaries.sh
+      - name: Planning candidate defense-in-depth checks
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.base.repo.node_id == 'R_kgDOUBJ-Dg' &&
+          github.event.pull_request.head.repo.node_id == 'R_kgDOUBJ-Dg' &&
+          github.event.pull_request.base.ref == 'develop' &&
+          github.event.pull_request.head.ref == 'khallmark/render-simulation-design'
+        env:
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 tools/test_pr_p_scope.py --base "$EVENT_BASE_SHA" --head "$EVENT_HEAD_SHA"
       - name: Compare report matches in-repo sources
         run: python3 tools/regen_compare_report.py --check
       - name: Compare report ordering is deterministic
         run: python3 tools/test_regen_compare_report.py
+      - name: Timing source capture is structurally locked
+        if: hashFiles('tools/test_capture_timing_sources.py') != ''
+        run: python3 tools/test_capture_timing_sources.py
+      - name: Timing source snapshots verify offline
+        if: hashFiles('tools/capture_timing_sources.py') != ''
+        run: python3 tools/capture_timing_sources.py verify-offline
+      - name: Timing train scope is structurally locked
+        if: hashFiles('tools/test_timing_train_scope.py') != ''
+        run: python3 tools/test_timing_train_scope.py
+      - name: Every frozen timing source has an exact disposition
+        if: hashFiles('tools/test_timing_source_disposition.py') != ''
+        run: python3 tools/test_timing_source_disposition.py
       - name: Cold Skirmish entry follows MainMenu
         run: python3 tools/test_oa_skirmish.py
