@@ -308,6 +308,15 @@ class ScriptedAI(TacticalAI):
         acts: list[Action] = []
         refuge = obs.refuge()
         if obs.noncombatants and refuge:
+            # SELECT them first. A move order goes to whoever is currently selected, and the
+            # squad selection from the previous round is still live -- so without this the
+            # order reached the soldiers, the civilians never moved, and they were killed where
+            # they stood. Observed dropping 21 -> 20 -> 18 -> 15 while this rule "ran" every
+            # round. Same shape as crewing the transport after the raid that needed it: the
+            # capability was right and the ordering made it act on the wrong units.
+            acts.append(Action("select_units",
+                               [u.uid for u in obs.noncombatants],
+                               f"take hold of {len(obs.noncombatants)} non-combatants first"))
             acts.append(Action("move_group", (refuge["x"], refuge["y"]),
                                f"{len(obs.noncombatants)} non-combatants to {refuge['type']}, "
                                f"furthest from every entry"))

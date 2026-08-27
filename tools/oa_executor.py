@@ -269,6 +269,14 @@ def execute(caps, actions: list, say=None) -> int:
                 # battle_positions gives in TILE space. Declared unsupported rather than faked:
                 # a wrong click is worse than a skipped order.
                 ok = False
+            elif k == "select_units":
+                # Named units, not "the first n on screen". Ctrl-click each one's click point so
+                # a following move order reaches exactly them.
+                obs_now = observe(caps)
+                wanted = set(a.arg or [])
+                points = [u.click_point for u in obs_now.mine
+                          if u.uid in wanted and u.click_point]
+                ok = bool(points) and caps.select_points(points)
             elif k == "move_group":
                 # A destination in TILE space, unlike "move" which names a unit. The executor
                 # asks the engine where that tile is drawn rather than guessing a pixel.

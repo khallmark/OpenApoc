@@ -145,6 +145,30 @@ class Capabilities:
         except Exception:
             return False
 
+    def select_points(self, points: list) -> bool:
+        """Ctrl-click each of these screen points, replacing the current selection.
+
+        select_units() takes "the first n friendlies on screen", which is the wrong tool when the
+        AI has named WHICH units it means -- moving the non-combatants needs the non-combatants
+        selected, not whoever happens to be listed first.
+        """
+        if not points:
+            return False
+        try:
+            self.d.h.send("keydown Left Ctrl")
+            P.settle(self.d)
+            for sx, sy in points:
+                self.d.h.click_xy(sx, sy)
+                time.sleep(0.06)
+            return True
+        except Exception:
+            return False
+        finally:
+            try:
+                self.d.h.send("keyup Left Ctrl")
+            except Exception:
+                pass
+
     def base_facilities(self) -> dict:
         """The defending base's facility layout, or {} when this is not a base defence."""
         try:

@@ -523,6 +523,21 @@ check(_acts.get("set_move_mode") == "group", "hold as one body")
 check(_acts.get("set_stance") == "kneel", "dug in on the door while nothing is visible")
 check("move_group" in _acts, "orders must actually be issued, not just computed")
 
+# A move order goes to whoever is SELECTED. The squad selection from the previous round is still
+# live, so the non-combatants must be taken hold of BEFORE they are told to move -- otherwise the
+# order reaches the soldiers and the civilians are killed where they stand. Observed exactly that
+# in a live base defence: 21 -> 20 -> 18 -> 15 while this rule "ran" every round.
+_kinds = [a.kind for a in VeteranAI().decide(quiet)]
+check("select_units" in _kinds, "non-combatants must be selected before being moved")
+check(_kinds.index("select_units") < _kinds.index("move_group"),
+      f"selection must come FIRST -- ordering is the whole bug: {_kinds}")
+_sel = next(a for a in VeteranAI().decide(quiet) if a.kind == "select_units")
+check(set(_sel.arg) == {u.uid for u in quiet.noncombatants},
+      "it must select exactly the non-combatants, not the squad")
+# And the squad is re-selected afterwards, or the press order would move civilians into contact.
+check(_kinds.index("select_squad") > _kinds.index("move_group"),
+      f"the squad must be re-taken after the civilians are sent away: {_kinds}")
+
 # With a hostile visible, press it -- and press the one nearest a door.
 _near = U(90, 5, 5, 0, hostile=True)
 _far = U(91, 25, 25, 0, hostile=True)
