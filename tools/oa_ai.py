@@ -302,7 +302,27 @@ class ScriptedAI(TacticalAI):
         It should be fast, and it should never be a question of where the aliens are.
         """
         entries = obs.entries
-        alive = max(1, len(obs.combatants))
+        combatants = obs.combatants
+        alive = max(1, len(combatants))
+
+        # A base with NO armed unit in it cannot hold anything, and the rest of this doctrine
+        # actively makes it worse: grouping the staff into one far room is handing a single alien
+        # a queue to work through. Observed exactly that -- 15 of 15 unarmed, one hostile, and the
+        # count falling 15 -> 14 -> 12 while the AI kept ordering a chokepoint nobody could man.
+        #
+        # Scatter instead. Spread out, keep moving, stay away: ten people in ten directions is ten
+        # separate problems for one alien, and every second they survive is a second the campaign
+        # has to send someone. It is not a defence -- there isn't one to mount -- it is the least
+        # bad thing available, and the real error was upstream, leaving the base ungarrisoned.
+        if not combatants:
+            return [
+                Action("select_units", [u.uid for u in obs.noncombatants],
+                       f"{len(obs.noncombatants)} unarmed staff and no squad: nobody can hold a "
+                       f"door"),
+                Action("set_move_mode", "individual", "scatter; do not queue up for one alien"),
+                Action("set_stance", "run", "distance is the only cover they have"),
+                Action("search", obs.stalls, "keep moving, away from wherever it is"),
+            ]
 
         # 1. Non-combatants to the far corner. Only worth ordering while they still exist.
         acts: list[Action] = []

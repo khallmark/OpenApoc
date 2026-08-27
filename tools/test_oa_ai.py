@@ -559,6 +559,33 @@ ufo = Observation(mine=_squad, foes=[], view_z=0, mission_type="ufo_recovery", m
                   facilities=FACILITIES)
 check("search" in {a.kind for a in VeteranAI().decide(ufo)}, "a UFO recovery is still a hunt")
 
+# A base with no armed unit cannot hold anything, and the rest of the doctrine makes it WORSE:
+# grouping the staff into one far room hands a single alien a queue to work through. Observed --
+# 15 unarmed, one hostile, count falling 15 -> 14 -> 12 while the AI ordered a chokepoint nobody
+# could man. Scatter instead: ten people in ten directions are ten problems for one alien.
+_only_civs = [U(200 + i, 10 + i, 10, 0) for i in range(10)]
+for _c in _only_civs:
+    _c.armed = False
+undefended = Observation(mine=_only_civs, foes=[], view_z=0, mission_type="base_defense",
+                         mode="rt", facilities=FACILITIES)
+_u = {a.kind: a.arg for a in VeteranAI().decide(undefended)}
+check(_u.get("set_move_mode") == "individual",
+      f"with nobody armed they must SCATTER, not group: {_u.get('set_move_mode')}")
+check("move_group" not in _u, "never gather defenceless people into one room")
+check(_u.get("set_stance") == "run", "distance is the only cover they have")
+check("search" in _u, "keep moving rather than standing still to be found")
+check("select_squad" not in _u, "there is no squad to select")
+
+# One armed unit is still a defence, and must go back to holding the door.
+_mixed = list(_only_civs)
+_gun = U(300, 9, 9, 0)
+_mixed.append(_gun)
+defended = Observation(mine=_mixed, foes=[], view_z=0, mission_type="base_defense", mode="rt",
+                       facilities=FACILITIES)
+_d = {a.kind: a.arg for a in VeteranAI().decide(defended)}
+check(_d.get("set_move_mode") == "group", "one rifle is enough to hold a chokepoint")
+check("move_group" in _d, "…and the civilians are moved out of the way again")
+
 if FAILED:
     print(f"FAILED {len(FAILED)}:")
     for m in FAILED:
