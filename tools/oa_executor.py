@@ -78,6 +78,29 @@ def make_ai(name: str, **kw) -> TacticalAI:
     return cls(**kw)
 
 
+def parse_from(src: dict, field: str) -> list:
+    """Parse the "x,y,z:key=value:..." entry list used by several harness queries."""
+    out = []
+    raw = (src or {}).get(field, "-")
+    if not raw or raw == "-":
+        return out
+    for part in raw.split(";"):
+        chunks = part.split(":")
+        bits = chunks[0].split(",")
+        if len(bits) < 3:
+            continue
+        fields = {}
+        for c in chunks[1:]:
+            if "=" in c:
+                key, _, val = c.partition("=")
+                fields[key] = val
+        try:
+            out.append((int(bits[0]), int(bits[1]), int(bits[2]), fields))
+        except ValueError:
+            continue
+    return out
+
+
 def observe(caps, stalls: int = 0, last_event_z=None) -> Observation:
     """Build an Observation from what the harness can see. No interpretation, no judgement."""
     pos = caps.battle_positions()
@@ -119,7 +142,8 @@ def observe(caps, stalls: int = 0, last_event_z=None) -> Observation:
 
     mine = [Unit(1000 + i, x, y, z, kind=f.get("kind", ""),
                  sx=as_int(f, "sx"), sy=as_int(f, "sy"),
-                 cx=as_int(f, "cx"), cy=as_int(f, "cy"), large=f.get("large") == "1")
+                 cx=as_int(f, "cx"), cy=as_int(f, "cy"), large=f.get("large") == "1",
+                 armed=f.get("armed", "1") != "0")
             for i, (x, y, z, f) in enumerate(parse("mine_at"))]
     foes = [Unit(2000 + i, x, y, z, hostile=True, kind=f.get("kind", ""),
                  sx=as_int(f, "sx"), sy=as_int(f, "sy"),
@@ -146,7 +170,19 @@ def observe(caps, stalls: int = 0, last_event_z=None) -> Observation:
     started, standing = count("mine"), count("mine_alive")
     hard_pressed = started > 0 and standing * 3 <= started * 2
 
-    return Observation(mine=mine, foes=foes, view_z=view_z, stalls=stalls,
+    # The defending base's facility layout. Only present on a base defence, and only what the
+    # base screen shows: which facility is where. This is what turns a base defence from a search
+    # into a geometry problem with a known answer.
+    facilities = []
+    if st.get("mission_type") == "base_defense":
+        try:
+            for x, y, z, f in parse_from(caps.base_facilities(), "at"):
+                facilities.append({"x": x, "y": y, "type": f.get("type", ""),
+                                   "sx": as_int(f, "sx"), "sy": as_int(f, "sy")})
+        except Exception:
+            facilities = []
+
+    return Observation(mine=mine, foes=foes, view_z=view_z, stalls=stalls, facilities=facilities,
                        hostiles_remain=str(st.get("in_battle", "1")) != "0",
                        hard_pressed=hard_pressed,
                        mission_type=st.get("mission_type", "unknown"),
@@ -233,6 +269,10 @@ def execute(caps, actions: list, say=None) -> int:
                 # battle_positions gives in TILE space. Declared unsupported rather than faked:
                 # a wrong click is worse than a skipped order.
                 ok = False
+            elif k == "move_group":
+                # A destination in TILE space, unlike "move" which names a unit. The executor
+                # asks the engine where that tile is drawn rather than guessing a pixel.
+                ok = caps.move_to_tile(*a.arg) if isinstance(a.arg, (tuple, list)) else False
             elif k == "search":
                 # Send the squad somewhere it has not been. The AI works in tile space and has no
                 # idea how big the window is, so the sweep pattern lives here where the screen is

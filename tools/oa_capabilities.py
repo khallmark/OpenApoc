@@ -145,6 +145,30 @@ class Capabilities:
         except Exception:
             return False
 
+    def base_facilities(self) -> dict:
+        """The defending base's facility layout, or {} when this is not a base defence."""
+        try:
+            return self.d.h.gs("base_facilities") or {}
+        except Exception:
+            return {}
+
+    def move_to_tile(self, tx: int, ty: int, tz: int = 0) -> bool:
+        """Order the selected units to a TILE, letting the engine say where that is on screen.
+
+        The AI reasons in tiles because the base layout is in tiles; only the engine knows the
+        current camera. Refuses rather than guessing when the tile is off screen -- a wrong click
+        in a base defence puts the squad in a corridor instead of on the door.
+        """
+        try:
+            info = self.d.h.gs(f"tile_screen {int(tx)} {int(ty)} {int(tz)}")
+            sx, sy = int(info.get("sx", -1)), int(info.get("sy", -1))
+            if sx < 0 or sy < 0:
+                return False
+            self.d.h.click_xy(sx, sy)
+            return True
+        except Exception:
+            return False
+
     def sweep(self, step: int, split: bool = True) -> bool:
         """Send the selected units to a point on a search pattern, a different one each step.
 

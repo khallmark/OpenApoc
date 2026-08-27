@@ -487,6 +487,63 @@ check(not seen.hunting, "a visible hostile is not a hunt")
 check("search" not in {a.kind for a in VeteranAI().decide(seen)},
       "…and the squad must go back to fighting it")
 
+
+# --- base defence: control the base, never search it -------------------------
+# Aliens enter through the access lift and the vehicle repair bay and nowhere else, so this is a
+# geometry problem with a known answer. Treating it as a hunt produced the worst results of every
+# run: 0 of 15 survivors, a squad scattered across a base it should have been holding.
+FACILITIES = [
+    {"x": 4,  "y": 4,  "type": "FACILITYTYPE_ACCESS_LIFT"},
+    {"x": 30, "y": 4,  "type": "FACILITYTYPE_VEHICLE_REPAIR_BAY"},
+    {"x": 17, "y": 30, "type": "FACILITYTYPE_LIVING_QUARTERS"},
+    {"x": 17, "y": 8,  "type": "FACILITYTYPE_STORES"},
+]
+_squad = [U(i, 10 + i, 10, 0) for i in range(4)]
+_civvies = [U(50 + i, 12 + i, 12, 0) for i in range(3)]
+for _c in _civvies:
+    _c.armed = False
+
+quiet = Observation(mine=_squad + _civvies, foes=[], view_z=0, mission_type="base_defense",
+                    mode="rt", facilities=FACILITIES)
+check(quiet.is_base_defence, "mission type must be recognised")
+check(len(quiet.entries) == 2, f"lift and repair bay are the entries, got {quiet.entries}")
+check(len(quiet.combatants) == 4 and len(quiet.noncombatants) == 3,
+      "armed and unarmed must be told apart")
+
+# The refuge must be far from BOTH doors, not merely far from one.
+_r = quiet.refuge()
+check(_r and _r["type"] == "FACILITYTYPE_LIVING_QUARTERS",
+      f"refuge should be the far facility, got {_r}")
+check(_r["type"] not in Observation.ENTRY_FACILITIES, "never shelter people on a door")
+
+_acts = {a.kind: a.arg for a in VeteranAI().decide(quiet)}
+check("search" not in _acts, f"a base defence must NEVER hunt: {sorted(_acts)}")
+check("wait" not in _acts, "…nor stand idle")
+check(_acts.get("set_move_mode") == "group", "hold as one body")
+check(_acts.get("set_stance") == "kneel", "dug in on the door while nothing is visible")
+check("move_group" in _acts, "orders must actually be issued, not just computed")
+
+# With a hostile visible, press it -- and press the one nearest a door.
+_near = U(90, 5, 5, 0, hostile=True)
+_far = U(91, 25, 25, 0, hostile=True)
+contact = Observation(mine=_squad + _civvies, foes=[_far, _near], view_z=0,
+                      mission_type="base_defense", mode="rt", facilities=FACILITIES)
+_c_acts = {a.kind: a.arg for a in VeteranAI().decide(contact)}
+check(_c_acts.get("focus_fire") == (5, 5, 0),
+      f"press the hostile nearest an entry, got {_c_acts.get('focus_fire')}")
+check(_c_acts.get("set_behaviour") == "aggressive", "push them, never let them into the base")
+check("search" not in _c_acts, "still never a search")
+
+# Without a known layout the doctrine must not fire -- it would be guessing at geometry.
+blind = Observation(mine=_squad, foes=[], view_z=0, mission_type="base_defense", mode="rt",
+                    facilities=[])
+check("search" in {a.kind for a in VeteranAI().decide(blind)},
+      "with no layout, fall back to the ordinary hunt rather than inventing doors")
+
+ufo = Observation(mine=_squad, foes=[], view_z=0, mission_type="ufo_recovery", mode="rt",
+                  facilities=FACILITIES)
+check("search" in {a.kind for a in VeteranAI().decide(ufo)}, "a UFO recovery is still a hunt")
+
 if FAILED:
     print(f"FAILED {len(FAILED)}:")
     for m in FAILED:

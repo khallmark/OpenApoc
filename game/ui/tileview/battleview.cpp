@@ -20,7 +20,12 @@
 #include "framework/keycodes.h"
 #include "framework/renderer.h"
 #include "framework/sound.h"
+#include <cstdio>
 #include "game/state/battle/battle.h"
+#include "game/state/city/base.h"
+#include "game/state/city/facility.h"
+#include "game/state/rules/battle/battlemap.h"
+#include "game/state/rules/city/facilitytype.h"
 #include "game/state/battle/battlehazard.h"
 #include "game/state/battle/battleitem.h"
 #include "game/state/battle/battlemappart.h"
@@ -1480,6 +1485,75 @@ void BattleView::registerBattleViewIntrospection()
 		    // "ERR unknown query", which the driver raises on and which has already cost two
 		    // missions that had just been WON. centred=0 is the same answer these give when
 		    // there is simply nothing to centre on, so no caller needs a new case.
+		    // The base's own facility layout: what type is where. This is the base screen's
+		    // information -- a commander knows their own base -- and it is deliberately NOT the
+		    // map generator's SpawnType::Enemy table, which is engine internals no player sees.
+		    //
+		    // It matters because a base defence is not a search problem. Aliens come in through
+		    // the access lift and the vehicle repair bay, so the squad should be holding the
+		    // intersections next to those and pushing outward, never hunting through its own
+		    // corridors. Treating it as a hunt produced the worst results of every run: squads
+		    // scattered across a base they should have been controlling.
+		    //
+		    // Facility grid positions are multiplied by the map's chunk_size to reach battle
+		    // tiles, which is the same conversion the generator uses to lay the sectors out.
+		    // Where a given TILE is drawn right now. The AI reasons in tiles -- the base layout
+		    // is in tiles -- but orders are clicks, and only the engine knows the current camera.
+		    // Reports sx=-1 when the tile is off screen, so a caller refuses rather than clicking
+		    // a guessed pixel.
+		    if (gameState && gameState->current_battle && q.substr(0, 12) == "tile_screen ")
+		    {
+			    int tx = 0, ty = 0, tz = 0;
+			    if (sscanf(q.c_str(), "tile_screen %d %d %d", &tx, &ty, &tz) != 3)
+			    {
+				    return UString("ERR tile_screen needs x y z");
+			    }
+			    const auto size = fw().displayGetSize();
+			    const auto screen =
+			        view->tileToOffsetScreenCoords<float>(Vec3<float>{(float)tx, (float)ty, (float)tz});
+			    const bool onScreen = screen.x >= 0 && screen.y >= 0 && screen.x < size.x &&
+			                          screen.y < size.y;
+			    return format("sx={0} sy={1} tile={2},{3},{4}",
+			                  onScreen ? (int)screen.x : -1, onScreen ? (int)screen.y : -1, tx, ty,
+			                  tz);
+		    }
+		    if (gameState && gameState->current_battle && q == "base_facilities")
+		    {
+			    const auto base = Battle::getCurrentDefendedBase(*gameState);
+			    if (!base)
+			    {
+				    return UString("count=0 mission_type=other at=-");
+			    }
+			    const auto &chunk = gameState->current_battle->battle_map->chunk_size;
+			    const auto size = fw().displayGetSize();
+			    UString out;
+			    int count = 0;
+			    for (const auto &f : base->facilities)
+			    {
+				    if (!f || !f->type || f->buildTime > 0)
+				    {
+					    continue; // not finished, so not on the map
+				    }
+				    const int span = f->type->size;
+				    const Vec3<int> t0{f->pos.x * chunk.x, f->pos.y * chunk.y, 0};
+				    const Vec3<int> t1{(f->pos.x + span) * chunk.x, (f->pos.y + span) * chunk.y,
+				                       chunk.z};
+				    const Vec3<float> mid{(t0.x + t1.x) / 2.0f, (t0.y + t1.y) / 2.0f, 0.0f};
+				    const auto screen = view->tileToOffsetScreenCoords<float>(mid);
+				    const bool onScreen = screen.x >= 0 && screen.y >= 0 && screen.x < size.x &&
+				                          screen.y < size.y;
+				    if (count++ > 0)
+				    {
+					    out += ";";
+				    }
+				    out += format("{0},{1},{2}:type={3}:x0={4}:y0={5}:x1={6}:y1={7}"
+				                  ":sx={8}:sy={9}",
+				                  (int)mid.x, (int)mid.y, 0, f->type.id, t0.x, t0.y, t1.x, t1.y,
+				                  onScreen ? (int)screen.x : -1, onScreen ? (int)screen.y : -1);
+			    }
+			    return format("count={0} mission_type=base_defense at={1}", count,
+			                  out.empty() ? UString("-") : out);
+		    }
 		    if (q == "centre_on_friends" || q == "centre_on_enemy" || q == "battle_positions")
 		    {
 			    if (!gameState || !gameState->current_battle)
@@ -1635,7 +1709,20 @@ void BattleView::registerBattleViewIntrospection()
 					    {
 						    mine += ";";
 					    }
-					    mine += entry;
+					    // Armed or not. A base defence fields everyone in the building --
+					    // scientists, engineers, biochemists -- and they carry nothing. They are
+					    // not a squad, they are people to move out of the way, and a driver that
+					    // cannot tell them apart sends civilians to hold a corridor.
+					    // Visible information: you can see what a unit is holding.
+					    const bool armed =
+					        unit->agent &&
+					        ((unit->agent->getFirstItemInSlot(EquipmentSlotType::RightHand) &&
+					          unit->agent->getFirstItemInSlot(EquipmentSlotType::RightHand)
+					              ->getPayloadType()) ||
+					         (unit->agent->getFirstItemInSlot(EquipmentSlotType::LeftHand) &&
+					          unit->agent->getFirstItemInSlot(EquipmentSlotType::LeftHand)
+					              ->getPayloadType()));
+					    mine += entry + format(":armed={0}", armed ? 1 : 0);
 				    }
 				    else
 				    {

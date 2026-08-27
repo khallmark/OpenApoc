@@ -60,6 +60,9 @@ class Unit:
     cx: Optional[int] = None
     cy: Optional[int] = None
     large: bool = False
+    # Holding a weapon. A base defence fields every scientist and engineer in the building, and
+    # they carry nothing: they are people to move out of the way, not a squad to post on a door.
+    armed: bool = True
 
     @property
     def click_point(self):
@@ -113,6 +116,10 @@ class Observation:
     # every one of them picked off alone, scored 0.00. The fix for standing still had become a way
     # to lose faster.
     hard_pressed: bool = False
+    # The defending base's own facility layout, when this is a base defence. What the base
+    # screen shows: which facility is where. NOT the map generator's spawn table, which is
+    # engine internals no player sees.
+    facilities: list = field(default_factory=list)
     # Set when the engine has told us where something just happened.
     last_event_z: Optional[int] = None
     # Rounds since the foe count last dropped -- the driver's own stall signal.
@@ -145,6 +152,44 @@ class Observation:
         levels = sorted({u.z for u in self.mine if u.alive}) or [self.view_z]
         levels = sorted(set(levels + [min(levels) , max(levels) + 1]))
         return levels[step % len(levels)]
+
+    # Aliens enter a base through the access lift and the vehicle repair bay. Nothing else
+    # connects the base to the outside, so these are the only doors that matter.
+    ENTRY_FACILITIES = ("FACILITYTYPE_ACCESS_LIFT", "FACILITYTYPE_VEHICLE_REPAIR_BAY")
+
+    @property
+    def is_base_defence(self) -> bool:
+        return self.mission_type == "base_defense"
+
+    @property
+    def entries(self) -> list:
+        """Where the aliens come in, as (x, y, click_point) -- the doors to hold."""
+        return [f for f in self.facilities if f.get("type") in self.ENTRY_FACILITIES]
+
+    @property
+    def combatants(self) -> list:
+        return [u for u in self.mine if u.alive and u.armed]
+
+    @property
+    def noncombatants(self) -> list:
+        """Scientists, engineers, biochemists. A base defence fields everyone in the building."""
+        return [u for u in self.mine if u.alive and not u.armed]
+
+    def refuge(self) -> Optional[dict]:
+        """The facility furthest from any entry: where the non-combatants go.
+
+        Distance is summed over ALL entries rather than taken from the nearest, so a room that is
+        merely far from one door but next to the other is not mistaken for safe.
+        """
+        entries = self.entries
+        if not entries or not self.facilities:
+            return None
+        candidates = [f for f in self.facilities if f.get("type") not in self.ENTRY_FACILITIES]
+        if not candidates:
+            return None
+        def score(f):
+            return sum((f["x"] - e["x"]) ** 2 + (f["y"] - e["y"]) ** 2 for e in entries)
+        return max(candidates, key=score)
 
     def foes_on(self, z: int) -> int:
         return sum(1 for u in self.foes if u.alive and u.z == z)
@@ -235,6 +280,65 @@ class ScriptedAI(TacticalAI):
             Action("set_stance", self.stance, "opening posture"),
         ]
 
+    def hold_the_base(self, obs: Observation) -> list[Action]:
+        """Base defence: control the base rather than search it.
+
+        Aliens enter through the access lift and the vehicle repair bay, and nowhere else. That
+        makes this a geometry problem with a known answer, not a hunt -- and treating it as a hunt
+        produced the worst results of every run: 0 of 15 survivors, a squad scattered across a base
+        it should have been holding while nine aliens it never saw cleared it room by room.
+
+        The shape, in order:
+
+          1. NON-COMBATANTS OUT. A base defence fields every scientist and engineer in the
+             building and they carry nothing. Send them to the facility furthest from every
+             entry, so they are neither casualties nor obstacles.
+          2. HOLD THE DOORS. Post the squad on the entries as a group, kneeling, snap fire. A
+             chokepoint is worth more than any amount of ground: everything that arrives has to
+             come through it, one at a time, into prepared fire.
+          3. THEN PRESS. Once something is in sight, push it. The aliens must never get loose in
+             the corridors -- once they are, it becomes the search this is designed to avoid.
+
+        It should be fast, and it should never be a question of where the aliens are.
+        """
+        entries = obs.entries
+        alive = max(1, len(obs.combatants))
+
+        # 1. Non-combatants to the far corner. Only worth ordering while they still exist.
+        acts: list[Action] = []
+        refuge = obs.refuge()
+        if obs.noncombatants and refuge:
+            acts.append(Action("move_group", (refuge["x"], refuge["y"]),
+                               f"{len(obs.noncombatants)} non-combatants to {refuge['type']}, "
+                               f"furthest from every entry"))
+
+        # 2/3. Hold, or press if something is visible. Either way the squad moves as one body.
+        acts += [
+            Action("set_move_mode", "group", "hold as one; a chokepoint is not held by stragglers"),
+            Action("set_fire_mode", "snap", "they come to us, at close range"),
+            Action("select_squad", alive, "every armed unit"),
+        ]
+        if obs.foes_alive:
+            target = min((f for f in obs.foes if f.alive),
+                         key=lambda f: min((f.x - e["x"]) ** 2 + (f.y - e["y"]) ** 2
+                                           for e in entries) if entries else 0)
+            acts += [
+                Action("set_stance", "walk", "press, but not at a run into contact"),
+                Action("set_behaviour", "aggressive", "push them; never let them loose in the base"),
+                Action("focus_fire", (target.x, target.y, target.z),
+                       "the one nearest a door -- kill it before it is past us"),
+            ]
+        else:
+            acts += [
+                Action("set_stance", "kneel", "dug in on the door, steadier and smaller"),
+                Action("set_behaviour", "normal", "hold the line, do not go looking"),
+            ]
+            if entries:
+                door = entries[0]
+                acts.append(Action("move_group", (door["x"], door["y"]),
+                                   f"choke the {door['type']} -- everything arrives here"))
+        return acts
+
     def hunt(self, obs: Observation) -> list[Action]:
         """Go and find the hostiles we know are out there but cannot see.
 
@@ -277,6 +381,8 @@ class ScriptedAI(TacticalAI):
 
     def decide(self, obs: Observation) -> list[Action]:
         acts: list[Action] = []
+        if obs.is_base_defence and obs.entries:
+            return self.hold_the_base(obs)
         if obs.hunting:
             return self.hunt(obs)
         if obs.foes_alive == 0:
@@ -401,6 +507,8 @@ class VeteranAI(ScriptedAI):
     def decide(self, obs: Observation) -> list[Action]:
         live_mine = [u for u in obs.mine if u.alive]
         live_foes = [u for u in obs.foes if u.alive]
+        if obs.is_base_defence and obs.entries:
+            return self.hold_the_base(obs)
         if obs.hunting:
             return self.hunt(obs)
         if not live_foes:

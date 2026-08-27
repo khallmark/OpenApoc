@@ -95,6 +95,10 @@ class Battle : public std::enable_shared_from_this<Battle>
 
 	StateRef<BattleMap> battle_map;
 
+	// Which base this defence is for, or empty when the mission is not a base defence.
+	// Read-only; exposed so UI and diagnostics can ask without reaching into Battle internals.
+	static sp<Base> getCurrentDefendedBase(GameState &state);
+
 	std::vector<sp<BattleMapSector::LineOfSightBlock>> losBlocks;
 	// Map of vectors of bools, one bool for every tile, denotes visible tiles (same indexing)
 	std::map<StateRef<Organisation>, std::vector<bool>> visibleTiles;
@@ -380,7 +384,7 @@ class Battle : public std::enable_shared_from_this<Battle>
 	    bool ignoreAllUnits = false, float *cost = nullptr, float maxCost = 0.0f);
 
 	// Returns defended base if mission is base defense, returns null otherwise
-	static sp<Base> getCurrentDefendedBase(GameState &state);
+
 
 	// Check if mission is base defense and has storage for specified capacity type
 	static bool isBaseDefenseWithStorage(GameState &state,
