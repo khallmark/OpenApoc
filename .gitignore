@@ -149,3 +149,5 @@ docs/original-game/.local/
 
 # Python bytecode from the automation tools
 tools/__pycache__/
+
+build*/

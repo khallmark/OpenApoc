@@ -91,6 +91,23 @@ class FrameworkPrivate
 	// 64-bit and iOS derives it from a UITouch pointer, so it must not be narrowed.
 	SDL_FingerID primaryFingerId = 0;
 	bool primaryFingerActive = false;
+
+	// iOS only: disambiguates what a touch-synthesized left button press means before
+	// forwarding it, since SDL's touch->mouse synthesis (SDL_HINT_TOUCH_MOUSE_EVENTS) fires
+	// the down instantly with no notion of a tap, a drag, or a long press. See the
+	// SDL_MOUSEBUTTONDOWN/MOTION/UP cases and the post-poll timeout check in
+	// translateSdlEvents().
+	enum class TouchPressState
+	{
+		Idle,          // no touch-synthesized press outstanding
+		Buffering,     // pressed, not yet released to anyone - still could be any of the three
+		ForwardedLeft, // released as a normal (possibly TouchStartedAsPan) left MOUSE_DOWN
+		ForwardedRight // released as a long-press-synthesized right MOUSE_DOWN
+	};
+	TouchPressState touchPressState = TouchPressState::Idle;
+	Vec2<int> touchPressOrigin{0, 0};
+	Uint32 touchPressStartTicks = 0;
+
 	up<ThreadPool> threadPool;
 	up<Harness> harness;
 
@@ -151,7 +168,13 @@ Framework::Framework(const UString programName, bool createWindow)
 #endif
 #ifdef __APPLE__
 #if TARGET_OS_IPHONE
-	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+	// Let SDL synthesise real mouse events from the primary touch. Every screen under game/ui/
+	// that reads raw EVENT_MOUSE_DOWN/UP/MOVE - the equip screens' press-move-release drag and
+	// drop included - only ever sees genuine top-level mouse events; a per-Control finger-to-
+	// mouse bridge (as forms/control.cpp used to have) never reaches those. translateSdlEvents()
+	// below gates the touch-synthesized SDL_MOUSEBUTTONDOWN/UP (SDL_TOUCH_MOUSEID) just enough
+	// to add what SDL can't: a tap vs. drag distinction and a long-press right click.
+	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
 	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
 #endif
 #endif
@@ -635,6 +658,33 @@ void Framework::translateSdlEvents()
 	Event *fwE;
 	bool touch_events_enabled = Options::optionEnableTouchEvents.get();
 
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+	// A touch-synthesized left press (SDL_HINT_TOUCH_MOUSE_EVENTS, which() == SDL_TOUCH_MOUSEID)
+	// is held back until we know it isn't the start of a pan: it's either released first (a tap
+	// - release DOWN immediately followed by UP), it moves past kTouchTapSlopPixels before that
+	// (a drag - release DOWN tagged TouchStartedAsPan so CityView/BattleView know not to also
+	// select/attack from it), or it sits still past kTouchLongPressMs (a long press - release it
+	// as a right button instead, since SDL's synthesis only ever presses the left one).
+	static constexpr int kTouchTapSlopPixels = 12;
+	static constexpr Uint32 kTouchLongPressMs = 450;
+	auto releaseBufferedTouchPress = [this](Uint8 button, bool startedAsPan)
+	{
+		Event *downEvent = new MouseEvent(EVENT_MOUSE_DOWN);
+		downEvent->mouse().X = p->touchPressOrigin.x;
+		downEvent->mouse().Y = p->touchPressOrigin.y;
+		downEvent->mouse().DeltaX = 0;
+		downEvent->mouse().DeltaY = 0;
+		downEvent->mouse().WheelVertical = 0;
+		downEvent->mouse().WheelHorizontal = 0;
+		downEvent->mouse().Button = SDL_BUTTON(button);
+		downEvent->mouse().TouchStartedAsPan = startedAsPan;
+		pushEvent(up<Event>(downEvent));
+		p->touchPressState = button == SDL_BUTTON_RIGHT
+		                         ? FrameworkPrivate::TouchPressState::ForwardedRight
+		                         : FrameworkPrivate::TouchPressState::ForwardedLeft;
+	};
+#endif
+
 	while (SDL_PollEvent(&e))
 	{
 		// A background window must not be playable: neither the click that raises it nor
@@ -696,6 +746,24 @@ void Framework::translateSdlEvents()
 				// FIXME: Do nothing?
 				break;
 			case SDL_MOUSEMOTION:
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+				if (e.motion.which == SDL_TOUCH_MOUSEID &&
+				    p->touchPressState == FrameworkPrivate::TouchPressState::Buffering)
+				{
+					int x = coordWindowToDisplayX(e.motion.x);
+					int y = coordWindowToDisplayY(e.motion.y);
+					int dx = x - p->touchPressOrigin.x;
+					int dy = y - p->touchPressOrigin.y;
+					if (dx * dx + dy * dy <= kTouchTapSlopPixels * kTouchTapSlopPixels)
+					{
+						// Still ambiguous - could yet be a tap or a long press. Don't forward
+						// motion for a press we haven't released as a mouse-down yet.
+						break;
+					}
+					releaseBufferedTouchPress(SDL_BUTTON_LEFT, /*startedAsPan=*/true);
+					// Fall through and forward this same motion like any other mouse move.
+				}
+#endif
 				fwE = new MouseEvent(EVENT_MOUSE_MOVE);
 				fwE->mouse().X = coordWindowToDisplayX(e.motion.x);
 				fwE->mouse().Y = coordWindowToDisplayY(e.motion.y);
@@ -724,6 +792,18 @@ void Framework::translateSdlEvents()
 				pushEvent(up<Event>(fwE));
 				break;
 			case SDL_MOUSEBUTTONDOWN:
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+				if (e.button.which == SDL_TOUCH_MOUSEID)
+				{
+					// Hold it - don't know yet whether this becomes a tap, a drag, or a long
+					// press. See releaseBufferedTouchPress() above and SDL_MOUSEBUTTONUP below.
+					p->touchPressState = FrameworkPrivate::TouchPressState::Buffering;
+					p->touchPressOrigin = {coordWindowToDisplayX(e.button.x),
+					                        coordWindowToDisplayY(e.button.y)};
+					p->touchPressStartTicks = e.button.timestamp;
+					break;
+				}
+#endif
 				fwE = new MouseEvent(EVENT_MOUSE_DOWN);
 				fwE->mouse().X = coordWindowToDisplayX(e.button.x);
 				fwE->mouse().Y = coordWindowToDisplayY(e.button.y);
@@ -735,6 +815,38 @@ void Framework::translateSdlEvents()
 				pushEvent(up<Event>(fwE));
 				break;
 			case SDL_MOUSEBUTTONUP:
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+				if (e.button.which == SDL_TOUCH_MOUSEID)
+				{
+					if (p->touchPressState == FrameworkPrivate::TouchPressState::Buffering)
+					{
+						// Released before slop or the long-press timeout: an ordinary tap.
+						// Release the held DOWN now, immediately followed by this UP.
+						releaseBufferedTouchPress(SDL_BUTTON_LEFT, /*startedAsPan=*/false);
+					}
+					if (p->touchPressState == FrameworkPrivate::TouchPressState::Idle)
+					{
+						// No matching down was ever buffered (e.g. the window lost focus
+						// mid-press and reset the gesture) - nothing to release.
+						break;
+					}
+					Uint8 button = p->touchPressState ==
+					                       FrameworkPrivate::TouchPressState::ForwardedRight
+					                   ? SDL_BUTTON_RIGHT
+					                   : SDL_BUTTON_LEFT;
+					fwE = new MouseEvent(EVENT_MOUSE_UP);
+					fwE->mouse().X = coordWindowToDisplayX(e.button.x);
+					fwE->mouse().Y = coordWindowToDisplayY(e.button.y);
+					fwE->mouse().DeltaX = 0;
+					fwE->mouse().DeltaY = 0;
+					fwE->mouse().WheelVertical = 0;
+					fwE->mouse().WheelHorizontal = 0;
+					fwE->mouse().Button = SDL_BUTTON(button);
+					pushEvent(up<Event>(fwE));
+					p->touchPressState = FrameworkPrivate::TouchPressState::Idle;
+					break;
+				}
+#endif
 				fwE = new MouseEvent(EVENT_MOUSE_UP);
 				fwE->mouse().X = coordWindowToDisplayX(e.button.x);
 				fwE->mouse().Y = coordWindowToDisplayY(e.button.y);
@@ -810,6 +922,11 @@ void Framework::translateSdlEvents()
 					case SDL_WINDOWEVENT_FOCUS_LOST:
 						p->windowFocused = false;
 						p->primaryFingerActive = false;
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+						// A backgrounded app isn't guaranteed a matching SDL_MOUSEBUTTONUP for a
+						// press that was still buffered - don't leave the gate stuck open.
+						p->touchPressState = FrameworkPrivate::TouchPressState::Idle;
+#endif
 						fwE = new DisplayEvent(EVENT_WINDOW_DEACTIVATE);
 						fwE->display().X = 0;
 						fwE->display().Y = 0;
@@ -869,6 +986,17 @@ void Framework::translateSdlEvents()
 				break;
 		}
 	}
+
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+	// The finger may simply be held still with no new SDL event arriving at all, so the
+	// long-press timeout can't be detected from inside the poll loop above - check it once per
+	// drain instead.
+	if (p->touchPressState == FrameworkPrivate::TouchPressState::Buffering &&
+	    SDL_GetTicks() - p->touchPressStartTicks >= kTouchLongPressMs)
+	{
+		releaseBufferedTouchPress(SDL_BUTTON_RIGHT, /*startedAsPan=*/false);
+	}
+#endif
 }
 
 void Framework::shutdownFramework()
