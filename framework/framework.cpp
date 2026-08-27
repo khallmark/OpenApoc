@@ -10,6 +10,7 @@
 #include "framework/logger_file.h"
 #include "framework/logger_sdldialog.h"
 #include "framework/options.h"
+#include "framework/os/display_size.h"
 #include "framework/renderer.h"
 #include "framework/renderer_interface.h"
 #include "framework/sound_interface.h"
@@ -76,7 +77,14 @@ class FrameworkPrivate
 	sp<Surface> defaultSurface;
 	// The display size may be scaled up to windowSize
 	Vec2<int> displaySize;
+	// Window size in points. drawableSize is the HiDPI backing store behind it, and is
+	// what the GPU actually paints -- on Retina it is 2x windowSize.
 	Vec2<int> windowSize;
+	Vec2<int> drawableSize;
+	// Size to restore when leaving fullscreen.
+	Vec2<int> lastWindowedSize;
+	// Integer factor between the forms' coordinate space and displaySize.
+	int uiScale;
 
 	sp<Surface> scaleSurface;
 	up<ThreadPool> threadPool;
@@ -87,7 +95,9 @@ class FrameworkPrivate
 	Vec2<int> toolTipPosition;
 
 	FrameworkPrivate()
-	    : quitProgram(false), window(nullptr), context(0), displaySize(0, 0), windowSize(0, 0)
+	    : quitProgram(false), window(nullptr), context(0), displaySize(0, 0), windowSize(0, 0),
+	      drawableSize(0, 0), lastWindowedSize(kDefaultScreenWidth, kDefaultScreenHeight),
+	      uiScale(kMinUiScale)
 	{
 		int threadPoolSize = Options::threadPoolSizeOption.get();
 		if (threadPoolSize > 0)
@@ -402,7 +412,7 @@ void Framework::run(sp<Stage> initialStage)
 			{
 				RendererSurfaceBinding scaleBind(*this->renderer, p->defaultSurface);
 				this->renderer->clear();
-				this->renderer->drawScaled(p->scaleSurface, {0, 0}, p->windowSize);
+				this->renderer->drawScaled(p->scaleSurface, {0, 0}, p->drawableSize);
 			}
 			{
 				this->renderer->flush();
@@ -660,11 +670,15 @@ void Framework::translateSdlEvents()
 				{
 					case SDL_WINDOWEVENT_RESIZED:
 						// FIXME: Do we care about SDL_WINDOWEVENT_SIZE_CHANGED?
+						// Refresh first: stages handling the event read displayGetSize().
+						displayRefreshSize();
 						fwE = new DisplayEvent(EVENT_WINDOW_RESIZE);
 						fwE->display().X = 0;
 						fwE->display().Y = 0;
-						fwE->display().Width = e.window.data1;
-						fwE->display().Height = e.window.data2;
+						// Report the display size, not raw window points: every stage
+						// that reacts to this works in display coordinates.
+						fwE->display().Width = p->displaySize.x;
+						fwE->display().Height = p->displaySize.y;
 						fwE->display().Active = true;
 						pushEvent(up<Event>(fwE));
 						break;
@@ -780,10 +794,11 @@ void Framework::displayInitialise()
 		mode = ScreenMode::Windowed;
 	}
 
-	if (mode == ScreenMode::FullScreen)
-		display_flags |= SDL_WINDOW_FULLSCREEN;
-	else if (mode == ScreenMode::Borderless)
-		display_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+#ifdef SDL_WINDOW_ALLOW_HIGHDPI
+	// Without this the drawable is the window size even on a Retina display, and the whole
+	// frame is upscaled by the compositor instead of rendered at native resolution.
+	display_flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+#endif
 
 	int displayNumber = Options::screenDisplayNumberOption.get();
 	if (displayNumber >= SDL_GetNumVideoDisplays())
@@ -792,19 +807,57 @@ void Framework::displayInitialise()
 		displayNumber = 0;
 	}
 
-	int scrW = Options::screenWidthOption.get();
-	int scrH = Options::screenHeightOption.get();
-
-	if (scrW < 640 || scrH < 480)
+	SDL_DisplayMode desktop{};
+	if (SDL_GetDesktopDisplayMode(displayNumber, &desktop) != 0 || desktop.w <= 0 ||
+	    desktop.h <= 0)
 	{
-		LogError("Requested display size of {{{0},{1}}} is lower than {{640,480}} and probably "
-		         "won't work",
-		         scrW, scrH);
+		LogWarning("Could not read desktop mode for display {0}: {1}", displayNumber,
+		           SDL_GetError());
+		desktop.w = kDefaultScreenWidth;
+		desktop.h = kDefaultScreenHeight;
 	}
 
-	p->window =
-	    SDL_CreateWindow("OpenApoc", SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber),
-	                     SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber), scrW, scrH, display_flags);
+	const int requestedW = Options::screenWidthOption.get();
+	const int requestedH = Options::screenHeightOption.get();
+	Vec2<int> resolved = resolveWindowSize(requestedW, requestedH, desktop.w, desktop.h);
+	if (requestedW <= 0 || requestedH <= 0)
+	{
+		LogInfo("Using desktop size {0} for requested {{{1},{2}}}", resolved, requestedW,
+		        requestedH);
+	}
+
+	if (mode == ScreenMode::FullScreen)
+	{
+		SDL_DisplayMode want{};
+		want.w = resolved.x;
+		want.h = resolved.y;
+		want.format = desktop.format;
+		want.refresh_rate = desktop.refresh_rate;
+		SDL_DisplayMode closest{};
+		if (!SDL_GetClosestDisplayMode(displayNumber, &want, &closest))
+		{
+			LogWarning("No exclusive mode near {0}, using borderless desktop", resolved);
+			mode = ScreenMode::Borderless;
+		}
+		else
+		{
+			resolved = {closest.w, closest.h};
+			display_flags |= SDL_WINDOW_FULLSCREEN;
+		}
+	}
+	if (mode == ScreenMode::Borderless)
+	{
+		display_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+	}
+	if (mode == ScreenMode::Windowed)
+	{
+		display_flags |= SDL_WINDOW_RESIZABLE;
+		p->lastWindowedSize = resolved;
+	}
+
+	p->window = SDL_CreateWindow("OpenApoc", SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber),
+	                             SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber), resolved.x,
+	                             resolved.y, display_flags);
 
 	if (!p->window)
 	{
@@ -890,47 +943,136 @@ void Framework::displayInitialise()
 	}
 	this->p->defaultSurface = this->renderer->getDefaultSurface();
 
-	int width, height;
-	SDL_GetWindowSize(p->window, &width, &height);
-	p->windowSize = {width, height};
-
 	setMouseGrab();
 
-	// FIXME: Scale is currently stored as an integer in 1/100 units (ie 100 is 1.0 == same
-	// size)
-	int scaleX = Options::screenScaleXOption.get();
-	int scaleY = Options::screenScaleYOption.get();
-	const bool autoScale = Options::screenAutoScale.get();
+	displayRefreshSize();
 
-	if (scaleX != 100 || scaleY != 100 || autoScale)
+	this->cursor.reset(new ApocCursor(this->data->loadPalette("xcom3/tacdata/tactical.pal")));
+}
+
+void Framework::displayRefreshSize()
+{
+	if (!p->window)
 	{
-		float scaleXFloat = (float)scaleX / 100.0f;
-		float scaleYFloat = (float)scaleY / 100.0f;
-		if (autoScale)
-		{
-			constexpr int referenceWidth = 1280;
-			scaleYFloat = scaleXFloat = (float)referenceWidth / p->windowSize.x;
-			LogInfo("Autoscaling enabled, scaling by ({0},{1})", scaleXFloat, scaleYFloat);
-		}
+		return;
+	}
 
-		p->displaySize.x = (int)((float)p->windowSize.x * scaleXFloat);
-		p->displaySize.y = (int)((float)p->windowSize.y * scaleYFloat);
-		if (p->displaySize.x < 640 || p->displaySize.y < 480)
+	int width = 0;
+	int height = 0;
+	SDL_GetWindowSize(p->window, &width, &height);
+	int drawW = width;
+	int drawH = height;
+	SDL_GL_GetDrawableSize(p->window, &drawW, &drawH);
+
+	const Vec2<int> newWindow{width, height};
+	const Vec2<int> newLogical{std::max(1, width), std::max(1, height)};
+	const Vec2<int> newDrawable{std::max(1, drawW), std::max(1, drawH)};
+	const bool autoScale = Options::screenAutoScale.get();
+	// Tiles and UI layout use window points. HiDPI backing-store pixels are an
+	// upscale blit, not extra world work.
+	const Vec2<int> newDisplay =
+	    computeDisplaySize(newLogical, Options::screenScaleXOption.get(),
+	                       Options::screenScaleYOption.get(), autoScale);
+	const int newUiScale =
+	    computeUiScale(newDisplay.x, Options::screenUiScaleOption.get(), autoScale);
+
+	const bool sizeChanged = newWindow != p->windowSize || newDrawable != p->drawableSize ||
+	                         newDisplay != p->displaySize || newUiScale != p->uiScale;
+
+	p->windowSize = newWindow;
+	p->drawableSize = newDrawable;
+	p->displaySize = newDisplay;
+	p->uiScale = newUiScale;
+	if (optionsScreenMode() == ScreenMode::Windowed && newWindow.x > 0 && newWindow.y > 0)
+	{
+		p->lastWindowedSize = newWindow;
+	}
+
+	if (!sizeChanged)
+	{
+		return;
+	}
+
+	if (p->drawableSize != p->windowSize)
+	{
+		LogInfo("HiDPI drawable size {0} from window size {1}", p->drawableSize, p->windowSize);
+	}
+	if (newUiScale > 1)
+	{
+		LogInfo("UI scale {0}x on display {1} (forms stay {2})", newUiScale, p->displaySize,
+		        uiLogicalSize(p->displaySize, newUiScale));
+	}
+
+	// The default surface is FBO 0. It is not reallocated on resize, so its recorded size
+	// has to be corrected in place or every draw into it is clipped to the old extent.
+	if (p->defaultSurface)
+	{
+		p->defaultSurface->size = {(unsigned)newDrawable.x, (unsigned)newDrawable.y};
+		if (p->defaultSurface->rendererPrivateData)
 		{
-			LogWarning("Requested scaled size of {0} is lower than {{640,480}} and probably "
-			           "won't work, so forcing 640x480",
-			           p->displaySize.x);
-			p->displaySize.x = std::max(640, p->displaySize.x);
-			p->displaySize.y = std::max(480, p->displaySize.y);
+			p->defaultSurface->rendererPrivateData->resize(
+			    {(unsigned)newDrawable.x, (unsigned)newDrawable.y});
 		}
-		LogInfo("Scaling from {0} to {1}", p->displaySize, p->windowSize);
-		p->scaleSurface = mksp<Surface>(p->displaySize);
+	}
+
+	// Render at displaySize, then blit up to the drawable. On a Retina display this is
+	// true even with no scaling requested, since displaySize is in points.
+	const bool wantScale = newDisplay != newDrawable;
+	if (wantScale)
+	{
+		const Vec2<unsigned int> want{(unsigned)newDisplay.x, (unsigned)newDisplay.y};
+		if (!p->scaleSurface || p->scaleSurface->size != want)
+		{
+			LogInfo("Scaling from {0} to {1}", newDisplay, newDrawable);
+			p->scaleSurface = mksp<Surface>(newDisplay);
+		}
 	}
 	else
 	{
-		p->displaySize = p->windowSize;
+		p->scaleSurface.reset();
 	}
-	this->cursor.reset(new ApocCursor(this->data->loadPalette("xcom3/tacdata/tactical.pal")));
+}
+
+void Framework::displaySetSize(Vec2<int> size)
+{
+	if (!p->window)
+	{
+		return;
+	}
+	SDL_SetWindowSize(p->window, std::max(kMinScreenWidth, size.x),
+	                  std::max(kMinScreenHeight, size.y));
+	displayRefreshSize();
+}
+
+void Framework::displayToggleFullscreen()
+{
+	if (!p->window)
+	{
+		return;
+	}
+	ScreenMode mode = optionsScreenMode();
+	if (mode == ScreenMode::Windowed)
+	{
+		SDL_GetWindowSize(p->window, &p->lastWindowedSize.x, &p->lastWindowedSize.y);
+		if (SDL_SetWindowFullscreen(p->window, SDL_WINDOW_FULLSCREEN_DESKTOP) != 0)
+		{
+			LogWarning("Could not enter borderless fullscreen: {0}", SDL_GetError());
+			return;
+		}
+		Options::screenModeOption.set("borderless");
+	}
+	else
+	{
+		if (SDL_SetWindowFullscreen(p->window, 0) != 0)
+		{
+			LogWarning("Could not leave fullscreen: {0}", SDL_GetError());
+			return;
+		}
+		SDL_SetWindowSize(p->window, std::max(kMinScreenWidth, p->lastWindowedSize.x),
+		                  std::max(kMinScreenHeight, p->lastWindowedSize.y));
+		Options::screenModeOption.set("windowed");
+	}
+	displayRefreshSize();
 }
 
 void Framework::displayShutdown()
@@ -953,6 +1095,8 @@ int Framework::displayGetWidth() { return p->displaySize.x; }
 int Framework::displayGetHeight() { return p->displaySize.y; }
 
 Vec2<int> Framework::displayGetSize() { return p->displaySize; }
+
+int Framework::uiGetScale() const { return p->uiScale; }
 
 int Framework::coordWindowToDisplayX(int x) const
 {

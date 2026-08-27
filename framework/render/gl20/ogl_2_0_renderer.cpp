@@ -585,6 +585,11 @@ class FBOData : public RendererImageData
 	{
 	}
 
+	void resize(Vec2<unsigned int> newSize) override
+	{
+		this->size = {(float)newSize.x, (float)newSize.y};
+	}
+
 	sp<Image> readBack() override
 	{
 		auto img = mksp<RGBImage>(size);
@@ -707,12 +712,16 @@ class OGL20Renderer : public Renderer
 	GLuint currentBoundFBO;
 
 	sp<Surface> currentSurface;
+	Vec2<unsigned int> currentViewport{0, 0};
 	sp<Palette> currentPalette;
 
 	friend class RendererSurfaceBinding;
 	void setSurface(sp<Surface> s) override
 	{
-		if (this->currentSurface == s)
+		// Identity alone is not enough to skip the rebind: the default surface keeps its
+		// identity across a window resize while its size changes underneath us, and the
+		// viewport would stay at the old extent.
+		if (this->currentSurface == s && this->currentViewport == s->size)
 		{
 			return;
 		}
@@ -725,6 +734,7 @@ class OGL20Renderer : public Renderer
 		gl20::BindFramebufferEXT(gl20::FRAMEBUFFER_EXT, fbo->fbo);
 		this->currentBoundFBO = fbo->fbo;
 		gl20::Viewport(0, 0, s->size.x, s->size.y);
+		this->currentViewport = s->size;
 	}
 	sp<Surface> getSurface() override { return currentSurface; }
 	sp<Surface> defaultSurface;

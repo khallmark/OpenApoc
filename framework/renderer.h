@@ -17,6 +17,9 @@ class RendererImageData
 {
   public:
 	virtual sp<Image> readBack();
+	// Correct the recorded size after a window resize. Only meaningful for a surface
+	// backed by an FBO the driver resizes for us -- notably FBO 0, the default surface.
+	virtual void resize(Vec2<unsigned int> newSize);
 	virtual ~RendererImageData();
 };
 
