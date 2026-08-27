@@ -241,6 +241,8 @@ class BattleView : public BattleTileView
 	// friendly units are on screen). Only the view can project tile coords to the screen.
 	void registerBattleViewIntrospection();
 	HarnessQueryFunction previousHarnessHandler;
+	// Liveness token for our harness handler; see ~CityView() for the reasoning.
+	sp<bool> harnessAlive;
 	void render() override;
 	void finish() override;
 	void eventOccurred(Event *e) override;

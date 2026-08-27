@@ -36,6 +36,9 @@ class VEquipScreen : public Stage
 	// Harness introspection: the inventory item rects live only in this screen, computed per
 	// frame, so a driver cannot find a weapon to fit without asking the screen itself.
 	HarnessQueryFunction previousHarnessHandler;
+	// Liveness token for our harness handler; see ~CityView() for why the handler is neutered
+	// rather than unhooked.
+	sp<bool> harnessAlive;
 	void registerVEquipIntrospection();
 	EquipmentSlotType selectionType;
 	sp<Palette> pal;

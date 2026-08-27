@@ -71,6 +71,9 @@ class AEquipScreen : public Stage
 	// Harness introspection: the inventory rects are computed per frame and carry no control
 	// ids, so a driver cannot arm anybody without asking this screen where the items are.
 	HarnessQueryFunction previousHarnessHandler;
+	// Liveness token for our harness handler; see ~CityView() for why the handler is neutered
+	// rather than unhooked.
+	sp<bool> harnessAlive;
 	void registerAEquipIntrospection();
 	int inventoryPage = 0;
 	void clampInventoryPage();

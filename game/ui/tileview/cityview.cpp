@@ -1833,11 +1833,24 @@ CityView::CityView(sp<GameState> state)
 
 CityView::~CityView()
 {
-	// Our harness handler captured a raw `this`. Normally the next gameplay stage re-registers
-	// and displaces it, but "Abandon Game" replaces the stack with MainMenu and nothing
-	// re-registers -- leaving a global std::function holding a dangling CityView. Put back
-	// whatever was installed before us.
-	setHarnessQueryHandler(previousHarnessHandler);
+	// Drop the liveness token and NOTHING ELSE. Do not restore previousHarnessHandler.
+	//
+	// These handlers form a CHAIN: each one captures whoever was installed before it and
+	// delegates to them. Restoring unconditionally is a stack-discipline violation -- if a
+	// second CityView has since chained in front of us, putting our predecessor back at the top
+	// erases that newer handler and every view-space query starts answering "unknown query".
+	// Observed exactly that: `gs centre_on_ufo` answered twice and then vanished mid-campaign,
+	// aborting the run, though the query is implemented and the game was still alive.
+	//
+	// Restoring only when we are on top does not fix it either: it would leave a NEWER handler
+	// delegating into our lambda, which captured a raw `this` that is about to dangle -- turning
+	// a lost query into a use-after-free.
+	//
+	// So the handler stays in the chain and is made harmless instead. Once this token dies the
+	// lambda answers nothing itself and passes every query straight to its predecessor, which is
+	// correct for the "Abandon Game" case too: the stack becomes MainMenu, nothing re-registers,
+	// and the stale handler simply forwards. The cost is one delegation hop per dead view.
+	harnessAlive.reset();
 }
 
 void CityView::begin()
@@ -2170,9 +2183,18 @@ void CityView::registerCityViewIntrospection()
 	auto stateHandler = previousHarnessHandler;
 	std::weak_ptr<GameState> weakState = state;
 	CityView *view = this;
+	harnessAlive = mksp<bool>(true);
+	std::weak_ptr<bool> alive = harnessAlive;
 	setHarnessQueryHandler(
-	    [stateHandler, weakState, view](const UString &query) -> UString
+	    [stateHandler, weakState, view, alive](const UString &query) -> UString
 	    {
+		    // This CityView is gone. `view` below is a raw pointer captured at registration, so
+		    // answering anything here would dereference freed memory -- forward instead. See
+		    // ~CityView() for why a dead handler is left in the chain rather than unhooked.
+		    if (alive.expired())
+		    {
+			    return stateHandler ? stateHandler(query) : UString("");
+		    }
 		    const auto q = to_lower(query);
 		    auto gameState = weakState.lock();
 		    // "centre_on_ufo": bring the nearest live UFO into view so a driver can click it.
@@ -2398,6 +2420,20 @@ void CityView::registerCityViewIntrospection()
 				    }
 				    const auto lower = to_lower(it->text);
 				    if (lower.find("alien") == UString::npos)
+				    {
+					    continue;
+				    }
+				    // A crashed UFO is not a raid. "UFO crash landed: Alien Transporter 1"
+				    // contains "alien" and its wreck can come down ON a building's footprint, so
+				    // it passes the building check below and is handed to the raider -- which
+				    // right-clicks a wreck expecting BuildingScreen, gets nothing, and burns the
+				    // leg. Observed exactly that: raid -> "no-building-screen (CityView, via
+				    // message-log, retry failed)", twice at re-centred coordinates, so it is the
+				    // target that is wrong and not the timing.
+				    //
+				    // Crash sites are already owned by the recovery path, which sends a craft to
+				    // collect them; they are not reachable by right-click at all.
+				    if (lower.find("crash") != UString::npos)
 				    {
 					    continue;
 				    }
@@ -4247,6 +4283,13 @@ bool CityView::handleKeyUp(Event *e)
 
 bool CityView::handleMouseDown(Event *e)
 {
+	if (e->mouse().TouchStartedAsPan)
+	{
+		// This touch had already moved past the tap threshold before Framework released the
+		// press (see translateSdlEvents) - it's driving EVENT_FINGER_MOVE panning already, so it
+		// must not also select/attack/move-order whatever was under the finger at press time.
+		return false;
+	}
 	static const std::set<TileObject::Type> sceneryPortalVehicleSet = {
 	    TileObject::Type::Scenery, TileObject::Type::Doodad, TileObject::Type::Vehicle};
 	static const std::set<TileObject::Type> projectileSet = {TileObject::Type::Projectile};

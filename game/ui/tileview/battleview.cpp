@@ -1306,9 +1306,11 @@ BattleView::~BattleView()
 	// Our harness handler captured a raw `this`. Nothing re-registers between the battle ending
 	// and BattleDebriefing being shown, and the handler's own guard (current_battle) stays true
 	// for that whole screen -- Battle::exitBattle clears it later -- so a `gs` query arriving in
-	// that window dereferences a destroyed BattleView. CityView has had this restoration since
-	// the same hazard was found there; BattleView was missed.
-	setHarnessQueryHandler(previousHarnessHandler);
+	// that window would dereference a destroyed BattleView.
+	//
+	// Killing the token, not restoring the predecessor, is what closes that window: restoring
+	// clobbers any handler chained in front of us since. See ~CityView() for the full account.
+	harnessAlive.reset();
 }
 
 void BattleView::begin()
@@ -1452,9 +1454,16 @@ void BattleView::registerBattleViewIntrospection()
 	auto stateHandler = previousHarnessHandler;
 	std::weak_ptr<GameState> weakState = state;
 	BattleView *view = this;
+	harnessAlive = mksp<bool>(true);
+	std::weak_ptr<bool> alive = harnessAlive;
 	setHarnessQueryHandler(
-	    [stateHandler, weakState, view](const UString &query) -> UString
+	    [stateHandler, weakState, view, alive](const UString &query) -> UString
 	    {
+		    // This BattleView is gone -- forward rather than dereference `view`.
+		    if (alive.expired())
+		    {
+			    return stateHandler ? stateHandler(query) : UString("");
+		    }
 		    const auto q = to_lower(query);
 		    auto gameState = weakState.lock();
 		    // Bring the next live hostile into view. enemies_screen only reports units already
@@ -3954,6 +3963,13 @@ bool BattleView::handleKeyUp(Event *e)
 
 bool BattleView::handleMouseDown(Event *e)
 {
+	if (e->mouse().TouchStartedAsPan)
+	{
+		// This touch had already moved past the tap threshold before Framework released the
+		// press (see translateSdlEvents) - it's driving EVENT_FINGER_MOVE panning already, so it
+		// must not also select/attack/move-order whatever was under the finger at press time.
+		return false;
+	}
 	if (activeTab == notMyTurnTab)
 	{
 		return true;

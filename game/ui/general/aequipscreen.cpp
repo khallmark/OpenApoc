@@ -151,7 +151,10 @@ AEquipScreen::AEquipScreen(sp<GameState> state, sp<Agent> firstAgent)
 	                                         {327, 246}, {311, 231}, {332, 217}};
 }
 
-AEquipScreen::~AEquipScreen() { setHarnessQueryHandler(previousHarnessHandler); }
+// Kill the token; do NOT restore the predecessor. Restoring erases any handler chained in front
+// of us since we registered -- and this screen is pushed and popped constantly mid-campaign, so
+// it is a prime source of that. See ~CityView() for the full account.
+AEquipScreen::~AEquipScreen() { harnessAlive.reset(); }
 
 void AEquipScreen::registerAEquipIntrospection()
 {
@@ -163,9 +166,16 @@ void AEquipScreen::registerAEquipIntrospection()
 	previousHarnessHandler = getHarnessQueryHandler();
 	auto previous = previousHarnessHandler;
 	AEquipScreen *screen = this;
+	harnessAlive = mksp<bool>(true);
+	std::weak_ptr<bool> alive = harnessAlive;
 	setHarnessQueryHandler(
-	    [previous, screen](const UString &query) -> UString
+	    [previous, screen, alive](const UString &query) -> UString
 	    {
+		    // Screen gone: `screen` dangles, so forward instead of answering.
+		    if (alive.expired())
+		    {
+			    return previous ? previous(query) : UString("");
+		    }
 		    const auto q = to_lower(query);
 		    if (q == "aequip_items")
 		    {

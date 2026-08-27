@@ -94,7 +94,8 @@ VEquipScreen::VEquipScreen(sp<GameState> state)
 	this->setHighlightedSlotType(EquipmentSlotType::VehicleWeapon);
 }
 
-VEquipScreen::~VEquipScreen() { setHarnessQueryHandler(previousHarnessHandler); }
+// Kill the token; do NOT restore the predecessor. See ~CityView() and ~AEquipScreen().
+VEquipScreen::~VEquipScreen() { harnessAlive.reset(); }
 
 void VEquipScreen::registerVEquipIntrospection()
 {
@@ -106,9 +107,16 @@ void VEquipScreen::registerVEquipIntrospection()
 	previousHarnessHandler = getHarnessQueryHandler();
 	auto previous = previousHarnessHandler;
 	VEquipScreen *screen = this;
+	harnessAlive = mksp<bool>(true);
+	std::weak_ptr<bool> alive = harnessAlive;
 	setHarnessQueryHandler(
-	    [previous, screen](const UString &query) -> UString
+	    [previous, screen, alive](const UString &query) -> UString
 	    {
+		    // Screen gone: `screen` dangles, so forward instead of answering.
+		    if (alive.expired())
+		    {
+			    return previous ? previous(query) : UString("");
+		    }
 		    const auto q = to_lower(query);
 		    if (q == "vequip_items")
 		    {

@@ -147,9 +147,12 @@ class CityView : public CityTileView
 	void registerCityViewIntrospection();
 	// Name of the selected base, or empty when the player has no bases left.
 	UString currentBaseName() const;
-	// Handler that was installed before ours, restored on destruction so the global harness hook
-	// never keeps calling into a CityView that no longer exists.
+	// Handler that was installed before ours. Our handler delegates to it for anything it does
+	// not answer. It is deliberately NOT restored on destruction -- see the destructor.
 	HarnessQueryFunction previousHarnessHandler;
+	// Liveness token for our harness handler. The handler holds a weak_ptr to it and stops
+	// touching this CityView the instant it expires, which is what makes not-restoring safe.
+	sp<bool> harnessAlive;
 	void render() override;
 	void eventOccurred(Event *e) override;
 	bool handleKeyDown(Event *e);
