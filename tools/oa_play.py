@@ -4541,7 +4541,7 @@ def _flying_crewed(d: Driver) -> int:
     return n
 
 
-def crew_transport(d: Driver) -> int:
+def crew_transport(d: Driver, garrison: int = 4) -> int:
     """Put soldiers aboard a craft so it can recover downed UFOs.
 
     VehicleMission::recoverVehicle is refused unless the craft carries a Soldier
@@ -4593,8 +4593,28 @@ def crew_transport(d: Driver) -> int:
     # Select the squad exactly once. MultilistBox toggles: clicking a row that is already
     # selected removes it again, so re-selecting before every craft-row attempt was switching
     # the squad back off and dragging an empty list on all attempts after the first.
+    # Leave a garrison. Aliens attack the BASE, and a base defended by scientists and engineers
+    # is not defended at all: observed 15 units in a base defence, every one of them unarmed,
+    # being killed one at a time by a single alien nobody could shoot back at. Whoever flies out
+    # is not home when that happens, so the transport takes what is spare and no more.
+    #
+    # A soldier held back is not idle -- they are the reason the labs, stores and staff are still
+    # there next week.
+    try:
+        soldiers = int(d.h.gs("agents").get("soldiers", "0") or 0)
+    except (ValueError, AttributeError):
+        soldiers = 0
+    # Scaled, not fixed. A flat reserve of four means a campaign with four soldiers never flies a
+    # mission at all -- which is the same "cannot fight" failure in a different costume, and this
+    # harness has produced enough of those. Hold back half, up to the cap, and always leave at
+    # least one able to go: a garrison that prevents every mission defends nothing worth keeping.
+    held = min(max(0, garrison), soldiers // 2) if soldiers > 1 else 0
+    take = 6 if soldiers <= 0 else max(1, min(6, soldiers - held))
+    if held:
+        d.say(f"  [crew] taking {take} of {soldiers} soldier(s); {held} stay to defend the base")
+
     picked = 0
-    for r in range(6):
+    for r in range(take):
         y = box.y + FIRST_ROW + r * ROW_H
         if y >= box.y + box.h - 8:
             break

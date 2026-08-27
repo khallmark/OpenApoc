@@ -171,6 +171,34 @@ check("bases_now" not in src_wb,
       "the base COUNT must not enter the decision at all -- owning a spare is not a reason to "
       "concede your home")
 
+# --- the transport never takes the whole garrison ----------------------------
+# Aliens attack the BASE. A base defended by scientists and engineers is not defended at all --
+# observed 15 units in a base defence, every one unarmed, killed one at a time by a single alien.
+# Whoever flew out was not home when it happened.
+#
+# But the reserve must SCALE. A flat "hold back four" means a campaign with four soldiers never
+# flies a mission, which is the same cannot-fight failure in a different costume. Every roster
+# size must both send someone and keep someone.
+def _crew_split(soldiers, garrison=4):
+    held = min(max(0, garrison), soldiers // 2) if soldiers > 1 else 0
+    take = 6 if soldiers <= 0 else max(1, min(6, soldiers - held))
+    return take, max(0, soldiers - take)
+
+for _n in (12, 10, 6, 4, 3, 2):
+    _take, _home = _crew_split(_n)
+    check(_take >= 1, f"{_n} soldiers must still be able to fly a mission, take={_take}")
+    check(_home >= 1, f"{_n} soldiers must leave someone to defend the base, home={_home}")
+    check(_take <= 6, f"a transport holds six, tried to take {_take}")
+
+# A single soldier flies -- holding them back defends a base that will lose anyway for want of
+# any mission ever being flown.
+check(_crew_split(1) == (1, 0), f"one soldier flies, got {_crew_split(1)}")
+# A full roster fills the transport and still leaves a real garrison.
+check(_crew_split(12) == (6, 6), f"a full roster fills the craft AND garrisons, got {_crew_split(12)}")
+
+check("garrison" in inspect.getsource(oa_play.crew_transport),
+      "crew_transport must reserve a garrison rather than taking the first six")
+
 if FAILED:
     print(f"FAILED {len(FAILED)}:")
     for m in FAILED:
