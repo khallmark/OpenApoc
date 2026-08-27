@@ -230,7 +230,16 @@ Framework::Framework(const UString programName, bool createWindow)
 		if (!picked.empty() && cdPathLooksValid(picked))
 		{
 			Options::cdPathOption.set(picked);
+			// This save carries the same hazard as the one in shutdownFramework():
+			// applyAppBundlePathDefaults() has already pointed Data and ModPath inside the
+			// .app, and an app bundle's absolute path changes on every reinstall - on iOS the
+			// container UUID changes outright. Recording them here would leave the next launch
+			// reading a bundle that no longer exists, which is exactly what happened the first
+			// time this ran on a simulator. Strip them, write, then re-derive for this session,
+			// which applyAppBundlePathDefaults() does only when they are the relative defaults.
+			revertBundleInternalPathsForSave();
 			config().save();
+			applyAppBundlePathDefaults(programName);
 		}
 	}
 	LogInfo("Loading config\n");
