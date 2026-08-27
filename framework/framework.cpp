@@ -351,6 +351,15 @@ void Framework::run(sp<Stage> initialStage)
 		}
 	}
 
+	// Framework.ProfileFrames: average the last N frames and log where the time went.
+	const uint64_t profileFrames = (uint64_t)std::max(0, Options::profileFrames.get());
+	uint64_t profileSamples = 0;
+	uint64_t profileDrawCalls = 0;
+	std::chrono::steady_clock::duration profileUpdate{};
+	std::chrono::steady_clock::duration profileRender{};
+	std::chrono::steady_clock::duration profileSwap{};
+	std::chrono::steady_clock::duration profileTotal{};
+
 	while (!p->quitProgram)
 	{
 		auto frame_time_now = std::chrono::steady_clock::now();
@@ -386,9 +395,11 @@ void Framework::run(sp<Stage> initialStage)
 		{
 			break;
 		}
+		const auto profileFrameStart = std::chrono::steady_clock::now();
 		{
 			p->ProgramStages.current()->update();
 		}
+		const auto profileUpdateEnd = std::chrono::steady_clock::now();
 
 		for (StageCmd cmd : stageCommands)
 		{
@@ -441,6 +452,7 @@ void Framework::run(sp<Stage> initialStage)
 				this->renderer->clear();
 				this->renderer->drawScaled(p->scaleSurface, {0, 0}, p->drawableSize);
 			}
+			const auto profileSwapStart = std::chrono::steady_clock::now();
 			{
 				this->renderer->flush();
 				// Read back before the swap: the back buffer's contents are undefined
@@ -451,6 +463,37 @@ void Framework::run(sp<Stage> initialStage)
 				}
 				this->renderer->newFrame();
 				SDL_GL_SwapWindow(p->window);
+			}
+			if (profileFrames > 0)
+			{
+				const auto profileFrameEnd = std::chrono::steady_clock::now();
+				profileUpdate += profileUpdateEnd - profileFrameStart;
+				profileRender += profileSwapStart - profileUpdateEnd;
+				profileSwap += profileFrameEnd - profileSwapStart;
+				profileTotal += profileFrameEnd - profileFrameStart;
+				profileDrawCalls += this->renderer->takeDrawCallCount();
+				if (++profileSamples >= profileFrames)
+				{
+					const auto avgMs = [profileSamples](std::chrono::steady_clock::duration d)
+					{
+						return std::chrono::duration<double, std::milli>(d).count() /
+						       (double)profileSamples;
+					};
+					LogWarning("Frame profile over {0} frames: update {1:.2f} ms, draw {2:.2f} "
+					           "ms, swap {3:.2f} ms, busy {4:.2f} ms ({5:.1f} fps if uncapped), "
+					           "{6} draw calls/frame, display {7} drawable {8} uiScale {9}",
+					           (unsigned long long)profileSamples, avgMs(profileUpdate),
+					           avgMs(profileRender), avgMs(profileSwap), avgMs(profileTotal),
+					           1000.0 / avgMs(profileTotal),
+					           (unsigned long long)(profileDrawCalls / profileSamples),
+					           p->displaySize, p->drawableSize, p->uiScale);
+					profileSamples = 0;
+					profileDrawCalls = 0;
+					profileUpdate = {};
+					profileRender = {};
+					profileSwap = {};
+					profileTotal = {};
+				}
 			}
 		}
 		if (frameCount && frame == frameCount)
