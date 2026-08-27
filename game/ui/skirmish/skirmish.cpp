@@ -60,6 +60,16 @@ std::shared_future<void> loadBattleBuilding(bool hotseat, sp<Building> building,
 		    StateRef<Vehicle> veh = {};
 
 		    const std::map<StateRef<AgentType>, int> *aliensRef = customAliens ? &aliens : nullptr;
+		    if (playerBase->building == building && aliensRef)
+		    {
+			    // Base defence is the one mission type BattleMap::createBattle staffs from
+			    // building->current_crew rather than from the alien list. Passing a list
+			    // sends it down the "enemy raid" branch instead, which spawns guards for
+			    // the alien org - and aliens have none, so nobody deploys. Hand the chosen
+			    // aliens over as the crew and let the crew branch run.
+			    building->current_crew = *aliensRef;
+			    aliensRef = nullptr;
+		    }
 		    const int *guardsRef = customGuards ? &guards : nullptr;
 		    const int *civiliansRef = customCivilians ? &civilians : nullptr;
 
@@ -569,7 +579,7 @@ void Skirmish::customizeForces(bool force)
 		return;
 	}
 	std::map<StateRef<AgentType>, int> *aliens = nullptr;
-	std::map<StateRef<AgentType>, int> aliensNone;
+	std::map<StateRef<AgentType>, int> aliensDefault;
 	if (locVehicle)
 	{
 		aliens = &locVehicle->crew_downed;
@@ -587,7 +597,30 @@ void Skirmish::customizeForces(bool force)
 	}
 	else if (force)
 	{
-		aliens = &aliensNone;
+		// A base has no UFO crew and no preset crew to draw on, so without a default the
+		// roster opens empty, every slider sits at zero, and the battle is won on turn
+		// one. A base assault is delivered by an alien assault ship, so its crew is the
+		// natural default - and a mod that retunes that ship retunes this with it.
+		const auto assaultShip = state.vehicle_types.find("VEHICLETYPE_ALIEN_ASSAULT_SHIP");
+		if (assaultShip != state.vehicle_types.end() && !assaultShip->second->crew_downed.empty())
+		{
+			aliensDefault = assaultShip->second->crew_downed;
+		}
+		else
+		{
+			// No assault ship in this mod set - fall back to the force the campaign
+			// seeds at this difficulty. Entries are a {min, max} range; take the
+			// midpoint so the default is stable rather than re-rolled each time.
+			const auto difficultyAliens = state.initial_aliens.find(state.difficulty);
+			if (difficultyAliens != state.initial_aliens.end())
+			{
+				for (auto &a : difficultyAliens->second)
+				{
+					aliensDefault[a.first] += (a.second.x + a.second.y) / 2;
+				}
+			}
+		}
+		aliens = &aliensDefault;
 	}
 	int guards = -1;
 	if (locBuilding)
