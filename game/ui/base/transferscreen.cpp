@@ -701,7 +701,7 @@ void TransferScreen::render()
 	if (second_base == viewBase)
 	{
 		Vec2<int> pos = currentSecondView->getLocationOnScreen() - 2;
-		Vec2<int> size = currentSecondView->Size + 4;
+		Vec2<int> size = currentSecondView->getSizeOnDisplay() + 4;
 		fw().renderer->drawRect(pos, size, COLOUR_RED);
 	}
 }

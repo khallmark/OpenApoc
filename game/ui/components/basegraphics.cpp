@@ -29,6 +29,20 @@ const std::unordered_map<std::vector<bool>, int> TILE_CORRIDORS = {
     {{true, true, true, false}, 16},  {{false, true, true, true}, 17},
     {{true, true, true, true}, 18}};
 
+static int displayTileSize() { return BaseGraphics::TILE_SIZE * fw().uiGetScale(); }
+
+static void drawBaseSprite(sp<Image> image, Vec2<int> pos, int tile)
+{
+	if (tile == BaseGraphics::TILE_SIZE)
+	{
+		fw().renderer->draw(image, pos);
+	}
+	else
+	{
+		fw().renderer->drawScaled(image, pos, {tile, tile});
+	}
+}
+
 int BaseGraphics::getCorridorSprite(const Base &base, Vec2<int> pos)
 {
 	if (pos.x < 0 || pos.y < 0 || pos.x >= Base::SIZE || pos.y >= Base::SIZE ||
@@ -45,6 +59,7 @@ int BaseGraphics::getCorridorSprite(const Base &base, Vec2<int> pos)
 
 void BaseGraphics::renderBase(Vec2<int> renderPos, const Base &base)
 {
+	const int tilePx = displayTileSize();
 	// Draw grid
 	sp<Image> grid = fw().data->loadImage(
 	    "PCK:xcom3/ufodata/base.pck:xcom3/ufodata/base.tab:0:xcom3/ufodata/base.pcx");
@@ -53,8 +68,8 @@ void BaseGraphics::renderBase(Vec2<int> renderPos, const Base &base)
 	{
 		for (i.y = 0; i.y < Base::SIZE; i.y++)
 		{
-			Vec2<int> pos = renderPos + i * TILE_SIZE;
-			fw().renderer->draw(grid, pos);
+			Vec2<int> pos = renderPos + i * tilePx;
+			drawBaseSprite(grid, pos, tilePx);
 		}
 	}
 
@@ -66,11 +81,11 @@ void BaseGraphics::renderBase(Vec2<int> renderPos, const Base &base)
 			int sprite = getCorridorSprite(base, i);
 			if (sprite != 0)
 			{
-				Vec2<int> pos = renderPos + i * TILE_SIZE;
+				Vec2<int> pos = renderPos + i * tilePx;
 				auto image = format(
 				    "PCK:xcom3/ufodata/base.pck:xcom3/ufodata/base.tab:{0}:xcom3/ufodata/base.pcx",
 				    sprite);
-				fw().renderer->draw(fw().data->loadImage(image), pos);
+				drawBaseSprite(fw().data->loadImage(image), pos, tilePx);
 			}
 		}
 	}
@@ -84,27 +99,35 @@ void BaseGraphics::renderBase(Vec2<int> renderPos, const Base &base)
 	for (auto &facility : base.facilities)
 	{
 		sp<Image> sprite = facility->type->sprite;
-		Vec2<int> pos = renderPos + facility->pos * TILE_SIZE;
+		Vec2<int> pos = renderPos + facility->pos * tilePx;
+		const int facilityPx = tilePx * facility->type->size;
 		if (facility->buildTime == 0)
 		{
-			fw().renderer->draw(sprite, pos);
+			drawBaseSprite(sprite, pos, facilityPx);
 		}
 		else
 		{
 			// Fade out facility
-			fw().renderer->drawTinted(sprite, pos, Colour(255, 255, 255, 128));
-			// Draw construction overlay
-			if (facility->type->size == 1)
+			if (tilePx == TILE_SIZE)
 			{
-				fw().renderer->draw(circleS, pos);
+				fw().renderer->drawTinted(sprite, pos, Colour(255, 255, 255, 128));
 			}
 			else
 			{
-				fw().renderer->draw(circleL, pos);
+				fw().renderer->drawScaled(sprite, pos, {facilityPx, facilityPx});
+			}
+			// Draw construction overlay
+			if (facility->type->size == 1)
+			{
+				drawBaseSprite(circleS, pos, tilePx);
+			}
+			else
+			{
+				drawBaseSprite(circleL, pos, facilityPx);
 			}
 			// Draw time remaining
 			auto textImage = font->getString(Strings::fromInteger(facility->buildTime));
-			Vec2<int> textPos = {TILE_SIZE, TILE_SIZE};
+			Vec2<int> textPos = {tilePx, tilePx};
 			textPos *= facility->type->size;
 			textPos -= textImage->size;
 			textPos /= 2;
@@ -121,20 +144,20 @@ void BaseGraphics::renderBase(Vec2<int> renderPos, const Base &base)
 	{
 		for (int y = 0; y < facility->type->size; y++)
 		{
-			Vec2<int> tile = facility->pos + Vec2<int>{-1, y};
-			if (getCorridorSprite(base, tile) != 0)
+			Vec2<int> mapTile = facility->pos + Vec2<int>{-1, y};
+			if (getCorridorSprite(base, mapTile) != 0)
 			{
-				Vec2<int> pos = renderPos + tile * TILE_SIZE;
-				fw().renderer->draw(doorLeft, pos + Vec2<int>{TILE_SIZE / 2, 0});
+				Vec2<int> pos = renderPos + mapTile * tilePx;
+				drawBaseSprite(doorLeft, pos + Vec2<int>{tilePx / 2, 0}, tilePx);
 			}
 		}
 		for (int x = 0; x < facility->type->size; x++)
 		{
-			Vec2<int> tile = facility->pos + Vec2<int>{x, facility->type->size};
-			if (getCorridorSprite(base, tile) != 0)
+			Vec2<int> mapTile = facility->pos + Vec2<int>{x, facility->type->size};
+			if (getCorridorSprite(base, mapTile) != 0)
 			{
-				Vec2<int> pos = renderPos + tile * TILE_SIZE;
-				fw().renderer->draw(doorBottom, pos - Vec2<int>{0, TILE_SIZE / 2});
+				Vec2<int> pos = renderPos + mapTile * tilePx;
+				drawBaseSprite(doorBottom, pos - Vec2<int>{0, tilePx / 2}, tilePx);
 			}
 		}
 	}
@@ -142,6 +165,7 @@ void BaseGraphics::renderBase(Vec2<int> renderPos, const Base &base)
 
 void BaseGraphics::renderBaseLayout(Vec2<int> renderPos, const BaseLayout &layout)
 {
+	const int tilePx = displayTileSize();
 	// Build corridor grid from layout rects
 	std::vector<std::vector<bool>> corridors(Base::SIZE, std::vector<bool>(Base::SIZE, false));
 	for (auto &rect : layout.baseCorridors)
@@ -163,8 +187,8 @@ void BaseGraphics::renderBaseLayout(Vec2<int> renderPos, const BaseLayout &layou
 	{
 		for (i.y = 0; i.y < Base::SIZE; i.y++)
 		{
-			Vec2<int> pos = renderPos + i * TILE_SIZE;
-			fw().renderer->draw(grid, pos);
+			Vec2<int> pos = renderPos + i * tilePx;
+			drawBaseSprite(grid, pos, tilePx);
 		}
 	}
 
@@ -185,11 +209,11 @@ void BaseGraphics::renderBaseLayout(Vec2<int> renderPos, const BaseLayout &layou
 			int sprite = TILE_CORRIDORS.at({north, south, west, east});
 			if (sprite != 0)
 			{
-				Vec2<int> pos = renderPos + i * TILE_SIZE;
+				Vec2<int> pos = renderPos + i * tilePx;
 				auto image = format(
 				    "PCK:xcom3/ufodata/base.pck:xcom3/ufodata/base.tab:{0}:xcom3/ufodata/base.pcx",
 				    sprite);
-				fw().renderer->draw(fw().data->loadImage(image), pos);
+				drawBaseSprite(fw().data->loadImage(image), pos, tilePx);
 			}
 		}
 	}
