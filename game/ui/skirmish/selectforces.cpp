@@ -318,7 +318,25 @@ void SelectForces::begin() {}
 
 void SelectForces::pause() {}
 
-void SelectForces::resume() { fw().stageQueueCommand({StageCmd::Command::POP}); }
+void SelectForces::resume()
+{
+	// This screen is finished the moment anything above it closes: the only stage pushed over it
+	// is AEquipScreen, and once equipping is done the force selection has nothing left to ask.
+	// So resuming means "get out of the way and let Skirmish start the battle".
+	//
+	// It must NOT queue that POP from here. resume() is called by StageStack::pop(), which the
+	// framework calls from inside its stage-command drain, and that drain iterates a COPY of the
+	// queue and then clears the real one (framework.cpp:432-463). A command appended during the
+	// drain is therefore discarded, every frame, forever -- which is exactly why Skirmish never
+	// started a battle: the trace ran Skirmish -> SelectForces -> AEquipScreen -> SelectForces
+	// and then stopped, this screen sitting on its own thrown-away pop request.
+	//
+	// update() runs BEFORE the copy is taken, so a command queued there survives. Deferring one
+	// frame is the whole fix, and it leaves the framework alone: the discard is load-bearing for
+	// stage teardown (StageStack::clear() resumes every stage it destroys), and preserving those
+	// commands instead was tried and broke opening Skirmish at all.
+	popOnUpdate = true;
+}
 
 void SelectForces::finish() {}
 
@@ -435,7 +453,15 @@ void SelectForces::eventOccurred(Event *e)
 	}
 }
 
-void SelectForces::update() { menuform->update(); }
+void SelectForces::update()
+{
+	menuform->update();
+	if (popOnUpdate)
+	{
+		popOnUpdate = false;
+		fw().stageQueueCommand({StageCmd::Command::POP});
+	}
+}
 
 void SelectForces::render()
 {

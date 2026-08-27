@@ -139,9 +139,10 @@ std::shared_future<void> loadBattleVehicle(bool hotseat, sp<VehicleType> vehicle
 }
 } // namespace
 
-Skirmish::Skirmish(sp<GameState> state) : Stage(), menuform(ui().getForm("skirmish")), state(*state)
+Skirmish::Skirmish(sp<GameState> gameState)
+    : Stage(), menuform(ui().getForm("skirmish")), ownedState(gameState), state(*gameState)
 {
-	menuform->findControlTyped<Label>("TEXT_FUNDS")->setText(state->getPlayerBalance());
+	menuform->findControlTyped<Label>("TEXT_FUNDS")->setText(state.getPlayerBalance());
 	updateLocationLabel();
 	menuform->findControlTyped<ScrollBar>("NUM_HUMANS_SLIDER")
 	    ->addCallback(
@@ -710,9 +711,21 @@ void Skirmish::pause() {}
 
 void Skirmish::resume()
 {
+	// Reaching this point means the setup screens above have all closed and the battle chosen in
+	// goToBattle() is ready to load. Do not load it HERE.
+	//
+	// Every branch of loadBattle ends in a REPLACEALL stage command, and resume() is reached from
+	// StageStack::pop() inside the framework's stage-command drain, which iterates a copy of the
+	// queue and clears the real one afterwards (framework.cpp:432-463). That REPLACEALL would be
+	// appended after the copy was taken and thrown away with everything else queued mid-drain.
+	// The stage genuinely returned to Skirmish and then nothing happened -- the exact symptom
+	// this mode has had for as long as anyone has looked at it, and the reason fixing only
+	// SelectForces::resume() would still have produced no battle.
+	//
+	// update() runs before the copy is taken, so defer one frame and the transition lands.
 	if (loadBattle)
 	{
-		loadBattle();
+		loadBattleOnUpdate = true;
 	}
 }
 
@@ -770,7 +783,17 @@ void Skirmish::eventOccurred(Event *e)
 	}
 }
 
-void Skirmish::update() { menuform->update(); }
+void Skirmish::update()
+{
+	menuform->update();
+	if (loadBattleOnUpdate && loadBattle)
+	{
+		// Clear first: loadBattle queues a REPLACEALL that destroys this stage later in the same
+		// frame, but the no-location branch only logs, and without this it would log every frame.
+		loadBattleOnUpdate = false;
+		loadBattle();
+	}
+}
 
 void Skirmish::render()
 {

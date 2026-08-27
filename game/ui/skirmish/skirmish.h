@@ -19,6 +19,9 @@ class Skirmish : public Stage
   private:
 	sp<Form> menuform;
 
+	// Owns the state when Skirmish is the only gameplay stage (main-menu launch).
+	// Campaign launch still has CityView holding a copy; this keeps both paths safe.
+	sp<GameState> ownedState;
 	GameState &state;
 
 	StateRef<Building> locBuilding;
@@ -26,6 +29,9 @@ class Skirmish : public Stage
 	StateRef<Base> locBase;
 
 	std::function<void()> loadBattle = 0;
+
+	// Set by resume(), acted on by update(). See Skirmish::resume().
+	bool loadBattleOnUpdate = false;
 
 	void clearLocation();
 	void updateLocationLabel();

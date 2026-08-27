@@ -7,47 +7,71 @@ thing actually being tested. Skirmish mode is meant to fight a single battlescap
 map and a chosen alien force in under a minute of wall-clock, which is what iterating on combat
 tactics (squad size, retreat threshold, movement pattern) actually needs.
 
-ROOT CAUSE FOUND (not yet safely fixed) -- framework/framework.cpp, the stage-command drain:
+ROOT CAUSE FOUND AND FIXED -- and it was TWO swallowed commands, not one:
 
     const auto commandsThisFrame = stageCommands;   // a copy
     for (const StageCmd &cmd : commandsThisFrame) { ... }
     stageCommands.clear();                          // discards anything queued DURING processing
 
-StageStack::pop() calls resume() on the stage it uncovers, and SelectForces::resume() queues a POP
-of itself (selectforces.cpp:321) so the Skirmish stage underneath is reached. That POP is appended
-AFTER the copy is taken, and clear() then throws it away -- every frame, forever. Skirmish::resume()
-never runs, loadBattle() is never called, and the mode looks like a hang.
+StageStack::pop() calls resume() on the stage it uncovers, so every resume() runs INSIDE that
+drain, and anything it queues is appended after the copy and thrown away. Two stages on this path
+did exactly that:
 
-Traced by watching stage transitions directly:
+  * SelectForces::resume() queued a POP of itself, so Skirmish underneath could be reached.
+  * Skirmish::resume() called loadBattle(), and every branch of it ends in a REPLACEALL.
 
-    0.0s  Skirmish
-    0.3s  SelectForces
-    1.6s  AEquipScreen
-    1.7s  SelectForces      <- popped correctly, and then nothing, ever
+Fixing only the first would have produced no battle either: the stage genuinely returned to
+"Skirmish" and its REPLACEALL was discarded in the same drain. That is precisely the
+"loadBattle never transitions anywhere" this file used to report, and why the earlier diagnosis
+-- which named only SelectForces -- was half an answer.
 
-The obvious repair -- consume only the commands actually processed and let the rest survive to the
-next frame -- was written, built green, and BROKE A WORKING PATH: Skirmish then could not be opened
-at all, because previously-swallowed commands across every screen suddenly took effect. Reverted.
-The discard is load-bearing somewhere else, and finding where is the real work. Do not re-apply the
-naive version; it has already been tried.
+The repair is in those two stages, NOT in the framework: resume() sets a flag, update() issues the
+command. update() runs before the copy is taken, so it survives, and deferring by one frame is the
+entire cost. The framework's discard is deliberately left alone -- it is load-bearing for stage
+teardown, since StageStack::clear() resumes every stage it is about to destroy, and the naive
+repair of preserving mid-drain commands to the next frame was tried, built green, passed 37/37 and
+broke opening Skirmish at all. Do not re-apply it.
+
+Verified A/B on 2026-08-26. Both binaries built from the SAME working tree, differing only in the
+four files above (the control was produced by `git checkout HEAD --` on them, so a third party's
+concurrent edits elsewhere in the tree are present in both and cannot explain the difference).
+Same driver, same map row 0, same alien mix, one round each:
+
+    control (fix reverted)   did not reach a battle stage (at SelectForces), 45s deadline expired
+    fixed                    resolved -- 14 of 17 survived, mission_type=base_defense
+
+Reproduced on a second fixed-binary run: round 1 resolved, 14 survivors.
+
+A green build and 37/37 were true of the reverted framework attempt as well; the trace above is
+the evidence that discriminates, and a build result is not.
+
+OPEN, AND NEWLY REACHABLE: --rounds 2 does not work. Round 1 fights and resolves; round 2 runs
+its setup to completion (the log shows a second "Adding new agents to base BASE_SKIRMISH" /
+"Resetting base inventory") and then the process disappears -- the driver's next status query gets
+ConnectionRefusedError, with nothing in game.log and no macOS crash report. Reproduced 2/2. This is
+not a regression: nobody could reach a second skirmish battle before, because they could not reach
+the first. Cause not established. The likeliest place to look is goToBattle re-running against a
+BASE_SKIRMISH that round 1 already populated, and battle generation then faulting on a threadpool
+worker -- the same async-generation mechanism named below. Until it is understood, run one round
+per process.
+
+Also now real, and worth a decision: Escape out of AEquipScreen no longer leaves the player parked
+on SelectForces, it proceeds into the battle. That is what the original code asked for -- resume()
+popped unconditionally -- it simply never executed. There is currently no cancel path once
+BUTTON_OK has been pressed.
 
 CURRENT STATUS: setup is fully driven and reliable (Skirmish -> pick a map -> SelectForces ->
-name an alien mix -> AEquipScreen), confirmed against the real screens step by step. The battle
-itself currently does not start. Skirmish::resume() is supposed to fire loadBattle() once
-AEquipScreen and SelectForces have both popped back to Skirmish (skirmish.cpp:698-702), and that
-cascade was confirmed to happen -- the stage genuinely returns to "Skirmish" -- but loadBattle()
-then never transitions anywhere, for at least 15 seconds of polling. Separately, one battlemap
-(BATTLEMAP_43sleep) was observed to throw an actual unhandled exception during generation
-("Failed to place mandatory sectors...", "Exception occurred in threadpool: vector"), on a
-background thread. Read together, this looks like a genuine, pre-existing bug in Skirmish's
-battlemap generation, not a harness or automation defect: the same async-generation-on-a-
-threadpool mechanism that produced the resumed-save GameState::initState segfault fixed earlier
-this session, in a different subsystem.
+name an alien mix -> AEquipScreen), and the battle now starts. One battlemap (BATTLEMAP_43sleep)
+was separately observed to throw during generation on a background thread ("Failed to place
+mandatory sectors...", "Exception occurred in threadpool: vector"). That is a genuine pre-existing
+bug in battlemap generation, untouched by this fix and still open -- a run that dies there is a
+different fault from the stage cascade, and should be reported as such.
 
-This does NOT affect the main campaign. City missions reach battle through a different code path
+None of this touches the main campaign. City missions reach battle through a different code path
 entirely -- loadBattleBuilding from BuildingScreen/AlertScreen, not Skirmish::goToBattle -- and
-that path has been fighting real missions (wins, losses, retreats) all session. Skirmish mode's
-own generation path is what is broken.
+that path has been fighting real missions (wins, losses, retreats) throughout. SelectForces and
+Skirmish are constructed nowhere outside this mode (ingameoptions.cpp:266, skirmish.cpp:634), so
+the blast radius of the fix is Skirmish mode and nothing else.
 
 There is no way to reach Skirmish from a cold MainMenu: it lives behind InGameOptions, which only
 exists once a game is running. So a run is: boot -> new game -> Escape into InGameOptions ->
@@ -211,11 +235,12 @@ def fight_skirmish(d: Driver, aliens: dict, real_time: bool = True,
             seen_equip = True
             d.click_id("BUTTON_OK", st)
         elif st.stage == "SelectForces":
-            # DO NOT press anything here. SelectForces::resume() pops ITSELF
-            # (selectforces.cpp:321), so once AEquipScreen closes the cascade runs on its own:
-            # SelectForces pops -> Skirmish::resume() -> loadBattle(). Pressing BUTTON_OK instead
-            # re-enters goToBattle, which pushes AEquipScreen again -- an infinite setup loop,
-            # observed fifteen times in a row when this was "fixed" that way.
+            # DO NOT press anything here. SelectForces pops ITSELF one frame after being
+            # resumed (selectforces.cpp, resume() sets the flag and update() issues the POP), so
+            # once AEquipScreen closes the cascade runs on its own: SelectForces pops ->
+            # Skirmish::resume() -> Skirmish::update() -> loadBattle(). Pressing BUTTON_OK
+            # instead re-enters goToBattle, which pushes AEquipScreen again -- an infinite setup
+            # loop, observed fifteen times in a row when this was "fixed" that way.
             if seen_equip and time.time() - last_ok > 5.0:
                 last_ok = time.time()
                 d.say("  [skirmish] equip done; waiting for the engine's own pop cascade")

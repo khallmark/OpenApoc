@@ -24,6 +24,9 @@ class SelectForces : public Stage
 
 	GameState &state;
 
+	// Set by resume(), acted on by update(). See SelectForces::resume().
+	bool popOnUpdate = false;
+
   public:
 	SelectForces(sp<GameState> state, Skirmish &skirmish,
 	             std::map<StateRef<AgentType>, int> *aliens = nullptr, int *guards = nullptr,
