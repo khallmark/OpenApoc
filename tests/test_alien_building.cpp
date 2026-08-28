@@ -76,7 +76,7 @@ int main(int argc, char **argv)
 	// dropped.
 	{
 		std::vector<Rect<int>> bounds = {
-		    Rect<int>{0, 0, 2, 2},  // index 0: origin
+		    Rect<int>{0, 0, 2, 2},   // index 0: origin
 		    Rect<int>{15, 0, 17, 2}, // index 1: distance 15 == maxDistance, kept
 		    Rect<int>{17, 0, 19, 2}, // index 2: distance 17 > maxDistance, dropped
 		};
