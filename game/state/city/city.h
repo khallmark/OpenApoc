@@ -136,6 +136,7 @@ class City : public StateObject<City>, public std::enable_shared_from_this<City>
 	void weeklyLoop(GameState &state);
 
 	void generatePortals(GameState &state);
+	int getNearestPortalIndex(Vec3<float> position) const;
 	bool canPlacePortal(Vec3<float> position);
 	void updateInfiltration(GameState &state);
 	void repairVehicles(GameState &state);
