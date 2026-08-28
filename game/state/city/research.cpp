@@ -63,27 +63,50 @@ bool ResearchDependency::satisfied() const
 
 bool ItemDependency::satisfied(StateRef<Base> base) const
 {
-	for (auto &e : agentItemsRequired)
+	auto agentHeld = [&](const std::pair<const StateRef<AEquipmentType>, int> &e) -> bool
 	{
 		int mult = e.first->type == AEquipmentType::Type::Ammo ? e.first->max_ammo : 1;
 		if (e.first->bioStorage)
 		{
-			if (base->inventoryBioEquipment[e.first.id] < e.second * mult)
+			return base->inventoryBioEquipment[e.first.id] >= e.second * mult;
+		}
+		return base->inventoryAgentEquipment[e.first.id] >= e.second * mult;
+	};
+	auto vehicleHeld = [&](const std::pair<const StateRef<VEquipmentType>, int> &e) -> bool
+	{ return base->inventoryVehicleEquipment[e.first.id] >= e.second; };
+
+	if (type == Type::Any)
+	{
+		if (agentItemsRequired.empty() && vehicleItemsRequired.empty())
+		{
+			return true;
+		}
+		for (auto &e : agentItemsRequired)
+		{
+			if (agentHeld(e))
 			{
-				return false;
+				return true;
 			}
 		}
-		else
+		for (auto &e : vehicleItemsRequired)
 		{
-			if (base->inventoryAgentEquipment[e.first.id] < e.second * mult)
+			if (vehicleHeld(e))
 			{
-				return false;
+				return true;
 			}
+		}
+		return false;
+	}
+	for (auto &e : agentItemsRequired)
+	{
+		if (!agentHeld(e))
+		{
+			return false;
 		}
 	}
 	for (auto &e : vehicleItemsRequired)
 	{
-		if (base->inventoryVehicleEquipment[e.first.id] < e.second)
+		if (!vehicleHeld(e))
 		{
 			return false;
 		}
