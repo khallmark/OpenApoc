@@ -1338,19 +1338,16 @@ void GameState::updateEndOfDay()
 void GameState::updateUfoGrowth()
 {
 	const int week = static_cast<int>(this->gameTime.getWeek());
-
-	// TODO: Make this query the UFOGrowth::week value?
-	auto growthIt = this->ufo_growth_lists.find(format("UFO_GROWTH_{0}", week));
-	if (growthIt == this->ufo_growth_lists.end())
-	{
-		growthIt = this->ufo_growth_lists.find("UFO_GROWTH_DEFAULT");
-	}
-	if (growthIt == this->ufo_growth_lists.end())
+	const auto growth = UFOGrowth::selectForWeek(*this, week);
+	if (!growth)
 	{
 		LogWarning("No valid UFO growth lists found");
 		return;
 	}
-	const auto &growth = growthIt->second;
+	if (!UFOGrowth::craftFactoryIntact(*this))
+	{
+		return;
+	}
 
 	const auto limitIt = this->ufo_growth_lists.find("UFO_GROWTH_LIMIT");
 	if (limitIt == this->ufo_growth_lists.end())
