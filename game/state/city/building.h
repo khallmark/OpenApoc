@@ -6,6 +6,7 @@
 #include "library/vec.h"
 #include <list>
 #include <set>
+#include <vector>
 
 namespace OpenApoc
 {
@@ -19,6 +20,10 @@ static const unsigned int TICKS_PER_DETECTION_ATTEMPT[5] = {
 static const unsigned int TICKS_DETECTION_TIMEOUT = 6 * TICKS_PER_HOUR;
 // How frequently building attack events are emitted
 static const unsigned int TICKS_ATTACK_EVENT_TIMEOUT = TICKS_PER_HOUR;
+// Alien movement destination selection: nearest intact candidates, 15 tiles
+// center-to-center, at most 15 candidates (same rule as Building::alienMovement).
+static const int NEARBY_INTACT_BUILDING_RANGE = 15;
+static const int NEARBY_INTACT_BUILDING_CANDIDATES = 15;
 
 class BuildingDef;
 class Agent;
@@ -99,6 +104,13 @@ class Building : public StateObject<Building>, public std::enable_shared_from_th
 	void detect(GameState &state, bool forced = false);
 	void alienGrowth(GameState &state);
 	void alienMovement(GameState &state);
+	static Vec2<int> boundsCenter(const Rect<int> &bounds);
+	static int manhattanCenterToPoint(const Rect<int> &bounds, Vec2<int> origin);
+	static std::vector<int> rankNearbyIntact(const std::vector<Rect<int>> &bounds,
+	                                         const std::vector<bool> &intact, Vec2<int> origin,
+	                                         int maxDistance = NEARBY_INTACT_BUILDING_RANGE,
+	                                         int maxCount = NEARBY_INTACT_BUILDING_CANDIDATES);
+	static StateRef<Building> pickNearbyIntact(GameState &state, City &city, Vec2<int> origin);
 	void initBuilding(GameState &state);
 	unsigned countActiveTiles() const;
 	void updateWorkforce();
