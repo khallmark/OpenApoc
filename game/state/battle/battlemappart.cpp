@@ -167,6 +167,11 @@ bool BattleMapPart::applyBurning(GameState &state, int age)
 	return true;
 }
 
+bool BattleMapPart::fireStageBurns(int fireStage, int fireBurnTime)
+{
+	return fireStage >= 0 && fireBurnTime >= 0 && fireBurnTime < 255 && fireStage >= fireBurnTime;
+}
+
 bool BattleMapPart::canBurn(int age)
 {
 	// Explanation for how fire works is at the end of battlehazard.h
