@@ -87,7 +87,8 @@ void test_unresolved_type_is_noop()
 	battleItem->item = item;
 
 	battleItem->applyFireHazard(state, 21);
-	check(item->armor == 50, "applyFireHazard with an unresolved item->type leaves armor untouched");
+	check(item->armor == 50,
+	      "applyFireHazard with an unresolved item->type leaves armor untouched");
 }
 
 void test_zero_power_byte_is_noop()
@@ -99,7 +100,8 @@ void test_zero_power_byte_is_noop()
 	auto battleItem = makeBattleItem(type, 50);
 
 	battleItem->applyFireHazard(state, 0);
-	check(battleItem->item->armor == 50, "powerByte 0 leaves armor untouched (delta computes to 0)");
+	check(battleItem->item->armor == 50,
+	      "powerByte 0 leaves armor untouched (delta computes to 0)");
 }
 
 void test_positive_delta_decrements_armor()
