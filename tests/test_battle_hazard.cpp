@@ -72,7 +72,8 @@ void test_fire_overlay_encode_decode()
 			break;
 		}
 	}
-	check(roundTripOk, "every stage in [0, FIRE_OVERLAY_INDEX_MASK] round-trips through encode/decode");
+	check(roundTripOk,
+	      "every stage in [0, FIRE_OVERLAY_INDEX_MASK] round-trips through encode/decode");
 }
 
 void test_fire_overlay_cadence_boundary_is_inert_by_default()
@@ -139,8 +140,10 @@ void test_fire_overlay_advance_and_extinguish()
 	// A live stage with nonzero power at the *next* stage advances and keeps
 	// the type-2 marker.
 	uint8_t overlay = BattleHazard::encodeFireOverlay(0);
-	check(BattleHazard::advanceFireOverlay(powerTable, overlay), "stage 0 advances (stage 1 power > 0)");
-	check(overlay == BattleHazard::encodeFireOverlay(1), "advance moves to stage 1, retains type 2");
+	check(BattleHazard::advanceFireOverlay(powerTable, overlay),
+	      "stage 0 advances (stage 1 power > 0)");
+	check(overlay == BattleHazard::encodeFireOverlay(1),
+	      "advance moves to stage 1, retains type 2");
 
 	check(BattleHazard::advanceFireOverlay(powerTable, overlay), "stage 1 advances");
 	check(BattleHazard::advanceFireOverlay(powerTable, overlay), "stage 2 advances");
@@ -148,12 +151,14 @@ void test_fire_overlay_advance_and_extinguish()
 
 	// Stage 3's *next* entry (index 4) is zero power -> extinguish: advance
 	// fails and clears the overlay to 0.
-	check(!BattleHazard::advanceFireOverlay(powerTable, overlay), "stage 3 extinguishes (next power is 0)");
+	check(!BattleHazard::advanceFireOverlay(powerTable, overlay),
+	      "stage 3 extinguishes (next power is 0)");
 	check(overlay == 0, "extinguished overlay is cleared to 0");
 
 	// A non-fire overlay never advances.
 	uint8_t nonFire = 0x40;
-	check(!BattleHazard::advanceFireOverlay(powerTable, nonFire), "non-fire overlay does not advance");
+	check(!BattleHazard::advanceFireOverlay(powerTable, nonFire),
+	      "non-fire overlay does not advance");
 	check(nonFire == 0, "non-fire overlay is cleared, not left dangling");
 
 	// A stage whose own power is already zero (not just its successor) also
@@ -217,11 +222,16 @@ void test_neighbour_tables()
 {
 	// Fire's 5-outcome table: East, South, West, North, Up. No dead (0,0,0)
 	// outcome, and Down is never reachable from fire's table.
-	check(BattleHazard::fireSpreadNeighbourDelta(0) == (Vec3<int>{1, 0, 0}), "fire outcome 0 is East");
-	check(BattleHazard::fireSpreadNeighbourDelta(1) == (Vec3<int>{0, 1, 0}), "fire outcome 1 is South");
-	check(BattleHazard::fireSpreadNeighbourDelta(2) == (Vec3<int>{-1, 0, 0}), "fire outcome 2 is West");
-	check(BattleHazard::fireSpreadNeighbourDelta(3) == (Vec3<int>{0, -1, 0}), "fire outcome 3 is North");
-	check(BattleHazard::fireSpreadNeighbourDelta(4) == (Vec3<int>{0, 0, 1}), "fire outcome 4 is Up");
+	check(BattleHazard::fireSpreadNeighbourDelta(0) == (Vec3<int>{1, 0, 0}),
+	      "fire outcome 0 is East");
+	check(BattleHazard::fireSpreadNeighbourDelta(1) == (Vec3<int>{0, 1, 0}),
+	      "fire outcome 1 is South");
+	check(BattleHazard::fireSpreadNeighbourDelta(2) == (Vec3<int>{-1, 0, 0}),
+	      "fire outcome 2 is West");
+	check(BattleHazard::fireSpreadNeighbourDelta(3) == (Vec3<int>{0, -1, 0}),
+	      "fire outcome 3 is North");
+	check(BattleHazard::fireSpreadNeighbourDelta(4) == (Vec3<int>{0, 0, 1}),
+	      "fire outcome 4 is Up");
 	check(BattleHazard::fireSpreadNeighbourDelta(-1) == (Vec3<int>{0, 0, 0}),
 	      "out-of-range outcome (below) is the sentinel zero vector");
 	check(BattleHazard::fireSpreadNeighbourDelta(5) == (Vec3<int>{0, 0, 0}),
@@ -245,12 +255,18 @@ void test_neighbour_tables()
 	check(!sawDown, "Down is unreachable from fire's table");
 
 	// The generalized engine's table: the same 5 plus Down, no dead slot.
-	check(BattleHazard::genericSpreadNeighbourDelta(0) == (Vec3<int>{1, 0, 0}), "generic outcome 0 East");
-	check(BattleHazard::genericSpreadNeighbourDelta(1) == (Vec3<int>{0, 1, 0}), "generic outcome 1 South");
-	check(BattleHazard::genericSpreadNeighbourDelta(2) == (Vec3<int>{-1, 0, 0}), "generic outcome 2 West");
-	check(BattleHazard::genericSpreadNeighbourDelta(3) == (Vec3<int>{0, -1, 0}), "generic outcome 3 North");
-	check(BattleHazard::genericSpreadNeighbourDelta(4) == (Vec3<int>{0, 0, 1}), "generic outcome 4 Up");
-	check(BattleHazard::genericSpreadNeighbourDelta(5) == (Vec3<int>{0, 0, -1}), "generic outcome 5 Down");
+	check(BattleHazard::genericSpreadNeighbourDelta(0) == (Vec3<int>{1, 0, 0}),
+	      "generic outcome 0 East");
+	check(BattleHazard::genericSpreadNeighbourDelta(1) == (Vec3<int>{0, 1, 0}),
+	      "generic outcome 1 South");
+	check(BattleHazard::genericSpreadNeighbourDelta(2) == (Vec3<int>{-1, 0, 0}),
+	      "generic outcome 2 West");
+	check(BattleHazard::genericSpreadNeighbourDelta(3) == (Vec3<int>{0, -1, 0}),
+	      "generic outcome 3 North");
+	check(BattleHazard::genericSpreadNeighbourDelta(4) == (Vec3<int>{0, 0, 1}),
+	      "generic outcome 4 Up");
+	check(BattleHazard::genericSpreadNeighbourDelta(5) == (Vec3<int>{0, 0, -1}),
+	      "generic outcome 5 Down");
 
 	bool genericSawDead = false;
 	for (int outcome = 0; outcome <= BattleHazard::GENERIC_SPREAD_NEIGHBOUR_RNG_SPAN; outcome++)
@@ -265,7 +281,8 @@ void test_neighbour_tables()
 	// The RNG span constants are the source of truth for the roll's actual
 	// range -- assert them directly so a future edit narrowing/widening the
 	// roll is caught here too, not just in the table-shape checks above.
-	check(BattleHazard::FIRE_SPREAD_NEIGHBOUR_RNG_SPAN == 4, "fire's neighbour roll spans 5 outcomes");
+	check(BattleHazard::FIRE_SPREAD_NEIGHBOUR_RNG_SPAN == 4,
+	      "fire's neighbour roll spans 5 outcomes");
 	check(BattleHazard::GENERIC_SPREAD_NEIGHBOUR_RNG_SPAN == 5,
 	      "the generic engine's neighbour roll spans 6 outcomes");
 	check(BattleHazard::FIRE_SPREAD_THRESHOLD_RNG_SPAN == 10,
@@ -292,7 +309,8 @@ void test_spread_roll_draw_count_and_order()
 		rngViaFn.getState(sFn);
 		rngViaManualDraws.getState(sManual);
 		check(sFn[0] == sManual[0] && sFn[1] == sManual[1],
-		      "fire's spread roll consumes exactly two draws, threshold then neighbour, in that order");
+		      "fire's spread roll consumes exactly two draws, threshold then neighbour, in that "
+		      "order");
 	}
 	{
 		Xorshift128Plus<uint32_t> rngViaFn(4242);
@@ -304,7 +322,8 @@ void test_spread_roll_draw_count_and_order()
 		rngViaFn.getState(sFn);
 		rngViaManualDraw.getState(sManual);
 		check(sFn[0] == sManual[0] && sFn[1] == sManual[1],
-		      "the generic engine's spread roll consumes exactly one draw -- no internal threshold roll");
+		      "the generic engine's spread roll consumes exactly one draw -- no internal threshold "
+		      "roll");
 	}
 
 	// End-to-end determinism check on the composed roll: same seed, same
