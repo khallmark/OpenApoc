@@ -54,6 +54,8 @@ class BattleItem : public std::enable_shared_from_this<BattleItem>
 
 	// Returns true if sound and doodad were handled by it
 	bool applyDamage(GameState &state, int power, StateRef<DamageType> damageType);
+	// TACP FUN_0007c110 @ VA 0x7C110 / file 0xD6BB4: fire overlay HP using unknown01 resist.
+	void applyFireHazard(GameState &state, int powerByte);
 
 	void die(GameState &state, bool violently = true);
 
