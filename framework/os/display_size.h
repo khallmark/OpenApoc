@@ -33,6 +33,12 @@ Vec2<int> uiLogicalSize(Vec2<int> displaySize, int uiScale);
 Vec2<int> uiToDisplay(Vec2<int> uiPoint, int uiScale);
 Vec2<int> displayToUi(Vec2<int> displayPoint, int uiScale);
 
+// True when the renderer preference list asks for Metal ahead of any GL backend. A window is
+// built for one graphics API and cannot be handed to the other, so this has to be answered
+// before the window is created rather than by the usual factory-selection loop. Names that are
+// not backends we recognise are skipped, matching that loop; the first recognised name decides.
+bool prefersMetal(const UString &rendererList);
+
 bool isFactoryWindowedDefault(int width, int height, const char *mode, bool autoScale);
 
 // Finder / iOS: native borderless + auto UI scale when the user has not set

@@ -97,11 +97,13 @@
 		},
 		{
 			"name": "ios-device",
-			"configurePreset": "ios-device"
+			"configurePreset": "ios-device",
+			"configuration": "RelWithDebInfo"
 		},
 		{
 			"name": "ios-simulator",
-			"configurePreset": "ios-simulator"
+			"configurePreset": "ios-simulator",
+			"configuration": "RelWithDebInfo"
 		}
 	]
 }
