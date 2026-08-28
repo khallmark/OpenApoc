@@ -193,8 +193,22 @@ class VehicleMission
 	int getDefaultIterationCount(Vehicle &v);
 	static Vec3<float> getRandomMapEdgeCoordinates(GameState &state, StateRef<City> city);
 	bool acquireTargetBuilding(GameState &state, Vehicle &v);
+	// UFO2P FUN_0003a910 @ object-page file 0x2A90F: vehicle +0x171 decrements every
+	// time the UFO reaches a mission destination and, at zero, either retargets or
+	// clears the target. See docs/original-game/findings/U1-U2-V1-incursion.md U1(a).
+	// Returns false if the mission was cancelled for lack of a new target (the
+	// caller should stop without pathing further).
+	bool advanceMissionCounterOnArrival(GameState &state, Vehicle &v);
 	void updateTimer(unsigned ticks);
 	void takePositionNearPortal(GameState &state, Vehicle &v);
+	// UFO2P FUN_0003b724 @ VA 0x3B724 / file 0x2B723: zone_mode + scatter -> tile XY.
+	static Vec2<int> computeIncursionSpawnXY(GameState &state, int baseX, int baseY, int zoneMode,
+	                                         int scatter, bool alienCity = false);
+	// FUN_0006da88 @ file 0x5DB80: type_percent > 50 and scatter == 15 -> scatter 10.
+	static int clampIncursionScatter(int scatter, int typePercent);
+	// FUN_0006da88 @ file 0x5DBBF: (constitution * type_percent) / 100 -> instance +0x168.
+	static int incursionTypeThreshold(int constitution, int typePercent);
+	void takeIncursionSpawnPosition(GameState &state, Vehicle &v, int zoneMode, int scatter);
 	static bool canRecoverVehicle(const GameState &state, const Vehicle &v, const Vehicle &target);
 
 	// Methods to create new missions
@@ -213,8 +227,11 @@ class VehicleMission
 	                                                  bool subvert = false,
 	                                                  StateRef<Building> target = nullptr);
 	static VehicleMission attackVehicle(GameState &state, Vehicle &v, StateRef<Vehicle> target);
+	// missionCounter: UFO_mission_data +0x1B, copied to vehicle +0x171 by FUN_0006da88.
+	// See advanceMissionCounterOnArrival() for the zero-transition it drives.
 	static VehicleMission attackBuilding(GameState &state, Vehicle &v,
-	                                     StateRef<Building> target = nullptr);
+	                                     StateRef<Building> target = nullptr,
+	                                     unsigned int missionCounter = 0);
 	static VehicleMission followVehicle(GameState &state, Vehicle &v, StateRef<Vehicle> target);
 	static VehicleMission followVehicle(GameState &state, Vehicle &v,
 	                                    std::list<StateRef<Vehicle>> &targets);
@@ -223,7 +240,8 @@ class VehicleMission
 	                                   StateRef<Building> target = nullptr);
 	static VehicleMission snooze(GameState &state, Vehicle &v, unsigned int ticks);
 	static VehicleMission selfDestruct(GameState &state, Vehicle &v);
-	static VehicleMission arriveFromDimensionGate(GameState &state, Vehicle &v, int ticks = 0);
+	static VehicleMission arriveFromDimensionGate(GameState &state, Vehicle &v, int ticks = 0,
+	                                              int zoneMode = -1, int scatter = 0);
 	static VehicleMission restartNextMission(GameState &state, Vehicle &v);
 	static VehicleMission crashLand(GameState &state, Vehicle &v);
 	static VehicleMission patrol(GameState &state, Vehicle &v, bool home = false,
@@ -278,9 +296,15 @@ class VehicleMission
 	StateRef<Vehicle> targetVehicle;
 	// FollowVehicle
 	std::list<StateRef<Vehicle>> targets;
+	// ArriveFromDimensionGate: UFO_mission_data tail (FUN_0006da88 -> FUN_0003b724). -1 = legacy.
+	int incursionZoneMode = -1;
+	int incursionScatter = 0;
 	// Snooze, SelfDestruct
 	unsigned int timeToSnooze = 0;
 	// RecoverVehicle, InfiltrateSubvert, Patrol: waypoints
+	// AttackBuilding: UFO_mission_data +0x1B / vehicle +0x171 (see attackBuilding()
+	// and advanceMissionCounterOnArrival()); 0 keeps the pre-existing unlimited
+	// behavior at the current target.
 	unsigned int missionCounter = 0;
 	// InfiltrateSubvert: mode
 	bool subvert = false;

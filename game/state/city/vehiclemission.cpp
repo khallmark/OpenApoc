@@ -455,11 +455,13 @@ VehicleMission VehicleMission::attackVehicle(GameState &, Vehicle &, StateRef<Ve
 
 VehicleMission VehicleMission::attackBuilding(GameState &state [[maybe_unused]],
                                               Vehicle &v [[maybe_unused]],
-                                              StateRef<Building> target)
+                                              StateRef<Building> target,
+                                              unsigned int missionCounter)
 {
 	VehicleMission mission;
 	mission.type = MissionType::AttackBuilding;
 	mission.targetBuilding = target;
+	mission.missionCounter = missionCounter;
 	return mission;
 }
 
@@ -533,10 +535,13 @@ VehicleMission VehicleMission::selfDestruct(GameState &state, Vehicle &v)
 	return mission;
 }
 
-VehicleMission VehicleMission::arriveFromDimensionGate(GameState &state, Vehicle &v, int ticks)
+VehicleMission VehicleMission::arriveFromDimensionGate(GameState &state, Vehicle &v, int ticks,
+                                                       int zoneMode, int scatter)
 {
 	VehicleMission mission;
 	mission.type = MissionType::ArriveFromDimensionGate;
+	mission.incursionZoneMode = zoneMode;
+	mission.incursionScatter = scatter;
 	// find max delay arrival and increment
 	int lastTicks = -DIMENSION_GATE_DELAY;
 	for (auto &v2 : state.vehicles)
@@ -1291,11 +1296,13 @@ bool VehicleMission::getNextDestination(GameState &state, Vehicle &v, Vec3<float
 		case MissionType::DepartToSpace:
 		case MissionType::OfferService:
 		case MissionType::InfiltrateSubvert:
+		case MissionType::RecoverVehicle:
+		case MissionType::Teleport:
 		{
 			return false;
 		}
 		default:
-			LogWarning("TODO: Implement getNextDestination");
+			LogWarning("Unhandled vehicle mission getNextDestination {0}", getName());
 			return false;
 	}
 	return false;
@@ -1482,8 +1489,10 @@ void VehicleMission::update(GameState &state, Vehicle &v, unsigned int ticks, bo
 		case MissionType::Snooze:
 			updateTimer(ticks);
 			return;
+		case MissionType::Teleport:
+			return;
 		default:
-			LogWarning("TODO: Implement update");
+			LogWarning("Unhandled vehicle mission update {0}", getName());
 			return;
 	}
 } // namespace OpenApoc
@@ -2000,6 +2009,11 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 
 			if (this->currentPlannedPath.empty())
 			{
+				if (!advanceMissionCounterOnArrival(state, v))
+				{
+					return;
+				}
+
 				std::uniform_int_distribution<int> xPos(targetBuilding->bounds.p0.x - 5,
 				                                        targetBuilding->bounds.p1.x + 5);
 				std::uniform_int_distribution<int> yPos(targetBuilding->bounds.p0.y - 5,
@@ -2584,6 +2598,10 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 					{
 						v.addMission(state, VehicleMission::gotoBuilding(state, v));
 					}
+					else if (incursionZoneMode >= 0)
+					{
+						takeIncursionSpawnPosition(state, v, incursionZoneMode, incursionScatter);
+					}
 					else
 					{
 						takePositionNearPortal(state, v);
@@ -2691,24 +2709,36 @@ void VehicleMission::setPathTo(GameState &state, Vehicle &v, Vec3<int> target, i
 	// Did not reach destination
 	if (path.empty() || path.back() != target)
 	{
-		// If target was close enough to reach
-		if (maxIterations > (int)distance)
+		// A ground vehicle restricted to roads dies the instant the road under it is destroyed
+		// (see GroundVehicleMover::update), so a *severed* road network -- the target's segment
+		// no longer connected to ours, e.g. a bombed-out gap somewhere between here and there --
+		// is an entirely ordinary outcome of issuing a move order, not a collision. The
+		// pathfinder still returns a non-empty `path`, just one that stops short of `target` at
+		// the closest reachable point.
+		//
+		// Only a vehicle that got *no* path at all (`path.empty()`), with a destination close
+		// enough that a route should plainly have existed, is genuinely stuck in place (e.g.
+		// boxed in solid by other vehicles) -- crash it so it becomes recoverable. Every other
+		// non-reaching case, close or far, empty or partial, means the vehicle can still drive;
+		// give up cleanly or spend a retry, but never destroy a vehicle that isn't stuck.
+		//
+		// The two sub-cases used to be handled separately and each left a gap: the "close"
+		// branch crashed on give-up regardless of whether a usable partial path existed, and a
+		// far target with a non-empty-but-short path hit neither branch, so reRouteAttempts never
+		// moved and GotoLocation re-planned the same unreachable target forever.
+		const bool stuckInPlace = path.empty() && maxIterations > (int)distance;
+		if (giveUpIfInvalid)
 		{
-			// If told to give up - cancel mission and crash vehicle so recovery can be initiated
-			if (giveUpIfInvalid)
+			cancelled = true;
+			if (stuckInPlace)
 			{
-				cancelled = true;
 				v.setCrashed(state);
-				return;
 			}
-			// If not told to give up - subtract attempt
-			else
-			{
-				if (reRouteAttempts > 0)
-				{
-					reRouteAttempts--;
-				}
-			}
+			return;
+		}
+		if (reRouteAttempts > 0)
+		{
+			reRouteAttempts--;
 		}
 	}
 
@@ -3035,12 +3065,285 @@ bool VehicleMission::acquireTargetBuilding(GameState &state, Vehicle &v)
 	return (bool)targetBuilding;
 }
 
+// UFO2P FUN_0003a910 @ object-page file 0x2A90F: vehicle +0x171 (UFO_mission_data
+// +0x1B, copied at spawn by FUN_0006da88) decrements every time the UFO reaches a
+// mission destination and, at zero, either picks a new target building
+// (FUN_00091f70 -> FUN_0004db84 -> FUN_0004e0d4, mapped here onto the existing
+// acquireTargetBuilding()/setPathTo() machinery) or, if none is found, resets to
+// target-less. See docs/original-game/findings/U1-U2-V1-incursion.md U1(a).
+//
+// The original's sibling outcome -- just latch an "arrived" flag with no new
+// search -- is gated by an order-type field (vehicle +0x104) whose semantics are
+// NOT BOUND, so it is deliberately not implemented here: guessing at that gate
+// would be exactly the kind of invented filter this project's parity work
+// prohibits. A missionCounter of 0 (the default for missions that don't opt in)
+// keeps this mission's pre-existing unlimited behavior at the current target
+// instead of retargeting every arrival.
+//
+// Returns false if the mission was cancelled for lack of a new target; the caller
+// should stop immediately without pathing further.
+bool VehicleMission::advanceMissionCounterOnArrival(GameState &state, Vehicle &v)
+{
+	if (missionCounter == 0 || --missionCounter != 0)
+	{
+		return true;
+	}
+	// UFO2P FUN_0003a910 branches here on vehicle +0x12C: value 1 latches an
+	// "arrived" flag whose reader (FUN_00059148) flies the craft to the nearest
+	// dimension gate; any other value takes the retarget search below.
+	//
+	// For an incursion-spawned UFO the branch is not a choice. FUN_0006da88 --
+	// the spawn function this file already maps for clampIncursionScatter and
+	// incursionTypeThreshold -- commits the role to +0x166 and then reclobbers
+	// BX with a literal 1 immediately before calling the writer, and two
+	// independent exhaustive writer censuses found nothing that ever touches
+	// +0x12C on an already-spawned vehicle. So +0x12C == 1 is a structural
+	// invariant for this population and the retarget branch is unreachable for
+	// it: these craft always leave. See
+	// docs/original-game/findings/U1-retarget-reconciliation.md.
+	//
+	// The retarget branch is still live code in the original, just for a
+	// different population -- a periodic scheduler (FUN_00092060 ->
+	// FUN_00092470) unrelated to the dimension-gate incursion system, which
+	// writes +0x12C from its own loop index.
+	//
+	// RESOLVED: that scheduler IS OpenApoc's OrganisationRaid::UnauthorizedVehicle
+	// population, so the owner gate below is already the right split and the
+	// default needs no change. The value that becomes +0x12C is an
+	// organisation-table index, not a vehicle type: FUN_00092060 writes it from
+	// the outer-loop variable indexing the same 27-entry 0x1b6-stride org table
+	// bound in O1-O2-M1-city.md, and a raw CMP SI,1/JZ at that loop's top
+	// excludes org indices 0 and 1 -- exactly ORG_XCOM and ORG_ALIENS, and
+	// exactly the set gamestate.cpp gates setRaidMissions on via
+	// initiatesDiplomacy. See findings/U1-scheduler-population.md.
+	//
+	// Gating on the owner rather than on a new serialized field: the two
+	// incursion call sites in gamestate.cpp are exactly the alien-owned ones,
+	// which is the same split the binary makes.
+	if (v.owner == state.getAliens())
+	{
+		// gotoPortal() picks the nearest portal, matching FUN_0005d360's
+		// nearest-match scan over the same gate table. With no portal to reach
+		// it would target {0,0,0} (or dereference an empty list), so fall
+		// through to the retarget search instead of flying at the map corner.
+		if (v.city && !v.city->portals.empty())
+		{
+			v.addMission(state, VehicleMission::gotoPortal(state, v));
+			cancelled = true;
+			return false;
+		}
+	}
+	// Cleared first: acquireTargetBuilding() only assigns targetBuilding when it
+	// finds a match, so a failed search leaves it in the "target-less" state.
+	targetBuilding.clear();
+	if (!acquireTargetBuilding(state, v))
+	{
+		cancelled = true;
+		return false;
+	}
+	return true;
+}
+
 void VehicleMission::updateTimer(unsigned ticks)
 {
 	if (ticks >= this->timeToSnooze)
 		this->timeToSnooze = 0;
 	else
 		this->timeToSnooze -= ticks;
+}
+
+namespace
+{
+
+// FUN_0005d1d8 @ VA 0x5D1D8 / file 0x4D1D7: EAX = n, return uniform [0, n].
+int incursionRand16(GameState &state, int n)
+{
+	if (n < 0)
+	{
+		return 0;
+	}
+	return randBoundsInclusive(state.rng, 0, n);
+}
+
+// FUN_0003b724 clamp: 100 is kept; only values > 100 become 99.
+int clampIncursionTile(int value)
+{
+	if (value < 0)
+	{
+		return 0;
+	}
+	if (value > 100)
+	{
+		return 99;
+	}
+	return value;
+}
+
+bool acceptIncursionZone0(int x, int y)
+{
+	if (x < 0 || x > 100 || y < 0 || y > 100)
+	{
+		return false;
+	}
+	if (x > 10 && x < 90 && y > 10 && y < 90)
+	{
+		return false;
+	}
+	return true;
+}
+
+bool acceptIncursionZone1(int x, int y)
+{
+	if (x < 10 || x > 90 || y < 10 || y > 90)
+	{
+		return false;
+	}
+	if (x > 25 && x < 75 && y > 25 && y < 75)
+	{
+		return false;
+	}
+	return true;
+}
+
+bool acceptIncursionZone2(int x, int y) { return x >= 25 && x <= 75 && y >= 25 && y <= 75; }
+
+void fallbackIncursionZone0(GameState &state, int &x, int &y)
+{
+	const int bucket = incursionRand16(state, 20);
+	if (bucket <= 5)
+	{
+		x = incursionRand16(state, 100);
+		y = incursionRand16(state, 10);
+	}
+	else if (bucket <= 10)
+	{
+		x = incursionRand16(state, 100);
+		y = 100 - incursionRand16(state, 10);
+	}
+	else if (bucket <= 15)
+	{
+		x = 100 - incursionRand16(state, 10);
+		y = incursionRand16(state, 100);
+	}
+	else
+	{
+		x = incursionRand16(state, 10);
+		y = incursionRand16(state, 100);
+	}
+}
+
+void fallbackIncursionZone1(GameState &state, int &x, int &y)
+{
+	const int bucket = incursionRand16(state, 20);
+	if (bucket <= 5)
+	{
+		x = incursionRand16(state, 80) + 10;
+		y = incursionRand16(state, 15) + 10;
+	}
+	else if (bucket <= 10)
+	{
+		x = incursionRand16(state, 80) + 10;
+		y = 90 - incursionRand16(state, 15);
+	}
+	else if (bucket <= 15)
+	{
+		x = 90 - incursionRand16(state, 15);
+		y = incursionRand16(state, 80) + 10;
+	}
+	else
+	{
+		x = incursionRand16(state, 15) + 10;
+		y = incursionRand16(state, 80) + 10;
+	}
+}
+
+} // namespace
+
+Vec2<int> VehicleMission::computeIncursionSpawnXY(GameState &state, int baseX, int baseY,
+                                                  int zoneMode, int scatter, bool alienCity)
+{
+	// UFO2P non-4 FUN_0003b724 @ VA 0x3B724 / file 0x2B723 (ISO CRC 0x4749ffc1).
+	// Main-loop EAX is scatter*2 (listing 0x2B738). Fallback maxes from 0x2B7AF / 0x2B8B8 /
+	// 0x2B9A4.
+	int x = baseX;
+	int y = baseY;
+	bool accepted = false;
+	for (int attempt = 1; attempt <= 11; attempt++)
+	{
+		x = baseX + incursionRand16(state, scatter * 2) - scatter;
+		y = baseY + incursionRand16(state, scatter * 2) - scatter;
+		if (attempt > 10)
+		{
+			break;
+		}
+		if (zoneMode == 0)
+		{
+			accepted = acceptIncursionZone0(x, y);
+		}
+		else if (zoneMode == 1)
+		{
+			accepted = acceptIncursionZone1(x, y);
+		}
+		else
+		{
+			accepted = acceptIncursionZone2(x, y);
+		}
+		if (accepted)
+		{
+			break;
+		}
+	}
+	if (!accepted)
+	{
+		if (zoneMode == 0)
+		{
+			fallbackIncursionZone0(state, x, y);
+		}
+		else if (zoneMode == 1)
+		{
+			fallbackIncursionZone1(state, x, y);
+		}
+		else
+		{
+			x = incursionRand16(state, 50) + 25;
+			y = incursionRand16(state, 50) + 25;
+		}
+	}
+	x = clampIncursionTile(x);
+	y = clampIncursionTile(y);
+	// DAT_000d5060 == 1 (alien city): overwrite, no re-clamp.
+	if (alienCity)
+	{
+		x = incursionRand16(state, 0x6e) - 10;
+		y = incursionRand16(state, 0x6e) - 10;
+	}
+	return {x, y};
+}
+
+int VehicleMission::clampIncursionScatter(int scatter, int typePercent)
+{
+	// FUN_0006da88 @ file 0x5DB80: CMP AX,0x32; scatter==15 -> 10.
+	if (typePercent > 50 && scatter == 15)
+	{
+		return 10;
+	}
+	return scatter;
+}
+
+int VehicleMission::incursionTypeThreshold(int constitution, int typePercent)
+{
+	// FUN_0006da88 @ file 0x5DBBF: (instance +0x12e constitution) * type_percent / 100.
+	return (constitution * typePercent) / 100;
+}
+
+void VehicleMission::takeIncursionSpawnPosition(GameState &state, Vehicle &v, int zoneMode,
+                                                int scatter)
+{
+	const int baseX = static_cast<int>(v.position.x);
+	const int baseY = static_cast<int>(v.position.y);
+	const auto xy = computeIncursionSpawnXY(state, baseX, baseY, zoneMode, scatter,
+	                                        v.city && v.city.id == "CITYMAP_ALIEN");
+	v.addMission(state, VehicleMission::gotoLocation(state, v, v.getPreferredPosition(xy.x, xy.y)));
 }
 
 void VehicleMission::takePositionNearPortal(GameState &state, Vehicle &v)
