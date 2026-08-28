@@ -24,6 +24,13 @@ class ItemDependency
 {
   public:
 	ItemDependency() = default;
+	enum class Type
+	{
+		Any,
+		All,
+	};
+	// FUN_000aa7a8 unknown1: 0 All, 1 Any of up to three typed item gates.
+	Type type = Type::All;
 	std::map<StateRef<AEquipmentType>, int> agentItemsRequired;
 	std::map<StateRef<VEquipmentType>, int> vehicleItemsRequired;
 	std::map<StateRef<AEquipmentType>, int> agentItemsConsumed;
