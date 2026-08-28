@@ -1010,6 +1010,10 @@ class OGL20Renderer : public Renderer
 	};
 	std::vector<BatchVertex> batchVertices;
 	GLuint batchVBO = 0;
+	// Quads are stored as four corners and expanded by an index buffer rather than as six
+	// vertices, which is a third less to build on the CPU and a third less to upload.
+	GLuint batchIBO = 0;
+	size_t batchIBOQuads = 0;
 	int batchPage = -1;
 	GLuint batchPalTex = 0;
 	bool batchFlipY = false;
@@ -1052,7 +1056,8 @@ class OGL20Renderer : public Renderer
 		glState.reset();
 		paletteAtlas.reset();
 		gl20::GenBuffers(1, &this->batchVBO);
-		this->batchVertices.reserve(6 * 4096);
+		gl20::GenBuffers(1, &this->batchIBO);
+		this->batchVertices.reserve(4 * 4096);
 		if (!this->paletteBatchProgram->valid())
 		{
 			LogWarning("Palette batch shader unavailable - falling back to one draw per sprite");
@@ -1084,6 +1089,10 @@ class OGL20Renderer : public Renderer
 		if (this->batchVBO)
 		{
 			gl20::DeleteBuffers(1, &this->batchVBO);
+		}
+		if (this->batchIBO)
+		{
+			gl20::DeleteBuffers(1, &this->batchIBO);
 		}
 		this->currentSurface.reset();
 		this->defaultSurface.reset();
@@ -1323,6 +1332,35 @@ class OGL20Renderer : public Renderer
 		this->currentBoundProgram = p->prog;
 	}
 
+	// Grows the shared quad index buffer to cover 'quads' quads. The contents only ever depend
+	// on the quad count, so this is rebuilt when the high-water mark rises and reused otherwise.
+	void ensureBatchIndices(size_t quads)
+	{
+		if (quads <= this->batchIBOQuads)
+		{
+			return;
+		}
+		std::vector<GLuint> indices;
+		indices.reserve(quads * 6);
+		for (size_t q = 0; q < quads; q++)
+		{
+			const GLuint base = (GLuint)(q * 4);
+			// Corners are inserted tl, tr, bl, br.
+			indices.push_back(base + 0);
+			indices.push_back(base + 1);
+			indices.push_back(base + 2);
+			indices.push_back(base + 2);
+			indices.push_back(base + 1);
+			indices.push_back(base + 3);
+		}
+		gl20::BindBuffer(gl20::ELEMENT_ARRAY_BUFFER, this->batchIBO);
+		gl20::BufferData(gl20::ELEMENT_ARRAY_BUFFER,
+		                 (GLsizeiptr)(indices.size() * sizeof(GLuint)), indices.data(),
+		                 gl20::STATIC_DRAW);
+		gl20::BindBuffer(gl20::ELEMENT_ARRAY_BUFFER, 0);
+		this->batchIBOQuads = quads;
+	}
+
 	void flushBatch()
 	{
 		if (this->batchVertices.empty())
@@ -1353,8 +1391,14 @@ class OGL20Renderer : public Renderer
 		gl20::VertexAttribPointer(this->paletteBatchProgram->tintLoc, 4, gl20::UNSIGNED_BYTE,
 		                          gl20::TRUE_, stride, (const void *)offsetof(BatchVertex, r));
 
-		gl20::DrawArrays(gl20::TRIANGLES, 0, (GLsizei)verts.size());
+		const size_t quads = verts.size() / 4;
+		ensureBatchIndices(quads);
+		gl20::BindBuffer(gl20::ELEMENT_ARRAY_BUFFER, this->batchIBO);
+		gl20::DrawElements(gl20::TRIANGLES, (GLsizei)(quads * 6), gl20::UNSIGNED_INT, nullptr);
 		drawCallCount++;
+		// Every other path in this renderer draws from client memory, which an element array
+		// binding would make GL read indices from the buffer instead of the given pointer.
+		gl20::BindBuffer(gl20::ELEMENT_ARRAY_BUFFER, 0);
 
 		// No other program re-points the tint attribute, so leaving it enabled would let
 		// later draws read the batch buffer past its end.
@@ -1406,7 +1450,8 @@ class OGL20Renderer : public Renderer
 		const BatchVertex tr{x1, y0, u1, v0, tint.r, tint.g, tint.b, tint.a};
 		const BatchVertex bl{x0, y1, u0, v1, tint.r, tint.g, tint.b, tint.a};
 		const BatchVertex br{x1, y1, u1, v1, tint.r, tint.g, tint.b, tint.a};
-		this->batchVertices.insert(this->batchVertices.end(), {tl, tr, bl, bl, tr, br});
+		// Corner order must match the index pattern built in ensureBatchIndices().
+		this->batchVertices.insert(this->batchVertices.end(), {tl, tr, bl, br});
 		return true;
 	}
 	void drawRgb(GLRGBImage &img, Vec2<float> offset, Vec2<float> size, Scaler scaler,
