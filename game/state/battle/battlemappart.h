@@ -55,6 +55,9 @@ class BattleMapPart : public SupportedMapPart, public std::enable_shared_from_th
 	// Called when map part is burnt by fire. Returns true if burn was successful (provided fuel for
 	// the fire)
 	bool applyBurning(GameState &state, int age);
+	// TACP FUN_0007b3dc compares the six-bit fire overlay stage directly with
+	// the map-part fire_burn_time byte.
+	static bool fireStageBurns(int fireStage, int fireBurnTime);
 	// Whether this map part can burn (due to resist, timer and already burnt state)
 	bool canBurn(int age);
 	// Returns true if sound and doodad were handled by it
