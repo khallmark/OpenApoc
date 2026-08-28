@@ -516,8 +516,9 @@ void AEquipScreen::render()
 			int wound = 0;
 			while (wound < ftw.second && wound < FATAL_WOUND_LOCATIONS[ftw.first].size())
 			{
-				fw().renderer->draw(woundImage,
-				                    formMain->Location + FATAL_WOUND_LOCATIONS[ftw.first][wound]);
+				fw().renderer->draw(woundImage, formMain->getLocationOnScreen() +
+				                                    FATAL_WOUND_LOCATIONS[ftw.first][wound] *
+				                                        fw().uiGetScale());
 				wound++;
 			}
 		}
@@ -529,7 +530,8 @@ void AEquipScreen::render()
 		Vec2<int> equipmentPos = fw().getCursor().getPosition() + this->draggedEquipmentOffset;
 		// If this is within the grid try to snap it
 		Vec2<int> equipmentGridPos = equipmentPos - equipOffset;
-		equipmentGridPos /= EQUIP_GRID_SLOT_SIZE;
+		const Vec2<int> slotPx = EQUIP_GRID_SLOT_SIZE * fw().uiGetScale();
+		equipmentGridPos /= slotPx;
 		if (equipmentGridPos.x < 0 || equipmentGridPos.x >= EQUIP_GRID_SLOTS.x ||
 		    equipmentGridPos.y < 0 || equipmentGridPos.y >= EQUIP_GRID_SLOTS.y)
 		{
@@ -538,7 +540,7 @@ void AEquipScreen::render()
 		else
 		{
 			// Inside the grid, snap
-			equipmentPos = equipmentGridPos * EQUIP_GRID_SLOT_SIZE;
+			equipmentPos = equipmentGridPos * slotPx;
 			equipmentPos += equipOffset;
 		}
 		fw().renderer->draw(this->draggedEquipment->type->equipscreen_sprite, equipmentPos);
@@ -640,11 +642,11 @@ void AEquipScreen::handleItemPlacement(Vec2<int> mousePos)
 
 	// Are we over the grid? If so try to place it on the agent.
 	auto paperDollControl = paperDoll;
-	Vec2<int> equipOffset = paperDollControl->Location + formMain->Location;
+	Vec2<int> equipOffset = paperDollControl->getLocationOnScreen();
 	Vec2<int> equipmentPos = mousePos + draggedEquipmentOffset;
 	// If this is within the grid try to snap it
 	Vec2<int> equipmentGridPos = equipmentPos - equipOffset;
-	equipmentGridPos /= EQUIP_GRID_SLOT_SIZE;
+	equipmentGridPos /= (EQUIP_GRID_SLOT_SIZE * fw().uiGetScale());
 
 	auto draggedFrom = draggedEquipmentOrigin;
 	auto draggedType =

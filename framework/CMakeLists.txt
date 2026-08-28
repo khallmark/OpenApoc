@@ -25,7 +25,8 @@ set (FRAMEWORK_SOURCE_FILES
 	logger_sdldialog.cpp
 	logger_file.cpp
 	options.cpp
-	modinfo.cpp)
+	modinfo.cpp
+	os/display_size.cpp)
 
 source_group(framework\\sources FILES ${FRAMEWORK_SOURCE_FILES})
 list(APPEND ALL_SOURCE_FILES ${FRAMEWORK_SOURCE_FILES})
@@ -55,7 +56,8 @@ set (FRAMEWORK_HEADER_FILES
 	stagestack.h
 	video.h
 	options.h
-	modinfo.h)
+	modinfo.h
+	os/display_size.h)
 
 source_group(framework\\headers FILES ${FRAMEWORK_HEADER_FILES})
 list(APPEND ALL_HEADER_FILES ${FRAMEWORK_HEADER_FILES})

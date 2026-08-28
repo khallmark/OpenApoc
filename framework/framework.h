@@ -68,12 +68,21 @@ class Framework
 
 	void displayInitialise();
 	void displayShutdown();
+	// Re-read the window from SDL and recompute display size and UI scale from it.
+	void displayRefreshSize();
+	void displayToggleFullscreen();
 	int displayGetWidth();
 	int displayGetHeight();
 	Vec2<int> displayGetSize();
+
+	// Resize the window as if the user dragged it. Test/automation hook.
+	void displaySetSize(Vec2<int> size);
+	int uiGetScale() const;
 	void displaySetTitle(UString NewTitle);
 	void displaySetIcon(sp<RGBImage> icon);
 	bool displayHasWindow() const;
+	// Read the last rendered frame back off the GPU and write it to a file.
+	bool writeScreenshot(const UString &path);
 	void *getWindowHandle() const;
 
 	// Map coordinates from window to display, for scaled displays

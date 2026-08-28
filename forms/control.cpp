@@ -9,6 +9,7 @@
 #include "framework/framework.h"
 #include "framework/image.h"
 #include "framework/options.h"
+#include "framework/os/display_size.h"
 #include "framework/renderer.h"
 #include "library/sp.h"
 #include <iterator>
@@ -18,9 +19,10 @@ namespace OpenApoc
 
 Control::Control(bool takesFocus)
     : funcPreRender(nullptr), mouseInside(false), mouseDepressed(false), resolvedLocation(0, 0),
-      Visible(true), isClickable(false), Removed(false), Name("Control"), Location(0, 0),
-      Size(0, 0), SelectionSize(0, 0), BackgroundColour(0, 0, 0, 0), takesFocus(takesFocus),
-      showBounds(false), Enabled(true), canCopy(true),
+      Visible(true), isClickable(false), Removed(false), alignedX(false), alignedY(false),
+      alignmentX(HorizontalAlignment::Left), alignmentY(VerticalAlignment::Top), Name("Control"),
+      Location(0, 0), Size(0, 0), SelectionSize(0, 0), BackgroundColour(0, 0, 0, 0),
+      takesFocus(takesFocus), showBounds(false), Enabled(true), canCopy(true),
       // Tooltip defaults
       ToolTipBackground{128, 128, 128},
       ToolTipBorders{{1, {0, 0, 0}}, {1, {255, 255, 255}}, {1, {0, 0, 0, 0}}}
@@ -72,13 +74,29 @@ void Control::resolveLocation()
 	}
 }
 
+int Control::uiScale() const
+{
+	// Controls are constructed by tools and tests that never bring up a display.
+	if (auto *fwInstance = Framework::tryGetInstance())
+	{
+		return fwInstance->uiGetScale();
+	}
+	return kMinUiScale;
+}
+
+Vec2<int> Control::getLocationOnScreen() const { return uiToDisplay(resolvedLocation, uiScale()); }
+
+Vec2<int> Control::getSizeOnDisplay() const { return uiToDisplay(Size, uiScale()); }
+
 bool Control::isPointInsideControlBounds(int x, int y) const
 {
 	const Vec2<int> &Size =
 	    (SelectionSize.x == 0 || SelectionSize.y == 0) ? this->Size : SelectionSize;
+	// x/y arrive in display pixels; the control's bounds are in UI space.
+	const Vec2<int> local = displayToUi({x, y}, uiScale());
 
-	return x >= resolvedLocation.x && x < resolvedLocation.x + Size.x && y >= resolvedLocation.y &&
-	       y < resolvedLocation.y + Size.y;
+	return local.x >= resolvedLocation.x && local.x < resolvedLocation.x + Size.x &&
+	       local.y >= resolvedLocation.y && local.y < resolvedLocation.y + Size.y;
 }
 
 bool Control::isPointInsideControlBounds(Event *e, sp<Control> c) const
@@ -357,9 +375,10 @@ void Control::eventOccured(Event *e)
 				}
 
 				int screenWidth = fw().displayGetWidth();
+				const int s = uiScale();
 
-				Vec2<int> tooltipPos =
-				    pos + resolvedLocation - Vec2<int>{surface->size.x / 2, surface->size.y};
+				Vec2<int> tooltipPos = uiToDisplay(pos + resolvedLocation, s) -
+				                       Vec2<int>{(int)surface->size.x / 2, (int)surface->size.y};
 
 				// Check if the tooltip is off the screen
 				if (tooltipPos.x < 0)
@@ -419,13 +438,39 @@ void Control::render()
 
 	this->dirty = false;
 
-	if (Enabled)
+	// Only a top-level control converts: a child's Location is relative to its parent, and
+	// the parent's own draw already placed the whole subtree.
+	Vec2<int> destPos = Location;
+	Vec2<int> destSize = Size;
+	if (!getParent())
 	{
-		fw().renderer->draw(controlArea, Location);
+		const int s = uiScale();
+		destPos = uiToDisplay(Location, s);
+		destSize = uiToDisplay(Size, s);
+	}
+
+	const Colour disabledTint(255, 255, 255, 128);
+	if (destSize == Size)
+	{
+		if (Enabled)
+		{
+			fw().renderer->draw(controlArea, destPos);
+		}
+		else
+		{
+			fw().renderer->drawTinted(controlArea, destPos, disabledTint);
+		}
 	}
 	else
 	{
-		fw().renderer->drawTinted(controlArea, Location, Colour(255, 255, 255, 128));
+		if (Enabled)
+		{
+			fw().renderer->drawScaled(controlArea, destPos, destSize, Renderer::Scaler::Nearest);
+		}
+		else
+		{
+			fw().renderer->drawScaledTinted(controlArea, destPos, destSize, disabledTint);
+		}
 	}
 }
 
@@ -982,7 +1027,7 @@ Vec2<int> Control::getParentSize() const
 	}
 	else
 	{
-		return Vec2<int>{fw().displayGetWidth(), fw().displayGetHeight()};
+		return uiLogicalSize(fw().displayGetSize(), uiScale());
 	}
 }
 
@@ -1024,11 +1069,15 @@ int Control::align(VerticalAlignment VAlign, int ParentHeight, int ChildHeight)
 
 void Control::align(HorizontalAlignment HAlign)
 {
+	alignedX = true;
+	alignmentX = HAlign;
 	Location.x = align(HAlign, getParentSize().x, Size.x);
 }
 
 void Control::align(VerticalAlignment VAlign)
 {
+	alignedY = true;
+	alignmentY = VAlign;
 	Location.y = align(VAlign, getParentSize().y, Size.y);
 }
 
@@ -1066,6 +1115,12 @@ void Control::copyControlData(sp<Control> CopyOf)
 	CopyOf->showBounds = this->showBounds;
 	CopyOf->Visible = this->Visible;
 	CopyOf->isClickable = this->isClickable;
+	// ui().getForm() hands each stage a copy, and the copy is the one on screen. Without
+	// these the copy does not know it was ever aligned, and never re-anchors on a resize.
+	CopyOf->alignedX = this->alignedX;
+	CopyOf->alignedY = this->alignedY;
+	CopyOf->alignmentX = this->alignmentX;
+	CopyOf->alignmentY = this->alignmentY;
 	CopyOf->ToolTipText = this->ToolTipText;
 	CopyOf->ToolTipFont = this->ToolTipFont;
 	CopyOf->ToolTipBackground = this->ToolTipBackground;
@@ -1085,15 +1140,12 @@ bool Control::eventIsWithin(const Event *e) const
 	if (e->type() == EVENT_MOUSE_MOVE || e->type() == EVENT_MOUSE_DOWN ||
 	    e->type() == EVENT_MOUSE_UP)
 	{
-		return (e->mouse().X >= resolvedLocation.x && e->mouse().X < resolvedLocation.x + Size.x &&
-		        e->mouse().Y >= resolvedLocation.y && e->mouse().Y < resolvedLocation.y + Size.y);
+		return isPointInsideControlBounds(e->mouse().X, e->mouse().Y);
 	}
 	else if (e->type() == EVENT_FINGER_DOWN || e->type() == EVENT_FINGER_UP ||
 	         e->type() == EVENT_FINGER_MOVE)
 	{
-		return (e->finger().X >= resolvedLocation.x &&
-		        e->finger().X < resolvedLocation.x + Size.x &&
-		        e->finger().Y >= resolvedLocation.y && e->finger().Y < resolvedLocation.y + Size.y);
+		return isPointInsideControlBounds(e->finger().X, e->finger().Y);
 	}
 	// Only mouse & finger events have a location to be within
 	return false;
@@ -1117,8 +1169,10 @@ void Control::pushFormEvent(FormEventType type, Event *parentEvent)
 			event->forms().RaisedBy = shared_from_this();
 			event->forms().EventFlag = type;
 			event->forms().MouseInfo = parentEvent->mouse();
-			event->forms().MouseInfo.X -= resolvedLocation.x;
-			event->forms().MouseInfo.Y -= resolvedLocation.y;
+			const Vec2<int> local =
+			    displayToUi({parentEvent->mouse().X, parentEvent->mouse().Y}, uiScale());
+			event->forms().MouseInfo.X = local.x - resolvedLocation.x;
+			event->forms().MouseInfo.Y = local.y - resolvedLocation.y;
 			fw().pushEvent(event);
 			break;
 		}
@@ -1130,8 +1184,10 @@ void Control::pushFormEvent(FormEventType type, Event *parentEvent)
 			event->forms().RaisedBy = shared_from_this();
 			event->forms().EventFlag = type;
 			event->forms().MouseInfo = parentEvent->mouse();
-			event->forms().MouseInfo.X -= resolvedLocation.x;
-			event->forms().MouseInfo.Y -= resolvedLocation.y;
+			const Vec2<int> local =
+			    displayToUi({parentEvent->mouse().X, parentEvent->mouse().Y}, uiScale());
+			event->forms().MouseInfo.X = local.x - resolvedLocation.x;
+			event->forms().MouseInfo.Y = local.y - resolvedLocation.y;
 			fw().pushEvent(event);
 			this->setDirty();
 			break;

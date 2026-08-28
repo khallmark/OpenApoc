@@ -1366,7 +1366,9 @@ void BattleView::render()
 			f->render();
 			if (f == motionScannerForms[false] || f == medikitForms[false])
 			{
-				pauseIconOffsetX = f->Size.x;
+				// Display pixels: this is subtracted from the display width below, and the
+				// form is drawn at the UI scale.
+				pauseIconOffsetX = f->getSizeOnDisplay().x;
 			}
 		}
 	}
@@ -1378,8 +1380,21 @@ void BattleView::render()
 		pauseIconTimer %= PAUSE_ICON_BLINK_TIME * 2;
 		if (updateSpeed == BattleUpdateSpeed::Pause && pauseIconTimer > PAUSE_ICON_BLINK_TIME)
 		{
-			fw().renderer->draw(
-			    pauseIcon, {fw().displayGetSize().x - pauseIconOffsetX - pauseIcon->size.x, 0.0f});
+			// The icon is chrome, so it scales with the panels it sits beside rather than
+			// staying a 1x sprite against 2x buttons.
+			const int scale = fw().uiGetScale();
+			const Vec2<int> iconSize{(int)pauseIcon->size.x * scale,
+			                         (int)pauseIcon->size.y * scale};
+			const Vec2<float> iconPos{
+			    (float)(fw().displayGetSize().x - pauseIconOffsetX - iconSize.x), 0.0f};
+			if (scale == 1)
+			{
+				fw().renderer->draw(pauseIcon, iconPos);
+			}
+			else
+			{
+				fw().renderer->drawScaled(pauseIcon, iconPos, iconSize, Renderer::Scaler::Nearest);
+			}
 		}
 	}
 

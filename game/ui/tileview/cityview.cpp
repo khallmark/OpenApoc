@@ -1915,152 +1915,164 @@ void CityView::refreshBaseView()
 
 void CityView::render()
 {
-	if (!this->surface)
+	// A modal dialog is up: the city is not being updated, so show the frame captured on
+	// the way out rather than re-rendering a static scene behind the dialog every frame.
+	if (fw().stageGetCurrent() != this->shared_from_this())
 	{
-		this->drawCity = true;
-		this->surface = mksp<Surface>(fw().displayGetSize());
-	}
-
-	if (drawCity)
-	{
-		this->drawCity = false;
-		RendererSurfaceBinding b(*fw().renderer, this->surface);
-
-		CityTileView::render();
-		if (DEBUG_SHOW_VEHICLE_PATH || DEBUG_SHOW_VEHICLE_TARGETS)
+		if (this->surface)
 		{
-			static const Colour groundColor = {255, 255, 64, 255};
-			static const Colour flyingColor = {64, 255, 255, 255};
-			static const Colour targetXCOMColor = {0, 255, 0, 255};
-			static const Colour targetOtherColor = {255, 0, 0, 255};
-			static const Colour targetMutualColor = {255, 240, 0, 255};
-			for (auto &pair : state->vehicles)
-			{
-				auto v = pair.second;
-				if (DEBUG_SHOW_VEHICLE_PATH)
-				{
-					auto vTile = v->tileObject;
-					if (v->city != state->current_city)
-						continue;
-					if (!vTile)
-						continue;
-					if (v->missions.empty())
-					{
-						continue;
-					}
-					auto &path = v->missions.front().currentPlannedPath;
-					Vec3<float> prevPos = vTile->getPosition();
-					for (auto &pos : path)
-					{
-						Vec3<float> posf = pos;
-						posf += Vec3<float>{0.5f, 0.5f, 0.5f};
-						Vec2<float> screenPosA = this->tileToOffsetScreenCoords(prevPos);
-						Vec2<float> screenPosB = this->tileToOffsetScreenCoords(posf);
-
-						fw().renderer->drawLine(screenPosA, screenPosB,
-						                        v->type->isGround() ? groundColor : flyingColor);
-
-						prevPos = posf;
-					}
-				}
-				if (DEBUG_SHOW_VEHICLE_TARGETS)
-				{
-					if (v->city != state->current_city)
-						continue;
-					if (v->missions.empty())
-					{
-						continue;
-					}
-					StateRef<Vehicle> targetVehicle = v->missions.front().targetVehicle;
-					if (targetVehicle)
-					{
-						auto &targetPos = targetVehicle->position;
-						auto &attackerPos = v->position;
-						Vec2<float> targetScreenPos = this->tileToOffsetScreenCoords(targetPos);
-						Vec2<float> attackerScreenPos = this->tileToOffsetScreenCoords(attackerPos);
-
-						fw().renderer->drawLine(
-						    attackerScreenPos, targetScreenPos,
-						    targetVehicle->missions.front().targetVehicle == v ? targetMutualColor
-						    : v->owner == state->getPlayer()                   ? targetXCOMColor
-						                                                       : targetOtherColor);
-					}
-				}
-			}
+			fw().renderer->drawTinted(this->surface, {0, 0}, {128, 128, 128, 255});
 		}
-		if (DEBUG_SHOW_ROAD_PATHFINDING)
-		{
-			static const auto lineColorFriend = Colour(0, 0, 0, 255);
-			static const auto lineColorEnemy = Colour(255, 0, 0, 255);
+		return;
+	}
+	renderCityScene();
+}
 
-			for (int i = 0; i < state->current_city->roadSegments.size(); i++)
+void CityView::pause()
+{
+	CityTileView::pause();
+	snapshotCity();
+}
+
+void CityView::snapshotCity()
+{
+	const Vec2<unsigned int> displayPixels{(unsigned)fw().displayGetWidth(),
+	                                       (unsigned)fw().displayGetHeight()};
+	// The window can change size while a dialog is open, so the snapshot cannot be
+	// allocated once and reused forever.
+	if (!this->surface || this->surface->size != displayPixels)
+	{
+		this->surface = mksp<Surface>(displayPixels);
+	}
+	RendererSurfaceBinding b(*fw().renderer, this->surface);
+	renderCityScene();
+}
+
+void CityView::renderCityScene()
+{
+	CityTileView::render();
+	if (DEBUG_SHOW_VEHICLE_PATH || DEBUG_SHOW_VEHICLE_TARGETS)
+	{
+		static const Colour groundColor = {255, 255, 64, 255};
+		static const Colour flyingColor = {64, 255, 255, 255};
+		static const Colour targetXCOMColor = {0, 255, 0, 255};
+		static const Colour targetOtherColor = {255, 0, 0, 255};
+		static const Colour targetMutualColor = {255, 240, 0, 255};
+		for (auto &pair : state->vehicles)
+		{
+			auto v = pair.second;
+			if (DEBUG_SHOW_VEHICLE_PATH)
 			{
-				auto &s = state->current_city->roadSegments[i];
-				if (s.empty())
+				auto vTile = v->tileObject;
+				if (v->city != state->current_city)
+					continue;
+				if (!vTile)
+					continue;
+				if (v->missions.empty())
 				{
 					continue;
 				}
-				// Connections
-				auto color = (s.connections.size() > 2 && s.tilePosition.size() > 1)
-				                 ? lineColorEnemy
-				                 : lineColorFriend;
-				int count = 0;
-				for (auto &c : s.connections)
+				auto &path = v->missions.front().currentPlannedPath;
+				Vec3<float> prevPos = vTile->getPosition();
+				for (auto &pos : path)
 				{
-					Vec3<float> thisPos =
-					    s.connections.front() == c ? s.tilePosition.front() : s.tilePosition.back();
-					thisPos += Vec3<float>{0.5f, 0.5f, 0.0f};
-					auto &s2 = state->current_city->roadSegments[c];
-					Vec3<float> tarPos = s2.connections.front() == i ? s2.tilePosition.front()
-					                                                 : s2.tilePosition.back();
-					tarPos += Vec3<float>{0.5f, 0.5f, 0.0f};
-					fw().renderer->drawLine(
-					    this->tileToOffsetScreenCoords(thisPos),
-					    this->tileToOffsetScreenCoords(thisPos * 0.6f + tarPos * 0.4f), color);
-					if (s.connections.size() > 2 && s.tilePosition.size() > 1)
-					{
-						auto &img = debugLabelsOK[count++];
-						fw().renderer->draw(img, this->tileToOffsetScreenCoords(thisPos) +
-						                             Vec2<float>{count * 8, -10});
-					}
-				}
-				// Tiles
-				for (auto j = 0; j < s.tilePosition.size(); j++)
-				{
-					auto &img = s.tileIntact[j] ? debugLabelsOK[i] : debugLabelsDead[i];
-					fw().renderer->draw(img, this->tileToOffsetScreenCoords(s.tilePosition[j]));
+					Vec3<float> posf = pos;
+					posf += Vec3<float>{0.5f, 0.5f, 0.5f};
+					Vec2<float> screenPosA = this->tileToOffsetScreenCoords(prevPos);
+					Vec2<float> screenPosB = this->tileToOffsetScreenCoords(posf);
+
+					fw().renderer->drawLine(screenPosA, screenPosB,
+					                        v->type->isGround() ? groundColor : flyingColor);
+
+					prevPos = posf;
 				}
 			}
-		}
-
-		baseForm->render();
-		overlayTab->render();
-		debugOverlay->render();
-		if (activeTab == uiTabs[0])
-		{
-			// Highlight selected base
-			for (auto &view : miniViews)
+			if (DEBUG_SHOW_VEHICLE_TARGETS)
 			{
-				auto viewBase = view->getData<Base>();
-				if (state->current_base == viewBase)
+				if (v->city != state->current_city)
+					continue;
+				if (v->missions.empty())
 				{
-					Vec2<int> pos = view->getLocationOnScreen() - 1;
-					Vec2<int> size = view->Size + 2;
-					fw().renderer->drawRect(pos, size, Colour{255, 0, 0});
-					break;
+					continue;
+				}
+				StateRef<Vehicle> targetVehicle = v->missions.front().targetVehicle;
+				if (targetVehicle)
+				{
+					auto &targetPos = targetVehicle->position;
+					auto &attackerPos = v->position;
+					Vec2<float> targetScreenPos = this->tileToOffsetScreenCoords(targetPos);
+					Vec2<float> attackerScreenPos = this->tileToOffsetScreenCoords(attackerPos);
+
+					fw().renderer->drawLine(attackerScreenPos, targetScreenPos,
+					                        targetVehicle->missions.front().targetVehicle == v
+					                            ? targetMutualColor
+					                        : v->owner == state->getPlayer() ? targetXCOMColor
+					                                                         : targetOtherColor);
 				}
 			}
 		}
 	}
+	if (DEBUG_SHOW_ROAD_PATHFINDING)
+	{
+		static const auto lineColorFriend = Colour(0, 0, 0, 255);
+		static const auto lineColorEnemy = Colour(255, 0, 0, 255);
 
-	// If there's a modal dialog, darken the screen
-	if (fw().stageGetCurrent() != this->shared_from_this())
-	{
-		fw().renderer->drawTinted(this->surface, {0, 0}, {128, 128, 128, 255});
+		for (int i = 0; i < state->current_city->roadSegments.size(); i++)
+		{
+			auto &s = state->current_city->roadSegments[i];
+			if (s.empty())
+			{
+				continue;
+			}
+			// Connections
+			auto color = (s.connections.size() > 2 && s.tilePosition.size() > 1) ? lineColorEnemy
+			                                                                     : lineColorFriend;
+			int count = 0;
+			for (auto &c : s.connections)
+			{
+				Vec3<float> thisPos =
+				    s.connections.front() == c ? s.tilePosition.front() : s.tilePosition.back();
+				thisPos += Vec3<float>{0.5f, 0.5f, 0.0f};
+				auto &s2 = state->current_city->roadSegments[c];
+				Vec3<float> tarPos =
+				    s2.connections.front() == i ? s2.tilePosition.front() : s2.tilePosition.back();
+				tarPos += Vec3<float>{0.5f, 0.5f, 0.0f};
+				fw().renderer->drawLine(
+				    this->tileToOffsetScreenCoords(thisPos),
+				    this->tileToOffsetScreenCoords(thisPos * 0.6f + tarPos * 0.4f), color);
+				if (s.connections.size() > 2 && s.tilePosition.size() > 1)
+				{
+					auto &img = debugLabelsOK[count++];
+					fw().renderer->draw(img, this->tileToOffsetScreenCoords(thisPos) +
+					                             Vec2<float>{count * 8, -10});
+				}
+			}
+			// Tiles
+			for (auto j = 0; j < s.tilePosition.size(); j++)
+			{
+				auto &img = s.tileIntact[j] ? debugLabelsOK[i] : debugLabelsDead[i];
+				fw().renderer->draw(img, this->tileToOffsetScreenCoords(s.tilePosition[j]));
+			}
+		}
 	}
-	else
+
+	baseForm->render();
+	overlayTab->render();
+	debugOverlay->render();
+	if (activeTab == uiTabs[0])
 	{
-		fw().renderer->draw(this->surface, {0, 0});
+		// Highlight selected base
+		for (auto &view : miniViews)
+		{
+			auto viewBase = view->getData<Base>();
+			if (state->current_base == viewBase)
+			{
+				Vec2<int> pos = view->getLocationOnScreen() - 1;
+				Vec2<int> size = view->getSizeOnDisplay() + 2;
+				fw().renderer->drawRect(pos, size, Colour{255, 0, 0});
+				break;
+			}
+		}
 	}
 }
 
@@ -2186,7 +2198,6 @@ void CityView::update()
 		}
 	}
 
-	this->drawCity = true;
 	CityTileView::update();
 
 	// Update debug menu
@@ -3346,7 +3357,6 @@ void CityView::initiateBuildingMission(sp<GameState> state, StateRef<Building> b
 
 void CityView::eventOccurred(Event *e)
 {
-	this->drawCity = true;
 	if (overlayTab->isVisible())
 	{
 		overlayTab->eventOccured(e);

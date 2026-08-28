@@ -62,6 +62,7 @@ add_openapoc_test(test_research)
 add_openapoc_test(test_agent_mission)
 add_openapoc_test(test_vehicle_mission)
 add_openapoc_test(test_battle_hazard)
+add_openapoc_test(test_display_size)
 
 # Tests that need a fully loaded GameState (difficulty0 + base_gamestate).
 add_openapoc_test(test_base_die ARGS

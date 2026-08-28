@@ -23,4 +23,6 @@ sp<Image> RendererImageData::readBack()
 	return nullptr;
 }
 
+void RendererImageData::resize(Vec2<unsigned int>) {}
+
 }; // namespace OpenApoc

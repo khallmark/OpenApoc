@@ -775,6 +775,7 @@ class GLSurface final : public RendererImageData
 		}
 	}
 	~GLSurface() override;
+	void resize(Vec2<unsigned int> newSize) override { this->size = newSize; }
 	sp<Image> readBack() override
 	{
 		BindFramebuffer b(this->fbo_id);
@@ -1454,9 +1455,14 @@ class OGLES30Renderer final : public Renderer
 	}
 	void drawTinted(sp<Image> i, Vec2<float> position, Colour tint) override
 	{
+		drawScaledTinted(i, position, i->size, tint);
+	}
+	void drawScaledTinted(sp<Image> i, Vec2<float> position, Vec2<float> size, Colour tint,
+	                      Scaler scaler = Scaler::Nearest) override
+	{
+		(void)scaler;
 		auto viewport_size = this->current_surface->size;
 		bool flip_y = (this->current_surface == this->default_surface);
-		auto size = i->size;
 		auto paletteImage = std::dynamic_pointer_cast<PaletteImage>(i);
 		if (paletteImage)
 		{

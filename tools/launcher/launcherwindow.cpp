@@ -46,10 +46,10 @@ static std::list<std::pair<UString, ModInfo>> enumerateMods()
 	return foundMods;
 }
 
-constexpr std::array<QSize, 6> default_resolutions = {
+constexpr std::array<QSize, 7> default_resolutions = {
 
-    // Use {0,0} as a placeholder for 'custom', expected to be the first index
-    QSize{0, 0},       QSize{640, 480},   QSize{1280, 720},
+    // {0,0} is Custom (spinboxes). {-1,-1} writes 0x0 (desktop size) to the engine.
+    QSize{0, 0},       QSize{-1, -1},     QSize{640, 480},  QSize{1280, 720},
     QSize{1920, 1080}, QSize{2560, 1440}, QSize{3200, 1800}};
 
 constexpr QSize MINIMUM_RESOLUTION = {640, 480};
@@ -121,12 +121,17 @@ void LauncherWindow::setupResolutionDisplay()
 		{
 			text = "Custom";
 		}
+		else if (size == QSize{-1, -1})
+		{
+			text = "Native desktop";
+		}
 		else
 		{
 			text = QString::number(size.width()) + " x " + QString::number(size.height());
 		}
 		comboBox.addItem(text, size);
-		if (current_size == size)
+		if ((current_size == QSize{0, 0} && size == QSize{-1, -1}) ||
+		    (size != QSize{0, 0} && size != QSize{-1, -1} && current_size == size))
 		{
 			comboBox.setCurrentIndex(comboBox.count() - 1);
 			is_custom = false;
@@ -162,7 +167,13 @@ void LauncherWindow::setResolutionSelection(int index)
 	int y = 0;
 	bool is_custom;
 
-	if (size.height() == 0 || size.width() == 0)
+	if (size == QSize{-1, -1})
+	{
+		x = 0;
+		y = 0;
+		is_custom = false;
+	}
+	else if (size.height() == 0 || size.width() == 0)
 	{
 		x = widthBox.text().toInt();
 		y = heightBox.text().toInt();
@@ -228,7 +239,8 @@ void LauncherWindow::setupDisplayNum()
 
 enum class ScalingType
 {
-	Auto = 0,
+	ExpandView = 0,
+	Auto,
 	None,
 	Scale_150,
 	Scale_200,
@@ -252,8 +264,9 @@ struct ScalingOption
 };
 
 constexpr std::array<ScalingOption, static_cast<int>(ScalingType::_count)> scaling_options = {
-    ScalingOption{ScalingType::Auto, "Auto", -1},
-    ScalingOption{ScalingType::None, "None", 100},
+    ScalingOption{ScalingType::ExpandView, "Expand view + UI scale", 0},
+    ScalingOption{ScalingType::Auto, "Scale all (legacy)", -1},
+    ScalingOption{ScalingType::None, "None (1x UI)", 100},
     ScalingOption{ScalingType::Scale_150, "150%", 66},
     ScalingOption{ScalingType::Scale_200, "200%", 50},
     ScalingOption{ScalingType::Scale_300, "300%", 33},
@@ -270,10 +283,16 @@ void LauncherWindow::setupScaling()
 	}
 
 	const bool autoScale = OpenApoc::Options::screenAutoScale.get();
+	const int uiScale = OpenApoc::Options::screenUiScaleOption.get();
 	ScalingType currentType = ScalingType::Custom;
 	if (autoScale)
 	{
 		currentType = ScalingType::Auto;
+	}
+	else if (OpenApoc::Options::screenScaleXOption.get() == 100 &&
+	         OpenApoc::Options::screenScaleYOption.get() == 100 && uiScale == 0)
+	{
+		currentType = ScalingType::ExpandView;
 	}
 	else
 	{
@@ -282,8 +301,18 @@ void LauncherWindow::setupScaling()
 
 		for (const auto &option : scaling_options)
 		{
+			if (option.type == ScalingType::ExpandView || option.type == ScalingType::Auto)
+			{
+				continue;
+			}
 			if (option.scale_value == screenScale.width() &&
-			    option.scale_value == screenScale.height())
+			    option.scale_value == screenScale.height() && uiScale == 1)
+			{
+				currentType = option.type;
+				break;
+			}
+			if (option.type == ScalingType::None && option.scale_value == screenScale.width() &&
+			    option.scale_value == screenScale.height() && uiScale <= 1)
 			{
 				currentType = option.type;
 				break;
@@ -299,9 +328,17 @@ void LauncherWindow::saveScalingOptions()
 	int index = ui->scaleBox->currentIndex();
 	LogAssert(index >= 0 && index < scaling_options.size());
 
-	if (scaling_options[index].type == ScalingType::Auto)
+	if (scaling_options[index].type == ScalingType::ExpandView)
+	{
+		OpenApoc::Options::screenAutoScale.set(false);
+		OpenApoc::Options::screenScaleXOption.set(100);
+		OpenApoc::Options::screenScaleYOption.set(100);
+		OpenApoc::Options::screenUiScaleOption.set(0);
+	}
+	else if (scaling_options[index].type == ScalingType::Auto)
 	{
 		OpenApoc::Options::screenAutoScale.set(true);
+		OpenApoc::Options::screenUiScaleOption.set(1);
 	}
 	else if (scaling_options[index].type == ScalingType::Custom)
 	{
@@ -312,6 +349,7 @@ void LauncherWindow::saveScalingOptions()
 		OpenApoc::Options::screenAutoScale.set(false);
 		OpenApoc::Options::screenScaleXOption.set(scaling_options[index].scale_value);
 		OpenApoc::Options::screenScaleYOption.set(scaling_options[index].scale_value);
+		OpenApoc::Options::screenUiScaleOption.set(1);
 	}
 }
 
@@ -331,8 +369,14 @@ void LauncherWindow::saveConfig()
 	saveScalingOptions();
 
 	const auto &comboBox = *ui->resolutionBox;
-	// Index 0 is always custom resolution
-	if (comboBox.currentIndex() == 0)
+	const auto &selectionVariant = comboBox.currentData();
+	const auto &size = selectionVariant.toSize();
+	if (size == QSize{-1, -1})
+	{
+		OpenApoc::Options::screenWidthOption.set(0);
+		OpenApoc::Options::screenHeightOption.set(0);
+	}
+	else if (comboBox.currentIndex() == 0 || size == QSize{0, 0})
 	{
 		auto &widthBox = *ui->customResolutionX;
 		auto &heightBox = *ui->customResolutionY;
@@ -343,8 +387,6 @@ void LauncherWindow::saveConfig()
 	}
 	else
 	{
-		const auto &selectionVariant = comboBox.currentData();
-		const auto &size = selectionVariant.toSize();
 		OpenApoc::Options::screenWidthOption.set(size.width());
 		OpenApoc::Options::screenHeightOption.set(size.height());
 	}

@@ -16,9 +16,11 @@ regression baseline for master and becomes a feature port.
 ctest --test-dir build -LE known-master-bug
 ```
 
-That is the regression gate: **25 tests, all green**, verified against a
-`base_gamestate` produced by master's own extractor — see the note on extractor
-provenance below, which is the trap this suite fell into once already. Plain `ctest` also runs three quarantined reproducers that fail
+That is the regression gate: **26 tests, all green** (25 from the port, plus
+`test_display_size`, which arrives with the display-size subsystem), verified
+against a `base_gamestate` produced by master's own extractor — see the note on
+extractor provenance below, which is the trap this suite fell into once already.
+Plain `ctest` also runs three quarantined reproducers that fail
 on purpose (see below).
 
 Both CI runners were updated to match: `.github/workflows/cmake.yml` and
@@ -118,13 +120,17 @@ is quarantined whole rather than split.
 
 ## What did not come across
 
-### Three files never ported — develop-only subsystems
+### Two files never ported — develop-only subsystems
 
 | File | Requires |
 | --- | --- |
 | `test_harness.cpp` | `framework/harness.h` (socket test harness) |
 | `test_app_paths.cpp` | `framework/os/app_paths.h` |
-| `test_display_size.cpp` | `framework/os/display_size.h` |
+
+`test_display_size.cpp` was a third entry here until `framework/os/display_size.h`
+came across with the UI-chrome / map-view decoupling. Its requirement is now
+satisfied and the file is ported whole, unmodified apart from two non-ASCII
+characters in comments. It is a pure-logic test and needs no extracted data.
 
 ### Five files dropped whole — every case was develop-only
 

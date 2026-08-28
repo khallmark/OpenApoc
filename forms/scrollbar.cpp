@@ -104,12 +104,12 @@ void ScrollBar::eventOccured(Event *e)
 			case Orientation::Vertical:
 				// MouseInfo.X/Y is relative to the control that raised it
 				// make it relative to this control instead
-				mousePosition = e->forms().MouseInfo.Y +
-				                e->forms().RaisedBy->getLocationOnScreen().y - resolvedLocation.y;
+				mousePosition = e->forms().MouseInfo.Y + e->forms().RaisedBy->getLocationInUi().y -
+				                resolvedLocation.y;
 				break;
 			case Orientation::Horizontal:
-				mousePosition = e->forms().MouseInfo.X +
-				                e->forms().RaisedBy->getLocationOnScreen().x - resolvedLocation.x;
+				mousePosition = e->forms().MouseInfo.X + e->forms().RaisedBy->getLocationInUi().x -
+				                resolvedLocation.x;
 				break;
 		}
 

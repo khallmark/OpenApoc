@@ -84,8 +84,11 @@ class CityView : public CityTileView
 
 	bool vanillaControls = false;
 
-	bool drawCity = true;
+	// Last frame captured on the way into a modal dialog, used as its darkened backdrop.
 	sp<Surface> surface;
+
+	void renderCityScene();
+	void snapshotCity();
 
 	std::vector<sp<Image>> debugLabelsOK;
 	std::vector<sp<Image>> debugLabelsDead;
@@ -129,6 +132,7 @@ class CityView : public CityTileView
 	                             std::list<StateRef<Agent>> agents);
 
 	void begin() override;
+	void pause() override;
 	void resume() override;
 	void refreshBaseView();
 	void update() override;
