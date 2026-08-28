@@ -8,14 +8,17 @@
 #include "framework/event.h"
 #include "framework/framework.h"
 #include "framework/keycodes.h"
+#include "game/state/battle/battle.h"
 #include "game/state/gamestate.h"
 #include "game/state/rules/battle/battlecommonimagelist.h"
+#include "game/state/rules/battle/battlemap.h"
 #include "game/state/shared/aequipment.h"
 #include "game/state/shared/agent.h"
 #include "game/ui/components/controlgenerator.h"
 #include "game/ui/general/aequipscreen.h"
 #include "game/ui/general/agentsheet.h"
 #include "game/ui/general/loadingscreen.h"
+#include "game/ui/general/messagebox.h"
 #include "game/ui/tileview/battleview.h"
 
 namespace OpenApoc
@@ -129,6 +132,17 @@ void BattlePreStart::begin()
 {
 	updateAgents();
 	displayAgent(nullptr);
+
+	// TACP mission briefing (currently only extracted for the ten alien-dimension buildings -
+	// see docs/original-game/findings/C2-organic-factory-objectives.md). Shown once, before
+	// squad assignment, same as other one-shot informational dialogs in this stage.
+	auto &battleMap = state->current_battle->battle_map;
+	if (battleMap && !battleMap->briefing.empty())
+	{
+		fw().stageQueueCommand(
+		    {StageCmd::Command::PUSH, mksp<MessageBox>(tr("Mission Briefing"), battleMap->briefing,
+		                                               MessageBox::ButtonOptions::Ok)});
+	}
 }
 
 void BattlePreStart::pause()
