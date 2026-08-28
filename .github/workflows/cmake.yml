@@ -26,10 +26,12 @@ jobs:
 
     - name: Download minimal cd image
       # HTTP only: s2.jonnyh.net does not serve HTTPS on :443 (port answers SSH,
-      # confirmed 2026-08-27); integrity is enforced below via checksum instead of TLS.
+      # confirmed 2026-08-27). Prefer HTTPS if that ever changes.
       run: wget http://s2.jonnyh.net/pub/cd_minimal.iso.xz -O $GITHUB_WORKSPACE/data/cd.iso.xz
 
     - name: Verify minimal cd image checksum
+      # Trust-on-first-use: proves the download matches the pin below, not that
+      # the artifact is authentic. See the PR description for how to re-pin.
       run: |
         echo "4e0e93a4110c2e52778d1468b96d02bd062324121773c345913ebf6852000631  $GITHUB_WORKSPACE/data/cd.iso.xz" | sha256sum -c -
 
