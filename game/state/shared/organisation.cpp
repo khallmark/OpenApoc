@@ -19,6 +19,20 @@
 namespace OpenApoc
 {
 
+// Settles a market transaction: the buyer's balance is always debited; the seller (this org) is
+// credited unless the seller and buyer are the same organisation (e.g. purchasing at one's own
+// base), which would otherwise wash out to a net-zero self-payment.
+static void settleMarketPurchase(Organisation &seller, StateRef<Organisation> buyer, int count,
+                                 int price)
+{
+	const int total = count * price;
+	buyer->balance -= total;
+	if (seller.id != buyer.id)
+	{
+		seller.balance += total;
+	}
+}
+
 // Returns 100% +- 25%, with a max of 20
 int Organisation::getGuardCount(GameState &state) const
 {
@@ -200,8 +214,7 @@ void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
 	                             StateRef<Organisation>{&state, id}, buyer);
 	LogWarning("PURCHASE: {0} bought {1}x{2} at {3} to {4} ", buyer->owner.id, count,
 	           vehicleEquipment.id, building.id, buyer.id);
-	auto owner = buyer->owner;
-	owner->balance -= count * price;
+	settleMarketPurchase(*this, buyer->owner, count, price);
 }
 
 void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
@@ -234,8 +247,7 @@ void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
 	                             StateRef<Organisation>{&state, id}, buyer);
 	LogWarning("PURCHASE: {0} bought {1}x{2} at {3} to {4} ", buyer->owner.id, count,
 	           vehicleAmmo.id, building.id, buyer.id);
-	auto owner = buyer->owner;
-	owner->balance -= count * price;
+	settleMarketPurchase(*this, buyer->owner, count, price);
 }
 
 void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
@@ -270,8 +282,7 @@ void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
 	    price, StateRef<Organisation>{&state, id}, buyer);
 	LogWarning("PURCHASE: {0} bought {1}x{2} at {3} to {4} ", buyer->owner.id, count,
 	           agentEquipment.id, building.id, buyer.id);
-	auto owner = buyer->owner;
-	owner->balance -= count * price;
+	settleMarketPurchase(*this, buyer->owner, count, price);
 }
 
 void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
@@ -305,8 +316,7 @@ void Organisation::purchase(GameState &state, const StateRef<Building> &buyer,
 	}
 	LogWarning("PURCHASE: {0} bought {1}x{2} at {3} to {4} ", buyer->owner.id, count,
 	           vehicleType.id, building.id, buyer.id);
-	auto owner = buyer->owner;
-	owner->balance -= count * price;
+	settleMarketPurchase(*this, buyer->owner, count, price);
 }
 
 void Organisation::setRaidMissions(GameState &state, StateRef<City> city)
@@ -724,7 +734,7 @@ void Organisation::updateVehicleAgentPark(GameState &state)
 		int countVehicles = 0;
 		for (auto &v : state.vehicles)
 		{
-			if (v.second->owner.id == id && v.second->type == entry.first)
+			if (v.second->owner.id == id && v.second->type == entry.first && !v.second->isDead())
 			{
 				countVehicles++;
 			}
@@ -744,7 +754,16 @@ void Organisation::updateVehicleAgentPark(GameState &state)
 		}
 		while (countVehicles < entry.second)
 		{
-			// FIXME: Check if org has funds before buying vehicle
+			int price = 0;
+			auto economyIt = state.economy.find(entry.first.id);
+			if (economyIt != state.economy.end())
+			{
+				price = economyIt->second.currentPrice;
+			}
+			if (price > 0 && balance < price)
+			{
+				break;
+			}
 
 			std::list<StateRef<Building>> buildingsRandomizer;
 
@@ -772,8 +791,43 @@ void Organisation::updateVehicleAgentPark(GameState &state)
 
 			auto v = building->city->placeVehicle(state, entry.first, {&state, id}, building);
 			v->homeBuilding = {&state, building};
+			if (price > 0)
+			{
+				balance -= price;
+			}
 
 			countVehicles++;
+		}
+		while (countVehicles > entry.second && !spaceLiner)
+		{
+			sp<Vehicle> surplus;
+			for (auto &v : state.vehicles)
+			{
+				if (v.second->owner.id == id && v.second->type == entry.first &&
+				    v.second->missions.empty() && v.second->currentAgents.empty() &&
+				    !v.second->crashed && !v.second->isDead())
+				{
+					surplus = v.second;
+					break;
+				}
+			}
+			if (!surplus)
+			{
+				// No idle surplus vehicle available to sell off.
+				break;
+			}
+			int price = 0;
+			auto economyIt = state.economy.find(entry.first.id);
+			if (economyIt != state.economy.end())
+			{
+				price = economyIt->second.currentPrice;
+			}
+			if (price > 0)
+			{
+				balance += price;
+			}
+			surplus->die(state, true);
+			countVehicles--;
 		}
 	}
 }
