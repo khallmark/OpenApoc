@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@main
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
         fetch-depth: 0
@@ -28,8 +28,14 @@ jobs:
       run: cmake -E make_directory ${{runner.workspace}}/build
 
     - name: Download minimal cd image
+      # HTTP only: s2.jonnyh.net does not serve HTTPS on :443 (port answers SSH,
+      # confirmed 2026-08-27); integrity is enforced below via checksum instead of TLS.
       run: wget http://s2.jonnyh.net/pub/cd_minimal.iso.xz -O $GITHUB_WORKSPACE/data/cd.iso.xz
-    
+
+    - name: Verify minimal cd image checksum
+      run: |
+        echo "4e0e93a4110c2e52778d1468b96d02bd062324121773c345913ebf6852000631  $GITHUB_WORKSPACE/data/cd.iso.xz" | sha256sum -c -
+
     - name: Extract minimal cd image
       run: xz -d $GITHUB_WORKSPACE/data/cd.iso.xz
 
@@ -44,8 +50,8 @@ jobs:
       # access regardless of the host operating system
       shell: bash
       working-directory: ${{runner.workspace}}/build
-      # Note the current convention is to use the -S and -B options here to specify source 
-      # and build directories, but this is only available with CMake 3.13 and higher.  
+      # Note the current convention is to use the -S and -B options here to specify source
+      # and build directories, but this is only available with CMake 3.13 and higher.
       # The CMake binaries on the Github Actions machines are (as of this writing) 3.12
       run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -GNinja -DCLANG_FORMAT=${CLANG_FORMAT} -DCLANG_TIDY=${CLANG_TIDY}
 
@@ -82,10 +88,10 @@ jobs:
         cd $GITHUB_WORKSPACE
         if [ "${{env.BEFORE_COMMIT_SHA}}" == "0000000000000000000000000000000000000000" ]
         then
-          echo 'BUILD_DIR=${{runner.workspace}}/build $GITHUB_WORKSPACE/tools/lint-tidy.sh ${{env.AFTER_COMMIT_SHA}} || true;'
-          BUILD_DIR=${{runner.workspace}}/build $GITHUB_WORKSPACE/tools/lint-tidy.sh ${{env.AFTER_COMMIT_SHA}} || true;
+          echo 'BUILD_DIR=${{runner.workspace}}/build $GITHUB_WORKSPACE/tools/lint-tidy.sh ${{env.AFTER_COMMIT_SHA}}'
+          BUILD_DIR=${{runner.workspace}}/build $GITHUB_WORKSPACE/tools/lint-tidy.sh ${{env.AFTER_COMMIT_SHA}}
         else
-          echo 'BUILD_DIR=${{runner.workspace}}/build $GITHUB_WORKSPACE/tools/lint-tidy.sh ${{env.BEFORE_COMMIT_SHA}}..${{env.AFTER_COMMIT_SHA}} || true;'
-          BUILD_DIR=${{runner.workspace}}/build $GITHUB_WORKSPACE/tools/lint-tidy.sh ${{env.BEFORE_COMMIT_SHA}}..${{env.AFTER_COMMIT_SHA}} || true;
+          echo 'BUILD_DIR=${{runner.workspace}}/build $GITHUB_WORKSPACE/tools/lint-tidy.sh ${{env.BEFORE_COMMIT_SHA}}..${{env.AFTER_COMMIT_SHA}}'
+          BUILD_DIR=${{runner.workspace}}/build $GITHUB_WORKSPACE/tools/lint-tidy.sh ${{env.BEFORE_COMMIT_SHA}}..${{env.AFTER_COMMIT_SHA}}
         fi
         
