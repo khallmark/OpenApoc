@@ -52,6 +52,7 @@ void dumpOptionsToLog()
 	dumpOption(targetFPS);
 	dumpOption(frameLimit);
 	dumpOption(swapInterval);
+	dumpOption(profileFrames);
 	dumpOption(screenshotPath);
 	dumpOption(resizeOnFrame);
 	dumpOption(resizeTo);
@@ -253,6 +254,8 @@ ConfigOptionInt frameLimit("Framework", "FrameLimit",
                            tr("Quit after this many frames - 0 = unlimited"), 0);
 ConfigOptionInt swapInterval("Framework", "SwapInterval",
                              tr("Swap interval (0 = tear, 1 = wait for vsync"), 0);
+ConfigOptionInt profileFrames("Framework", "ProfileFrames",
+                              tr("Log average update/render times every N frames - 0 = off"), 0);
 ConfigOptionString screenshotPath(
     "Framework", "Screenshot",
     tr("Write the last frame to this file before quitting on FrameLimit - empty = off"), "");

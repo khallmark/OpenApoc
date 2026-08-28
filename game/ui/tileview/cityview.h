@@ -3,6 +3,7 @@
 #include "game/state/stateobject.h"
 #include "game/ui/tileview/citytileview.h"
 #include "library/sp.h"
+#include <set>
 #include <vector>
 
 namespace OpenApoc
@@ -54,6 +55,10 @@ class CityView : public CityTileView
 	std::vector<sp<Form>> uiTabs;
 	sp<Form> overlayTab, debugOverlay;
 	std::vector<sp<GraphicButton>> miniViews;
+	// Layout hash per entry in miniViews, so an unchanged base is not redrawn.
+	std::vector<size_t> miniViewSignatures;
+	// Click handlers are permanent, so never register one on the same button twice.
+	std::set<sp<GraphicButton>> miniViewsWithCallback;
 	CityUpdateSpeed updateSpeed;
 	CityUpdateSpeed lastSpeed;
 
