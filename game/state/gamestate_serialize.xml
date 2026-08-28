@@ -912,6 +912,7 @@
     <member>power</member>
     <member>lifetime</member>
     <member>age</member>
+    <member>fireOverlay</member>
     <member>frame</member>
     <member>ticksUntilVisible</member>
     <member>frameChangeTicksAccumulated</member>
@@ -1233,6 +1234,7 @@
     <member>bioRemains</member>
     <member>launcher</member>
     <member>artifact</member>
+    <member>hazardResist</member>
     <member>body_sprite</member>
     <member>damage_modifier</member>
     <member>body_part</member>
