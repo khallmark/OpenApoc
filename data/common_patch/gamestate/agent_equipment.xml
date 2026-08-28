@@ -264,14 +264,12 @@
   <entry>
     <key>AEQUIPMENTTYPE_DIMENSION_DESTABILISER</key>
     <value>
-      <research>
-        <entry>
-          <type>All</type>
-          <topics>
-            <entry>RESEARCH_DIMENSION_DESTABILISER</entry>
-          </topics>
-        </entry>
-      </research>
+      <research_dependency>
+        <type>All</type>
+        <topics>
+          <entry>RESEARCH_DIMENSION_DESTABILISER</entry>
+        </topics>
+      </research_dependency>
     </value>
   </entry>
   <entry>
@@ -383,6 +381,7 @@
   <entry>
     <key>AEQUIPMENTTYPE_PERSONAL_DISRUPTOR_SHIELD</key>
     <value>
+      <hazardResist>200</hazardResist>
       <research>
         <entry>
           <type>All</type>
@@ -474,6 +473,7 @@
   <entry>
     <key>AEQUIPMENTTYPE_X-COM_BODY_SHIELD</key>
     <value>
+      <hazardResist>100</hazardResist>
       <research>
         <entry>
           <type>All</type>
@@ -556,5 +556,11 @@
 	<bioStorage>true</bioStorage>
 	<bioRemains>AEQUIPMENTTYPE_OVERSPAWN_DEAD</bioRemains>
 	</value>
+  </entry>
+  <entry>
+    <key>AEQUIPMENTTYPE_MARSEC_BODY_UNIT</key>
+    <value>
+      <hazardResist>50</hazardResist>
+    </value>
   </entry>
 </agent_equipment>
