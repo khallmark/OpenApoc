@@ -54,23 +54,23 @@ namespace
 
 thread_local bool testCheckFailed = false;
 
-#define TEST_CHECK(cond, ...)                                                                     \
+#define TEST_CHECK(cond, ...)                                                                      \
 	do                                                                                             \
 	{                                                                                              \
-		if (!(cond))                                                                              \
+		if (!(cond))                                                                               \
 		{                                                                                          \
-			LogError(__VA_ARGS__);                                                                \
+			LogError(__VA_ARGS__);                                                                 \
 			testCheckFailed = true;                                                                \
 		}                                                                                          \
 	} while (0)
 
-#define TEST_REQUIRE(cond, ...)                                                                   \
+#define TEST_REQUIRE(cond, ...)                                                                    \
 	do                                                                                             \
 	{                                                                                              \
-		if (!(cond))                                                                              \
+		if (!(cond))                                                                               \
 		{                                                                                          \
-			LogError(__VA_ARGS__);                                                                \
-			return false;                                                                         \
+			LogError(__VA_ARGS__);                                                                 \
+			return false;                                                                          \
 		}                                                                                          \
 	} while (0)
 
@@ -111,8 +111,8 @@ bool test_weapon_priority_formula_ordering_and_inversion()
 	const float priorityA2 = priority(cthA2, damageA2, timeA2);
 	const float priorityB2 = priority(cthB2, damageB2, timeB2);
 	TEST_REQUIRE(priorityB2 > priorityA2,
-	             "inverting all three factors did not invert the ordering ({0} vs {1})",
-	             priorityA2, priorityB2);
+	             "inverting all three factors did not invert the ordering ({0} vs {1})", priorityA2,
+	             priorityB2);
 
 	// A direct TIME-only inversion (time != 1 on both sides), holding CTH and DAMAGE fixed: a
 	// slower weapon must score lower than an identical but faster one, all else equal. This is
@@ -158,8 +158,7 @@ bool test_weapon_priority_inputs_are_sane_for_real_weapons()
 		weaponsChecked++;
 		TEST_CHECK(e.second->fire_delay > 0, "{0} has fire_delay {1} (formula divides by time)",
 		           e.first, e.second->fire_delay);
-		TEST_CHECK(e.second->damage >= 0, "{0} has negative damage {1}", e.first,
-		           e.second->damage);
+		TEST_CHECK(e.second->damage >= 0, "{0} has negative damage {1}", e.first, e.second->damage);
 		TEST_CHECK(e.second->accuracy >= 0, "{0} has negative accuracy {1}", e.first,
 		           e.second->accuracy);
 	}
