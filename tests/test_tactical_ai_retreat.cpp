@@ -26,20 +26,35 @@ struct RetreatDistanceCase
 
 const RetreatDistanceCase CASES[] = {
     // Candidate clearly farther from the enemy than the unit's current position.
-    {"candidate farther along +x", {10.0f, 0.0f, 0.0f}, {5.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f},
+    {"candidate farther along +x",
+     {10.0f, 0.0f, 0.0f},
+     {5.0f, 0.0f, 0.0f},
+     {0.0f, 0.0f, 0.0f},
      true},
     // Candidate clearly nearer to the enemy than the unit's current position.
-    {"candidate nearer along +x", {2.0f, 0.0f, 0.0f}, {5.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f},
+    {"candidate nearer along +x",
+     {2.0f, 0.0f, 0.0f},
+     {5.0f, 0.0f, 0.0f},
+     {0.0f, 0.0f, 0.0f},
      false},
     // Boundary: candidate is equidistant (same distance, different point) - must NOT count
     // as farther. This is the case a sloppy ">=" mutation would get wrong.
-    {"candidate equidistant, different point", {0.0f, 5.0f, 0.0f}, {5.0f, 0.0f, 0.0f},
-     {0.0f, 0.0f, 0.0f}, false},
+    {"candidate equidistant, different point",
+     {0.0f, 5.0f, 0.0f},
+     {5.0f, 0.0f, 0.0f},
+     {0.0f, 0.0f, 0.0f},
+     false},
     // Full 3D displacement, non-origin enemy, negative coordinates.
-    {"3d farther with negative coords", {-8.0f, 6.0f, 4.0f}, {-1.0f, 1.0f, 1.0f},
-     {2.0f, -3.0f, 0.0f}, true},
-    {"3d nearer with negative coords", {1.0f, -2.0f, 0.5f}, {-8.0f, 6.0f, 4.0f},
-     {2.0f, -3.0f, 0.0f}, false},
+    {"3d farther with negative coords",
+     {-8.0f, 6.0f, 4.0f},
+     {-1.0f, 1.0f, 1.0f},
+     {2.0f, -3.0f, 0.0f},
+     true},
+    {"3d nearer with negative coords",
+     {1.0f, -2.0f, 0.5f},
+     {-8.0f, 6.0f, 4.0f},
+     {2.0f, -3.0f, 0.0f},
+     false},
 };
 } // namespace
 
