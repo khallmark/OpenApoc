@@ -157,6 +157,9 @@ set (RENDERER_SOURCE_FILES
 if(NOT IOS)
 	list(APPEND RENDERER_SOURCE_FILES render/gl20/ogl_2_0_renderer.cpp)
 endif()
+if(APPLE)
+	list(APPEND RENDERER_SOURCE_FILES render/metal/metal_renderer.mm)
+endif()
 
 source_group(framework\\renderer\\sources FILES
 	${RENDERER_SOURCE_FILES})
@@ -199,13 +202,25 @@ add_library(OpenApoc_Framework STATIC
 	${RENDERER_SOURCE_FILES} ${RENDERER_HEADER_FILES}
 	${FILESYSTEM_SOURCE_FILES} ${FILESYSTEM_HEADER_FILES})
 
+if(APPLE)
+	set_source_files_properties(render/metal/metal_renderer.mm PROPERTIES
+		LANGUAGE OBJCXX
+		COMPILE_FLAGS "-fobjc-arc")
+	target_compile_definitions(OpenApoc_Framework PUBLIC "-DOPENAPOC_METAL")
+	find_library(METAL_LIBRARY Metal REQUIRED)
+	find_library(QUARTZCORE_LIBRARY QuartzCore REQUIRED)
+	find_library(FOUNDATION_LIBRARY Foundation REQUIRED)
+	target_link_libraries(OpenApoc_Framework PUBLIC
+		${METAL_LIBRARY} ${QUARTZCORE_LIBRARY} ${FOUNDATION_LIBRARY})
+endif()
+
 if(IOS)
 	target_sources(OpenApoc_Framework PRIVATE os/ios_file_picker.mm)
 	set_source_files_properties(os/ios_file_picker.mm PROPERTIES
 		LANGUAGE OBJCXX
 		COMPILE_FLAGS "-fobjc-arc")
 	target_compile_definitions(OpenApoc_Framework PUBLIC
-			"-DRENDERERS=\"GLES_3_0\""
+			"-DRENDERERS=\"Metal:GLES_3_0\""
 			"-DOPENAPOC_GLES")
 	target_compile_definitions(OpenApoc_Framework PRIVATE
 			"-DGLESWRAP_PLATFORM_SDL")
@@ -217,7 +232,7 @@ elseif(APPLE)
 		LANGUAGE OBJCXX
 		COMPILE_FLAGS "-fobjc-arc")
 	target_compile_definitions(OpenApoc_Framework PUBLIC
-			"-DRENDERERS=\"GLES_3_0:GL_2_0\"")
+			"-DRENDERERS=\"Metal:GLES_3_0:GL_2_0\"")
 	target_compile_definitions(OpenApoc_Framework PRIVATE
 			"-DGLESWRAP_PLATFORM_MACHO")
 	# OSX doesn't seem to support the c++11 'thread_local' keyword

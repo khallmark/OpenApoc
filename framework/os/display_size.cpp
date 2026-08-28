@@ -51,6 +51,20 @@ Vec2<int> computeDisplaySize(Vec2<int> logicalSize, int scaleXPercent, int scale
 	}
 
 	Vec2<int> display{(int)((float)logical.x * scaleX), (int)((float)logical.y * scaleY)};
+	// Raising each axis to its minimum independently changes the aspect ratio, and the result
+	// is then stretched across the whole drawable by the scale-surface blit. A 16:9 window at
+	// 50% computes 640x360, and clamping only y to 480 would render 4:3 content squashed
+	// across a 16:9 screen. Lift both axes by the same factor so the shape the scale asked for
+	// survives -- deliberate anisotropy from ScaleX != ScaleY is preserved, accidental
+	// anisotropy from the clamp is not.
+	if (display.x < kMinScreenWidth || display.y < kMinScreenHeight)
+	{
+		const float lift = std::max((float)kMinScreenWidth / (float)std::max(1, display.x),
+		                            (float)kMinScreenHeight / (float)std::max(1, display.y));
+		display.x = (int)((float)display.x * lift);
+		display.y = (int)((float)display.y * lift);
+	}
+	// The rounding above can leave an axis a pixel short of the minimum.
 	display.x = std::max(kMinScreenWidth, display.x);
 	display.y = std::max(kMinScreenHeight, display.y);
 	return display;
@@ -88,6 +102,22 @@ Vec2<int> displayToUi(Vec2<int> displayPoint, int uiScale)
 	return {displayPoint.x / s, displayPoint.y / s};
 }
 
+bool prefersMetal(const UString &rendererList)
+{
+	for (const auto &name : split(rendererList, ":"))
+	{
+		if (name == "Metal")
+		{
+			return true;
+		}
+		if (name == "GLES_3_0" || name == "GL_2_0")
+		{
+			return false;
+		}
+	}
+	return false;
+}
+
 bool isFactoryWindowedDefault(int width, int height, const char *mode, bool autoScale)
 {
 	if (autoScale)
@@ -111,15 +141,36 @@ void applyAppBundleDisplayDefaults(const UString &programPath)
 #ifdef __APPLE__
 #if TARGET_OS_IPHONE
 	(void)programPath;
-	Options::screenWidthOption.set(0);
-	Options::screenHeightOption.set(0);
-	Options::screenModeOption.set("borderless");
-	Options::screenAutoScale.set(false);
+	// Each default applies only where the user has not spoken. These used to be set
+	// unconditionally, which silently discarded every one of them from settings.conf and from
+	// the command line -- UI scale on an iPad could not be changed at all. The desktop branch
+	// below bails out entirely when any screen option is overridden; that is not right here,
+	// because an iOS app has no windowed mode to fall back to, so setting one option must not
+	// cost the others their defaults.
+	if (!config().optionOverridden("Framework.Screen.Width"))
+	{
+		Options::screenWidthOption.set(0);
+	}
+	if (!config().optionOverridden("Framework.Screen.Height"))
+	{
+		Options::screenHeightOption.set(0);
+	}
+	if (!config().optionOverridden("Framework.Screen.Mode"))
+	{
+		Options::screenModeOption.set("borderless");
+	}
+	if (!config().optionOverridden("Framework.Screen.AutoScale"))
+	{
+		Options::screenAutoScale.set(false);
+	}
 	// The auto rule only reaches 2x above 2560 points, which no iPad is, so a
 	// 640x480 UI would sit in a small box in the middle of a 13-inch screen with
 	// targets far under the ~44pt a finger needs. AutoScale must stay false:
 	// computeUiScale pins the scale back to 1 whenever it is set.
-	Options::screenUiScaleOption.set(2);
+	if (!config().optionOverridden("Framework.Screen.UiScale"))
+	{
+		Options::screenUiScaleOption.set(2);
+	}
 	return;
 #endif
 #endif

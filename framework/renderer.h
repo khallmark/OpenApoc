@@ -55,6 +55,11 @@ class Renderer
 	virtual void flush() = 0;
 	virtual UString getName() = 0;
 
+	// Hand the finished frame to the display. Backends that present through SDL's GL
+	// swap (both GL renderers) leave this empty; Metal owns its own swapchain and does
+	// the work here.
+	virtual void present() {};
+
 	virtual void newFrame() {};
 
 	// GPU draw calls issued since the last call, for the frame profiler. 0 if the

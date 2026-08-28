@@ -21,6 +21,9 @@
 #include "library/sp.h"
 #include "library/xorshift.h"
 #include <SDL.h>
+#ifdef OPENAPOC_METAL
+#include <SDL_metal.h>
+#endif
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -67,7 +70,13 @@ class FrameworkPrivate
 
 	SDL_DisplayMode screenMode;
 	SDL_Window *window;
+	// Exactly one of these is live: a Metal window cannot host a GL context, and the choice
+	// is made before the window exists. context == nullptr means the Metal path won.
 	SDL_GLContext context;
+#ifdef OPENAPOC_METAL
+	SDL_MetalView metalView = nullptr;
+	void *metalLayer = nullptr;
+#endif
 
 	std::map<UString, std::unique_ptr<RendererFactory>> registeredRenderers;
 	std::map<UString, std::unique_ptr<SoundBackendFactory>> registeredSoundBackends;
@@ -311,10 +320,14 @@ Framework::Framework(const UString programName, bool createWindow)
 	}
 	audioInitialise(!createWindow);
 
-#if defined(__APPLE__) && TARGET_OS_IPHONE
+// Kept off on a real device, where a listening socket is a privacy and App Store review
+// surface and nothing is there to connect to it. The simulator is a development target sharing
+// the host's network stack, and without the harness there is no way to drive a scripted test on
+// iOS at all -- which is how a renderer bug reaches an iPad unverified.
+#if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
 	if (Options::harnessEnable.get())
 	{
-		LogWarning("Framework.Harness is disabled on iOS");
+		LogWarning("Framework.Harness is disabled on iOS devices");
 	}
 #else
 	if (Options::harnessEnable.get())
@@ -512,7 +525,13 @@ void Framework::run(sp<Stage> initialStage)
 				this->renderer->flush();
 				this->renderer->newFrame();
 				profileSwapStart = std::chrono::steady_clock::now();
-				SDL_GL_SwapWindow(p->window);
+				// Metal owns its swapchain and presents in here; the GL renderers leave
+				// present() empty and are swapped through SDL below.
+				this->renderer->present();
+				if (p->context)
+				{
+					SDL_GL_SwapWindow(p->window);
+				}
 			}
 		}
 		if (profileFrames)
@@ -1038,44 +1057,26 @@ void Framework::displayInitialise()
 		return;
 	}
 	LogInfo("Init display");
-	int display_flags = SDL_WINDOW_OPENGL;
+
+	// A window is created for one graphics API and cannot be handed to the other, so the
+	// backend has to be chosen from the preference list here rather than after the window
+	// exists. See prefersMetal(); it is a free function so the choice can be unit-tested.
+	bool useMetal = false;
+#ifdef OPENAPOC_METAL
+	useMetal = prefersMetal(Options::renderersOption.get());
+#endif
+
+	// GL_2_0 cannot run on a core profile -- it feeds GL from client memory and its shaders are
+	// #version 110 -- so this stays opt-in rather than being inferred from the renderer list.
+	[[maybe_unused]] const bool requestCoreProfile = Options::glProfileOption.get() == "core";
+
+	int display_flags = 0;
 #ifdef SDL_WINDOW_ALLOW_HIGHDPI
 	display_flags |= SDL_WINDOW_ALLOW_HIGHDPI;
 #endif
 #if defined(__APPLE__) && TARGET_OS_IPHONE
 	display_flags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_BORDERLESS;
 #endif
-	// GL_2_0 cannot run on a core profile -- it feeds GL from client memory and its shaders
-	// are #version 110 -- so this stays opt-in rather than being inferred from the renderer list.
-	[[maybe_unused]] const bool requestCoreProfile = Options::glProfileOption.get() == "core";
-#ifdef OPENAPOC_GLES
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-	// Request context version 3.0
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-#else
-	// This used to be guarded by SDL_OPENGL_CORE, which nothing in the build ever defines --
-	// so no core profile was ever requested, and macOS (which offers 3.2 and 4.1 through a
-	// core profile only) always fell back to a legacy 2.1 context with neither ES3 nor
-	// GL_ARB_ES3_compatibility. That is why GLES_3_0 could not initialise there.
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
-	                    requestCoreProfile ? SDL_GL_CONTEXT_PROFILE_CORE : 0);
-	// 4.1 is the ceiling on macOS. Asking for less there yields 3.2/GLSL 1.50, which has no
-	// explicit attribute locations -- the GLES_3_0 shaders would not compile.
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, requestCoreProfile ? 4 : 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, requestCoreProfile ? 1 : 0);
-#endif
-#ifdef DEBUG_RENDERER
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
-#endif
-	// Request RGBA8888 - change if needed
-	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-
-	SDL_GL_SetSwapInterval(Options::swapInterval.get());
 
 	ScreenMode mode = optionsScreenMode();
 	if (mode == ScreenMode::Unknown)
@@ -1145,86 +1146,184 @@ void Framework::displayInitialise()
 		p->lastWindowedSize = resolved;
 	}
 
-	p->window =
-	    SDL_CreateWindow("OpenApoc", SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber),
-	                     SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber), resolved.x, resolved.y,
-	                     display_flags);
-
-	if (!p->window)
+	// Metal first when it was preferred: if the view cannot be made, the window is torn
+	// down and remade for GL rather than left in a state neither backend can use.
+	for (int attempt = 0; attempt < 2; attempt++)
 	{
-		LogError("Failed to create window \"{0}\"", SDL_GetError());
-		exit(1);
-	}
-	p->windowFocused = (SDL_GetWindowFlags(p->window) & SDL_WINDOW_INPUT_FOCUS) != 0;
-
-	p->context = SDL_GL_CreateContext(p->window);
-	if (!p->context)
-	{
+		int api_flags = useMetal ? SDL_WINDOW_METAL : SDL_WINDOW_OPENGL;
+		if (!useMetal)
+		{
 #ifdef OPENAPOC_GLES
-		LogError("Failed to create OpenGL ES 3.0 context! [SDLerror: {0}]", SDL_GetError());
-		SDL_DestroyWindow(p->window);
-		exit(1);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+			// Request context version 3.0
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #else
-		// The first request is for a version macOS never grants, so this retry is the normal
-		// path there, not a fault. A genuine failure is the LogError + exit(1) just below.
-		LogInfo("GL context request unsupported by driver, retrying with a legacy context "
-		        "[SDLError: {0}]",
-		        SDL_GetError());
-		LogInfo("Attempting to create context by lowering the requested version");
-		// A core profile mask left set here would make the retry ask for "2.0 core",
-		// which is not a profile any driver can grant.
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, 0);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+			// This used to be guarded by SDL_OPENGL_CORE, which nothing in the build ever
+			// defines -- so no core profile was ever requested, and macOS (which offers 3.2
+			// and 4.1 through a core profile only) always fell back to a legacy 2.1 context
+			// with neither ES3 nor GL_ARB_ES3_compatibility. That is why GLES_3_0 could not
+			// initialise there. Opt in with --Framework.GLProfile=core.
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+			                    requestCoreProfile ? SDL_GL_CONTEXT_PROFILE_CORE : 0);
+			// 4.1 is the ceiling on macOS. Asking for less there yields 3.2/GLSL 1.50, which
+			// has no explicit attribute locations -- the GLES_3_0 shaders would not compile.
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, requestCoreProfile ? 4 : 3);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, requestCoreProfile ? 1 : 0);
+#endif
+#ifdef DEBUG_RENDERER
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+#endif
+			// Request RGBA8888 - change if needed
+			SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+			SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+			SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+			SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+			SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+
+			SDL_GL_SetSwapInterval(Options::swapInterval.get());
+		}
+
+		p->window = SDL_CreateWindow(
+		    "OpenApoc", SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber),
+		    SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber), resolved.x, resolved.y,
+		    display_flags | api_flags);
+
+		if (!p->window)
+		{
+			LogError("Failed to create window \"{0}\"", SDL_GetError());
+			exit(1);
+		}
+
+		if (useMetal)
+		{
+#ifdef OPENAPOC_METAL
+			p->metalView = SDL_Metal_CreateView(p->window);
+			if (p->metalView)
+			{
+				p->metalLayer = SDL_Metal_GetLayer(p->metalView);
+			}
+			if (p->metalLayer)
+			{
+				LogInfo("Created Metal view");
+				// The renderer is built here rather than by the selection loop below. A Metal
+				// window cannot host a GL context, so the moment Metal turns out to be
+				// unusable is the last moment the window can still be rebuilt for GL -- and
+				// the loop below would have no GL factory registered to fall back to.
+				up<RendererFactory> metalFactory(getMetalRendererFactory(p->metalLayer));
+				if (Renderer *r = metalFactory->create())
+				{
+					this->renderer.reset(r);
+					break;
+				}
+				LogWarning("Metal renderer failed to initialise, falling back to OpenGL");
+			}
+			else
+			{
+				LogWarning("Could not create a Metal view [SDLerror: {0}], falling back to "
+				           "OpenGL",
+				           SDL_GetError());
+			}
+			p->metalLayer = nullptr;
+			if (p->metalView)
+			{
+				SDL_Metal_DestroyView(p->metalView);
+				p->metalView = nullptr;
+			}
+			SDL_DestroyWindow(p->window);
+			p->window = nullptr;
+			useMetal = false;
+			continue;
+#endif
+		}
+
 		p->context = SDL_GL_CreateContext(p->window);
 		if (!p->context)
 		{
-			LogError("Failed to create GL context! [SDLerror: {0}]", SDL_GetError());
+#ifdef OPENAPOC_GLES
+			LogError("Failed to create OpenGL ES 3.0 context! [SDLerror: {0}]", SDL_GetError());
 			SDL_DestroyWindow(p->window);
 			exit(1);
-		}
+#else
+			// The first request is for a version macOS never grants, so this retry is the
+			// normal path there, not a fault. A genuine failure is the LogError + exit(1)
+			// just below.
+			LogInfo("GL context request unsupported by driver, retrying with a legacy context "
+			        "[SDLError: {0}]",
+			        SDL_GetError());
+			LogInfo("Attempting to create context by lowering the requested version");
+			// A core profile mask left set here would make the retry ask for "2.0 core",
+			// which is not a profile any driver can grant.
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, 0);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+			p->context = SDL_GL_CreateContext(p->window);
+			if (!p->context)
+			{
+				LogError("Failed to create GL context! [SDLerror: {0}]", SDL_GetError());
+				SDL_DestroyWindow(p->window);
+				exit(1);
+			}
 #endif
+		}
+		break;
 	}
-	// Output the context parameters
-	LogInfo("Created OpenGL context, parameters:");
-	int value;
-	SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, &value);
-	UString profileType;
-	switch (value)
+	p->windowFocused = (SDL_GetWindowFlags(p->window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+
+	if (p->context)
 	{
-		case SDL_GL_CONTEXT_PROFILE_ES:
-			profileType = "ES";
-			break;
-		case SDL_GL_CONTEXT_PROFILE_CORE:
-			profileType = "Core";
-			break;
-		case SDL_GL_CONTEXT_PROFILE_COMPATIBILITY:
-			profileType = "Compatibility";
-			break;
-		default:
-			profileType = "Unknown";
+		// Output the context parameters
+		LogInfo("Created OpenGL context, parameters:");
+		int value;
+		SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, &value);
+		UString profileType;
+		switch (value)
+		{
+			case SDL_GL_CONTEXT_PROFILE_ES:
+				profileType = "ES";
+				break;
+			case SDL_GL_CONTEXT_PROFILE_CORE:
+				profileType = "Core";
+				break;
+			case SDL_GL_CONTEXT_PROFILE_COMPATIBILITY:
+				profileType = "Compatibility";
+				break;
+			default:
+				profileType = "Unknown";
+		}
+		LogInfo("  Context profile: {0}", profileType);
+		int ctxMajor, ctxMinor;
+		SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &ctxMajor);
+		SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &ctxMinor);
+		LogInfo("  Context version: {0}.{1}", ctxMajor, ctxMinor);
+		int bitsRed, bitsGreen, bitsBlue, bitsAlpha;
+		SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &bitsRed);
+		SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE, &bitsGreen);
+		SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE, &bitsBlue);
+		SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE, &bitsAlpha);
+		LogInfo("  RGBA bits: {0}-{1}-{2}-{3}", bitsRed, bitsGreen, bitsBlue, bitsAlpha);
+		SDL_GL_MakeCurrent(p->window, p->context); // for good measure?
 	}
-	LogInfo("  Context profile: {0}", profileType);
-	int ctxMajor, ctxMinor;
-	SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &ctxMajor);
-	SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &ctxMinor);
-	LogInfo("  Context version: {0}.{1}", ctxMajor, ctxMinor);
-	int bitsRed, bitsGreen, bitsBlue, bitsAlpha;
-	SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &bitsRed);
-	SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE, &bitsGreen);
-	SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE, &bitsBlue);
-	SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE, &bitsAlpha);
-	LogInfo("  RGBA bits: {0}-{1}-{2}-{3}", bitsRed, bitsGreen, bitsBlue, bitsAlpha);
-	SDL_GL_MakeCurrent(p->window, p->context); // for good measure?
 	SDL_ShowCursor(SDL_DISABLE);
 
-	p->registeredRenderers["GLES_3_0"].reset(getGLES30RendererFactory());
+	// Only the backend the window was actually built for is offered to the selection loop.
+	// A GLES renderer handed a Metal window would find no context at all. Metal is absent
+	// from this map on purpose: when it won, its renderer was already constructed during
+	// window creation, and its factory refuses a second create().
+	if (p->context)
+	{
+		p->registeredRenderers["GLES_3_0"].reset(getGLES30RendererFactory());
 #if !defined(__ANDROID__) && !defined(OPENAPOC_GLES)
-	p->registeredRenderers["GL_2_0"].reset(getGL20RendererFactory());
+		p->registeredRenderers["GL_2_0"].reset(getGL20RendererFactory());
 #endif
+	}
 
 	for (auto &rendererName : split(Options::renderersOption.get(), ":"))
 	{
+		if (this->renderer)
+		{
+			break;
+		}
 		auto rendererFactory = p->registeredRenderers.find(rendererName);
 		if (rendererFactory == p->registeredRenderers.end())
 		{
@@ -1238,7 +1337,6 @@ void Framework::displayInitialise()
 			continue;
 		}
 		this->renderer.reset(r);
-		LogInfo("Using renderer: {0}", this->renderer->getName());
 		break;
 	}
 	if (!this->renderer)
@@ -1246,6 +1344,10 @@ void Framework::displayInitialise()
 		LogError("No functional renderer found");
 		abort();
 	}
+	// Logged here rather than inside the loop above: the Metal renderer is constructed during
+	// window creation and never passes through that loop, and this line is the one place that
+	// says which backend a session actually ran on.
+	LogInfo("Using renderer: {0}", this->renderer->getName());
 	this->p->defaultSurface = this->renderer->getDefaultSurface();
 
 	setMouseGrab();
@@ -1262,9 +1364,22 @@ void Framework::displayShutdown()
 	}
 	LogInfo("Shutdown Display");
 	p->defaultSurface.reset();
+	p->scaleSurface.reset();
 	renderer.reset();
 
-	SDL_GL_DeleteContext(p->context);
+#ifdef OPENAPOC_METAL
+	if (p->metalView)
+	{
+		SDL_Metal_DestroyView(p->metalView);
+		p->metalView = nullptr;
+		p->metalLayer = nullptr;
+	}
+#endif
+	if (p->context)
+	{
+		SDL_GL_DeleteContext(p->context);
+		p->context = nullptr;
+	}
 	SDL_DestroyWindow(p->window);
 }
 
@@ -1299,7 +1414,16 @@ void Framework::displayRefreshSize()
 	SDL_GetWindowSize(p->window, &width, &height);
 	int drawW = width;
 	int drawH = height;
-	SDL_GL_GetDrawableSize(p->window, &drawW, &drawH);
+#ifdef OPENAPOC_METAL
+	if (p->metalView)
+	{
+		SDL_Metal_GetDrawableSize(p->window, &drawW, &drawH);
+	}
+	else
+#endif
+	{
+		SDL_GL_GetDrawableSize(p->window, &drawW, &drawH);
+	}
 
 	const Vec2<int> newWindow{width, height};
 	const Vec2<int> newLogical{std::max(1, width), std::max(1, height)};
