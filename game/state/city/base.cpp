@@ -21,6 +21,11 @@ namespace OpenApoc
 
 constexpr int Base::SIZE;
 
+bool Base::alienExposureRollSucceeds(int inclusiveRoll, int movedAlienCount)
+{
+	return movedAlienCount > 0 && inclusiveRoll < 5 * movedAlienCount;
+}
+
 template <> sp<Base> StateObject<Base>::get(const GameState &state, const UString &id)
 {
 	auto it = state.player_bases.find(id);
