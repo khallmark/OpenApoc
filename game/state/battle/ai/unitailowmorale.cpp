@@ -21,6 +21,12 @@ UnitAILowMorale::UnitAILowMorale() { type = Type::LowMorale; }
 
 void UnitAILowMorale::reset(GameState &, BattleUnit &) { ticksActionAvailable = 0; }
 
+bool UnitAILowMorale::isFartherFromEnemy(const Vec3<float> &candidate, const Vec3<float> &current,
+                                         const Vec3<float> &enemy)
+{
+	return glm::distance(candidate, enemy) > glm::distance(current, enemy);
+}
+
 std::tuple<AIDecision, bool> UnitAILowMorale::think(GameState &state, BattleUnit &u, bool interrupt)
 {
 	std::ignore = interrupt;
@@ -80,11 +86,42 @@ std::tuple<AIDecision, bool> UnitAILowMorale::think(GameState &state, BattleUnit
 					}
 					if (!adjacentBlocks.empty())
 					{
-						auto targetLB = pickRandom(state.rng, adjacentBlocks);
+						Vec3<float> closestEnemy;
+						bool haveEnemy = false;
+						float closestDist = 0.0f;
+						for (auto &enemy : state.current_battle->visibleEnemies[u.owner])
+						{
+							if (!enemy)
+							{
+								continue;
+							}
+							const float dist = glm::distance(enemy->position, u.position);
+							if (!haveEnemy || dist < closestDist)
+							{
+								haveEnemy = true;
+								closestDist = dist;
+								closestEnemy = enemy->position;
+							}
+						}
+						std::list<int> fartherBlocks;
+						if (haveEnemy)
+						{
+							for (int block : adjacentBlocks)
+							{
+								const Vec3<float> center =
+								    state.current_battle->blockCenterPos[type][block];
+								if (isFartherFromEnemy(center, u.position, closestEnemy))
+								{
+									fartherBlocks.push_back(block);
+								}
+							}
+						}
+						auto &candidates = fartherBlocks.empty() ? adjacentBlocks : fartherBlocks;
+						auto targetLB = pickRandom(state.rng, candidates);
 						auto targetPos = state.current_battle->blockCenterPos[type][targetLB];
 						// Try 10 times to pick a valid position in that block, otherwise run to
 						// it's center
-						auto lb = state.current_battle->losBlocks[curLB];
+						auto lb = state.current_battle->losBlocks[targetLB];
 						auto &map = u.tileObject->map;
 						auto helper = BattleUnitTileHelper(map, u);
 						for (int i = 0; i < 10; i++)
@@ -103,10 +140,8 @@ std::tuple<AIDecision, bool> UnitAILowMorale::think(GameState &state, BattleUnit
 						decision.movement->type = AIMovement::Type::Patrol;
 						decision.movement->targetLocation = targetPos;
 						decision.movement->kneelingMode = u.kneeling_mode;
-						// 33% chance to switch to run
-						decision.movement->movementMode =
-						    randBoundsExclusive(state.rng, 0, 100) < 33 ? MovementMode::Running
-						                                                : u.movement_mode;
+						// ai.txt: "run to a random LOS block"
+						decision.movement->movementMode = MovementMode::Running;
 					}
 				}
 				return std::make_tuple(decision, true);
