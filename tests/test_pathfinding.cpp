@@ -9,12 +9,12 @@
 //
 // The battle/tilemap/unit fixtures below are hand-built (not a real generated
 // battle map) to keep the fixture small and fast. The unit's stunDamage is set
-// above its health on purpose: it makes the unit briefly "unconscious" for the
-// duration of the call, which is the only lever available from outside
-// pathfinding.cpp to keep BattleUnit::setBodyState/onReachGoal from touching
-// the line-of-sight/vision bookkeeping (visibleBlocks/losBlocks/tileToLosBlock)
-// that a real Battle::beginBattle() would populate but this synthetic fixture
-// does not. None of that vision machinery is part of what's being tested here.
+// above its health on purpose: it makes the unit "unconscious" for the rest of
+// the test, which is the only lever available from outside pathfinding.cpp to
+// keep BattleUnit::setBodyState/onReachGoal from touching the line-of-sight/
+// vision bookkeeping (visibleBlocks/losBlocks/tileToLosBlock) that a real
+// Battle::beginBattle() would populate but this synthetic fixture does not.
+// None of that vision machinery is part of what's being tested here.
 #include "framework/configfile.h"
 #include "framework/framework.h"
 #include "framework/logger.h"
@@ -221,9 +221,9 @@ int main(int argc, char **argv)
 	    battle.placeUnit(*state, agent, (Vec3<float>)startPos + Vec3<float>{0.5f, 0.5f, 0.0f});
 	unit->facing = {0, 1};
 
-	// Make the unit briefly unconscious so setBodyState/onReachGoal (invoked from within
-	// the teleport mission this test exercises) skip the LOS/vision refresh this synthetic
-	// fixture never populates. See file header comment.
+	// Make the unit unconscious for the remainder of the test so setBodyState/onReachGoal
+	// (invoked from within the teleport mission this test exercises) skip the LOS/vision
+	// refresh this synthetic fixture never populates. See file header comment.
 	unit->stunDamage = agent->getHealth() + 1;
 
 	auto item = mksp<AEquipment>();
