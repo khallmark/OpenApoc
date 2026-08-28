@@ -669,8 +669,8 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	// Get unit's gun muzzle location (where shots come from)
 	Vec3<float> getMuzzleLocation() const;
 	// Get unit's eyes (where vision rays come from)
-	// FIXME: This likely won't work properly for large units
-	// Idea here is to LOS from the center of the occupied tile
+	// LOS originates from the centre of the currently occupied tile/block (works for large units:
+	// see the isLarge() branch in the .cpp)
 	Vec3<float> getEyeLocation() const;
 	// Get thrown item's departure location
 	Vec3<float> getThrownItemLocation() const;

@@ -613,21 +613,32 @@ bool BattleUnit::calculateVisionToUnit(GameState &state, BattleUnit &u)
 	{
 		return false;
 	}
-	auto target = u.tileObject->getCenter();
-	if (u.isLarge())
+	auto maxRange = VIEW_DISTANCE / (u.isCloaked() ? 2 : 1);
+	if (!u.isLarge())
 	{
-		// Offset search for large units as they can get caught up in ground
-		// that is supposed to allow units to go through it but blocks LOS
-		auto targetvVectorDelta = glm::normalize(target - eyesPos) * 0.75f;
-		target -= targetvVectorDelta;
+		auto c = map.findCollision(eyesPos, u.tileObject->getCenter(), mapPartSet, tileObject, true,
+		                           false, maxRange);
+		return !c && !c.outOfRange;
 	}
-	auto c = map.findCollision(eyesPos, target, mapPartSet, tileObject, true, false,
-	                           VIEW_DISTANCE / (u.isCloaked() ? 2 : 1));
-	if (c || c.outOfRange)
+	// A large unit is visible if any of its occupied tiles has a clear line to it, not just a
+	// single point at the exact geometric centre of its 2x2 block -- which sits precisely on the
+	// corner shared by all 8 of its tiles, a degenerate raycast endpoint that can clip terrain it
+	// has no business clipping. Check each of the four ground-level tiles it occupies.
+	Vec3<int> corner = (Vec3<int>)u.position;
+	for (int dx = -1; dx <= 0; dx++)
 	{
-		return false;
+		for (int dy = -1; dy <= 0; dy++)
+		{
+			Vec3<float> target = {corner.x + dx + 0.5f, corner.y + dy + 0.5f, u.position.z + 0.5f};
+			auto c =
+			    map.findCollision(eyesPos, target, mapPartSet, tileObject, true, false, maxRange);
+			if (!c && !c.outOfRange)
+			{
+				return true;
+			}
+		}
 	}
-	return true;
+	return false;
 }
 
 void BattleUnit::calculateVisionToUnits(GameState &state)
@@ -1021,16 +1032,29 @@ WeaponStatus BattleUnit::canAttackUnit(GameState &state, sp<BattleUnit> unit,
 
 bool BattleUnit::hasLineToUnit(const sp<BattleUnit> unit, bool useLOS) const
 {
-	auto muzzleLocation = getMuzzleLocation();
-	auto targetPosition = unit->tileObject->getVoxelCentrePosition();
-	if (unit->isLarge())
+	if (!unit->isLarge())
 	{
-		// Offset search for large units as they can get caught up in ground
-		// that is supposed to allow units to go through it but blocks LOS
-		auto targetvVectorDelta = glm::normalize(targetPosition - muzzleLocation) * 0.75f;
-		targetPosition -= targetvVectorDelta;
+		return hasLineToPosition(unit->tileObject->getVoxelCentrePosition(), useLOS);
 	}
-	return hasLineToPosition(targetPosition, useLOS);
+	// A large unit has a line to/from it if any of its occupied tiles does, not just a single
+	// point at the exact geometric centre of its 2x2 block -- that centre sits precisely on the
+	// corner shared by all 8 of its tiles, a degenerate raycast endpoint that can clip terrain it
+	// has no business clipping. Keep the aim height getVoxelCentrePosition() already computes;
+	// only its x/y (the block's shared corner) needs to vary across the four ground tiles.
+	Vec3<int> corner = (Vec3<int>)unit->position;
+	float targetZ = unit->tileObject->getVoxelCentrePosition().z;
+	for (int dx = -1; dx <= 0; dx++)
+	{
+		for (int dy = -1; dy <= 0; dy++)
+		{
+			Vec3<float> targetPosition = {corner.x + dx + 0.5f, corner.y + dy + 0.5f, targetZ};
+			if (hasLineToPosition(targetPosition, useLOS))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 bool BattleUnit::hasLineToPosition(Vec3<float> targetPosition, bool useLOS) const
@@ -5545,7 +5569,16 @@ Vec3<float> BattleUnit::getMuzzleLocation() const
 
 Vec3<float> BattleUnit::getEyeLocation() const
 {
-	return Vec3<float>{(int)position.x + 0.5f, (int)position.y + 0.5f,
+	// Snap to the centre of whichever tile/block is currently occupied, ignoring any sub-tile
+	// interpolation from movement animation. A small unit's position is already a tile centre
+	// (x+0.5, y+0.5), so truncating to the current integer tile and re-adding 0.5 recovers it. A
+	// large unit's position is its 2x2 block's own max-x/max-y/min-z corner, and a 2x2 block's
+	// centre coincides with that corner value exactly -- no +0.5 needed, and applying it (as this
+	// used to do unconditionally) put a large unit's eyes half a tile off from the block it
+	// actually occupies, and off from its own muzzle (getMuzzleLocation(), which is not offset).
+	Vec3<float> centre = isLarge() ? Vec3<float>{(float)(int)position.x, (float)(int)position.y, 0}
+	                               : Vec3<float>{(int)position.x + 0.5f, (int)position.y + 0.5f, 0};
+	return Vec3<float>{centre.x, centre.y,
 	                   (int)position.z +
 	                       ((float)agent->type->bodyType->muzzleZPosition.at(current_body_state)) /
 	                           40.0f};
