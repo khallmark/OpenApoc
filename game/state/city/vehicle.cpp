@@ -2088,8 +2088,50 @@ Vec3<float> Vehicle::getMuzzleLocation() const
 	                             (float)type->height / 16.0f);
 }
 
+bool Vehicle::withdrawBandEntered(int health, int maxHealth, int crashHealth, int percent)
+{
+	// Recovered from UFO2P FUN_000588f8: the gate compares current constitution against a
+	// role-derived fraction of the type's ceiling, and fires only while the craft is still
+	// flying. Two roles (Escort, and the unnamed role 9) sit at 10%, which is below
+	// crash_health on every hull, so their band is empty by construction -- that falls out of
+	// this comparison rather than needing a special case.
+	if (percent <= 0 || maxHealth <= 0)
+	{
+		return false;
+	}
+	const int threshold = maxHealth * percent / 100;
+	// INCLUSIVE lower bound. FUN_000588f8 does CMP against the floor table then JL to skip -- it
+	// jumps away only when constitution is strictly BELOW the floor, so the block runs at
+	// floor[type] <= constitution < threshold.
+	return health >= crashHealth && health < threshold;
+}
+
 void Vehicle::update(GameState &state, unsigned int ticks)
 {
+	// Damaged UFOs break off and leave through the nearest dimension gate. The original runs
+	// this as a periodic, calendar-staggered sweep over all vehicle slots (FUN_0005760c) rather
+	// than as a reaction at the instant of a hit; checking it in the per-vehicle update is the
+	// same behaviour at a finer cadence, and the band test is idempotent so a craft already
+	// withdrawing is not re-ordered.
+	if (withdrawHealthPercent > 0 && type && !crashed && !falling && !isDead() &&
+	    owner == state.getAliens() &&
+	    withdrawBandEntered(health, type->health, type->crash_health, withdrawHealthPercent))
+	{
+		bool alreadyLeaving = false;
+		for (auto &m : missions)
+		{
+			if (m.type == VehicleMission::MissionType::GotoPortal)
+			{
+				alreadyLeaving = true;
+				break;
+			}
+		}
+		if (!alreadyLeaving && city && !city->portals.empty())
+		{
+			setMission(state, VehicleMission::gotoPortal(state, *this));
+		}
+	}
+
 	if (isDead() && status == VehicleStatus::Operational)
 	{
 		status = VehicleStatus::Destroyed;
@@ -3971,7 +4013,10 @@ void Cargo::refund(GameState &state, StateRef<Building> currentBuilding)
 			LogError("Bought cargo from nobody!? WTF?");
 			return;
 		}
-		originalOwner->balance -= cost * count / divisor;
+		// Expiry/cancellation refunds the buyer above; it must not also debit originalOwner.
+		// Nothing on this path credits the seller for the sale in the first place (that
+		// credit is a separate, out-of-unit slice in organisation.cpp), so debiting them here
+		// is not a reversal of anything they received -- it is a plain, unrelated penalty.
 		if (destination->owner == state.getPlayer())
 		{
 			fw().pushEvent(
