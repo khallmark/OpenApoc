@@ -1,4 +1,14 @@
 version: '{branch}-0.0.{build}'
+# Branch coverage reconciliation (OPE-4): this file's `branches: except:` and
+# appveyor.yml's `branches: only:` list the exact same two patterns, so every
+# branch is covered by exactly one of the two files -- no gap and no overlap.
+# This file intentionally skips the NSIS installer and debug-symbol packaging
+# that appveyor.yml does for master/release builds.
+#
+# This file only actually builds anything if a *second* AppVeyor project for
+# this repository has "Custom configuration .yml file name" set to
+# appveyor-dev.yml in its project settings -- that is server-side AppVeyor
+# configuration, not something expressed or verifiable from this repo tree.
 branches:
   except:
   - master
@@ -24,7 +34,32 @@ before_build:
   - cd %APPVEYOR_BUILD_FOLDER%
   - vcpkg install
   - git submodule update --init --recursive
+  # s2.jonnyh.net does not serve this asset over TLS: a handshake on port 443
+  # fails at the ClientHello with two independent TLS stacks (LibreSSL/curl:
+  # "tlsv1 alert protocol version"; OpenSSL/python: "wrong version number") --
+  # there is no HTTPS listener to switch to here. Prefer https:// instead of
+  # this http:// if that ever changes.
+  #
+  # Until then, the pinned SHA-256 below is the real control: it is
+  # trust-on-first-use, proving the artifact hasn't changed since this pin was
+  # recorded -- it does NOT prove the original download was authentic, since a
+  # compromise predating the pin would be pinned right along with it. The file
+  # has been byte-stable since 2016-10-04 (fixed Last-Modified/ETag), so
+  # pinning is low-risk. The check must fail the build (not merely warn) and
+  # must run before the archive is extracted.
+  #
+  # If this asset is ever legitimately replaced upstream, CI will fail here
+  # with an opaque hash mismatch. To roll the pin forward, download the new
+  # file and recompute its hash with:
+  #   (Get-FileHash temp\cd.iso.xz -Algorithm SHA256).Hash
+  # then update $expected below to match.
   - curl http://s2.jonnyh.net/pub/cd_minimal.iso.xz -o temp\cd.iso.xz
+  - ps: |
+      $expected = '4E0E93A4110C2E52778D1468B96D02BD062324121773C345913EBF6852000631'
+      $actual = (Get-FileHash temp\cd.iso.xz -Algorithm SHA256).Hash
+      if ($actual -ne $expected) {
+        throw "cd_minimal.iso.xz checksum mismatch: got $actual, expected $expected"
+      }
   - 7z e temp\cd.iso.xz -odata\
   - call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" %VCVARS_ARCH%
 build_script:
