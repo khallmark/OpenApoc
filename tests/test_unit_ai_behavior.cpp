@@ -174,7 +174,8 @@ int main(int argc, char **argv)
 	    {"default_state", checkDefaultState},
 	    {"notify_under_fire_sets_position_only", checkNotifyUnderFireSetsPositionOnly},
 	    {"notify_hit_sets_position_and_counts_hit", checkNotifyHitSetsPositionAndCountsHit},
-	    {"notify_hit_accumulates_across_multiple_hits", checkNotifyHitAccumulatesAcrossMultipleHits},
+	    {"notify_hit_accumulates_across_multiple_hits",
+	     checkNotifyHitAccumulatesAcrossMultipleHits},
 	    {"reset_clears_exposure_state", checkResetClearsExposureState},
 	    {"constructor_sets_behavior_type", checkConstructorSetsBehaviorType},
 	};
