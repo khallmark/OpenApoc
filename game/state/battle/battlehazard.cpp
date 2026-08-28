@@ -19,6 +19,138 @@
 
 namespace OpenApoc
 {
+
+namespace
+{
+// Legacy, NOT-recovered spread-chance value (was the invented macro
+// HAZARD_SPREAD_CHANCE, now renamed and confined to this translation unit).
+// This still governs two things the recovered spread-RNG primitives below do
+// NOT cover, because both are legacy-path only:
+//
+//   1. Smoke spreading from an already-burning fire hazard in grow() below.
+//      The recovered fire spread roll is fire's *ignition* roll (fire
+//      catching neighbouring terrain), which this file already implements as
+//      the unconditional 8-neighbour expand() sweep above this comparison --
+//      it says nothing about smoke.
+//   2. Non-fire hazard (smoke/gas) spread, which the recovered generalized
+//      placement engine primitive would cover, except its resistance-gate
+//      threshold is caller-supplied and no recovered source for that
+//      argument is wired here (see the class declaration comment).
+//
+// Value preserved unchanged from the deleted macro so behaviour does not
+// regress while these two call sites stay on the legacy path. This is
+// deliberately NOT promoted to a "recovered" constant: it remains an
+// inference carried forward for parity, not a decoded value.
+constexpr int LEGACY_HAZARD_SPREAD_CHANCE_PERCENT = 10; // out of 100, not recovered
+} // namespace
+
+int BattleHazard::hazardRoll(Xorshift128Plus<uint32_t> &rng, int max)
+{
+	if (max < 0)
+	{
+		max = 0;
+	}
+	return randBoundsInclusive(rng, 0, max);
+}
+
+bool BattleHazard::fireSpreadResistanceGate(int resistanceValue, int rolledThreshold)
+{
+	return resistanceValue < rolledThreshold;
+}
+
+Vec3<int> BattleHazard::fireSpreadNeighbourDelta(int outcome)
+{
+	// Recovered 5-outcome neighbour table for fire's spread roll -- see the
+	// class declaration comment for scope/caveats.
+	static const Vec3<int> table[5] = {
+	    {1, 0, 0},  // outcome 0: East
+	    {0, 1, 0},  // outcome 1: South
+	    {-1, 0, 0}, // outcome 2: West
+	    {0, -1, 0}, // outcome 3: North
+	    {0, 0, 1},  // outcome 4: Up
+	};
+	if (outcome < 0 || outcome > 4)
+	{
+		return {0, 0, 0};
+	}
+	return table[outcome];
+}
+
+Vec3<int> BattleHazard::genericSpreadNeighbourDelta(int outcome)
+{
+	// Recovered 6-outcome neighbour table for the generalized placement
+	// engine: fire's table plus Down.
+	static const Vec3<int> table[6] = {
+	    {1, 0, 0},  // outcome 0: East
+	    {0, 1, 0},  // outcome 1: South
+	    {-1, 0, 0}, // outcome 2: West
+	    {0, -1, 0}, // outcome 3: North
+	    {0, 0, 1},  // outcome 4: Up
+	    {0, 0, -1}, // outcome 5: Down
+	};
+	if (outcome < 0 || outcome > 5)
+	{
+		return {0, 0, 0};
+	}
+	return table[outcome];
+}
+
+Vec3<int> BattleHazard::rollFireSpreadNeighbour(Xorshift128Plus<uint32_t> &rng, int baseline,
+                                                int resistance, bool &spreads)
+{
+	// Recovered call order: threshold roll first, then neighbour pick.
+	const int threshold = hazardRoll(rng, FIRE_SPREAD_THRESHOLD_RNG_SPAN) + baseline;
+	const int outcome = hazardRoll(rng, FIRE_SPREAD_NEIGHBOUR_RNG_SPAN);
+	spreads = fireSpreadResistanceGate(resistance, threshold);
+	return fireSpreadNeighbourDelta(outcome);
+}
+
+Vec3<int> BattleHazard::rollGenericSpreadNeighbour(Xorshift128Plus<uint32_t> &rng)
+{
+	// Recovered: exactly one draw, no internal threshold roll.
+	const int outcome = hazardRoll(rng, GENERIC_SPREAD_NEIGHBOUR_RNG_SPAN);
+	return genericSpreadNeighbourDelta(outcome);
+}
+
+uint8_t BattleHazard::encodeFireOverlay(unsigned stage)
+{
+	return FIRE_OVERLAY_TYPE | (stage & FIRE_OVERLAY_INDEX_MASK);
+}
+
+int BattleHazard::fireOverlayStage(uint8_t overlay)
+{
+	// Only overlay type 2 is fire.
+	return (overlay >> 6) == 2 ? overlay & FIRE_OVERLAY_INDEX_MASK : -1;
+}
+
+int BattleHazard::fireOverlayPower(const std::vector<int> &powerTable, uint8_t overlay)
+{
+	const int stage = fireOverlayStage(overlay);
+	if (stage < 0 || static_cast<size_t>(stage) >= powerTable.size())
+	{
+		return 0;
+	}
+	return powerTable[stage];
+}
+
+bool BattleHazard::advanceFireOverlay(const std::vector<int> &powerTable, uint8_t &overlay)
+{
+	const int stage = fireOverlayStage(overlay);
+	if (stage < 0 || fireOverlayPower(powerTable, overlay) == 0)
+	{
+		overlay = 0;
+		return false;
+	}
+	const int nextStage = stage + 1;
+	if (static_cast<size_t>(nextStage) >= powerTable.size() || powerTable[nextStage] == 0)
+	{
+		overlay = 0;
+		return false;
+	}
+	overlay = encodeFireOverlay(nextStage);
+	return true;
+}
+
 BattleHazard::BattleHazard(GameState &state, StateRef<DamageType> damageType, bool delayVisibility)
     : damageType(damageType), hazardType(damageType->hazardType)
 {
@@ -276,7 +408,7 @@ void BattleHazard::grow(GameState &state)
 
 		// Now spread smoke
 
-		if (randBoundsExclusive(state.rng, 0, 100) >= HAZARD_SPREAD_CHANCE)
+		if (randBoundsExclusive(state.rng, 0, 100) >= LEGACY_HAZARD_SPREAD_CHANCE_PERCENT)
 		{
 			return;
 		}
@@ -305,7 +437,7 @@ void BattleHazard::grow(GameState &state)
 		{
 			return;
 		}
-		if (randBoundsExclusive(state.rng, 0, 100) >= HAZARD_SPREAD_CHANCE)
+		if (randBoundsExclusive(state.rng, 0, 100) >= LEGACY_HAZARD_SPREAD_CHANCE_PERCENT)
 		{
 			return;
 		}
@@ -509,6 +641,17 @@ bool BattleHazard::update(GameState &state, unsigned int ticks)
 		frame %= hazardType->fire ? 2 : HAZARD_FRAME_COUNT;
 	}
 
+	if (realTime && fireOverlayStage(fireOverlay) >= 0)
+	{
+		// Cadence boundary: a hazard carrying a recovered type-2 overlay stands
+		// down from the legacy per-hazard scheduler below. Progressing that
+		// overlay is a Battle-level scheduler responsibility tracked outside
+		// this file; nothing here currently sets a non-zero overlay, so this
+		// branch is presently unreachable in practice and exists to receive
+		// that scheduler once it lands.
+		return false;
+	}
+
 	if (realTime)
 	{
 		return updateInner(state, ticks);
@@ -516,7 +659,15 @@ bool BattleHazard::update(GameState &state, unsigned int ticks)
 	return false;
 }
 
-bool BattleHazard::updateTB(GameState &state) { return updateInner(state, TICKS_PER_TURN); }
+bool BattleHazard::updateTB(GameState &state)
+{
+	if (fireOverlayStage(fireOverlay) >= 0)
+	{
+		// See the equivalent guard in update() above.
+		return false;
+	}
+	return updateInner(state, TICKS_PER_TURN);
+}
 
 void BattleHazard::updateTileVisionBlock(GameState &state)
 {
