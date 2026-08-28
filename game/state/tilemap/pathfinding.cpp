@@ -6,7 +6,10 @@
 #include "game/state/city/vehicle.h"
 #include "game/state/city/vehiclemission.h"
 #include "game/state/gamestate.h"
+#include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/city/scenerytiletype.h"
+#include "game/state/shared/aequipment.h"
+#include "game/state/shared/agent.h"
 #include "game/state/tilemap/tilemap.h"
 #include "limits.h"
 #include <algorithm>
@@ -844,12 +847,10 @@ std::list<int> Battle::findLosBlockPath(int origin, int destination, BattleUnitT
 	return result;
 }
 
-// FIXME: Implement usage of teleporters in group move
 void Battle::groupMove(GameState &state, std::list<StateRef<BattleUnit>> &selectedUnits,
                        Vec3<int> targetLocation, int facingDelta, bool demandGiveWay,
                        bool useTeleporter)
 {
-	std::ignore = useTeleporter;
 	// Legend:
 	//
 	// (arrive from the southwest)						(arrive from the south)
@@ -950,6 +951,46 @@ void Battle::groupMove(GameState &state, std::list<StateRef<BattleUnit>> &select
 	{
 		return;
 	}
+	if (useTeleporter)
+	{
+		static const Vec3<int> teleportOffsets[] = {
+		    {0, 0, 0},   {-1, 0, 0}, {1, 0, 0},  {0, -1, 0}, {0, 1, 0},
+		    {-1, -1, 0}, {1, -1, 0}, {-1, 1, 0}, {1, 1, 0},  {0, 0, 1},
+		    {0, 0, -1},  {-2, 0, 0}, {2, 0, 0},  {0, -2, 0}, {0, 2, 0},
+		};
+		size_t offsetIndex = 0;
+		std::list<StateRef<BattleUnit>> remaining;
+		for (auto &unit : selectedUnits)
+		{
+			auto item = unit->agent->getFirstItemByType(AEquipmentType::Type::Teleporter);
+			if (!item || item->ammo != item->type->max_ammo)
+			{
+				remaining.push_back(unit);
+				continue;
+			}
+			bool teleported = false;
+			while (offsetIndex < sizeof(teleportOffsets) / sizeof(teleportOffsets[0]))
+			{
+				const auto dest = targetLocation + teleportOffsets[offsetIndex++];
+				auto *mission = BattleUnitMission::teleport(*unit, item, dest);
+				if (unit->setMission(state, mission) && !mission->cancelled)
+				{
+					teleported = true;
+					break;
+				}
+			}
+			if (!teleported)
+			{
+				remaining.push_back(unit);
+			}
+		}
+		if (remaining.empty())
+		{
+			return;
+		}
+		groupMove(state, remaining, targetLocation, facingDelta, demandGiveWay, false);
+		return;
+	}
 	if (selectedUnits.size() == 1)
 	{
 		selectedUnits.front()->setMission(
@@ -1043,7 +1084,7 @@ void Battle::groupMove(GameState &state, std::list<StateRef<BattleUnit>> &select
 	if (itUnit == localUnits.end() && !leadUnit)
 	{
 		log += format("\nNoone could path to target, aborting");
-		LogWarning("{0}", log);
+		LogInfo("{0}", log);
 		return;
 	}
 
@@ -1089,7 +1130,7 @@ void Battle::groupMove(GameState &state, std::list<StateRef<BattleUnit>> &select
 		if (itOffset == targetOffsets.end())
 		{
 			log += format("\nRan out of location offsets, exiting");
-			LogWarning("{0}", log);
+			LogInfo("{0}", log);
 			return;
 		}
 		log += format("\nPathing unit {0}", unit.id);
@@ -1128,7 +1169,9 @@ void Battle::groupMove(GameState &state, std::list<StateRef<BattleUnit>> &select
 		}
 	}
 	log += format("\nSuccessfully pathed everybody to target");
-	LogWarning("{0}", log);
+	// Verbose per-unit trace of a group move (including the "could not path there" outcomes
+	// above, which are ordinary refusals of an unreachable destination, not engine faults).
+	LogInfo("{0}", log);
 }
 
 std::list<Vec3<int>> City::findShortestPath(Vec3<int> origin, Vec3<int> destination,
@@ -1713,7 +1756,7 @@ void City::groupMove(GameState &state, std::list<StateRef<Vehicle>> &selectedVeh
 
 void City::fillRoadSegmentMap(GameState &state [[maybe_unused]])
 {
-	LogWarning("Begun filling road segment map");
+	LogInfo("Begun filling road segment map");
 	// Expecting this to be done on clean intact map
 	tileToRoadSegmentMap.clear();
 	roadSegments.clear();
@@ -1792,7 +1835,7 @@ void City::fillRoadSegmentMap(GameState &state [[maybe_unused]])
 					{
 						if (roadSegments[nextSegmentToProcess].empty())
 						{
-							LogWarning("Skipping empty segment {0}", nextSegmentToProcess);
+							LogInfo("Skipping empty segment {0}", nextSegmentToProcess);
 							nextSegmentToProcess++;
 							continue;
 						}
@@ -2035,6 +2078,6 @@ void City::fillRoadSegmentMap(GameState &state [[maybe_unused]])
 	{
 		roadSegments[i].finalizeStats();
 	}
-	LogWarning("Finished filling road segment map");
+	LogInfo("Finished filling road segment map");
 }
 } // namespace OpenApoc
