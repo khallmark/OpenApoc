@@ -8,6 +8,7 @@
 #include "library/vec.h"
 #include <list>
 #include <set>
+#include <vector>
 
 namespace OpenApoc
 {
@@ -18,6 +19,7 @@ class Sample;
 class DoodadType;
 class Organisation;
 class VAmmoType;
+class GameState;
 
 class VEquipmentType : public StateObject<VEquipmentType>
 {
@@ -94,11 +96,19 @@ class VEquipmentType : public StateObject<VEquipmentType>
 
 	// Score requirement
 	int scoreRequirement = 0;
+	// UFO2P cequip_score_req_data columns: Novice..Superhuman. Empty = use scoreRequirement.
+	std::vector<int> scoreRequirementByDifficulty;
 
 	ResearchDependency research_dependency;
+	// FUN_00014854 @ file 0x77116: DAT_00183b0a[i] = (economy week == 0).
+	// FUN_000ab440 case 0 @ file 0x10DC0D (4-build 0x10E481) clears it.
+	bool economyUnhidden = false;
+	void clearEconomyHide();
+	bool isEconomyVisible(const GameState &state) const;
 
 	int getRangeInTiles() const;
 	int getRangeInMetres() const;
+	int scoreRequirementFor(int difficulty) const;
 };
 
 } // namespace OpenApoc
