@@ -1,6 +1,46 @@
 ---
+# Warning baseline (OPE-4 "make CI signals honest and consistent"):
+#
+# Before this change, WarningsAsErrors was '' (empty), so clang-tidy never
+# exited non-zero on its own -- every warning was purely informational
+# regardless of what the CI wrapper scripts did with the exit code. That made
+# the "clang-tidy lint" CI step decorative rather than a real gate.
+#
+# Measured backlog (local repro, see PR body for full methodology/caveats):
+# scanning all ~250 project .cpp translation units with these Checks found
+# 329 in-scope diagnostics across ~152 files (~61%). 292 of those 329 (89%)
+# are a single check, readability-non-const-parameter, spread across ~116
+# files -- almost all pre-existing, stylistic, and not something a partial
+# CI pass should start hard-failing unrelated PRs over.
+#
+# clang-analyzer-* (the checks that actually indicate probable bugs --
+# dead stores, calls on possibly-null/uninitialized values, virtual calls
+# from constructors/destructors) is far more bounded: 26 findings across
+# 19 files (~8% of the tree). That is a tractable, named backlog:
+#   forms/control.cpp, framework/jukebox.cpp,
+#   framework/sound/null_backend.cpp, framework/sound/sdlraw_backend.cpp,
+#   game/state/battle/battleunit.cpp, game/state/city/agentmission.cpp,
+#   game/state/city/building.cpp, game/state/city/city.cpp,
+#   game/state/city/vehicle.cpp, game/state/gamestate.cpp,
+#   game/state/shared/agent.cpp, game/state/tilemap/pathfinding.cpp,
+#   game/state/tilemap/tileobject.cpp,
+#   game/state/tilemap/tileobject_projectile.cpp,
+#   game/ui/components/controlgenerator.cpp,
+#   game/ui/general/messagelogscreen.cpp, game/ui/general/moreoptions.cpp,
+#   game/ui/tileview/battletileview.cpp, game/ui/tileview/battleview.cpp
+#
+# Decision: promote clang-analyzer-* (plus hard compiler errors, which are
+# clang-diagnostic-error) to WarningsAsErrors now -- a bounded, honest
+# signal that will fail CI for genuinely-suspicious code without also
+# failing every PR that happens to touch one of the ~60% of files carrying
+# pre-existing readability-non-const-parameter debt. readability-non-const-
+# parameter stays enabled (still visible in CI logs) but warn-only.
+#
+# Path to full enforcement: clean up the 19-file clang-analyzer list above,
+# then work through the readability-non-const-parameter backlog file-by-file
+# before adding it to WarningsAsErrors too.
 Checks:          'clang-diagnostic-*,clang-analyzer-*,readability-non-const-parameter'
-WarningsAsErrors: ''
+WarningsAsErrors: 'clang-diagnostic-error,clang-analyzer-*'
 HeaderFileExtensions:
   - ''
   - h
@@ -15,4 +55,3 @@ ImplementationFileExtensions:
 HeaderFilterRegex: 'forms/.*|framework/.*|game/.*|library/.*|tests/.*|tools/.*'
 SystemHeaders:   false
 ...
-
