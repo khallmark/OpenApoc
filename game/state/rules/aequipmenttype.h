@@ -98,6 +98,11 @@ class AEquipmentType : public StateObject<AEquipmentType>
 	// Alien artifact flag (does not show in economy unless you own it)
 	bool artifact = false;
 
+	// TACP AgentEquipmentData.unknown01 -- fire/hazard item resist (0..200).
+	int hazardResist = 0;
+	static int fireHazardDamage(int powerByte, int resist);
+	int fireHazardDamage(int powerByte) const;
+
 	// Armor only
 	sp<Image> body_sprite;
 	StateRef<DamageModifier> damage_modifier;

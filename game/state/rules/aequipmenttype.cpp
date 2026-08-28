@@ -2,6 +2,7 @@
 #include "game/state/gamestate.h"
 #include "game/state/shared/aequipment.h"
 #include "game/state/tilemap/tilemap.h"
+#include <algorithm>
 
 namespace OpenApoc
 {
@@ -141,4 +142,17 @@ float AEquipmentType::getRoundsPerSecond() const
 int AEquipmentType::getRangeInTiles() const { return range / (int)VELOCITY_SCALE_BATTLE.x; }
 
 int AEquipmentType::getRangeInMetres() const { return range / 16; }
+
+int AEquipmentType::fireHazardDamage(int powerByte, int resist)
+{
+	// TACP FUN_0007c110 @ VA 0x7C110 / file 0xD6BB4:
+	// factor = (dl+19)/20; delta = factor - (resist*factor)/100 (signed; 0 skips).
+	const int factor = (static_cast<unsigned char>(std::max(0, powerByte)) + 19) / 20;
+	return factor - (resist * factor) / 100;
+}
+
+int AEquipmentType::fireHazardDamage(int powerByte) const
+{
+	return fireHazardDamage(powerByte, hazardResist);
+}
 } // namespace OpenApoc
