@@ -15,12 +15,16 @@ class Gles3
 	bool desktop_extension;
 
   public:
-	// If 'desktop_extension' is true that means we're on a 'desktop' GL context
-	// with GL_ARB_ES3_compatibility, thus should GetProcAddress instead of dlsym
-	// for symbol resolution
+	// If 'desktop_extension' is true that means we're on a 'desktop' GL context that provides
+	// ES3-equivalent functionality (either GL_ARB_ES3_compatibility or a core profile of at
+	// least GL 3.3), thus should GetProcAddress instead of dlsym for symbol resolution.
 	static bool supported(bool desktop_extension, std::string lib_name = "libGLESv2.so");
 	Gles3(bool desktop_extension, std::string lib_name = "libGLESv2.so");
 	~Gles3();
+
+	// True on a desktop GL context, which rejects the ES shading language -- callers building
+	// shader sources have to emit a desktop '#version' directive instead.
+	bool isDesktopContext() const { return this->desktop_extension; }
 
 	std::string VersionString;
 	std::string VendorString;

@@ -1045,20 +1045,29 @@ void Framework::displayInitialise()
 #if defined(__APPLE__) && TARGET_OS_IPHONE
 	display_flags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_BORDERLESS;
 #endif
+	// GL_2_0 cannot run on a core profile -- it feeds GL from client memory and its shaders
+	// are #version 110 -- so this stays opt-in rather than being inferred from the renderer list.
+	[[maybe_unused]] const bool requestCoreProfile = Options::glProfileOption.get() == "core";
 #ifdef OPENAPOC_GLES
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+	// Request context version 3.0
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #else
-#ifdef SDL_OPENGL_CORE
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-#endif
-
+	// This used to be guarded by SDL_OPENGL_CORE, which nothing in the build ever defines --
+	// so no core profile was ever requested, and macOS (which offers 3.2 and 4.1 through a
+	// core profile only) always fell back to a legacy 2.1 context with neither ES3 nor
+	// GL_ARB_ES3_compatibility. That is why GLES_3_0 could not initialise there.
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+	                    requestCoreProfile ? SDL_GL_CONTEXT_PROFILE_CORE : 0);
+	// 4.1 is the ceiling on macOS. Asking for less there yields 3.2/GLSL 1.50, which has no
+	// explicit attribute locations -- the GLES_3_0 shaders would not compile.
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, requestCoreProfile ? 4 : 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, requestCoreProfile ? 1 : 0);
 #endif
 #ifdef DEBUG_RENDERER
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
 #endif
-	// Request context version 3.0
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 	// Request RGBA8888 - change if needed
 	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
 	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
@@ -1162,6 +1171,9 @@ void Framework::displayInitialise()
 		        "[SDLError: {0}]",
 		        SDL_GetError());
 		LogInfo("Attempting to create context by lowering the requested version");
+		// A core profile mask left set here would make the retry ask for "2.0 core",
+		// which is not a profile any driver can grant.
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, 0);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 		p->context = SDL_GL_CreateContext(p->window);
