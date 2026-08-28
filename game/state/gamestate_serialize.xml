@@ -912,6 +912,7 @@
     <member>power</member>
     <member>lifetime</member>
     <member>age</member>
+    <member>fireOverlay</member>
     <member>frame</member>
     <member>ticksUntilVisible</member>
     <member>frameChangeTicksAccumulated</member>
