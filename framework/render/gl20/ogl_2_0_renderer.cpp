@@ -1613,6 +1613,15 @@ class OGL20RendererFactory : public OpenApoc::RendererFactory
 				        gl20::sys::GetMinorVersion());
 				return nullptr;
 			}
+			// This renderer feeds GL from client memory and compiles #version 110 shaders,
+			// neither of which a core profile allows -- it would fail in ways that look like
+			// driver bugs rather than declining cleanly. glGetString(GL_EXTENSIONS) returning
+			// NULL is exactly the core-profile discriminator, and needs no extra entry point.
+			if (!gl20::GetString(gl20::EXTENSIONS))
+			{
+				LogInfo("GL context is a core profile, which GL_2_0 cannot use");
+				return nullptr;
+			}
 			functionLoadSuccess = true;
 		}
 		if (functionLoadSuccess)

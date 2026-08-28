@@ -36,6 +36,7 @@ void dumpOptionsToLog()
 	dumpOption(cdPathOption);
 	dumpOption(threadPoolSizeOption);
 	dumpOption(renderersOption);
+	dumpOption(glProfileOption);
 	dumpOption(audioBackendsOption);
 	dumpOption(audioGlobalGainOption);
 	dumpOption(audioSampleGainOption);
@@ -217,6 +218,15 @@ ConfigOptionInt threadPoolSizeOption(
 ConfigOptionString
     renderersOption("Framework", "Renderers",
                     tr("':' separated list of renderer backends (in preference order)"), RENDERERS);
+// "core" is what makes GLES_3_0 reachable on macOS: Apple only exposes GL 3.2/4.1 through a core
+// profile, and without one the driver hands back a legacy 2.1 context that has neither ES3 nor
+// GL_ARB_ES3_compatibility. It is not the default because a core profile removes client-side
+// vertex arrays and the fixed-function shading language, which GL_2_0 depends on.
+ConfigOptionString glProfileOption("Framework", "GLProfile",
+                                   tr("OpenGL context profile to request (\"default\" or "
+                                      "\"core\"). \"core\" is required for GLES_3_0 on macOS "
+                                      "and is incompatible with GL_2_0"),
+                                   "default");
 ConfigOptionString
     audioBackendsOption("Framework", "AudioBackends",
                         tr("':' separated list of audio backends (in preference order)"),
