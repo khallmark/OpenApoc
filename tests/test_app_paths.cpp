@@ -13,6 +13,39 @@ static bool testRelativeDefaults()
 	return true;
 }
 
+static bool testResolveModPath()
+{
+	// The untouched default follows whatever data path was resolved -- this is the case that
+	// used to break: mods stayed at "./data/mods" while every other asset came from --Framework.Data.
+	const UString followed = resolveModPath("/opt/game/data", kDefaultModPath);
+	TEST_REQUIRE(followed.find("/opt/game/data") != UString::npos, "mod path follows data path");
+	TEST_REQUIRE(followed.find("mods") != UString::npos, "mod path ends in mods");
+	// A path already resolved elsewhere (bundle defaults, settings.conf, command line) is kept.
+	TEST_REQUIRE(resolveModPath("/opt/game/data", "/elsewhere/mods") == "/elsewhere/mods",
+	             "explicit mod path is untouched");
+	// No data path to derive from means no change rather than a bare "mods".
+	TEST_REQUIRE(resolveModPath("", kDefaultModPath) == kDefaultModPath, "empty data path");
+	// The plain relative case must keep behaving exactly as it did.
+	TEST_REQUIRE(resolveModPath(kDefaultDataPath, kDefaultModPath).find("mods") != UString::npos,
+	             "relative default still resolves");
+	return true;
+}
+
+static bool testDataPathLooksValid()
+{
+	const fs::path tmp = fs::temp_directory_path() / "openapoc-data-test";
+	fs::remove_all(tmp);
+	// The case that used to go unnoticed: settings.conf naming a checkout that has been deleted.
+	TEST_REQUIRE(!dataPathLooksValid(tmp.string()), "missing path");
+	fs::create_directories(tmp);
+	TEST_REQUIRE(!dataPathLooksValid(tmp.string()), "empty directory is not data");
+	fs::create_directories(tmp / "mods");
+	TEST_REQUIRE(dataPathLooksValid(tmp.string()), "directory holding mods");
+	fs::remove_all(tmp);
+	TEST_REQUIRE(!dataPathLooksValid(""), "empty string");
+	return true;
+}
+
 static bool testJoinDir()
 {
 	const UString joined = joinDir("/tmp/pref/", "saves");
@@ -53,6 +86,8 @@ int main(int argc, char **argv)
 	}
 	return TestHelpers::runTestSuite({
 	    {"relative defaults", testRelativeDefaults},
+	    {"resolve mod path", testResolveModPath},
+	    {"data path valid", testDataPathLooksValid},
 	    {"join dir", testJoinDir},
 	    {"bundle path detect", testBundlePathDetect},
 	    {"cd path valid", testCdPathLooksValid},

@@ -235,6 +235,12 @@ Framework::Framework(const UString programName, bool createWindow)
 
 	enableFileLogger(logPath.c_str());
 
+	// Order matters: repair a stale data path first, so the mod path follows the repaired one.
+	applyDataPathFallback();
+	// After the bundle defaults so it sees the data path that was actually resolved, and after
+	// the config save above so a derived path is never written into the user's settings.
+	applyDataRelativeModPath();
+
 	Options::dumpOptionsToLog();
 
 	// This is always set, the default being an empty string (which correctly chooses 'system
