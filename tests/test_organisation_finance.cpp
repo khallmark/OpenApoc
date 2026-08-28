@@ -91,7 +91,7 @@ static StateRef<Organisation> findOrgWithHumanBuilding(sp<GameState> state)
 // ruleset-defined VehicleType wholesale - some of those are battle-only placeholders never
 // meant to be placed in the city, and this keeps the test on realistic ground.
 static StateRef<VehicleType> findNonSpaceLinerVehicleType(sp<GameState> state,
-                                                           StateRef<Organisation> org)
+                                                          StateRef<Organisation> org)
 {
 	std::set<UString> spaceLinerTypes;
 	for (auto &cityMissions : org->recurring_missions)
@@ -165,7 +165,7 @@ static bool test_settle_market_purchase_credits_seller(sp<GameState> state)
 	if (!manufacturer)
 	{
 		LogWarning("No manufacturer org sharing the player's city was found, skipping "
-		          "seller-credit test");
+		           "seller-credit test");
 		return true;
 	}
 
@@ -192,13 +192,13 @@ static bool test_settle_market_purchase_credits_seller(sp<GameState> state)
 	if (player->balance != buyerBalanceBefore - expectedTotal)
 	{
 		LogError("Buyer balance should decrease by {0}: was {1}, now {2}", expectedTotal,
-		        buyerBalanceBefore, player->balance);
+		         buyerBalanceBefore, player->balance);
 		return false;
 	}
 	if (manufacturer->balance != sellerBalanceBefore + expectedTotal)
 	{
 		LogError("Seller balance should increase by {0}: was {1}, now {2}", expectedTotal,
-		        sellerBalanceBefore, manufacturer->balance);
+		         sellerBalanceBefore, manufacturer->balance);
 		return false;
 	}
 
@@ -241,7 +241,7 @@ static bool test_settle_market_purchase_self_no_double_dip(sp<GameState> state)
 	if (player->balance != balanceBefore - expectedTotal)
 	{
 		LogError("Self-purchase should debit exactly {0} once: was {1}, now {2}", expectedTotal,
-		        balanceBefore, player->balance);
+		         balanceBefore, player->balance);
 		return false;
 	}
 
@@ -272,7 +272,7 @@ static bool test_vehicle_park_insufficient_funds_blocks_purchase(sp<GameState> s
 	if (org->balance != 999)
 	{
 		LogError("Insufficient-funds attempt should not touch balance: expected 999, got {0}",
-		        org->balance);
+		         org->balance);
 		return false;
 	}
 
@@ -339,7 +339,7 @@ static bool test_vehicle_park_surplus_sale_credits_balance(sp<GameState> state,
 	if (org->balance != 750)
 	{
 		LogError("Surplus sale should credit the current price: expected 750, got {0}",
-		        org->balance);
+		         org->balance);
 		return false;
 	}
 
@@ -400,7 +400,7 @@ static bool test_vehicle_park_no_surplus_is_noop(sp<GameState> state, StateRef<O
 	if (org->balance != balanceBefore)
 	{
 		LogError("No-surplus case should not touch balance: was {0}, now {1}", balanceBefore,
-		        org->balance);
+		         org->balance);
 		return false;
 	}
 
