@@ -493,6 +493,7 @@ void InitialGameStateExtractor::extractAgentEquipment(GameState &state) const
 			e->launcher = true;
 		}
 
+		e->hazardResist = edata.unknown01;
 		e->artifact = edata.artifact != 0;
 
 		unsigned payload_idx = std::numeric_limits<unsigned>::max();
