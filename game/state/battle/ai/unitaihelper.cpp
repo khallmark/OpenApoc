@@ -6,8 +6,8 @@
 #include "game/state/tilemap/tileobject_battleunit.h"
 #include <cfloat>
 #include <cmath>
-#include <vector>
 #include <glm/glm.hpp>
+#include <vector>
 
 namespace OpenApoc
 {

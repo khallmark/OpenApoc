@@ -62,10 +62,7 @@ const ExposureCase CASES[] = {
      {{10.0f, 10.0f, 1.0f}},
      {10.0f, 10.0f, 7.0f},
      -1},
-    {"7 levels up in Z is outside a 13-deep box",
-     {{10.0f, 10.0f, 1.0f}},
-     {10.0f, 10.0f, 8.0f},
-     0},
+    {"7 levels up in Z is outside a 13-deep box", {{10.0f, 10.0f, 1.0f}}, {10.0f, 10.0f, 8.0f}, 0},
     // Three qualifying threats in range must cost three, not saturate at one and not double-count.
     {"three threats in range each cost one unit of exposure",
      {{10.0f, 10.0f, 1.0f}, {11.0f, 10.0f, 1.0f}, {12.0f, 10.0f, 1.0f}},
@@ -109,7 +106,7 @@ static bool checkCustomBoxOverride()
 	const int wideBox = UnitAIHelper::exposureScore(threats, {0.0f, 0.0f, 0.0f}, /*boxXY=*/21,
 	                                                /*boxZ=*/13);
 	const int narrowBox = UnitAIHelper::exposureScore(threats, {0.0f, 0.0f, 0.0f}, /*boxXY=*/5,
-	                                                   /*boxZ=*/13);
+	                                                  /*boxZ=*/13);
 	if (wideBox != -1)
 	{
 		LogError("custom_box_override: expected -1 with the default box, got {0}", wideBox);
