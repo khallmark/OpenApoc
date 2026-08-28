@@ -19,6 +19,7 @@
 #include "tools/extractors/common/research.h"
 #include "tools/extractors/common/scenerytile.h"
 #include "tools/extractors/common/strtab.h"
+#include "tools/extractors/common/ufoincursion.h"
 #include "tools/extractors/common/ufopaedia.h"
 #include "tools/extractors/common/vehicle.h"
 #include "tools/extractors/common/vequipment.h"
@@ -94,6 +95,7 @@ class UFO2P
 	std::unique_ptr<DataChunk<OrgInfiltrationSpeed>> infiltration_speed_org;
 	std::unique_ptr<DataChunk<AgentInfiltrationSpeed>> infiltration_speed_agent;
 	std::unique_ptr<DataChunk<BuildingInfiltrationSpeed>> infiltration_speed_building;
+	std::unique_ptr<DataChunk<UfoMissionData>> ufo_mission_data;
 
 	UString getOrgId(int idx) const
 	{
