@@ -40,9 +40,7 @@ for f in ${MODIFIED_FILES}; do
   fi
   echo "Running clang-tidy on ${f}"
 
-  ${CLANG_TIDY} -p "${BUILD_DIR}" "${f}" || true
-  RESULT=$?
-  if [ ${RESULT} != 0 ]; then
+  if ! ${CLANG_TIDY} -p "${BUILD_DIR}" "${f}"; then
     RET=1;
     echo "File ${f} failed clang-tidy checks"
   fi;
