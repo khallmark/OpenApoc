@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <cstring>
 #include <glm/gtx/rotate_vector.hpp>
 #include <list>
 #include <mutex>
@@ -42,10 +43,50 @@ static const int PALETTE_TEX_IDX = 2;
 
 static const auto SCRATCH_TEX_SLOT = GL::TEXTURE3;
 
+// The shader sources below are written against ES 3.0, which a desktop core profile rejects
+// outright. Everything else in them -- explicit attribute locations, 'flat' integer varyings,
+// texelFetch -- is legal GLSL 4.10, and precision qualifiers are accepted (and ignored) by
+// desktop GLSL from 1.30 onwards, so most of the translation is the version directive.
+//
+// The exception is the signed integer samplers. The paletted textures are GL_R8UI, an
+// *unsigned* format, and ES 3.0 drivers tolerate reading them through an isampler. Desktop GL
+// requires the sampler's type to match the internal format and leaves the mismatch undefined:
+// in practice zero still reads back as zero (so sprite silhouettes, which come from the
+// 'idx == 0' discard, look correct) while nonzero indices come back wrong, giving every
+// affected sprite a colour from the wrong palette entry. Measured against Metal that was 27.8%
+// of the frame. The ES sources are left alone so the iOS path is untouched.
+static const struct
+{
+	const char *from;
+	const char *to;
+} DESKTOP_SHADER_SUBSTITUTIONS[] = {
+    {"#version 300 es\n", "#version 410 core\n"},
+    {"uniform highp isampler2DArray paletted_spritesheets;",
+     "uniform highp usampler2DArray paletted_spritesheets;"},
+    {"int idx = texelFetch(paletted_spritesheets, ivec3(texcoord.x, texcoord.y, page), 0).r;",
+     "int idx = int(texelFetch(paletted_spritesheets, ivec3(texcoord.x, texcoord.y, page), "
+     "0).r);"},
+    {"uniform highp isampler2D palette_texture;", "uniform highp usampler2D palette_texture;"},
+    {"int idx = texelFetch(palette_texture, ivec2(texcoord.x, texcoord.y), 0).r;",
+     "int idx = int(texelFetch(palette_texture, ivec2(texcoord.x, texcoord.y), 0).r);"},
+};
+
 GL::GLuint CreateShader(GL::GLenum type, const UString &source)
 {
 	GL::GLuint shader = gl->CreateShader(type);
 	auto sourceString = source;
+	if (gl->isDesktopContext())
+	{
+		for (const auto &substitution : DESKTOP_SHADER_SUBSTITUTIONS)
+		{
+			auto pos = sourceString.find(substitution.from);
+			while (pos != UString::npos)
+			{
+				sourceString.replace(pos, strlen(substitution.from), substitution.to);
+				pos = sourceString.find(substitution.from, pos + strlen(substitution.to));
+			}
+		}
+	}
 	const GL::GLchar *string = sourceString.c_str();
 	GL::GLint stringLength = sourceString.length();
 	gl->ShaderSource(shader, 1, &string, &stringLength);

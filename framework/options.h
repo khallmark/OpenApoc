@@ -11,6 +11,7 @@ extern ConfigOptionString dataPathOption;
 extern ConfigOptionString cdPathOption;
 extern ConfigOptionInt threadPoolSizeOption;
 extern ConfigOptionString renderersOption;
+extern ConfigOptionString glProfileOption;
 extern ConfigOptionString audioBackendsOption;
 extern ConfigOptionInt audioGlobalGainOption;
 extern ConfigOptionInt audioSampleGainOption;

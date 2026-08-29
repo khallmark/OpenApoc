@@ -39,6 +39,7 @@
 #endif
 
 #include <cstring>
+#include <stdexcept>
 #include <string>
 
 static const std::string FUNCTION_PREFIX = "gl";
@@ -176,13 +177,61 @@ bool Gles3::supported(bool desktop_extension, std::string lib_name)
 
 	if (desktop_extension)
 	{
-		std::string extension_list = reinterpret_cast<const char *>(LocalGetString(EXTENSIONS));
-		LogInfo("GL_EXTENSIONS: \"{0}\"", extension_list.c_str());
-		if (extension_list.find("GL_ARB_ES3_compatibility ") != extension_list.npos)
+		const char *version_cstr = reinterpret_cast<const char *>(LocalGetString(VERSION));
+		if (!version_cstr)
 		{
-			return true;
+			LogInfo("No GL_VERSION string");
+			return false;
 		}
-		return false;
+		std::string version_string = version_cstr;
+		LogInfo("GL_VERSION: \"{0}\"", version_string.c_str());
+		// A real ES context reports "OpenGL ES x.y" -- that is the other branch's business.
+		if (version_string.find("OpenGL ES ") == 0)
+		{
+			return false;
+		}
+		// 4.1 is the bar, and it is set by the shaders rather than by the API: the desktop
+		// substitutions in ogles_3_0_renderer_v2.cpp emit "#version 410 core" unconditionally.
+		// Every API feature this renderer needs became core earlier, at 3.3 -- texture arrays,
+		// integer textures, instanced arrays, vertex array objects, explicit attribute
+		// locations -- but claiming support at 3.3 would hand the renderer a context whose
+		// GLSL compiler rejects its own shaders, so it must match what is actually emitted.
+		// The version test is not merely a shortcut past the extension string: Apple caps
+		// desktop GL at 4.1 and GL_ARB_ES3_compatibility is a 4.3 feature, so on macOS this is
+		// the only test that can ever pass.
+		auto dot = version_string.find('.');
+		if (dot != std::string::npos && dot != 0)
+		{
+			int major = 0;
+			int minor = 0;
+			try
+			{
+				major = std::stoi(version_string.substr(0, dot));
+				minor = std::stoi(version_string.substr(dot + 1));
+			}
+			catch (const std::exception &)
+			{
+				LogInfo("Could not parse GL_VERSION \"{0}\"", version_string.c_str());
+				return false;
+			}
+			if (major > 4 || (major == 4 && minor >= 1))
+			{
+				LogInfo("Desktop GL {0}.{1} provides ES3-equivalent functionality", major, minor);
+				return true;
+			}
+		}
+		// Only reached below 4.1, which includes a 3.2 core profile. glGetString(GL_EXTENSIONS) is
+		// illegal in a core profile -- it returns NULL and raises INVALID_ENUM -- so the result
+		// has to be checked before it is used to construct a std::string.
+		const char *extension_cstr = reinterpret_cast<const char *>(LocalGetString(EXTENSIONS));
+		if (!extension_cstr)
+		{
+			LogInfo("No GL_EXTENSIONS string (core profile below 4.1?)");
+			return false;
+		}
+		std::string extension_list = extension_cstr;
+		LogInfo("GL_EXTENSIONS: \"{0}\"", extension_list.c_str());
+		return extension_list.find("GL_ARB_ES3_compatibility ") != extension_list.npos;
 	}
 	else
 	{
@@ -458,17 +507,37 @@ Gles3::Gles3(bool desktop_extension, std::string lib_name)
 	loader->load(TexStorage3D, "TexStorage3D");
 	loader->load(GetInternalformativ, "GetInternalformativ");
 
-	this->VersionString = reinterpret_cast<const char *>(this->GetString(VERSION));
-	this->VendorString = reinterpret_cast<const char *>(this->GetString(VENDOR));
-	this->RendererString = reinterpret_cast<const char *>(this->GetString(RENDERER));
-	this->ExtensionString = reinterpret_cast<const char *>(this->GetString(EXTENSIONS));
+	// Every one of these can legitimately return NULL -- GL_EXTENSIONS always does in a core
+	// profile, where glGetStringi is the only way to enumerate -- and assigning NULL to a
+	// std::string is a segfault, not an empty string.
+	auto stringOrEmpty = [](const GLubyte *s) -> std::string
+	{ return s ? reinterpret_cast<const char *>(s) : std::string(); };
+
+	this->VersionString = stringOrEmpty(this->GetString(VERSION));
+	this->VendorString = stringOrEmpty(this->GetString(VENDOR));
+	this->RendererString = stringOrEmpty(this->GetString(RENDERER));
+	this->ExtensionString = stringOrEmpty(this->GetString(EXTENSIONS));
 
 	GLint extension_count = 0;
 	this->GetIntegerv(NUM_EXTENSIONS, &extension_count);
 
 	for (int i = 0; i < extension_count; i++)
 	{
-		this->Extensions.insert(reinterpret_cast<const char *>(this->GetStringi(EXTENSIONS, i)));
+		auto extension = stringOrEmpty(this->GetStringi(EXTENSIONS, i));
+		if (extension.empty())
+			continue;
+		this->Extensions.insert(extension);
+	}
+	// A core profile has no monolithic extension string, so rebuild one from the indexed
+	// query -- callers that log or search it still expect a value. The trailing space after
+	// each name matches glGetString's own format, which those searches rely on.
+	if (this->ExtensionString.empty())
+	{
+		for (const auto &extension : this->Extensions)
+		{
+			this->ExtensionString += extension;
+			this->ExtensionString += " ";
+		}
 	}
 
 	this->KHR_debug = {this};
