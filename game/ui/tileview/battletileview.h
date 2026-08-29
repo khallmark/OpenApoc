@@ -85,8 +85,7 @@ class BattleTileView : public TileView
 	int focusAnimationTicksAccumulated = 0;
 	int selectionFrameTicksAccumulated = 0;
 
-	bool colorForward = true;
-	int colorCurrent = 0;
+	int paletteAnimationTick = 0;
 	sp<Palette> palette;
 	std::vector<sp<Palette>> modPalette;
 

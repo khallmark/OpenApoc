@@ -1,3 +1,6 @@
+#ifndef _USE_MATH_DEFINES
+#define _USE_MATH_DEFINES
+#endif
 #include "game/ui/tileview/battletileview.h"
 #include "forms/form.h"
 #include "forms/graphic.h"
@@ -28,10 +31,29 @@
 #include "game/state/tilemap/tileobject_shadow.h"
 #include "library/strings_format.h"
 #include <algorithm>
+#include <cmath>
 #include <glm/glm.hpp>
 
 namespace OpenApoc
 {
+namespace
+{
+// The five reserved palette entries all ramp between a dim and a bright variant. Both
+// ramps span this many colour units end to end.
+const int PULSE_RANGE = 240;
+// Unit indicators ramp on a linear triangle wave; this is how many steps each half of
+// that wave takes, and so how many updates each half occupies.
+const int INDICATOR_PULSE_STEPS = 15;
+// One full indicator pulse, up and back down. Left as it was: a blinking unit marker is
+// meant to catch the eye.
+const int INDICATOR_PULSE_TICKS = INDICATOR_PULSE_STEPS * 2;
+// The gravlift glow instead fades over four indicator pulses (2s at the default 60 FPS),
+// which reads as a slow breath rather than a flicker. Holding it to a whole multiple of
+// the indicator pulse keeps the combined animation periodic, so one precomputed palette
+// per tick still drives both.
+const int PALETTE_ANIMATION_TICKS = INDICATOR_PULSE_TICKS * 4;
+} // namespace
+
 void BattleTileView::updateHiddenBar()
 {
 	hiddenBarTicksAccumulated = 0;
@@ -104,29 +126,36 @@ BattleTileView::BattleTileView(TileMap &map, Vec3<int> isoTileSize, Vec2<int> st
 {
 	pal = palette;
 
-	for (int j = 0; j <= 15; j++)
+	for (int tick = 0; tick < PALETTE_ANIMATION_TICKS; tick++)
 	{
-		colorCurrent = j;
 		auto newPal = mksp<Palette>();
 
 		for (int i = 0; i < 255 - 4; i++)
 		{
 			newPal->setColour(i, palette->getColour(i));
 		}
-		// Lift color, pulsates from (0r 3/8g 5/8b) to (0r 8/8g 4/8b)
-		newPal->setColour(255 - 4, Colour(0, (colorCurrent * 16 * 5 + 255 * 3) / 8,
-		                                  (colorCurrent * 16 * -1 + 255 * 5) / 8));
+
+		// Indicators step along the triangle wave, 0 .. 15 .. 0, one step per update
+		const int indicatorStep =
+		    INDICATOR_PULSE_STEPS - std::abs(INDICATOR_PULSE_STEPS - tick % INDICATOR_PULSE_TICKS);
+		const int indicatorLevel =
+		    (indicatorStep * (PULSE_RANGE / INDICATOR_PULSE_STEPS) * 5 + 255 * 3) / 8;
+		// The lift follows a raised cosine across the whole cycle instead, so it eases
+		// into and out of each extreme rather than reversing on a hard corner
+		const float liftLevel =
+		    0.5f - 0.5f * std::cos(2.0f * (float)M_PI * (float)tick / PALETTE_ANIMATION_TICKS);
+
+		// Lift color, fades from (0r 3/8g 5/8b) to (0r 8/8g 4/8b)
+		newPal->setColour(255 - 4, Colour(0, (uint8_t)((liftLevel * PULSE_RANGE * 5 + 255 * 3) / 8),
+		                                  (uint8_t)((liftLevel * PULSE_RANGE * -1 + 255 * 5) / 8)));
 		// Yellow color, for owned indicators, pulsates from (3/8r 3/8g 0b) to (8/8r 8/8g 0b)
-		newPal->setColour(255 - 3, Colour((colorCurrent * 16 * 5 + 255 * 3) / 8,
-		                                  (colorCurrent * 16 * 5 + 255 * 3) / 8, 0));
+		newPal->setColour(255 - 3, Colour(indicatorLevel, indicatorLevel, 0));
 		// Red color, for enemy indicators, pulsates from (3/8r 0g 0b) to (8/8r 0g 0b)
-		newPal->setColour(255 - 2, Colour((colorCurrent * 16 * 5 + 255 * 3) / 8, 0, 0));
+		newPal->setColour(255 - 2, Colour(indicatorLevel, 0, 0));
 		// Pink color, for neutral indicators, pulsates from (3/8r 0g 3/8b) to (8/8r 0g 8/8b)
-		newPal->setColour(255 - 1, Colour((colorCurrent * 16 * 5 + 255 * 3) / 8, 0,
-		                                  (colorCurrent * 16 * 5 + 255 * 3) / 8));
+		newPal->setColour(255 - 1, Colour(indicatorLevel, 0, indicatorLevel));
 		// Blue color, for misc. indicators, pulsates from (0r 3/8g 3/8b) to (0r 8/8g 8/8b)
-		newPal->setColour(255 - 0, Colour(0, (colorCurrent * 16 * 5 + 255 * 3) / 8,
-		                                  (colorCurrent * 16 * 5 + 255 * 3) / 8));
+		newPal->setColour(255 - 0, Colour(0, indicatorLevel, indicatorLevel));
 
 		modPalette.push_back(newPal);
 	}
@@ -1593,14 +1622,9 @@ void BattleTileView::update()
 {
 	TileView::update();
 
-	// Pulsate palette colors
-	colorCurrent += (colorForward ? 1 : -1);
-	if (colorCurrent <= 0 || colorCurrent >= 15)
-	{
-		colorCurrent = clamp(colorCurrent, 0, 15);
-		colorForward = !colorForward;
-	}
-	pal = modPalette[colorCurrent];
+	// Advance the shared palette animation: indicators pulse, the lift glow fades
+	paletteAnimationTick = (paletteAnimationTick + 1) % PALETTE_ANIMATION_TICKS;
+	pal = modPalette[paletteAnimationTick];
 }
 
 void BattleTileView::resetAttackCost()
