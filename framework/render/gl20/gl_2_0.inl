@@ -2462,7 +2462,13 @@ namespace gl20
 			_detail::GetString = reinterpret_cast<_detail::PFNGETSTRING>(IntGetProcAddress("glGetString"));
 			if(!_detail::GetString) return exts::LoadTest();
 			
-			ProcExtsFromExtString((const char *)gl20::_detail::GetString(gl20::EXTENSIONS), table);
+			/*glGetString(GL_EXTENSIONS) is illegal in a core profile: it raises INVALID_ENUM
+			and returns NULL, which ProcExtsFromExtString would hand straight to strlen().
+			An empty extension table is the right answer there -- this loader only needs
+			entry points that are core in GL 2.0, and the caller declines a core context.*/
+			const char *strExtensions = (const char *)gl20::_detail::GetString(gl20::EXTENSIONS);
+			if(strExtensions)
+				ProcExtsFromExtString(strExtensions, table);
 			
 			int numFailed = _detail::LoadCoreFunctions();
 			return exts::LoadTest(true, numFailed);
