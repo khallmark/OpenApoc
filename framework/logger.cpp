@@ -1,6 +1,7 @@
 #include "framework/logger.h"
 #include "framework/configfile.h"
 #include "library/backtrace.h"
+#include <algorithm>
 #include <iostream>
 #include <mutex>
 
@@ -19,6 +20,14 @@ static std::mutex &loggerMutex()
 {
 	static std::mutex *m = new std::mutex();
 	return *m;
+}
+
+// stderr prints Warning and Error (defaultLogFunction); other sinks raise this when enabled.
+int logMaxEnabledLevel = (int)LogLevel::Warning;
+
+void raiseLogMaxEnabledLevel(LogLevel level)
+{
+	logMaxEnabledLevel = std::max(logMaxEnabledLevel, (int)level);
 }
 
 void defaultLogFunction(LogLevel level, UString prefix, const UString &text)

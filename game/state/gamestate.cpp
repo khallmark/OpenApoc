@@ -1314,9 +1314,21 @@ void GameState::update(unsigned int ticks)
 
 		current_city->update(*this, ticks);
 
+		// What a rescue craft could go for (VehicleMission::canRecoverVehicle's target test),
+		// found once here rather than by every organisation walking every vehicle.
+		std::vector<std::pair<UString, sp<Vehicle>>> rescueCandidates;
+		for (auto &v : this->vehicles)
+		{
+			const auto &veh = v.second;
+			if (!veh->isDead() && (veh->crashed || veh->sliding || veh->falling) &&
+			    !veh->carriedByVehicle)
+			{
+				rescueCandidates.emplace_back(v.first, veh);
+			}
+		}
 		for (auto &o : this->organisations)
 		{
-			o.second->updateMissions(*this);
+			o.second->updateMissions(*this, rescueCandidates);
 		}
 
 		for (auto &v : this->vehicles)

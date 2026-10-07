@@ -163,7 +163,10 @@ class Organisation : public StateObject<Organisation>
 	void setRaidMissions(GameState &state, StateRef<City> city);
 	// long_term − current, floored at 1. Call before updateRelations snapshots long_term.
 	float raidRelationPressure(const StateRef<Organisation> &other) const;
-	void updateMissions(GameState &state);
+	// rescueCandidates: every vehicle a rescue craft could go for (alive, crashed/sliding/falling,
+	// not already carried), in state.vehicles order. Found once per update by the caller.
+	void updateMissions(GameState &state,
+	                    const std::vector<std::pair<UString, sp<Vehicle>>> &rescueCandidates);
 	void updateHirableAgents(GameState &state);
 	void updateInfiltration(GameState &state);
 	void updateTakeOver(GameState &state, unsigned int ticks);

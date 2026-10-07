@@ -1231,7 +1231,7 @@ std::list<Vec3<int>> City::findShortestPath(Vec3<int> origin, Vec3<int> destinat
 			// Check if segment can be entered
 			// For non-roads check tile number 0
 			// For roads check based on where we came from
-			auto nextSeg = roadSegments[originSeg.connections[0]];
+			const auto &nextSeg = roadSegments[originSeg.connections[0]];
 			int intoConnect = nextSeg.length == 1 || nextSeg.connections[0] == originID ? 0 : 1;
 			// Entrance intact
 			if (nextSeg.getIntactByConnectID(intoConnect))
@@ -1252,7 +1252,7 @@ std::list<Vec3<int>> City::findShortestPath(Vec3<int> origin, Vec3<int> destinat
 			// Check if segment can be entered
 			// For non-roads check tile number 0
 			// For roads check based on where we came from
-			auto nextSeg = roadSegments[originSeg.connections[1]];
+			const auto &nextSeg = roadSegments[originSeg.connections[1]];
 			int intoConnect = nextSeg.length == 1 || nextSeg.connections[0] == originID ? 0 : 1;
 			// Entrance intact
 			if (nextSeg.getIntactByConnectID(intoConnect))
@@ -1393,7 +1393,7 @@ std::list<Vec3<int>> City::findShortestPath(Vec3<int> origin, Vec3<int> destinat
 			// Check if segment can be entered
 			// For non-roads check tile number 0
 			// For roads check based on where we came from
-			auto nextSeg = roadSegments[c];
+			const auto &nextSeg = roadSegments[c];
 			int intoConnect = nextSeg.length == 1 || nextSeg.connections[0] == thisID ? 0 : 1;
 			// Entrance not intact
 			if (!nextSeg.getIntactByConnectID(intoConnect))

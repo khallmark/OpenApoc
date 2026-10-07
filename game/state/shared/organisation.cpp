@@ -429,7 +429,8 @@ void Organisation::setRaidMissions(GameState &state, StateRef<City> city)
 	}
 }
 
-void Organisation::updateMissions(GameState &state)
+void Organisation::updateMissions(
+    GameState &state, const std::vector<std::pair<UString, sp<Vehicle>>> &rescueCandidates)
 {
 	if (state.getPlayer().id == id)
 	{
@@ -460,6 +461,13 @@ void Organisation::updateMissions(GameState &state)
 		{
 			m.execute(state, state.current_city, currentOrg);
 		}
+	}
+	// Nothing anywhere to recover: skip the rescue scan. It used to walk every vehicle in the
+	// world several times per organisation per update, which with ~560 vehicles and 27
+	// organisations was a sixth of a busy city's frame.
+	if (rescueCandidates.empty())
+	{
+		return;
 	}
 	// Find all idle rescue-capable craft
 	std::vector<StateRef<Vehicle>> rescueTransports;
@@ -493,7 +501,7 @@ void Organisation::updateMissions(GameState &state)
 	{
 		StateRef<Vehicle> target;
 		// Rescue owned
-		for (auto &v : state.vehicles)
+		for (auto &v : rescueCandidates)
 		{
 			if (v.second->city == rescueTransport->city && v.second->owner.id == id &&
 			    claimedVictims.find(v.first) == claimedVictims.end() &&
@@ -506,7 +514,7 @@ void Organisation::updateMissions(GameState &state)
 		// Rescue allies but not aliens
 		if (!target)
 		{
-			for (auto &v : state.vehicles)
+			for (auto &v : rescueCandidates)
 			{
 				if (v.second->city == rescueTransport->city &&
 				    v.second->owner != state.getAliens() && v.second->owner.id != id &&

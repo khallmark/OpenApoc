@@ -47,6 +47,7 @@ void enableSDLDialogLogger(SDL_Window *win)
 	}
 	parentWindow = win;
 	dialogLogLevel = (LogLevel)Options::dialogLogLevelOption.get();
+	raiseLogMaxEnabledLevel(dialogLogLevel);
 	previousFunction() = getLogCallback();
 	setLogCallback(SDLDialogLogFunction);
 }

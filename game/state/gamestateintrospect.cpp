@@ -1119,6 +1119,33 @@ UString introspectGameState(GameState &state, const UString &query)
 	{
 		return describeVehicles(state);
 	}
+	// Performance diagnosis: how many vehicles the world holds, and whose. Every one is updated
+	// every tick, so unbounded growth is CPU and memory the game never gives back.
+	if (q == "vehicle_census")
+	{
+		std::map<UString, int> byOwner;
+		int total = 0, dead = 0, crashed = 0, inCity = 0;
+		for (const auto &v : state.vehicles)
+		{
+			total++;
+			const auto &veh = v.second;
+			if (!veh)
+			{
+				continue;
+			}
+			byOwner[veh->owner ? veh->owner.id : UString("none")]++;
+			dead += veh->isDead() ? 1 : 0;
+			crashed += veh->crashed ? 1 : 0;
+			inCity += veh->city == state.current_city && veh->tileObject ? 1 : 0;
+		}
+		UString owners;
+		for (const auto &o : byOwner)
+		{
+			owners += format("{0}{1}={2}", owners.empty() ? "" : "|", o.first, o.second);
+		}
+		return format("total={0} dead={1} crashed={2} on_map={3} owners={4}", total, dead, crashed,
+		              inCity, owners.empty() ? UString("-") : owners);
+	}
 	if (q == "agents")
 	{
 		return describeAgents(state);

@@ -58,13 +58,15 @@ void FileLogFunction(LogLevel level, UString prefix, const UString &text)
 				break;
 		}
 		const auto message = OpenApoc::format("{0} {1}: {2}", levelPrefix, prefix, text);
-		logFile() << message << std::endl;
+		// '\n', not std::endl: endl flushes, and flushing every Info line to disk was the
+		// single largest cost in a busy city frame. Warnings and errors still flush below.
+		logFile() << message << '\n';
 	}
 
 	if (level <= backtraceLogLevel)
 	{
 		const auto backtrace = new_backtrace();
-		logFile() << *backtrace << std::endl;
+		logFile() << *backtrace << '\n';
 		flush = true;
 	}
 	if (flush)
@@ -83,6 +85,8 @@ void enableFileLogger(const char *outputFile)
 	}
 	fileLogLevel = (LogLevel)Options::fileLogLevelOption.get();
 	backtraceLogLevel = (LogLevel)Options::backtraceLogLevelOption.get();
+	raiseLogMaxEnabledLevel(fileLogLevel);
+	raiseLogMaxEnabledLevel(backtraceLogLevel);
 	previousFunction() = getLogCallback();
 	setLogCallback(FileLogFunction);
 }

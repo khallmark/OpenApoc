@@ -50,14 +50,20 @@ void Log(LogLevel level, UString prefix, const UString &text);
 
 NORETURN_FUNCTION void _logAssert(UString prefix, UString string, int line, UString file);
 
+// The most verbose level any sink (stderr, file, backtrace, dialog) will actually record. Log
+// macros test it BEFORE formatting: a LogInfo per vehicle route attempt, formatted and then
+// discarded, was a measurable share of a busy city's frame time.
+extern int logMaxEnabledLevel;
+void raiseLogMaxEnabledLevel(LogLevel level);
+
 /* Returns if the log level will be output (either to file or stderr or both) */
-static inline bool logLevelEnabled(LogLevel level [[maybe_unused]])
+static inline bool logLevelEnabled(LogLevel level)
 {
 #ifdef NDEBUG
 	if (level >= LogLevel::Debug)
 		return false;
 #endif
-	return true;
+	return (int)level <= logMaxEnabledLevel;
 }
 
 // All logger output will be UTF8

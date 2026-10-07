@@ -640,6 +640,9 @@ class GameProcess:
             # Belt and braces alongside the engine-side guard: a modal error dialog blocks the
             # main loop forever when there is no human to dismiss it.
             "--Logger.dialogLevel=0",
+            # Warnings and errors only: an Info line per vehicle route attempt and mission change
+            # is thousands of formatted strings a second in a busy city, for a log nobody reads.
+            "--Logger.FileLevel=2",
             # Frame limiting is honoured again now that the loop resynchronises after a hitch,
             # and ticks advance per frame -- so an automated run asks for the headroom outright
             # rather than relying on the limiter being broken.
