@@ -1888,7 +1888,7 @@ void CityView::resume()
 
 	// There may be no base left. Losing a base-defence mission destroys it, Base::die clears
 	// current_base, and BattleDebriefing's OK handler constructs a CityView immediately -- before
-	// the XComDefeated event it raised gets a chance to replace the stage stack. Dereferencing an
+	// the GameLost event it raised gets a chance to replace the stage stack. Dereferencing an
 	// empty StateRef yields nullptr rather than throwing, so this read used to segfault on the
 	// way out of the player's final battle.
 	this->uiTabs[0]->findControlTyped<Label>("TEXT_BASE_NAME")->setText(currentBaseName());
@@ -2296,7 +2296,7 @@ void CityView::registerCityViewIntrospection()
 		    // and the last of them ends the game.
 		    if (gameState && q == "centre_on_basesite")
 		    {
-			    // Frame a building that could become a second base. XComDefeated is raised on
+			    // Frame a building that could become a second base. GameLost is raised on
 			    // exactly one condition -- player_bases.empty() (base.cpp:150-159) -- so a
 			    // campaign with two bases cannot be ended by losing one, however badly a base
 			    // defence goes. Funding termination merely zeroes income; it is not defeat.
@@ -4615,8 +4615,8 @@ bool CityView::handleGameStateEvent(Event *e)
 			case GameEventType::MissionCompletedBuildingNormal:
 			case GameEventType::MissionCompletedBuildingRaid:
 			case GameEventType::MissionCompletedVehicle:
-			case GameEventType::AliensDefeated:
-			case GameEventType::XComDefeated:
+			case GameEventType::GameWon:
+			case GameEventType::GameLost:
 			{
 				// Never pause for these
 				break;
@@ -5048,18 +5048,23 @@ bool CityView::handleGameStateEvent(Event *e)
 			showWeeklyFundingReport();
 		}
 		break;
-		case GameEventType::AliensDefeated:
+		case GameEventType::GameWon:
+		case GameEventType::GameLost:
 		{
-			fw().stageQueueCommand(
-			    {StageCmd::Command::REPLACEALL,
-			     mksp<VideoScreen>("SMK:xcom3/smk/wingame2.smk", mksp<MainMenu>())});
-		}
-		break;
-		case GameEventType::XComDefeated:
-		{
-			fw().stageQueueCommand(
-			    {StageCmd::Command::REPLACEALL,
-			     mksp<VideoScreen>("SMK:xcom3/smk/lose1.smk", mksp<MainMenu>())});
+			// Upstream's ending: pause and say what happened. On top of it, OK plays the original
+			// game's own ending cutscene before returning to the main menu.
+			const bool won = gameEvent->type == GameEventType::GameWon;
+			const UString video = won ? "SMK:xcom3/smk/wingame2.smk" : "SMK:xcom3/smk/lose1.smk";
+			setUpdateSpeed(CityUpdateSpeed::Pause);
+			auto message_box = mksp<MessageBox>(
+			    won ? tr("VICTORY") : tr("DEFEAT"), gameEvent->message(),
+			    MessageBox::ButtonOptions::Ok,
+			    [video]()
+			    {
+				    fw().stageQueueCommand({StageCmd::Command::REPLACEALL,
+				                            mksp<VideoScreen>(video, mksp<MainMenu>())});
+			    });
+			fw().stageQueueCommand({StageCmd::Command::PUSH, message_box});
 		}
 		break;
 		default:

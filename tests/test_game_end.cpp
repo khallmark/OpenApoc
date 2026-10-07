@@ -12,10 +12,12 @@ using namespace OpenApoc::TestHelpers;
 
 static bool test_defeat_messages()
 {
-	TEST_REQUIRE(GameEvent(GameEventType::AliensDefeated).message() ==
-	                 tr("THE ALIENS ARE DEFEATED"),
+	TEST_REQUIRE(GameEvent(GameEventType::GameWon).message() ==
+	                 tr("The link with the Alien dimension is broken forever. The Aliens are "
+	                    "vanquished and victory is ours!"),
 	             "win banner");
-	TEST_REQUIRE(GameEvent(GameEventType::XComDefeated).message() == tr("X-COM IS DEFEATED"),
+	TEST_REQUIRE(GameEvent(GameEventType::GameLost).message() ==
+	                 tr("The last X-COM base has fallen. Earth is lost to the Alien invasion."),
 	             "lose banner");
 	return true;
 }

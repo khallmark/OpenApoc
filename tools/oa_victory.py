@@ -2,7 +2,7 @@
 """Play OpenApoc from a Novice start toward victory, unattended and without cheating.
 
 Victory in this engine is precise: raid BUILDING_DIMENSION_GATE_GENERATOR in the alien dimension
-and win the tactical mission. Battle::exitBattle sets AliensDefeated only for the one building
+and win the tactical mission. Battle::exitBattle sets GameWon only for the one building
 carrying `victory`, and it sits behind RESEARCH_ALIEN_BUILDING_9 -- the end of a chain where each
 alien building must be raided and won to unlock research for the next. That is months of game
 time and many tactical missions, so this runner is built to survive rather than to be quick:
@@ -402,7 +402,7 @@ class Victory:
 
         # --- the endgame, checked before the routine city work ---------------------------
         # These are the only actions that actually win: cross into the alien dimension and raid
-        # its buildings in order, the last of which fires AliensDefeated. Everything else --
+        # its buildings in order, the last of which fires GameWon. Everything else --
         # interception, recovery, research -- exists to make these two possible.
         if time.time() - self.last_endgame > 60.0:
             self.last_endgame = time.time()
@@ -492,7 +492,7 @@ class Victory:
                 self.progress["infil_raids"] = self.progress.get("infil_raids", 0) + 1
                 self.flush()
 
-        # A second base is the cheapest insurance in the game. XComDefeated is raised on exactly
+        # A second base is the cheapest insurance in the game. GameLost is raised on exactly
         # one condition -- player_bases.empty() (base.cpp:150-159) -- so with two bases, losing
         # one to a base defence that goes badly no longer ends the campaign. The last three runs
         # all ended that way. Funding termination is a much milder thing than it looks: it only
@@ -774,7 +774,7 @@ class Victory:
     def bankrupt(self) -> bool:
         """True when the campaign is finished even though the engine has not said so.
 
-        XComDefeated fires only when the LAST base is lost (base.cpp:150-159), so a run whose
+        GameLost fires only when the LAST base is lost (base.cpp:150-159), so a run whose
         funding has been cut and whose treasury is empty simply limps: no income, nothing to buy
         weapons with, and a squad that cannot be armed. Seen at day 26 -- funding terminated, $249,
         every facility gone, score -6147 -- with the runner unable to call it either way.
@@ -809,8 +809,9 @@ class Victory:
             return False
         if st.stage != "VideoScreen":
             return False
-        # Both endings are a VideoScreen: AliensDefeated plays wingame2.smk, XComDefeated plays
-        # lose1.smk (cityview.cpp:4686-4699), and the intro is a VideoScreen too. Treating any
+        # Both endings are a VideoScreen once the driver OKs the VICTORY/DEFEAT message box:
+        # GameWon plays wingame2.smk, GameLost plays lose1.smk (CityView's GameWon/GameLost
+        # handler), and the intro is a VideoScreen too. Treating any
         # VideoScreen as a win reported victory on day 8 of a campaign with one recovery and no
         # alien research at all, right after a base defence. Only the winning video counts.
         detail = (st.detail or "-").lower()

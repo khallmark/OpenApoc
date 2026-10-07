@@ -92,7 +92,10 @@ static bool test_player_relation_mirror()
 	sp<Organisation> megapol;
 	addOrg(state, "ORG_X-COM", 0, player);
 	addOrg(state, "ORG_MEGAPOL", 0, megapol);
+	sp<Organisation> aliens;
+	addOrg(state, "ORG_ALIEN", 0, aliens);
 	state.player = {&state, "ORG_X-COM"};
+	state.aliens = {&state, "ORG_ALIEN"};
 
 	StateRef<Organisation> playerRef{&state, "ORG_X-COM"};
 	megapol->adjustRelationTo(state, playerRef, -10.0f);
@@ -101,9 +104,10 @@ static bool test_player_relation_mirror()
 	TEST_REQUIRE(player->getRelationTo({&state, "ORG_MEGAPOL"}) == -10.0f,
 	             "player mirror {0}", player->getRelationTo({&state, "ORG_MEGAPOL"}));
 
-	// Player-initiated adjust does not clobber the org's view (raid deltas stay asymmetric).
+	// X-COM's view always mirrors what the other org thinks of X-COM (upstream 58b3d53a), so a
+	// player-initiated adjust is re-mirrored straight away and the org's own view is untouched.
 	player->adjustRelationTo(state, {&state, "ORG_MEGAPOL"}, 7.0f);
-	TEST_REQUIRE(player->getRelationTo({&state, "ORG_MEGAPOL"}) == -3.0f, "player after {0}",
+	TEST_REQUIRE(player->getRelationTo({&state, "ORG_MEGAPOL"}) == -10.0f, "player after {0}",
 	             player->getRelationTo({&state, "ORG_MEGAPOL"}));
 	TEST_REQUIRE(megapol->getRelationTo(playerRef) == -10.0f, "org view must stay -10, got {0}",
 	             megapol->getRelationTo(playerRef));

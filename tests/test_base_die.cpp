@@ -7,7 +7,7 @@
 // SIGSEGV inside __tree_const_iterator<StateRef<Agent>>::operator++ under Base::die.
 //
 // The path also carries this fork's change of swapping a "no screen for that yet" LogError for a
-// real GameEventType::XComDefeated event, which the crash had kept unreachable.
+// real GameEventType::GameLost event, which the crash had kept unreachable.
 
 #include "framework/configfile.h"
 #include "framework/framework.h"

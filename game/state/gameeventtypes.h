@@ -115,8 +115,8 @@ enum class GameEventType
 	BuildingDisabled,
 	MissionCompletedVehicle,
 	MissionCompletedBuildingAlien,
-	AliensDefeated,
-	XComDefeated,
+	GameWon,
+	GameLost,
 
 	None
 };

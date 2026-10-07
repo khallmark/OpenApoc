@@ -830,7 +830,7 @@ class Driver:
     def game_over(self) -> bool:
         """True once the campaign has reached a terminal state.
 
-        Losing the last base raises XComDefeated, which replaces the stage stack with the losing
+        Losing the last base raises GameLost, which replaces the stage stack with the losing
         cutscene and then the main menu. That is the campaign ending, not a failure of the run.
         """
         st = self.status()
@@ -1708,7 +1708,7 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
 def raid_alien_building(d: Driver) -> str:
     """Raid the next alien building. Returns the battle outcome, or why it could not start.
 
-    This is the win condition: Battle::exitBattle fires AliensDefeated only for the alien building
+    This is the win condition: Battle::exitBattle fires GameWon only for the alien building
     carrying victory=true, and each earlier raid force-completes the research that unlocks the
     next. Only works from inside CITYMAP_ALIEN, and only for a building whose accessTopic is
     researched -- BuildingScreen refuses with "No Entrance" otherwise
@@ -1917,7 +1917,7 @@ def goto_portal(d: Driver) -> bool:
 def build_second_base(d: Driver) -> str:
     """Buy a second base. Returns "bought", or why it could not.
 
-    This is the single most valuable insurance a campaign can buy. XComDefeated is raised on
+    This is the single most valuable insurance a campaign can buy. GameLost is raised on
     exactly one condition -- state.player_bases.empty() (base.cpp:150-159) -- so with two bases,
     losing one to a botched base defence no longer ends the game. Funding termination is a
     separate and much milder thing: weeklyPlayerUpdate merely sets income to zero
@@ -4864,7 +4864,7 @@ def base_upkeep(d: Driver, need_quarters: bool = False) -> dict:
     driver and the adversarial evaluator never expanded a base at all. That is not a missing
     nicety; it is what makes a campaign run down and a base defence unsurvivable.
 
-    A SECOND BASE. XComDefeated is raised on exactly one condition, player_bases.empty()
+    A SECOND BASE. GameLost is raised on exactly one condition, player_bases.empty()
     (base.cpp:150-159), so a second base turns losing one from a defeat into a setback. It also
     decides whether a base defence can be abandoned at all: win_battle's may_leave requires
     bases > 1, so with a single base a losing defence must be fought to the last man. Observed

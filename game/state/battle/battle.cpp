@@ -3651,7 +3651,7 @@ void Battle::exitBattle(GameState &state)
 
 	if (victory)
 	{
-		state.eventFromBattle = GameEventType::AliensDefeated;
+		state.eventFromBattle = GameEventType::GameWon;
 	}
 
 	state.current_battle = nullptr;

@@ -117,7 +117,7 @@ static bool test_raid_relation_pressure()
 	StateRef<Organisation> self{&state, "ORG_A"};
 
 	a->current_relations[other] = 0.0f;
-	a->long_term_relations[other] = 20.0f;
+	a->previous_relations[other] = 20.0f;
 	TEST_REQUIRE(a->raidRelationPressure(other) == 20.0f, "pressure before snapshot is {0}",
 	             a->raidRelationPressure(other));
 	a->updateRelations(self);

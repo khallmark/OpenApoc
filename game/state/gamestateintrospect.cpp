@@ -521,7 +521,7 @@ UString introspectGameState(GameState &state, const UString &query)
 	// The alien-dimension buildings, which are the whole endgame. Each one is gated on its own
 	// accessTopic being researched (buildingscreen.cpp:112-122); winning its raid force-completes
 	// the unlock for the next. The last one carries victory=true, and beating it is the only
-	// thing in the game that fires AliensDefeated (battle.cpp:3506-3592). A driver needs to know
+	// thing in the game that fires GameWon (battle.cpp:3506-3592). A driver needs to know
 	// which link of that chain it is standing on.
 	// The topics ResearchSelect would offer for the lab currently being viewed, in the same
 	// order and with the same filtering (researchselect.cpp:222-240), so the driver can pick a

@@ -152,11 +152,11 @@ void Base::die(GameState &state, bool collapse)
 	{
 		if (state.current_battle)
 		{
-			state.eventFromBattle = GameEventType::XComDefeated;
+			state.eventFromBattle = GameEventType::GameLost;
 		}
 		else
 		{
-			fw().pushEvent(new GameEvent(GameEventType::XComDefeated));
+			fw().pushEvent(new GameEvent(GameEventType::GameLost));
 		}
 		return;
 	}

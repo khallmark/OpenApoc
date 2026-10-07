@@ -2,7 +2,7 @@
 """Long-running, resumable OpenApoc campaign: Novice start toward victory, no cheats.
 
 Victory in this engine is precise: raid BUILDING_DIMENSION_GATE_GENERATOR in the alien dimension
-and win the tactical mission. Battle::exitBattle sets AliensDefeated only for the one building
+and win the tactical mission. Battle::exitBattle sets GameWon only for the one building
 carrying `victory`, and it is gated behind RESEARCH_ALIEN_BUILDING_9 -- the end of a chain where
 each alien building must be raided and won to unlock research for the next.
 
@@ -146,7 +146,7 @@ class Campaign:
 
     # -- the campaign itself ---------------------------------------------
     def victory(self) -> bool:
-        """AliensDefeated replaces the stack with the winning cutscene."""
+        """GameWon replaces the stack with the winning cutscene."""
         try:
             st = self.d.status()
         except OSError:

@@ -876,7 +876,7 @@ Ten buildings, strictly linear. Raiding building *n* force-completes
 
 **[V]** Building 9 carries the `victory` flag ([building.h:95](../game/state/city/building.h#L95));
 winning that raid is the win condition ([battle.cpp:3519](../game/state/battle/battle.cpp#L3519)).
-On `FixShitUp` this raises `GameEventType::AliensDefeated` and plays `smk/wingame2.smk`; on
+On `FixShitUp` this raises `GameEventType::GameWon` and plays `smk/wingame2.smk`; on
 `master` the flag is read and then discarded. See [§15](#15-known-gaps-in-openapoc).
 
 **This is a ten-building campaign, not the five or six the guides describe.** LIL documents five
@@ -1211,7 +1211,7 @@ Re-checked against **`khallmark/FixShitUp`**. Several items from this document's
 
 | Was | Now |
 |---|---|
-| No victory state (`LogError("You won, but we have no screen for that yet LOL!")`) | Implemented — `GameEventType::AliensDefeated` → `smk/wingame2.smk` → main menu ([battle.cpp:3590](../game/state/battle/battle.cpp#L3590)) |
+| No victory state (`LogError("You won, but we have no screen for that yet LOL!")`) | Implemented — `GameEventType::GameWon` → `smk/wingame2.smk` → main menu ([battle.cpp:3590](../game/state/battle/battle.cpp#L3590)) |
 | `calculateFundingModifier` never breaks, collapsing six tiers to a binary outcome | Fixed — the **tightest** matching band wins ([gamestate.cpp:1860](../game/state/gamestate.cpp#L1860)) |
 | Overspawn falls back to a plain building attack | Implemented |
 | `UFO_MISSION_PREFERENCE_13` missing; week 14 wrong | Extracted from the EXE instead of hand-copied |

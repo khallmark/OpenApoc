@@ -647,8 +647,10 @@ void GameState::startGame()
 
 			// Finally stay in bounds
 			entry.second = clamp(entry.second, -100.0f, 100.0f);
-			// Sync up long-term value for initial relationships
+			// Sync up long-term value for initial relationships, and seed the daily snapshot so
+			// day one does not read as a fall from 0 (raid pressure, the player's daily delta).
 			pair.second->long_term_relations[entry.first] = entry.second;
+			pair.second->previous_relations[entry.first] = entry.second;
 
 			// Set player reverse relationships
 			if (entry.first == getPlayer())
@@ -2008,8 +2010,8 @@ void GameState::updateAfterBattle()
 			fw().pushEvent(new GameEvent(eventFromBattle));
 			break;
 		}
-		case GameEventType::AliensDefeated:
-		case GameEventType::XComDefeated:
+		case GameEventType::GameWon:
+		case GameEventType::GameLost:
 		{
 			fw().pushEvent(new GameEvent(eventFromBattle));
 			break;

@@ -673,11 +673,14 @@ bool Organisation::militarizedFromType(int organizationType)
 
 float Organisation::raidRelationPressure(const StateRef<Organisation> &other) const
 {
-	const auto longIt = long_term_relations.find(other);
+	// The raid rule reads the DAILY snapshot taken by updateRelations(), before it is retaken
+	// (docs/original-game/parity-guide.md, O1). That snapshot is previous_relations;
+	// long_term_relations is the event-gated value set by establishRelation().
+	const auto snapIt = previous_relations.find(other);
 	const auto curIt = current_relations.find(other);
-	const float longTerm = (longIt == long_term_relations.end()) ? 0.0f : longIt->second;
+	const float snapshot = (snapIt == previous_relations.end()) ? 0.0f : snapIt->second;
 	const float current = (curIt == current_relations.end()) ? 0.0f : curIt->second;
-	return std::max(1.0f, longTerm - current);
+	return std::max(1.0f, snapshot - current);
 }
 
 float Organisation::updateRelations(StateRef<Organisation> &playerOrg)
