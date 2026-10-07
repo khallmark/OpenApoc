@@ -112,14 +112,16 @@ GameState::~GameState()
 }
 
 // Just a handy shortcut since it's shown on every single screen
-UString GameState::getPlayerBalance() const
+UString GameState::getPlayerBalance() const { return formatCurrency(this->getPlayer()->balance); }
+
+UString GameState::formatCurrency(int64_t amount) const
 {
-	auto playerBalance = Strings::fromInteger(this->getPlayer()->balance);
+	auto formatted = Strings::fromInteger(amount);
 
 	if (config().getBool("OpenApoc.NewFeature.formatAsCurrency"))
-		playerBalance = Strings::formatTextAsCurrency(playerBalance);
+		formatted = Strings::formatTextAsCurrency(formatted);
 
-	return playerBalance;
+	return formatted;
 }
 
 StateRef<Organisation> GameState::getOrganisation(const UString &orgID)
@@ -1685,6 +1687,22 @@ void GameState::updateEndOfWeek(bool gameStart)
 
 	if (!gameStart)
 	{
+		int maxOrgTechLevel = 1;
+		for (auto &es : equipment_sets)
+		{
+			if (es.second->type == EquipmentSet::Type::Human)
+			{
+				maxOrgTechLevel = std::max(maxOrgTechLevel, es.second->min_score);
+			}
+		}
+		for (auto &[id, org] : organisations)
+		{
+			if (id != player.id && id != aliens.id && id != civilian.id)
+			{
+				org->tech_level = std::min(org->tech_level + 1, maxOrgTechLevel);
+			}
+		}
+
 		for (auto &c : this->cities)
 		{
 			c.second->weeklyLoop(*this);
@@ -1706,6 +1724,7 @@ void GameState::weeklyPlayerUpdate()
 		else
 		{
 			int income = player->income;
+			previousWeekIncome = player->income;
 
 			// Reduce this week's income if government doesn't have enough funds
 			const int availableGovFunds = government->balance / 2;

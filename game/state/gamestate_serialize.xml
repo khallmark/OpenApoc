@@ -42,6 +42,7 @@
     <member>agentEquipmentTemplates</member>
     <member>totalScore</member>
     <member>weekScore</member>
+    <member>previousWeekIncome</member>
     <member>objectIdCount</member>
     <member type="Section">city_common_image_list</member>
     <member type="Section">city_common_sample_list</member>
@@ -270,6 +271,7 @@
     <member>hiredOn</member>
     <member>killCount</member>
     <member>missionCount</member>
+    <member>victoryPoints</member>
   </object>
   <object>
     <name>AgentPortrait</name>
@@ -827,6 +829,13 @@
     <member>offset</member>
   </object>
   <object>
+    <name>BattleUnitExperience</name>
+    <member>accuracyHits</member>
+    <member>reactionHits</member>
+    <member>staminaSpent</member>
+    <member>killScore</member>
+  </object>
+  <object>
     <name>BattleUnit</name>
     <member>id</member>
     <member>agent</member>
@@ -847,7 +856,7 @@
     <member>ticksAccumulatedToNextPsiCheck</member>
     <member>psiAttackers</member>
     <member>brainSucker</member>
-    <member>experiencePoints</member>
+    <member>experience</member>
     <member>combatRating</member>
     <member>fatalWounds</member>
     <member>healingBodyPart</member>
@@ -1452,6 +1461,7 @@
     <member>icon</member>
     <member>current_relations</member>
     <member>long_term_relations</member>
+    <member>previous_relations</member>
     <member>ufopaedia_entry</member>
     <member>raid_missions</member>
     <member>recurring_missions</member>

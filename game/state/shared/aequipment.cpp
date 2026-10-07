@@ -853,6 +853,7 @@ void AEquipment::fire(GameState &state, Vec3<float> targetPosition, StateRef<Bat
 		payloadType.clear();
 		loadAmmo(state);
 		ownerAgent->updateSpeed();
+		ownerAgent->updatePsiDefence();
 	}
 }
 

@@ -96,12 +96,11 @@ void TileObject::setPosition(Vec3<float> newPosition)
 		LogError("This == null");
 	}
 	if (newPosition.x < 0 || newPosition.y < 0 || newPosition.z < 0 ||
-	    newPosition.x > map.size.x + 1 || newPosition.y > map.size.y + 1 ||
-	    newPosition.z > map.size.z + 1)
+	    newPosition.x >= map.size.x || newPosition.y >= map.size.y || newPosition.z >= map.size.z)
 	{
-		const Vec3<float> clamped{clamp(newPosition.x, 0.0f, (float)map.size.x + 1),
-		                          clamp(newPosition.y, 0.0f, (float)map.size.y + 1),
-		                          clamp(newPosition.z, 0.0f, (float)map.size.z + 1)};
+		const Vec3<float> clamped{clamp(newPosition.x, 0.0f, map.size.x - 0.1f),
+		                          clamp(newPosition.y, 0.0f, map.size.y - 0.1f),
+		                          clamp(newPosition.z, 0.0f, map.size.z - 0.1f)};
 		// An object resting exactly on the ground routinely lands a rounding sliver below it
 		// (z = -1e-6). Clamping that is correct and uninteresting. Only an excursion of a
 		// meaningful fraction of a tile means something actually placed the object off-map.

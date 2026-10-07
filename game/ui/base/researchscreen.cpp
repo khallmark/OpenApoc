@@ -20,6 +20,26 @@
 
 namespace OpenApoc
 {
+namespace
+{
+
+bool listBoxNeedsHorizontalScroll(const sp<ListBox> &listBox)
+{
+	if (listBox->Controls.empty())
+	{
+		return false;
+	}
+
+	int contentWidth = listBox->ItemSpacing * (static_cast<int>(listBox->Controls.size()) - 1);
+	for (const auto &item : listBox->Controls)
+	{
+		item->update();
+		contentWidth += item->Size.x;
+	}
+	return contentWidth > listBox->Size.x;
+}
+
+} // namespace
 
 ResearchScreen::ResearchScreen(sp<GameState> state, sp<Facility> selected_lab) : BaseStage(state)
 {
@@ -28,6 +48,31 @@ ResearchScreen::ResearchScreen(sp<GameState> state, sp<Facility> selected_lab) :
 	viewHighlight = BaseGraphics::FacilityHighlight::Labs;
 	if (selected_lab)
 	{
+		// The facility passed in may belong to a base other than the currently
+		// selected one - eg when opened from a "research/manufacture completed"
+		// prompt for a base that isn't the one selected in the cityscape, or from
+		// the cityscape science tabs when the implicitly-selected scientist's base
+		// differs from the current one. Make sure current_base tracks the
+		// facility's actual base, otherwise setCurrentLabInfo() compares agent
+		// counts gathered from the wrong base against this lab's assigned_agents
+		// and asserts.
+		for (auto &base : state->player_bases)
+		{
+			bool found = false;
+			for (auto &facility : base.second->facilities)
+			{
+				if (facility == selected_lab)
+				{
+					found = true;
+					break;
+				}
+			}
+			if (found)
+			{
+				state->current_base = {state.get(), base.second};
+				break;
+			}
+		}
 		state->current_base->selectedLab = viewFacility = selected_lab;
 	}
 	else
@@ -321,6 +366,11 @@ void ResearchScreen::populateUILabList(const UString &listName, std::list<sp<Fac
 		}
 	}
 	uiListLabs->setSelected(selectedItem);
+	if (uiListLabs->scroller)
+	{
+		uiListLabs->scroller->scrollMin();
+		uiListLabs->scroller->setVisible(listBoxNeedsHorizontalScroll(uiListLabs));
+	}
 }
 
 void ResearchScreen::setCurrentLabInfo()

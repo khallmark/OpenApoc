@@ -292,7 +292,7 @@ Vec3<int> FlyingVehicleTileHelper::findTileToLandOn(GameState &, sp<TileObjectVe
 			}
 		}
 	}
-	return startPos;
+	return {-1, -1, -1};
 }
 
 Vec3<float> FlyingVehicleTileHelper::findSidestep(GameState &state, sp<TileObjectVehicle> vTile,
@@ -320,6 +320,8 @@ Vec3<float> FlyingVehicleTileHelper::findSidestep(GameState &state, sp<TileObjec
 		{
 			newPosition.z -= 1;
 		}
+		newPosition.x = glm::clamp(newPosition.x, 0.0f, map.size.x - 0.1f);
+		newPosition.y = glm::clamp(newPosition.y, 0.0f, map.size.y - 0.1f);
 		newPosition.z = glm::clamp(newPosition.z, 0.0f, map.size.z - 0.1f);
 
 		if (static_cast<Vec3<int>>(newPosition) != vTile->getOwningTile()->position &&
@@ -851,6 +853,9 @@ VehicleTargetHelper::adjustTargetToClosestFlying(GameState &state, Vehicle &v, V
 						if (x == midX - i || x == midX + i || y == midY - i || y == midY + i ||
 						    z == midZ - i || z == midZ + i)
 						{
+							// The scan walks outward from the midpoint and can step off the
+							// map, so bounds-check before the lookup - same guard the
+							// Sidestep branch below already applies.
 							if (!map.tileIsValid(x, y, z) ||
 							    !footprintFitsOnMap({x, y, z}))
 							{
@@ -958,6 +963,10 @@ Reachability VehicleTargetHelper::isReachableForRecovery(const Vehicle &v, Vec3<
 
 	auto &map = *v.city->map;
 	auto targetTile = map.getTile(target);
+	if (!targetTile)
+	{
+		return Reachability::BlockedByBuilding;
+	}
 
 	// Check if target tile has no building parts permanently blocking it
 	for (auto &obj : targetTile->ownedObjects)
@@ -978,6 +987,10 @@ Reachability VehicleTargetHelper::isReachableTargetFlying(const Vehicle &v, Vec3
 {
 	auto &map = *v.city->map;
 	auto targetTile = map.getTile(target);
+	if (!targetTile)
+	{
+		return Reachability::BlockedByScenery;
+	}
 
 	// Check if target tile has no scenery permanently blocking it
 	for (auto &obj : targetTile->ownedObjects)
@@ -1574,6 +1587,11 @@ bool VehicleMission::isFinishedInternal(GameState &state, Vehicle &v)
 				LogInfo("Vehicle attack mission: Target not on the map");
 				return true;
 			}
+			if (t->city != v.city)
+			{
+				LogInfo("Vehicle attack mission: Target left the city");
+				return true;
+			}
 			if (!attackCrashed && (t->crashed || t->sliding || t->falling))
 			{
 				return true;
@@ -2069,12 +2087,22 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 			FlyingVehicleTileHelper tileHelper(map, v);
 
 			auto tile = tileHelper.findTileToLandOn(state, vehicleTile);
-			if (tile == vehicleTile->getOwningTile()->position)
+			if (tile == Vec3<int>{-1, -1, -1})
 			{
+				static const unsigned int maxCrashLandAttempts = 10;
+				if (++missionCounter >= maxCrashLandAttempts)
+				{
+					LogWarning("Vehicle mission {0}: Giving up looking for a landing spot after "
+					           "{1} attempts",
+					           getName(), missionCounter);
+					cancelled = true;
+					return;
+				}
+				auto searchOrigin = vehicleTile->getOwningTile()->position;
 				Vec3<int> randomNearbyPos = {
-				    randBoundsInclusive(state.rng, tile.x - 4, tile.x + 4),
-				    randBoundsInclusive(state.rng, tile.y - 4, tile.y + 4),
-				    randBoundsInclusive(state.rng, tile.z - 2, tile.z + 2)};
+				    randBoundsInclusive(state.rng, searchOrigin.x - 4, searchOrigin.x + 4),
+				    randBoundsInclusive(state.rng, searchOrigin.y - 4, searchOrigin.y + 4),
+				    randBoundsInclusive(state.rng, searchOrigin.z - 2, searchOrigin.z + 2)};
 				randomNearbyPos.x = clamp(randomNearbyPos.x, 0, map.size.x - 1);
 				randomNearbyPos.y = clamp(randomNearbyPos.y, 0, map.size.y - 1);
 				randomNearbyPos.z = clamp(randomNearbyPos.z, 0, map.size.z - 1);
@@ -2086,7 +2114,14 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 				return;
 			}
 			this->targetLocation = tile;
-			setPathTo(state, v, tile, getDefaultIterationCount(v));
+			if (tile == vehicleTile->getOwningTile()->position)
+			{
+				currentPlannedPath.clear();
+			}
+			else
+			{
+				setPathTo(state, v, tile, getDefaultIterationCount(v));
+			}
 			return;
 		}
 		case MissionType::FollowVehicle:
@@ -2675,11 +2710,7 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 		}
 		case MissionType::SelfDestruct:
 		{
-			if (v.smokeDoodad)
-			{
-				LogError("Restarting self destruct?");
-			}
-			else
+			if (!v.smokeDoodad)
 			{
 				v.setCrashed(state);
 			}

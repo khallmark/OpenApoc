@@ -57,7 +57,7 @@ class BattleItem : public std::enable_shared_from_this<BattleItem>
 	// TACP FUN_0007c110 @ VA 0x7C110 / file 0xD6BB4: fire overlay HP using unknown01 resist.
 	void applyFireHazard(GameState &state, int powerByte);
 
-	void die(GameState &state, bool violently = true);
+	void die(GameState &state, bool violently = true, bool scoreAsLost = true);
 
 	void hopTo(GameState &state, Vec3<float> targetPosition);
 

@@ -289,6 +289,9 @@ class FlyingVehicleMover : public VehicleMover
 				//   Otherwise we think we'll be moving too slow to dodge (basically moving
 				//   backwards into projectile or forwards alongside it and still getting hit)
 				auto point2d = glm::normalize(Vec2<float>{point.x, point.y});
+				// Use the vehicle's owning tile (integer) as the base so offsets don't get
+				// truncated toward zero and collapse onto the vehicle's own tile near 0
+				auto ownTile = vehicle.tileObject->getOwningTile()->position;
 				// Gather all allowed dodge locations according to the rules above
 				std::list<Vec3<int>> possibleDodgeLocations;
 				for (int x = -1; x <= 1; x++)
@@ -315,21 +318,19 @@ class FlyingVehicleMover : public VehicleMover
 								continue;
 							}
 							// Dodging horizontally
-							possibleDodgeLocations.emplace_back(
-							    vehicle.position.x + x, vehicle.position.y + y, vehicle.position.z);
+							possibleDodgeLocations.emplace_back(ownTile.x + x, ownTile.y + y,
+							                                    ownTile.z);
 						}
 						// Dodging vertically
 						if (dodgeUp)
 						{
-							possibleDodgeLocations.emplace_back(vehicle.position.x + x,
-							                                    vehicle.position.y + y,
-							                                    vehicle.position.z + 1.0f);
+							possibleDodgeLocations.emplace_back(ownTile.x + x, ownTile.y + y,
+							                                    ownTile.z + 1);
 						}
 						if (dodgeDown)
 						{
-							possibleDodgeLocations.emplace_back(vehicle.position.x + x,
-							                                    vehicle.position.y + y,
-							                                    vehicle.position.z + -1.0f);
+							possibleDodgeLocations.emplace_back(ownTile.x + x, ownTile.y + y,
+							                                    ownTile.z - 1);
 						}
 					}
 				}
@@ -1813,8 +1814,9 @@ StateRef<Building> Vehicle::getServiceDestination(GameState &state)
 	// Step 01: Find first cargo destination and remove arrived cargo
 	for (auto it = cargo.begin(); it != cargo.end();)
 	{
-		if (it->destination == currentBuilding)
+		if (cargoDeliverableAtCurrentBuilding(*it))
 		{
+			it->destination = currentBuilding;
 			// Only add aliens if alien containment is available at base
 			const auto vehicleContainsAlienLoot = cargoContainsAlienLoot();
 			const auto alienContainmentExists =
@@ -2094,48 +2096,12 @@ void Vehicle::adjustRelationshipOnDowned(GameState &state, StateRef<Vehicle> att
 	// If we're hostile to attacker - lose 5 points
 	if (owner->isRelatedTo(attacker->owner) == Organisation::Relation::Hostile)
 	{
-		owner->adjustRelationTo(state, attacker->owner, -5.0f);
+		owner->adjustRelationTo(state, attacker->owner, -5.0f, true);
 	}
 	// If we're not hostile to attacker - lose 30 points
 	else
 	{
-		owner->adjustRelationTo(state, attacker->owner, -30.0f);
-	}
-	// Our allies lose 15 points, enemies gain 5 points
-	// Otherwise 20+ relationship is +-3 points, 10+ is +-1 points
-	for (auto &org : state.organisations)
-	{
-		if (org.first != attacker->owner.id && org.first != state.getCivilian().id)
-		{
-			if (org.second->isRelatedTo(owner) == Organisation::Relation::Hostile)
-			{
-				org.second->adjustRelationTo(state, attacker->owner, 5.0f);
-			}
-			else if (org.second->isRelatedTo(owner) == Organisation::Relation::Allied)
-			{
-				org.second->adjustRelationTo(state, attacker->owner, -15.0f);
-			}
-			else
-			{
-				auto rel = org.second->getRelationTo(owner);
-				if (rel > 20.0f)
-				{
-					org.second->adjustRelationTo(state, attacker->owner, -3.0f);
-				}
-				else if (rel > 10.0f)
-				{
-					org.second->adjustRelationTo(state, attacker->owner, -1.0f);
-				}
-				else if (rel < -10.0f)
-				{
-					org.second->adjustRelationTo(state, attacker->owner, 1.0f);
-				}
-				else if (rel < -20.0f)
-				{
-					org.second->adjustRelationTo(state, attacker->owner, 3.0f);
-				}
-			}
-		}
+		owner->adjustRelationTo(state, attacker->owner, -30.0f, true);
 	}
 }
 
@@ -2525,7 +2491,7 @@ void Vehicle::updateCargo(GameState &state)
 		// Either this is non-combat loot, or this loot belongs to this building
 		// Don't keep trying to ferry combat loot to other building as we're NOT going to move
 		// when we check it in getServiceDestination method!
-		if (c.originalOwner || c.destination == currentBuilding)
+		if (c.originalOwner || cargoDeliverableAtCurrentBuilding(c))
 		{
 			needFerry = true;
 			break;
@@ -3290,11 +3256,15 @@ Vehicle::addMission(GameState &state, VehicleMission mission, bool toBack)
 		// - Can place on carrying vehicles
 		case VehicleMission::MissionType::GotoLocation:
 		case VehicleMission::MissionType::Land:
-			if (crashed || sliding || falling)
+		{
+			bool executingCrashMission =
+			    !missions.empty() && missions.front().type == VehicleMission::MissionType::Crash;
+			if ((crashed && !executingCrashMission) || sliding || falling)
 			{
 				return missions.end();
 			}
 			break;
+		}
 		// - Cannot place in front
 		// - Cannot place on crashed vehicles
 		// - Cannot place on carrying vehicles
@@ -4028,6 +3998,13 @@ const bool Vehicle::cargoContainsAlienLoot() const
 	}
 
 	return false;
+}
+
+bool Vehicle::cargoDeliverableAtCurrentBuilding(const Cargo &c) const
+{
+	return currentBuilding &&
+	       (c.destination == currentBuilding ||
+	        (!c.originalOwner && currentBuilding->base && currentBuilding->owner == owner));
 }
 
 Cargo::Cargo(GameState &state, StateRef<AEquipmentType> equipment, int count, int price,

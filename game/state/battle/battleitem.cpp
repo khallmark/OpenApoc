@@ -21,14 +21,15 @@
 namespace OpenApoc
 {
 
-void BattleItem::die(GameState &state, bool violently)
+void BattleItem::die(GameState &state, bool violently, bool scoreAsLost)
 {
 	if (violently)
 	{
 		item->explode(state);
 	}
 	// Lose score if item that dies and it's not a primed grenade
-	if (!item->primed && item->ownerOrganisation && item->ownerOrganisation == state.getPlayer())
+	if (scoreAsLost && !item->primed && item->ownerOrganisation &&
+	    item->ownerOrganisation == state.getPlayer())
 	{
 		state.current_battle->score.equipmentLost -= item->type->score;
 		if (item->payloadType)
@@ -261,9 +262,9 @@ void BattleItem::update(GameState &state, unsigned int ticks)
 			// Intentional fall-through
 			case TileObject::Type::Ground:
 				// Let item fall so that it can collide with scenery or ground if falling on top of
-				// it
+				// it, but never past the surface we just hit
 				newPosition = {previousPosition.x, previousPosition.y,
-				               std::min(newPosition.z, previousPosition.z)};
+				               std::max(std::min(newPosition.z, previousPosition.z), c.position.z)};
 				break;
 			default:
 				LogError("What the hell is this item colliding with? Type is {0}",
@@ -299,10 +300,14 @@ void BattleItem::update(GameState &state, unsigned int ticks)
 		// Fell below 0???
 		if (newPosition.z < 0)
 		{
-			LogError("Item at {0} {1} fell off the end of the world!?", newPosition.x,
-			         newPosition.y);
-			die(state, false);
-			return;
+			if (!tileObject->map.getTile(newPosition))
+			{
+				LogError("Item at {0} {1} fell off the end of the world!?", newPosition.x,
+				         newPosition.y);
+				die(state, false);
+				return;
+			}
+			collision = true;
 		}
 		setPosition(newPosition);
 	}

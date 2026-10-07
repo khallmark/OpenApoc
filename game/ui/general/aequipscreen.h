@@ -28,6 +28,7 @@ class BitmapFont;
 class Graphic;
 class Organisation;
 class Base;
+class ScrollBar;
 enum class BodyPart;
 
 class AEquipScreen : public Stage
@@ -75,8 +76,8 @@ class AEquipScreen : public Stage
 	// rather than unhooked.
 	sp<bool> harnessAlive;
 	void registerAEquipIntrospection();
-	int inventoryPage = 0;
-	void clampInventoryPage();
+	sp<ScrollBar> inventoryScrollBar;
+	void updateInventoryScrollRange();
 
 	// Items temporarily stored inside vehicle (go into vehicle storage when exiting)
 	std::map<sp<Vehicle>, std::list<sp<AEquipment>>> vehicleItems;

@@ -223,7 +223,8 @@ bool BattleUnitTileHelper::canEnterTile(Tile *from, Tile *to, bool allowJumping,
 	if (large)
 	{
 		// Can we fit?
-		if (toPos.x < 1 || toPos.y < 1 || toPos.z + 1 >= map.size.z)
+		if (toPos.x < 1 || toPos.y < 1 || toPos.z + 1 >= map.size.z || fromPos.x < 1 ||
+		    fromPos.y < 1)
 		{
 			return false;
 		}
@@ -1029,7 +1030,7 @@ bool BattleUnitTileHelper::canEnterTile(Tile *from, Tile *to, bool allowJumping,
 	// If jumping then cost is preset (2x normal movement cost)
 	if (!allowJumping && jumped)
 	{
-		cost = 2.0f * (float)STANDART_MOVE_TU_COST *
+		cost = 2.0f * (float)STANDARD_MOVE_TU_COST *
 		       ((toPos.x != fromPos.x && toPos.y != fromPos.y) ? 3.0f : 2.0f);
 	}
 	else
@@ -1577,19 +1578,25 @@ void BattleUnitMission::update(GameState &state, BattleUnit &u, unsigned int tic
 	switch (this->type)
 	{
 		case Type::Jump:
-			if (!jumped && !u.falling && u.atGoal && u.facing == u.goalFacing &&
+			if (!cancelled && !jumped && !u.falling && u.atGoal && u.facing == u.goalFacing &&
 			    u.facing == targetFacing &&
 			    (u.current_body_state == u.target_body_state ||
 			     targetBodyState == BodyState::Jumping) &&
 			    u.target_body_state == targetBodyState)
 			{
-				// Jumping cost assumed same as walking into tile
-				int cost = STANDART_MOVE_TU_COST;
-				if (!spendAgentTUs(state, u, cost, true))
+				if (targetBodyState == BodyState::Jumping)
 				{
-					return;
+					// Jumping cost assumed same as walking into tile
+					if (!spendAgentTUs(state, u, STANDARD_MOVE_TU_COST, true))
+					{
+						return;
+					}
+					u.launch(state, jumpTarget, targetBodyState);
 				}
-				u.launch(state, jumpTarget, targetBodyState);
+				else
+				{
+					u.jumpDown(state, jumpTarget, targetBodyState);
+				}
 				jumped = true;
 			}
 			return;
@@ -1862,6 +1869,8 @@ void BattleUnitMission::start(GameState &state, BattleUnit &u)
 			if (targetUnit->brainSucker && targetUnit->brainSucker.id != u.id)
 			{
 				cancelled = true;
+				u.resetGoal();
+				u.startFalling(state);
 				return;
 			}
 			targetUnit->brainSucker = {&state, u.id};
@@ -1973,7 +1982,14 @@ void BattleUnitMission::start(GameState &state, BattleUnit &u)
 			{
 				u.setFacing(state, u.goalFacing);
 			}
-			cancelled = u.isLarge() || !u.canLaunch(jumpTarget);
+			if (targetBodyState == BodyState::Jumping)
+			{
+				cancelled = u.isLarge() || !u.canLaunch(jumpTarget);
+			}
+			else
+			{
+				cancelled = !u.canJumpDown((Vec3<int>)jumpTarget, jumpTarget);
+			}
 			return;
 		case Type::ChangeBodyState:
 		case Type::AcquireTU:

@@ -1,7 +1,8 @@
 PROJECT (OpenApoc_Tests CXX C)
 
 set (TEST_LIST test_rect test_voxel test_tilemap test_rng test_images
-		test_unicode test_colour test_backtrace)
+		test_unicode test_colour test_backtrace test_strings
+		test_gravlift_lineoffire test_squad_assignment)
 
 foreach(TEST ${TEST_LIST})
 		add_executable(${TEST} ${TEST}.cpp)
@@ -94,3 +95,57 @@ add_openapoc_test(test_unit_ai_priority ARGS
 add_openapoc_test(test_battle_disruptor_shield ARGS
 		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
 		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
+# test_gravlift_lof and test_gravlift_ai_battle are manual investigation
+# harnesses that boot a real battle in one of the base game's grav-lift tilesets
+# to exercise the real voxel/AI code paths, which needs the fully extracted
+# tileset/map/gamestate data CI's minimal cd.iso does not provide. They are
+# deliberately not add_test()-ed; build and run them by hand (see the header
+# comment in each .cpp for arguments).
+set(TEST test_gravlift_lof)
+add_executable(${TEST} ${TEST}.cpp)
+target_link_libraries(${TEST} OpenApoc_Library OpenApoc_Framework OpenApoc_GameState)
+target_compile_definitions(${TEST} PRIVATE -DUNIT_TEST)
+
+set(TEST test_gravlift_ai_battle)
+add_executable(${TEST} ${TEST}.cpp)
+target_link_libraries(${TEST} OpenApoc_Library OpenApoc_Framework OpenApoc_GameState)
+
+# Manual diagnostic harness for issue #647, run by hand against its
+# attached savegame; deliberately not add_test'd.
+
+# Standalone harness, run by hand against a savegame; deliberately not add_test'd.
+set(TEST test_mission_end_recheck)
+add_executable(${TEST} ${TEST}.cpp)
+target_link_libraries(${TEST} OpenApoc_Library OpenApoc_Framework
+		OpenApoc_GameState)
+target_compile_definitions(${TEST} PRIVATE -DUNIT_TEST)
+
+# Standalone harness for crashed vehicle recovery throughput. Not wired to
+# add_test: it is a manually-run before/after comparison, not a regression gate.
+set(TEST test_crashed_vehicle_recovery)
+add_executable(${TEST} ${TEST}.cpp)
+target_link_libraries(${TEST} OpenApoc_Library OpenApoc_Framework
+		OpenApoc_GameState)
+target_compile_definitions(${TEST} PRIVATE -DUNIT_TEST)
+
+# test_city_dimension_gate requires args (same as test_serialize)
+set(TEST test_city_dimension_gate)
+add_executable(${TEST} ${TEST}.cpp)
+target_link_libraries(${TEST} OpenApoc_Library OpenApoc_Framework
+		OpenApoc_GameState)
+target_compile_definitions(${TEST} PRIVATE -DUNIT_TEST)
+add_test(NAME ${TEST} COMMAND ${TEST}
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate
+		--Framework.CD=${CD_PATH} --Framework.Data=${CMAKE_SOURCE_DIR}/data)
+
+# test_org_relations requires args (same as test_serialize)
+set(TEST test_org_relations)
+add_executable(${TEST} ${TEST}.cpp)
+target_link_libraries(${TEST} OpenApoc_Library OpenApoc_Framework
+		OpenApoc_GameState)
+target_compile_definitions(${TEST} PRIVATE -DUNIT_TEST)
+add_test(NAME ${TEST} COMMAND ${TEST}
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate
+		--Framework.CD=${CD_PATH} --Framework.Data=${CMAKE_SOURCE_DIR}/data)

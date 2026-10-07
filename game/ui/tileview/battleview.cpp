@@ -2740,7 +2740,17 @@ void BattleView::refreshRangeText()
 
 void BattleView::orderJump(Vec3<int> target, BodyState bodyState)
 {
-	orderJump((Vec3<float>)target + Vec3<float>{0.5f, 0.5f, 0.0f}, bodyState);
+	if (battle.battleViewSelectedUnits.empty())
+	{
+		return;
+	}
+	auto unit = battle.battleViewSelectedUnits.front();
+	Vec3<float> landing;
+	if (!unit->canJumpDown(target, landing))
+	{
+		return;
+	}
+	orderJump(landing, bodyState);
 }
 
 void BattleView::orderJump(Vec3<float> target, BodyState bodyState)
@@ -2750,7 +2760,7 @@ void BattleView::orderJump(Vec3<float> target, BodyState bodyState)
 		return;
 	}
 	auto unit = battle.battleViewSelectedUnits.front();
-	unit->setMission(*state, BattleUnitMission::jump(*unit, target, bodyState));
+	unit->setMission(*state, BattleUnitMission::jump(*unit, target, bodyState, false));
 }
 
 void BattleView::updatePathPreview()
@@ -2917,6 +2927,18 @@ void BattleView::updateSquadIndex(StateRef<BattleUnit> u)
 	if (u->squadNumber != -1)
 	{
 		battle.battleViewSquadIndex = u->squadNumber;
+	}
+}
+
+void BattleView::assignSelectionToSquad(int index)
+{
+	for (auto &u : battle.battleViewSelectedUnits)
+	{
+		if (u->squadNumber != index &&
+		    battle.forces[battle.currentPlayer].squads[index].getNumUnits() < 6)
+		{
+			u->assignToSquad(battle, index);
+		}
 	}
 }
 
@@ -3208,7 +3230,7 @@ void BattleView::orderDrop(bool right)
 		auto item = items.front();
 		unit->agent->addEquipment(
 		    *state, item->item, right ? EquipmentSlotType::RightHand : EquipmentSlotType::LeftHand);
-		item->die(*state, false);
+		item->die(*state, false, false);
 	}
 }
 
@@ -3842,6 +3864,10 @@ bool BattleView::handleKeyDown(Event *e)
 				{
 					baseForm->findControl("UNIT_1")->click();
 				}
+				else if (modifierLCtrl || modifierRCtrl)
+				{
+					assignSelectionToSquad(0);
+				}
 				else if (modifierLAlt || modifierRAlt)
 				{
 					baseForm->findControl("UNIT_1_HOSTILES")->click();
@@ -3855,6 +3881,10 @@ bool BattleView::handleKeyDown(Event *e)
 				if (modifierLShift || modifierRShift)
 				{
 					baseForm->findControl("UNIT_2")->click();
+				}
+				else if (modifierLCtrl || modifierRCtrl)
+				{
+					assignSelectionToSquad(1);
 				}
 				else if (modifierLAlt || modifierRAlt)
 				{
@@ -3870,6 +3900,10 @@ bool BattleView::handleKeyDown(Event *e)
 				{
 					baseForm->findControl("UNIT_3")->click();
 				}
+				else if (modifierLCtrl || modifierRCtrl)
+				{
+					assignSelectionToSquad(2);
+				}
 				else if (modifierLAlt || modifierRAlt)
 				{
 					baseForm->findControl("UNIT_3_HOSTILES")->click();
@@ -3883,6 +3917,10 @@ bool BattleView::handleKeyDown(Event *e)
 				if (modifierLShift || modifierRShift)
 				{
 					baseForm->findControl("UNIT_4")->click();
+				}
+				else if (modifierLCtrl || modifierRCtrl)
+				{
+					assignSelectionToSquad(3);
 				}
 				else if (modifierLAlt || modifierRAlt)
 				{
@@ -3898,6 +3936,10 @@ bool BattleView::handleKeyDown(Event *e)
 				{
 					baseForm->findControl("UNIT_5")->click();
 				}
+				else if (modifierLCtrl || modifierRCtrl)
+				{
+					assignSelectionToSquad(4);
+				}
 				else if (modifierLAlt || modifierRAlt)
 				{
 					baseForm->findControl("UNIT_5_HOSTILES")->click();
@@ -3911,6 +3953,10 @@ bool BattleView::handleKeyDown(Event *e)
 				if (modifierLShift || modifierRShift)
 				{
 					baseForm->findControl("UNIT_6")->click();
+				}
+				else if (modifierLCtrl || modifierRCtrl)
+				{
+					assignSelectionToSquad(5);
 				}
 				else if (modifierLAlt || modifierRAlt)
 				{
@@ -3971,6 +4017,10 @@ bool BattleView::handleKeyDown(Event *e)
 				}
 				return true;
 			case SDLK_s:
+				if (!(modifierLCtrl || modifierRCtrl))
+				{
+					break;
+				}
 				if (activeTab == notMyTurnTab)
 				{
 					return true;

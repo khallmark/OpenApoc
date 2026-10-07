@@ -14,6 +14,7 @@
 #include "framework/renderer.h"
 #include "game/state/city/base.h"
 #include "game/state/city/building.h"
+#include "game/state/city/vehicle.h"
 #include "game/state/gamestate.h"
 #include "game/state/rules/aequipmenttype.h"
 #include "game/state/shared/aequipment.h"
@@ -159,7 +160,13 @@ void RecruitScreen::populateAgentList()
 		if (a.second->owner == player)
 		{
 			// Need to be able to strip agent
-			if (a.second->currentBuilding == a.second->homeBuilding)
+			auto effectiveBuilding =
+			    a.second->currentBuilding
+			        ? a.second->currentBuilding
+			        : (a.second->currentVehicle && a.second->currentVehicle->currentBuilding
+			               ? a.second->currentVehicle->currentBuilding
+			               : nullptr);
+			if (effectiveBuilding == a.second->homeBuilding)
 			{
 				agentLists[bases[a.second->homeBuilding->base.id]].push_back(
 				    ControlGenerator::createLargeAgentControl(*state, a.second, list->Size.x,
@@ -332,9 +339,9 @@ void RecruitScreen::updateFormValues()
 
 	// Update money
 	const auto balance = state->getPlayer()->balance + moneyDelta;
-	form->findControlTyped<Label>("TEXT_FUNDS")->setText(Strings::fromInteger(balance));
+	form->findControlTyped<Label>("TEXT_FUNDS")->setText(state->formatCurrency(balance));
 	form->findControlTyped<Label>("TEXT_FUNDS_DELTA")
-	    ->setText(format("{0}{1}", moneyDelta > 0 ? "+" : "", Strings::fromInteger(moneyDelta)));
+	    ->setText(format("{0}{1}", moneyDelta > 0 ? "+" : "", state->formatCurrency(moneyDelta)));
 
 	updateBaseHighlight();
 }
