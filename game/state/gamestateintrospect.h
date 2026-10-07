@@ -1,5 +1,6 @@
 #pragma once
 
+#include "game/state/stateobject.h"
 #include "library/sp.h"
 #include "library/strings.h"
 
@@ -7,6 +8,10 @@ namespace OpenApoc
 {
 
 class GameState;
+class Building;
+
+// Read-only campaign target: the lowest numbered open, surviving alien building.
+StateRef<Building> nextRaidableAlienBuilding(GameState &state);
 
 // Answers the harness "GS <query>" command with a single line of key=value pairs.
 // Returns an empty string for an unrecognised query.

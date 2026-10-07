@@ -2197,6 +2197,26 @@ void CityView::registerCityViewIntrospection()
 		    }
 		    const auto q = to_lower(query);
 		    auto gameState = weakState.lock();
+		    if (gameState && q == "owned_craft_rows")
+		    {
+			    const auto list = view->uiTabs[1]->findControl("OWNED_VEHICLE_LIST");
+			    const auto top = list->getLocationInUi();
+			    UString rows;
+			    for (const auto &row : list->Controls)
+			    {
+				    const auto vehicle = row->getData<Vehicle>();
+				    if (!vehicle)
+				    {
+					    continue;
+				    }
+				    const auto pos = row->getLocationInUi() + row->Size / 2;
+				    const bool visible = pos.x >= top.x && pos.x < top.x + list->Size.x;
+				    rows += (rows.empty() ? "" : "|") + format("{0}={1},{2},{3}",
+				                                               Vehicle::getId(*gameState, vehicle),
+				                                               pos.x, pos.y, visible ? 1 : 0);
+			    }
+			    return format("detail={0}", rows.empty() ? UString("-") : rows);
+		    }
 		    // "centre_on_ufo": bring the nearest live UFO into view so a driver can click it.
 		    // Craft off the visible area cannot be targeted at all, which made automated
 		    // interception a no-op whenever the camera sat over the player's base.
@@ -2231,11 +2251,16 @@ void CityView::registerCityViewIntrospection()
 			    // recovery is indistinguishable from a successful one otherwise, since neither
 			    // produces a message.
 			    UString mission = "none";
+			    UString building = "-";
 			    for (auto &v : gameState->current_city->cityViewSelectedOwnedVehicles)
 			    {
-				    if (v && v->owner == gameState->getPlayer() && !v->missions.empty())
+				    if (v && v->owner == gameState->getPlayer())
 				    {
-					    mission = v->missions.front().getName();
+					    if (!v->missions.empty())
+					    {
+						    mission = v->missions.front().getName();
+					    }
+					    building = v->currentBuilding ? v->currentBuilding.id : UString("-");
 					    break;
 				    }
 			    }
@@ -2249,8 +2274,9 @@ void CityView::registerCityViewIntrospection()
 					           format("{0}:{1}", v->name, v->currentAgents.size());
 				    }
 			    }
-			    return format("selected={0} with_soldier={1} mission={2} ids={3}", count,
-			                  withSoldier, mission, ids.empty() ? UString("-") : ids);
+			    return format("selected={0} with_soldier={1} mission={2} ids={3} building={4}",
+			                  count, withSoldier, mission, ids.empty() ? UString("-") : ids,
+			                  building);
 		    }
 		    // Follow whatever craft the driver currently has selected, so the view tracks the
 		    // action instead of staying wherever it was last pointed.
@@ -2532,22 +2558,18 @@ void CityView::registerCityViewIntrospection()
 		    }
 		    if (gameState && q == "centre_on_raidable")
 		    {
-			    const auto aliens = gameState->getAliens();
 			    if (!gameState->current_city)
 			    {
 				    return UString("centred=0");
 			    }
-			    for (const auto &ref : gameState->current_city->buildings)
+			    if (gameState->current_city.id != "CITYMAP_ALIEN")
+			    {
+				    return UString("centred=0");
+			    }
+			    const auto ref = nextRaidableAlienBuilding(*gameState);
+			    if (ref)
 			    {
 				    const auto bld = ref.getSp();
-				    if (!bld || !bld->owner || bld->owner.id != aliens.id)
-				    {
-					    continue;
-				    }
-				    if (bld->accessTopic && !bld->accessTopic->isComplete())
-				    {
-					    continue;
-				    }
 				    const auto &bb = bld->bounds;
 				    const Vec3<float> mid{(bb.p0.x + bb.p1.x) / 2.0f, (bb.p0.y + bb.p1.y) / 2.0f,
 				                          2.0f};

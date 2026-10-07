@@ -1322,9 +1322,8 @@ def _lab_skill_total(d: Driver) -> int:
     return total
 
 
-# The route to victory runs through particular research, in order: the advanced workshop unlocks
-# the Large lab that MANUFACTURE_DIMENSION_SHIFTER requires, the shifter is what lets a craft
-# cross into the alien dimension, and each RESEARCH_ALIEN_BUILDING_i opens the raid that unlocks
+# The large physics lab unlocks gate-capable craft research, and the large workshop builds one.
+# Each RESEARCH_ALIEN_BUILDING_i opens the raid that unlocks
 # the next. Picking whatever topic happens to sit in row 0 will eventually stumble into these,
 # but not before burning game-months on brainsucker launchers.
 # Ordered best-first. pick_topic_rows walks this and takes the first startable match, then falls
@@ -1347,7 +1346,7 @@ def _lab_skill_total(d: Driver) -> int:
 #
 # Verified against data/common_patch/gamestate/research.xml: all 95 ids exist, spelled exactly,
 # none hidden, none Engineering-type (an Engineering lab takes MANUFACTURE_* projects, a
-# different namespace this list cannot address), and no topic precedes one it depends on.
+# different namespace). The offered list enforces dependencies before priority is applied.
 PRIORITY_RESEARCH = [
     # -- 0. the critical path AllOutWar's guide names outright: "The goal here is to shoot down
     #       UFO type 3, and then let the games begin. One alien tech -> Advanced Quantum Lab ->
@@ -1360,6 +1359,18 @@ PRIORITY_RESEARCH = [
     "RESEARCH_ALIEN_ENERGY_SOURCE",
     "RESEARCH_ADVANCED_QUANTUM_PHYSICS_LAB",
     "RESEARCH_ADVANCED_BIOCHEMISTRY_LAB",
+    "RESEARCH_ADVANCED_WORKSHOP",  # Offered only after Dimension Probe is complete.
+
+    # -- gate craft: take the first available route through the dimension gates --
+    "RESEARCH_DIMENSION_PROBE",
+    "RESEARCH_UFO_TYPE_3",
+    "RESEARCH_BIO-TRANSPORT",
+    "RESEARCH_UFO_TYPE_5",
+    "RESEARCH_EXPLORER",
+    "RESEARCH_UFO_TYPE_6",
+    "RESEARCH_RETALIATOR",
+    "RESEARCH_UFO_TYPE_9",
+    "RESEARCH_ANNIHILATOR",
 
     # -- 1. cheap item-gated roots: fastest payback, and they open the rest of the tree --
     "RESEARCH_BIO-TRANSPORT_MODULE",
@@ -1427,12 +1438,12 @@ PRIORITY_RESEARCH = [
     "RESEARCH_ALIEN_BUILDING_1",
     "RESEARCH_ALIEN_BUILDING_2",
     "RESEARCH_ALIEN_BUILDING_3",
+    "RESEARCH_ALIEN_BUILDING_4",
     "RESEARCH_ALIEN_BUILDING_5",
     "RESEARCH_ALIEN_BUILDING_6",
     "RESEARCH_ALIEN_BUILDING_7",
     "RESEARCH_ALIEN_BUILDING_8",
     "RESEARCH_ALIEN_BUILDING_9",
-    "RESEARCH_ALIEN_BUILDING_4",
 
     # -- 4. heavy weapons, craft and UFO analysis: valuable, never blocking --
     "RESEARCH_MEDIUM_DISRUPTOR_BEAM",
@@ -1471,6 +1482,34 @@ PRIORITY_RESEARCH = [
 # length.
 PRIORITY_RESEARCH = list(dict.fromkeys(PRIORITY_RESEARCH))
 
+# Workshops only build an explicitly requested capability. Prefer the best unlocked gate craft;
+# once one exists (or is being built), leave other workshops idle instead of buying duplicates.
+PRIORITY_MANUFACTURE = [
+    "MANUFACTURE_ANNIHILATOR",
+    "MANUFACTURE_RETALIATOR",
+    "MANUFACTURE_EXPLORER",
+    "MANUFACTURE_BIO-TRANSPORT",
+]
+
+
+def gate_craft_project(d: Driver) -> str:
+    """Cheap read-only preflight for one gate craft at the currently selected base."""
+    if "shifter=1" in d.h.gs("interceptors").get("detail", ""):
+        return ""
+    labs = d.h.gs("research").get("labs_detail", "").split("|")
+    if any(topic in lab for lab in labs for topic in PRIORITY_MANUFACTURE):
+        return ""
+    if "FACILITYTYPE_ADVANCED_WORKSHOP:0" not in d.h.gs("facilities").get("base", ""):
+        return ""
+    funds = int(d.h.gs("funds").get("balance", "0") or 0)
+    for want in PRIORITY_MANUFACTURE:
+        topic = d.h.gs(f"topic {want}")
+        if (topic.get("found") == "1" and topic.get("hidden") == "0"
+                and topic.get("deps_satisfied") == "1"
+                and funds >= int(topic.get("cost", "0") or 0)):
+            return want
+    return ""
+
 
 def pick_topic_rows(d: Driver) -> list[tuple[int, str]]:
     """Every startable topic for this lab, best first: priority list, then the game's own order.
@@ -1479,7 +1518,8 @@ def pick_topic_rows(d: Driver) -> list[tuple[int, str]]:
     which selects whatever happens to sit at that position -- including already-researched or
     too-large topics. Offering a real ordered candidate list keeps every attempt a considered one.
     """
-    detail = d.h.gs("research_options").get("detail", "")
+    opts = d.h.gs("research_options")
+    detail = opts.get("detail", "")
     if not detail or detail == "-":
         return []
     rows = []
@@ -1488,12 +1528,16 @@ def pick_topic_rows(d: Driver) -> list[tuple[int, str]]:
             idx, rest = part.split("=", 1)
             fields = rest.split(",")
             topic = fields[0]
-            done = fields[1].endswith("1")
-            big = fields[2].endswith("1")
+            flags = dict(f.split("=", 1) for f in fields[1:] if "=" in f)
+            done = flags.get("done") == "1"
+            big = flags.get("big") == "1"
         except (ValueError, IndexError):
             continue
-        if not done and not big:
+        if not done and not big and flags.get("running") != "1" and flags.get("affordable") != "0":
             rows.append((int(idx), topic))
+    if opts.get("type") == "engineering" or any(t.startswith("MANUFACTURE_") for _, t in rows):
+        want = gate_craft_project(d)
+        return [(idx, topic) for idx, topic in rows if topic == want]
     ranked = []
     for want in PRIORITY_RESEARCH:
         for idx, topic in rows:
@@ -1516,9 +1560,9 @@ def current_project(d: Driver) -> str:
     try:
         reply = d.h.send("control TEXT_CURRENT_PROJECT get")
     except (HarnessError, OSError):
-        return ""
+        return "unknown project"  # A failed observation must never authorize replacing work.
     if not reply.startswith("OK"):
-        return ""
+        return "unknown project"
     # The reply is "OK <CONTROL_ID> text=<value>", and the value has had its spaces replaced with
     # underscores so it survives the whitespace-delimited protocol. Taking everything after
     # "text=" is the only correct read: matching a leading prefix left the control id glued to
@@ -1526,7 +1570,9 @@ def current_project(d: Driver) -> str:
     # though it were busy -- the exact inverse of the bug this function exists to prevent.
     body = reply[2:].strip()
     marker = "text="
-    text = body.split(marker, 1)[1].strip() if marker in body else ""
+    if marker not in body:
+        return "unknown project"
+    text = body.split(marker, 1)[1].strip()
     text = text.replace("_", " ").strip()
     if text.lower() in ("", "-", "no project"):
         return ""
@@ -1755,12 +1801,37 @@ def raid_alien_building(d: Driver) -> str:
     if where.get("current_city") != "CITYMAP_ALIEN":
         return "not-in-alien-dimension"
 
+    if not select_gate_craft(d, "CITYMAP_ALIEN"):
+        return "no-gate-squad"
+
     target = d.h.gs("centre_on_raidable")
     if target.get("centred") != "1":
         return "nothing-raidable"
     d.say(f"  [raid] target {target.get('building')} (victory={target.get('victory')})")
     time.sleep(0.5)
     bx, by = (int(v) for v in target["at"].split(",")[:2])
+    if d.h.gs("selected").get("building") != target.get("building"):
+        if not d.click_id("BUTTON_GOTO_BUILDING", d.status()):
+            return "no-goto-building-button"
+        d.h.ok(f"click {bx} {by}")
+        d.say(f"  [raid] squad flying to {target.get('building')}")
+        deadline = time.time() + 120.0
+        while time.time() < deadline:
+            st = d.status()
+            if st.stage != "CityView":
+                return "arrival-interrupted"
+            if d.h.gs("selected").get("building") == target.get("building"):
+                break
+            set_speed(d, 4)
+            set_speed(d, 5)
+            time.sleep(0.5)
+        else:
+            return "squad-still-travelling"
+        d.say(f"  [raid] squad arrived at {target.get('building')}")
+        target = d.h.gs("centre_on_raidable")
+        if target.get("centred") != "1":
+            return "nothing-raidable"
+        bx, by = (int(v) for v in target["at"].split(",")[:2])
     d.h.ok(f"click {bx} {by} right")
     time.sleep(1.2)
 
@@ -1770,8 +1841,15 @@ def raid_alien_building(d: Driver) -> str:
         return_to_city(d)
         return "no-building-screen"
 
-    picked = d.select_assignment_rows(st)
-    if not picked:
+    craft = [r for r in assignment_rows(st, "boarding") if len(r) == 6 and r[2] == 1 and r[4] == 1]
+    if not craft:
+        return_to_city(d)
+        return "no-gate-craft-at-building"
+    d.h.click_xy(*craft[0][:2])  # Selecting a craft selects its actual passenger list.
+    time.sleep(0.2)
+    detail = d.status().detail or ""
+    selected = detail.split("selected_agents=", 1)[-1].split("_", 1)[0].split()[0]
+    if not selected.isdigit() or int(selected) == 0:
         return_to_city(d)
         return "no-agents-selectable"
     d.click_id("BUTTON_RAID", d.status())
@@ -1891,42 +1969,105 @@ def station_at_gates(d: Driver) -> int:
     return sent
 
 
-def goto_portal(d: Driver) -> bool:
-    """Send a dimension-shifter-equipped craft through a portal into the alien city.
-
-    Crossing is the gate on the entire endgame: the ten alien buildings, and the one carrying
-    victory, exist only in CITYMAP_ALIEN. VehicleMission::GotoPortal checks
-    Vehicle::hasDimensionShifter() on arrival -- without one the craft is stranded or crashes
-    outright -- so this refuses to send a craft that cannot make the trip rather than throwing
-    one away.
-
-    The order is a right-click on a portal doodad with the craft selected; portals live in
-    City::portals and have no UI handle, hence centre_on_portal.
-    """
-    st = d.status()
-    if st.stage != "CityView":
-        return False
-
-    shifters = []
+def craft_flags(d: Driver) -> list[tuple[int, dict[str, str]]]:
+    """Owned craft in state order, including their city and actual passenger count."""
+    result = []
     for part in d.h.gs("interceptors").get("detail", "").split("|"):
         bits = part.split(":")
         if len(bits) < 3 or not bits[0].isdigit():
             continue
-        if "shifter=1" in bits[-1]:
-            shifters.append(int(bits[0]))
-    if not shifters:
-        d.say("  [portal] no craft carries a dimension shifter; cannot cross")
-        return False
+        flags = dict(f.split("=", 1) for f in bits[-1].split(",") if "=" in f)
+        result.append((int(bits[0]), flags))
+    return result
 
-    if not d.click_id("BUTTON_TAB_2", st):
+
+def select_gate_craft(d: Driver, city: str, require_crew: bool = True) -> bool:
+    """Select a gate-capable transport with soldiers in this city, through its UI list."""
+    candidates = [(idx, f) for idx, f in craft_flags(d)
+                  if f.get("shifter") == "1" and f.get("flying") == "1"
+                  and (not require_crew or int(f.get("crew", "0")) > 0)
+                  and f.get("city", city) == city
+                  and f.get("transit", "0") == "0"]
+    if not candidates:
+        d.say(f"  [portal] no crewed gate-capable craft ready in {city}")
+        return False
+    if not d.click_id("BUTTON_TAB_2", d.status()):
         return False
     time.sleep(0.35)
-    lst = d.controls(d.status()).get("OWNED_VEHICLE_LIST")
-    if lst is None or lst.w <= 0:
+    idx, flags = candidates[0]
+    craft_id = flags.get("id", str(idx))
+    # The city's craft icons listen to MouseDown, not ListBoxChangeSelected. Use their resolved
+    # positions and scroll the list when necessary; CONTROL set would select only the widget.
+    def position():
+        for part in d.h.gs("owned_craft_rows").get("detail", "").split("|"):
+            index, _, values = part.partition("=")
+            if index == craft_id:
+                return tuple(int(v) for v in values.split(","))
+        return ()
+    at = position()
+    if len(at) != 3:
         return False
-    d.h.click_xy(lst.x + 16 + shifters[0] * 36, lst.y + lst.h // 2)
+    if at[2] == 0:
+        viewport = d.live_rect("OWNED_VEHICLE_LIST")
+        reply = d.h.send("control OWNED_VEHICLE_LIST_SCROLL get")
+        scroll = dict(p.split("=", 1) for p in reply.split() if "=" in p)
+        if not viewport or "max" not in scroll:
+            return False
+        value = int(scroll.get("value", "0")) + at[0] - (viewport["x"] + viewport["w"] // 2)
+        value = max(int(scroll.get("min", "0")), min(int(scroll["max"]), value))
+        d.h.send(f"control OWNED_VEHICLE_LIST_SCROLL set {value}")
+        time.sleep(0.25)
+        at = position()
+    if len(at) != 3 or at[2] != 1:
+        return False
+    # Right-click removes this craft from any existing group. The following left-click then
+    # replaces the selection with it alone, so ordinary interceptors never receive the gate order.
+    d.h.click_xy(*at[:2], button="right")
+    time.sleep(0.15)
+    d.h.click_xy(*at[:2])
     time.sleep(0.3)
+    selected = d.h.gs("selected")
+    return (selected.get("selected") == "1" and
+            (not require_crew or int(selected.get("with_soldier", "0") or 0) > 0))
 
+
+def wait_for_dimension(d: Driver, city: str, budget_s: float = 120.0) -> bool:
+    """Keep the clock running until the normal dimension-view switch actually happens."""
+    deadline = time.time() + budget_s
+    while time.time() < deadline:
+        st = d.status()
+        if st.stage == "CityView":
+            if d.h.gs("alien_buildings").get("current_city") == city:
+                d.say(f"  [portal] arrived in {city}")
+                return True
+            set_speed(d, 4)
+            set_speed(d, 5)
+        elif st.stage in ("BattleBriefing", "BattlePreStart", "BattleView", "BaseDefenseScreen",
+                          "VideoScreen", "MainMenu"):
+            return False  # Victory.run handles the mission/ending before resuming the crossing.
+        elif not d.dismiss_modal(st):
+            return False
+        time.sleep(0.5)
+    d.say(f"  [portal] arrival pending: waiting for city view {city}")
+    return False
+
+
+def goto_portal(d: Driver, destination: str = "CITYMAP_ALIEN") -> bool:
+    """Order the crewed gate craft across, then observe the normal day-rollover view switch."""
+    if d.status().stage != "CityView":
+        return False
+    current = d.h.gs("alien_buildings").get("current_city", "CITYMAP_HUMAN")
+    if current == destination:
+        return True
+    fleet = craft_flags(d)
+    require_crew = destination == "CITYMAP_ALIEN"
+    # A prior order can already have moved the craft while the view waits for midnight.
+    if any(f.get("shifter") == "1" and (not require_crew or int(f.get("crew", "0")) > 0)
+           and (f.get("city") == destination or f.get("transit") == "1"
+                or f.get("portal") == "1") for _, f in fleet):
+        return wait_for_dimension(d, destination)
+    if not select_gate_craft(d, current, require_crew=require_crew):
+        return False
     info = d.h.gs("centre_on_portal")
     if info.get("centred") != "1":
         d.say("  [portal] no portal found in this city")
@@ -1934,18 +2075,9 @@ def goto_portal(d: Driver) -> bool:
     time.sleep(0.5)
     px, py = (int(v) for v in info["at"].split(",")[:2])
     d.h.ok(f"click {px} {py} right")
-
-    mission = "none"
-    for _ in range(6):
-        time.sleep(0.8)
-        mission = d.h.gs("selected").get("mission", "none")
-        if "ortal" in mission:
-            d.say(f"  [portal] craft ordered through the gate ({mission})")
-            return True
-        if "TakeOff" not in mission and mission != "none":
-            break
-    d.say(f"  [portal] order not accepted (mission={mission})")
-    return False
+    label = "crewed gate craft" if require_crew else "gate craft"
+    d.say(f"  [portal] {label} ordered toward {destination}; waiting for city view")
+    return wait_for_dimension(d, destination)
 
 
 def build_second_base(d: Driver) -> str:
@@ -2008,8 +2140,7 @@ def build_second_base(d: Driver) -> str:
 def build_facility(d: Driver, want: str = "FACILITYTYPE_ADVANCED_WORKSHOP") -> bool:
     """Construct a base facility. Returns True when one is actually placed.
 
-    MANUFACTURE_DIMENSION_SHIFTER needs a Large workshop and the starting base has only a small
-    one, so this is a hard gate on reaching the alien dimension at all.
+    Gate craft need a Large physics lab for research and a Large workshop for manufacture.
 
     Placement cannot be driven by name. BaseScreen keys entirely off raw mouse events against the
     control under the cursor (basescreen.cpp:259-417): hovering a row in LISTBOX_FACILITIES sets
@@ -2025,6 +2156,12 @@ def build_facility(d: Driver, want: str = "FACILITYTYPE_ADVANCED_WORKSHOP") -> b
     if st.stage != "CityView":
         return False
     info = d.h.gs("facilities")
+    if any(part.split(":")[0] == want for part in info.get("base", "").split(",")):
+        return False  # Includes construction in progress; never buy the same facility twice.
+    costs = dict(part.split("=", 1) for part in info.get("costs", "").split("|") if "=" in part)
+    if want not in costs or int(d.h.gs("funds").get("balance", "0") or 0) < int(costs[want]):
+        d.say(f"  [build] waiting for funds to build {want}")
+        return False
     offer = info.get("offer", "")
     if want not in offer:
         d.say(f"  [build] {want} is not offered yet (research gates it)")
@@ -2102,13 +2239,11 @@ def build_facility(d: Driver, want: str = "FACILITYTYPE_ADVANCED_WORKSHOP") -> b
     return False
 
 
-def manufacture(d: Driver, want: str = "MANUFACTURE_DIMENSION_SHIFTER", qty: int = 1) -> bool:
+def manufacture(d: Driver, want: str = "MANUFACTURE_BIO-TRANSPORT", qty: int = 1) -> bool:
     """Start a manufacturing project in a workshop. Returns True when it actually takes.
 
-    VEQUIPMENTTYPE_DIMENSION_SHIFTER is the only player-obtainable way into the alien dimension,
-    so this is the gate the whole endgame sits behind. It is an Engineering project needing a
-    *Large* workshop -- the starting base has only a small one, which is why
-    FACILITYTYPE_ADVANCED_WORKSHOP has to be researched and built first.
+    Bio-Trans and its successors can enter dimension gates without a shifter component. Keep
+    existing projects intact, including a copy of the requested craft running in another lab.
 
     Manufacturing reuses the research screen and ResearchSelect, but Lab::setResearch branches on
     lab type: an Engineering lab is charged the project cost immediately. required_lab_size is
@@ -2116,7 +2251,9 @@ def manufacture(d: Driver, want: str = "MANUFACTURE_DIMENSION_SHIFTER", qty: int
     list too and is refused with a message box when picked -- gs research_options flags that as
     big=1, and pick_topic_rows already skips those.
     """
-    before = d.h.gs("stores").get("vehicle_top", "-")
+    if any(want in lab for lab in d.h.gs("research").get("labs_detail", "").split("|")):
+        d.say(f"  [manufacture] {want} already in progress; leaving it")
+        return False
     st = d.status()
     if st.stage != "CityView":
         return False
@@ -2146,17 +2283,27 @@ def manufacture(d: Driver, want: str = "MANUFACTURE_DIMENSION_SHIFTER", qty: int
                 break
             time.sleep(0.3)
             opts = d.h.gs("research_options")
-            if "engineering" not in opts.get("lab", "").lower() and "MANUFACTURE" not in opts.get(
+            if opts.get("type") != "engineering" and "MANUFACTURE" not in opts.get(
                 "detail", ""
             ):
+                continue
+            # The engine reports the exact topic id; the label is a fallback for older builds.
+            project = opts.get("current")
+            if project is None:
+                project = current_project(d) or "-"
+            if project != "-":
+                d.say(f"  [manufacture] lab {list_id}[{slot}] already on {project}; leaving it")
                 continue
             row = -1
             for part in opts.get("detail", "").split("|"):
                 idx, _, rest = part.partition("=")
                 fields = rest.split(",")
-                if fields and fields[0] == want and not fields[1].endswith("1"):
-                    if len(fields) > 2 and fields[2].endswith("1"):
+                flags = dict(f.split("=", 1) for f in fields[1:] if "=" in f)
+                if fields and fields[0] == want and flags.get("done") != "1":
+                    if flags.get("big") == "1":
                         d.say(f"  [manufacture] {want} needs a larger lab than this one")
+                        continue
+                    if flags.get("running") == "1" or flags.get("affordable") == "0":
                         continue
                     row = int(idx)
                     break
@@ -2180,7 +2327,10 @@ def manufacture(d: Driver, want: str = "MANUFACTURE_DIMENSION_SHIFTER", qty: int
                 d.h.key("Return")
                 time.sleep(0.5)
                 continue
-            # Quantity only becomes meaningful once a project is committed.
+            if d.h.gs("research_options").get("current") != want:
+                continue  # A click or a refused selection is not a manufacturing receipt.
+            # Quantity only becomes meaningful once a project is committed. New projects default
+            # to ONE in Lab::setResearch, so a missing slider cannot create an unbounded order.
             try:
                 d.h.control("MANUFACTURE_QUANTITY_SLIDER", "set", str(qty))
             except HarnessError:
@@ -2202,7 +2352,6 @@ def manufacture(d: Driver, want: str = "MANUFACTURE_DIMENSION_SHIFTER", qty: int
             d.escape_key()
         time.sleep(0.5)
 
-    after = d.h.gs("stores").get("vehicle_top", "-")
     if not started:
         d.say(f"  [manufacture] could not start {want} (needs a Large workshop?)")
     return started
@@ -2278,7 +2427,8 @@ def assign_research(d: Driver) -> bool:
     # to the top stage alone (framework.cpp:608). An event that fires while the driver is in here
     # is lost for good -- and researchCompleted is the one score bucket that can never go
     # negative, so every one of those is pure forfeited score.
-    if _lab_skill_total(d) < 800:
+    if _lab_skill_total(d) < 800 or any(":built:" in lab and ":staff=0:" in lab
+                                       for lab in before.get("labs_detail", "").split("|")):
         staff_labs(d)
 
     # Fill every lab, verifying against the engine after each attempt.
@@ -2325,7 +2475,12 @@ def assign_research(d: Driver) -> bool:
             # when a busy lab is overwritten, the success check never fired and the loop did it
             # again, up to eight times per visit -- so the campaign could research for hours and
             # finish almost nothing.
-            busy_with = current_project(d)
+            opts = d.h.gs("research_options")
+            busy_with = opts.get("current", "")
+            if busy_with == "-":
+                busy_with = ""
+            elif not busy_with:
+                busy_with = current_project(d)
             if busy_with:
                 d.say(f"  [research] lab {list_id}[{slot}] already on {busy_with}; leaving it")
                 continue
@@ -4573,123 +4728,113 @@ def _flying_crewed(d: Driver) -> int:
     return n
 
 
+def assignment_rows(st: Status, field: str) -> list[tuple[int, ...]]:
+    """Read resolved rows from BuildingScreen's read-only harness detail."""
+    detail = st.detail or ""
+    if f"{field}=" not in detail:
+        return []
+    value = detail.split(f"{field}=", 1)[1].split("_", 1)[0].split()[0]
+    rows = []
+    for part in value.split(";"):
+        try:
+            rows.append(tuple(int(v) for v in part.split(",")))
+        except ValueError:
+            continue
+    return rows
+
+
 def crew_transport(d: Driver, garrison: int = 4) -> int:
-    """Put soldiers aboard a craft so it can recover downed UFOs.
+    """Board a flying transport, preferring a gate craft and retaining a base garrison.
 
-    VehicleMission::recoverVehicle is refused unless the craft carries a Soldier
-    (cityview.cpp:1069-1090), so an all-interceptor fleet shoots UFOs down and collects none of
-    them -- no artifacts, no alien research, no route to victory. Observed directly: three wrecks
-    on the map with crewed=0 and every recovery refused.
-
-    Two engine details decide how this has to be driven:
-
-    * The assignment widget exists only on the three screens that embed city/agentassignment.form.
-      Left-clicking our own base opens BaseScreen, which has no widget; *right*-clicking the same
-      building opens BuildingScreen, which does (cityview.cpp:282-306).
-    * The drop list is not built on MouseDown. It is built on the first MouseMove that travels
-      more than `insensibility` (5px) from the press, copying whatever is selected in the source
-      list (agentassignment.cpp:749-768). Press-then-release without a real move in between drops
-      an empty list and silently transfers nobody, so the drag is issued as a stepped path.
-
-    The transfer itself also requires the craft to be parked in the same building as the agent
-    (agentassignment.cpp:527-536), which is why this is done at the base.
+    Resolved widget rows identify the actual craft. If a gate craft exists elsewhere, wait for
+    it to park here; loading an ordinary transport would keep the dimension assault impossible.
+    Soldiers already aboard an ordinary transport can be dragged from its passenger list.
     """
     st = d.status()
     if st.stage != "CityView":
         return 0
+    fleet = craft_flags(d)
+    gate = any(f.get("shifter") == "1" for _, f in fleet)
+    if any(f.get("shifter") == "1" and int(f.get("crew", "0")) > 0 for _, f in fleet):
+        return _flying_crewed(d)
     at = d.h.gs("centre_on_base")
     if at.get("centred") != "1":
         return 0
     bx, by = (int(v) for v in at["at"].split(",")[:2])
     d.h.ok(f"click {bx} {by} right")
     time.sleep(1.2)
-
-    st = d.status()
-    if st.stage != "BuildingScreen":
-        d.say(f"  [crew] expected BuildingScreen, got {st.stage}")
-        d.escape_key()
+    if d.status().stage != "BuildingScreen":
+        return_to_city(d)
         return 0
-    box = d.controls(st).get("AGENT_ASSIGNMENT")
-    if box is None or box.w <= 0:
-        d.escape_key()
-        return 0
-
-    ROW_H, FIRST_ROW, AGENT_DX, VEHICLE_DX = 26, 63, 103, 383
-    # Count only flying crewed craft: loading a road vehicle looks like success and then fails
-    # every recovery.
-    before = _flying_crewed(d)
-    crewed = before
-
-    # Select the squad once, then try each craft row: the right column starts with the building
-    # itself, so the first row that accepts a squad is not known ahead of time.
-    # Select the squad exactly once. MultilistBox toggles: clicking a row that is already
-    # selected removes it again, so re-selecting before every craft-row attempt was switching
-    # the squad back off and dragging an empty list on all attempts after the first.
-    # Leave a garrison. Aliens attack the BASE, and a base defended by scientists and engineers
-    # is not defended at all: observed 15 units in a base defence, every one of them unarmed,
-    # being killed one at a time by a single alien nobody could shoot back at. Whoever flies out
-    # is not home when that happens, so the transport takes what is spare and no more.
-    #
-    # A soldier held back is not idle -- they are the reason the labs, stores and staff are still
-    # there next week.
     try:
-        soldiers = int(d.h.gs("agents").get("soldiers", "0") or 0)
-    except (ValueError, AttributeError):
-        soldiers = 0
-    # Scaled, not fixed. A flat reserve of four means a campaign with four soldiers never flies a
-    # mission at all -- which is the same "cannot fight" failure in a different costume, and this
-    # harness has produced enough of those. Hold back half, up to the cap, and always leave at
-    # least one able to go: a garrison that prevents every mission defends nothing worth keeping.
-    held = min(max(0, garrison), soldiers // 2) if soldiers > 1 else 0
-    take = 6 if soldiers <= 0 else max(1, min(6, soldiers - held))
-    if held:
-        d.say(f"  [crew] taking {take} of {soldiers} soldier(s); {held} stay to defend the base")
-
-    picked = 0
-    for r in range(take):
-        y = box.y + FIRST_ROW + r * ROW_H
-        if y >= box.y + box.h - 8:
-            break
-        d.h.click_xy(box.x + AGENT_DX, y)
-        picked += 1
-        time.sleep(0.1)
-    if not picked:
-        d.escape_key()
-        return 0
-
-    for row in range(6):
-
-        sy = box.y + FIRST_ROW
-        dy = box.y + FIRST_ROW + row * ROW_H
-        if dy >= box.y + box.h - 8:
-            break
-        d.h.ok(f"down {box.x + AGENT_DX} {sy}")
-        time.sleep(0.15)
-        for step in range(1, 7):  # stepped path so the >5px move actually fires
-            mx = box.x + AGENT_DX + (VEHICLE_DX - AGENT_DX) * step // 6
-            my = sy + (dy - sy) * step // 6
-            d.h.ok(f"move {mx} {my}")
-            time.sleep(0.08)
-        d.h.ok(f"up {box.x + VEHICLE_DX} {dy}")
-        time.sleep(0.6)
-
-        crewed = _flying_crewed(d)
-        if crewed > before:
-            d.say(f"  [crew] squad boarded a flying craft on row {row}")
-            break
-
-    # Leave by the screen's own quit button. dismiss_modal would pick this stage's "act" control,
-    # which on a BuildingScreen is BUTTON_RAID -- an assault on our own base.
-    for _ in range(6):
+        d.h.send("control AGENT_SELECT_SCROLL set 0")  # An unchanged scrollbar returns ERR.
+        time.sleep(0.2)
         st = d.status()
-        if st.stage == "CityView":
-            break
-        if not d.click_id("BUTTON_QUIT", st):
-            d.escape_key()
-        time.sleep(0.4)
-    crewed = _flying_crewed(d)
-    d.say(f"  [crew] flying crewed craft {before} -> {crewed}")
-    return crewed
+        targets = [r for r in assignment_rows(st, "boarding")
+                   if len(r) == 6 and r[3] > 0 and r[5] == 1 and (not gate or r[2] == 1)]
+        if not targets:
+            d.say("  [crew] waiting for gate craft at the base" if gate else
+                  "  [crew] no flying transport parked at the base")
+            return 0
+        target = targets[0]
+        soldiers = int(d.h.gs("agents").get("soldiers", "0") or 0)
+        held = min(max(0, garrison), soldiers // 2) if soldiers > 1 else 0
+        take = max(1, min(6, target[3], soldiers - held))
+        rows = [r for r in assignment_rows(st, "soldier_rows") if len(r) == 5 and r[3] == 1]
+        # A drag copies ONE source list. Prefer the existing assault squad over new recruits.
+        rows.sort(key=lambda r: -r[2])
+        if not rows:
+            d.say("  [crew] no soldiers visible at the base yet")
+            return 0
+        group = rows[0][4]
+        squad = [r for r in rows if r[4] == group][:take]
+        before = _flying_crewed(d)
+        for x, y, *_ in squad:
+            d.h.click_xy(x, y)
+            time.sleep(0.1)
+        sx, sy = squad[0][:2]
+        d.say(f"  [crew] taking {len(squad)} of {soldiers} soldier(s); reserve {held}")
+        d.h.ok(f"down {sx} {sy}")
+        # The first >5px movement creates the dragged list from the selected soldiers.
+        d.h.ok(f"move {sx + 12} {sy}")
+        time.sleep(0.15)
+        try:
+            if target[4] == 0:
+                viewport = d.live_rect("AGENT_SELECT_BOX")
+                reply = d.h.send("control AGENT_SELECT_SCROLL get")
+                scroll = dict(p.split("=", 1) for p in reply.split() if "=" in p)
+                if viewport and "max" in scroll:
+                    value = int(scroll.get("value", "0")) + target[1] - (
+                        viewport["y"] + viewport["h"] // 2)
+                    value = max(int(scroll.get("min", "0")), min(int(scroll["max"]), value))
+                    d.h.send(f"control AGENT_SELECT_SCROLL set {value}")
+                    time.sleep(0.25)
+                    targets = [r for r in assignment_rows(d.status(), "boarding")
+                               if len(r) == 6 and r[3] > 0 and r[4] == 1 and r[5] == 1
+                               and (not gate or r[2] == 1)]
+                    if not targets:
+                        return 0
+                    target = targets[0]
+                else:
+                    return 0
+            tx, ty = target[:2]
+            for step in range(1, 7):
+                d.h.ok(f"move {sx + (tx - sx) * step // 6} {sy + (ty - sy) * step // 6}")
+                time.sleep(0.08)
+            d.h.ok(f"up {tx} {ty}")
+            time.sleep(0.6)
+        finally:
+            d.h.ok(f"up {sx} {sy}")  # Release even when scroll/target lookup failed.
+        after = craft_flags(d)
+        if gate and any(f.get("shifter") == "1" and int(f.get("crew", "0")) > 0
+                        for _, f in after):
+            d.say("  [crew] assault squad boarded a gate-capable craft")
+        elif not gate and _flying_crewed(d) > before:
+            d.say("  [crew] squad boarded a flying craft")
+        return _flying_crewed(d)
+    finally:
+        # BuildingScreen's generic response is RAID; use its normal exit explicitly.
+        return_to_city(d)
 
 
 def select_crewed_craft(d: Driver) -> bool:

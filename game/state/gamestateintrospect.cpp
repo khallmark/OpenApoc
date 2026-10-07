@@ -4,27 +4,27 @@
 #include "game/state/battle/battleunit.h"
 #include "game/state/city/base.h"
 #include "game/state/city/building.h"
-#include "game/state/rules/battle/battlemap.h"
-#include "game/state/rules/city/vequipmenttype.h"
-#include "game/state/city/vequipment.h"
-#include "game/state/city/facility.h"
-#include "game/state/rules/city/facilitytype.h"
-#include "game/state/rules/aequipmenttype.h"
-#include "game/state/shared/aequipment.h"
-#include <map>
-#include <set>
 #include "game/state/city/city.h"
+#include "game/state/city/facility.h"
 #include "game/state/city/research.h"
 #include "game/state/city/vehicle.h"
 #include "game/state/city/vehiclemission.h"
-#include "game/state/rules/city/vehicletype.h"
+#include "game/state/city/vequipment.h"
 #include "game/state/gamestate.h"
 #include "game/state/gametime.h"
+#include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/agenttype.h"
+#include "game/state/rules/battle/battlemap.h"
+#include "game/state/rules/city/facilitytype.h"
+#include "game/state/rules/city/vehicletype.h"
+#include "game/state/rules/city/vequipmenttype.h"
+#include "game/state/shared/aequipment.h"
 #include "game/state/shared/agent.h"
 #include "game/state/shared/organisation.h"
 #include "library/strings_format.h"
+#include <map>
 #include <memory>
+#include <set>
 
 namespace OpenApoc
 {
@@ -156,12 +156,13 @@ UString describeResearch(GameState &state)
 		// project and no scientists in it looks busy and advances nothing, for ever.
 		const int skill = l.second->getTotalSkill();
 		const auto &proj = l.second->current_project;
-		labDetail += (labDetail.empty() ? "" : "|") +
-		             format("{0}:{1}:{2}:staff={3}:skill={4}:{5}", l.first, kind,
-		                    built ? "built" : "unbuilt", l.second->assigned_agents.size(), skill,
-		                    proj ? format("{0}({1}/{2})", proj.id, proj->man_hours_progress,
-		                                  proj->man_hours)
-		                         : UString("idle"));
+		labDetail +=
+		    (labDetail.empty() ? "" : "|") +
+		    format("{0}:{1}:{2}:staff={3}:skill={4}:size={5}:{6}", l.first, kind,
+		           built ? "built" : "unbuilt", l.second->assigned_agents.size(), skill,
+		           l.second->size == ResearchTopic::LabSize::Large ? "large" : "small",
+		           proj ? format("{0}({1}/{2})", proj.id, proj->man_hours_progress, proj->man_hours)
+		                : UString("idle"));
 	}
 	// Topics that are unlocked, unfinished and not already running somewhere. Dependency
 	// satisfaction is evaluated against the first player base, which is where the labs are.
@@ -439,6 +440,30 @@ UString describeStage(GameState &state)
 
 } // namespace
 
+StateRef<Building> nextRaidableAlienBuilding(GameState &state)
+{
+	const auto city = state.cities.find("CITYMAP_ALIEN");
+	if (city == state.cities.end() || !city->second)
+	{
+		return {};
+	}
+	// The vector's storage order and the building names are not the campaign order.
+	for (int number = 0; number < 10; number++)
+	{
+		const auto topic = format("RESEARCH_ALIEN_BUILDING_{0}", number);
+		for (const auto &ref : city->second->buildings)
+		{
+			const auto b = ref.getSp();
+			if (b && b->owner == state.getAliens() && b->accessTopic &&
+			    b->accessTopic.id == topic && b->accessTopic->isComplete() && b->isAlive())
+			{
+				return ref;
+			}
+		}
+	}
+	return {};
+}
+
 UString introspectGameState(GameState &state, const UString &query)
 {
 	// Checkpointing for long unattended runs: a multi-day campaign needs to survive a crash or a
@@ -531,7 +556,7 @@ UString introspectGameState(GameState &state, const UString &query)
 	// be first.
 	// Everything the engine knows about one topic, by id. The XML in data/common_patch is only a
 	// patch over data extracted from the player's original game, so questions like "does
-	// MANUFACTURE_DIMENSION_SHIFTER actually have prerequisites in the merged data" cannot be
+	// MANUFACTURE_BIO-TRANSPORT actually have prerequisites in the merged data" cannot be
 	// answered by reading the repo -- only by asking the running game.
 	if (q.size() > 6 && q.substr(0, 6) == "topic ")
 	{
@@ -594,24 +619,42 @@ UString introspectGameState(GameState &state, const UString &query)
 			const bool tooLarge = t->required_lab_size == ResearchTopic::LabSize::Large &&
 			                      lab->size == ResearchTopic::LabSize::Small;
 			const auto found = ids.find(t.get());
+			bool running = false;
+			for (const auto &entry : state.research.labs)
+			{
+				if (entry.second && entry.second->current_project.getSp() == t)
+				{
+					running = true;
+					break;
+				}
+			}
 			out += (out.empty() ? "" : "|") +
-			       format("{0}={1},done={2},big={3}", idx,
+			       format("{0}={1},done={2},big={3},running={4},affordable={5}", idx,
 			              found == ids.end() ? UString("?") : found->second,
-			              t->isComplete() ? 1 : 0, tooLarge ? 1 : 0);
+			              t->isComplete() ? 1 : 0, tooLarge ? 1 : 0, running ? 1 : 0,
+			              t->type != ResearchTopic::Type::Engineering ||
+			                      state.getPlayer()->balance >= t->cost
+			                  ? 1
+			                  : 0);
 			idx++;
 		}
-		return format("options={0} lab={1} detail={2}", idx, lab.id,
+		const char *kind = lab->type == ResearchTopic::Type::Engineering ? "engineering"
+		                   : lab->type == ResearchTopic::Type::Physics   ? "physics"
+		                                                                 : "biochem";
+		return format("options={0} lab={1} type={2} current={3} detail={4}", idx, lab.id, kind,
+		              lab->current_project ? lab->current_project.id : UString("-"),
 		              out.empty() ? UString("-") : out);
 	}
 	// The facility types BaseScreen would offer, in the order it builds its list
 	// (basescreen.cpp:80-93: state.facility_types, filtered by isVisible()). Placement is a
 	// hover-and-drag onto the base grid and every row is an identically-named Graphic, so
 	// position in this list is the only way to know which row is which -- and the driver needs
-	// FACILITYTYPE_ADVANCED_WORKSHOP specifically, since MANUFACTURE_DIMENSION_SHIFTER demands a
-	// Large workshop and the starting base has only a small one.
+	// the advanced physics lab and workshop specifically: gate craft require Large labs, while
+	// the starting base has only small ones.
 	if (q == "facilities")
 	{
 		UString out;
+		UString costs;
 		size_t idx = 0;
 		for (const auto &f : state.facility_types)
 		{
@@ -620,6 +663,7 @@ UString introspectGameState(GameState &state, const UString &query)
 				continue;
 			}
 			out += (out.empty() ? "" : "|") + format("{0}={1}", idx, f.first);
+			costs += (costs.empty() ? "" : "|") + format("{0}={1}", f.first, f.second->buildCost);
 			idx++;
 		}
 		UString built;
@@ -640,12 +684,13 @@ UString introspectGameState(GameState &state, const UString &query)
 				         format("{0}:{1}", fac->type.id, fac->buildTime);
 			}
 		}
-		return format("buildable={0} pending={1} offer={2} base={3}", idx, pending,
-		              out.empty() ? UString("-") : out, built.empty() ? UString("-") : built);
+		return format("buildable={0} pending={1} offer={2} base={3} costs={4}", idx, pending,
+		              out.empty() ? UString("-") : out, built.empty() ? UString("-") : built,
+		              costs.empty() ? UString("-") : costs);
 	}
 	// Which craft unlock what when recovered. Recovering a UFO force-completes its type's
-	// researchUnlock list (cityview.cpp:4376-4379), and that is the *only* way hidden topics like
-	// RESEARCH_DIMENSION_SHIFTER can ever complete -- they are excluded from the manual research
+	// researchUnlock list (cityview.cpp:4376-4379), and that is the *only* way hidden UFO unlock
+	// topics complete -- they are excluded from the manual research
 	// list for good. None of this is in data/: vehicle types come from the extractor, so the repo
 	// cannot answer "which UFO do I need to shoot down", only the running game can.
 	if (q == "ufo_types")
@@ -827,11 +872,19 @@ UString introspectGameState(GameState &state, const UString &query)
 			// crew=0 will happily send the APC that carries the squad, and losing it is what
 			// left a whole campaign unable to fly a single ground mission.
 			const int pax = veh->getMaxPassengers();
+			bool portal = false;
+			for (const auto &mission : veh->missions)
+			{
+				portal = portal || mission.type == VehicleMission::MissionType::GotoPortal;
+			}
 			out += (out.empty() ? "" : "|") +
-			       format("{0}:{1}:flying={2},armed={3},crew={4},shifter={5},pax={6}", idx,
-			              safeName,
-			              flying ? 1 : 0, armed ? 1 : 0, crew,
-			              veh->hasDimensionShifter() ? 1 : 0, pax);
+			       format("{0}:{1}:flying={2},armed={3},crew={4},shifter={5},pax={6},city={7},"
+			              "transit={8},home={9},id={10},portal={11}",
+			              idx, safeName, flying ? 1 : 0, armed ? 1 : 0, crew,
+			              veh->hasDimensionShifter() ? 1 : 0, pax, veh->city.id,
+			              veh->betweenDimensions ? 1 : 0,
+			              veh->currentBuilding && veh->currentBuilding == veh->homeBuilding ? 1 : 0,
+			              v.first, portal ? 1 : 0);
 			idx++;
 		}
 		return format("craft={0} interceptors={1} detail={2}", idx, usable,
@@ -896,14 +949,15 @@ UString introspectGameState(GameState &state, const UString &query)
 			n++;
 			const bool mine = bld->owner && bld->owner.id == aliens.id;
 			const bool open = bld->accessTopic && bld->accessTopic->isComplete();
-			if (mine && open)
+			const bool alive = bld->isAlive();
+			if (mine && open && alive)
 			{
 				raidable++;
 			}
 			out += (out.empty() ? "" : "|") +
-			       format("{0}:topic={1},open={2},alien={3},victory={4}", ref.id,
+			       format("{0}:topic={1},open={2},alien={3},victory={4},alive={5}", ref.id,
 			              bld->accessTopic ? bld->accessTopic.id : UString("-"), open ? 1 : 0,
-			              mine ? 1 : 0, bld->victory ? 1 : 0);
+			              mine ? 1 : 0, bld->victory ? 1 : 0, alive ? 1 : 0);
 		}
 		return format("alien_buildings={0} raidable={1} current_city={2} detail={3}", n, raidable,
 		              state.current_city ? state.current_city.id : UString("none"),
@@ -981,9 +1035,7 @@ UString introspectGameState(GameState &state, const UString &query)
 				}
 			}
 		}
-		// Vehicle equipment too: MANUFACTURE_DIMENSION_SHIFTER's output lands in
-		// inventoryVehicleEquipment, and that item is the only player-obtainable way into the
-		// alien dimension -- so "did the workshop actually produce one" needs to be answerable.
+		// Vehicle equipment produced by workshops lands in inventoryVehicleEquipment.
 		UString vehTop;
 		size_t vehKinds = 0, vehTotal = 0;
 		for (const auto &b : state.player_bases)

@@ -48,6 +48,8 @@ from oa_play import (
     raid_alien_building,
     raid_infiltrated_building,
     manufacture,
+    gate_craft_project,
+    craft_flags,
     buy_equipment,
     buy_vehicles,
     stock_best_guns,
@@ -130,7 +132,6 @@ class Victory:
         self.last_hire = 0.0
         self.stuck_since = 0.0
         self.last_build = 0.0
-        self.built_workshop = False
         self.last_equip = 0.0
         self.last_craft = 0.0
         self.last_equipment = 0.0
@@ -386,6 +387,119 @@ class Victory:
             fit = 12
         return max(12, fit + 6)
 
+    def dimension_turn(self) -> bool:
+        """Advance the legitimate endgame, or keep an alien-city return out of base routines."""
+        alien = self.d.h.gs("alien_buildings")
+        fleet = craft_flags(self.d)
+        gate = [f for _, f in fleet if f.get("shifter") == "1"]
+        squad = [f for f in gate if int(f.get("crew", "0")) > 0]
+        city = alien.get("current_city", "CITYMAP_HUMAN")
+        if self.progress.get("crossing_to") == "CITYMAP_ALIEN":
+            if city == "CITYMAP_ALIEN":
+                self.progress.pop("crossing_to", None)
+                self.record("crossed_to_alien_dimension")
+                self.say("=== CROSSING INTO THE ALIEN DIMENSION: CITYMAP_ALIEN confirmed ===")
+                self.last_endgame = 0.0
+            elif not squad:
+                self.progress.pop("crossing_to", None)
+                self.flush()
+            else:
+                if time.time() - self.last_endgame > 60.0:
+                    self.last_endgame = time.time()
+                    goto_portal(self.d)
+                set_speed(self.d, 4)
+                set_speed(self.d, 5)
+                return True
+        if self.progress.get("returning_home"):
+            if city == "CITYMAP_HUMAN" and any(f.get("home") == "1" for f in squad):
+                self.progress.pop("returning_home", None)
+                self.record("squad_returned_home")
+                self.say("=== ALIEN RAID SQUAD HOME: ready for research and the next raid ===")
+            elif not squad:
+                self.progress.pop("returning_home", None)
+                self.flush()
+                self.say("  [portal] returning squad lost; rebuilding the assault capability")
+            else:
+                if (city == "CITYMAP_ALIEN" and time.time() - self.last_endgame > 60.0
+                        and any(f.get("city") == city and f.get("transit") == "0"
+                                and f.get("portal") == "0" for f in squad)):
+                    self.last_endgame = time.time()
+                    goto_portal(self.d, "CITYMAP_HUMAN")
+                set_speed(self.d, 4)
+                set_speed(self.d, 5)
+                return True
+        if city == "CITYMAP_ALIEN":
+            if not any(f.get("city") == city and f.get("transit") == "0" for f in squad):
+                # The view can lag the craft's automatic return. Let the engine finish it.
+                if (time.time() - self.last_endgame > 60.0
+                        and any(f.get("city") == city and f.get("transit") == "0"
+                                and f.get("portal") == "0" for f in gate)):
+                    self.last_endgame = time.time()
+                    self.say("  [portal] empty assault craft returning home to collect soldiers")
+                    goto_portal(self.d, "CITYMAP_HUMAN")
+                set_speed(self.d, 4)
+                set_speed(self.d, 5)
+                return True
+            if time.time() - self.last_endgame > 60.0:
+                self.last_endgame = time.time()
+                if int(alien.get("raidable", "0") or 0) > 0:
+                    outcome = raid_alien_building(self.d)
+                    self.say(f"=== ALIEN BUILDING RAID: {outcome} ===")
+                    if outcome in ("resolved", "lost", "returned"):
+                        self.progress["returning_home"] = True
+                        if outcome == "resolved":
+                            self.progress["alien_buildings_taken"] = (
+                                self.progress.get("alien_buildings_taken", 0) + 1)
+                            self.record("alien_building_raided")
+                            self.say("=== ALIEN RAID WON: engine returning squad through the gate ===")
+                        self.flush()
+                    return True
+                self.progress["returning_home"] = True
+                self.flush()
+                self.say("  [portal] no surviving building open; returning home for research")
+                goto_portal(self.d, "CITYMAP_HUMAN")
+            set_speed(self.d, 4)
+            set_speed(self.d, 5)
+            return True
+        # These actions are retryable. Recorded milestones never suppress a new attempt.
+        if time.time() - self.last_endgame <= 60.0:
+            return False
+        self.last_endgame = time.time()
+        if not gate:
+            want = gate_craft_project(self.d)
+            if want and manufacture(self.d, want, 1):
+                self.record("gate_craft_manufacture_started", want)
+                self.say(f"=== GATE CRAFT MANUFACTURE STARTED: {want} x1 ===")
+            else:
+                # assign_research may have started this same explicit project on a prior turn.
+                labs = self.d.h.gs("research").get("labs_detail", "")
+                for project in ("MANUFACTURE_BIO-TRANSPORT", "MANUFACTURE_EXPLORER",
+                                "MANUFACTURE_RETALIATOR", "MANUFACTURE_ANNIHILATOR"):
+                    if (project in labs and
+                            self.progress.get("gate_craft_manufacture_started") != project):
+                        self.record("gate_craft_manufacture_started", project)
+                        self.say(f"=== GATE CRAFT MANUFACTURE IN PROGRESS: {project} ===")
+                        break
+            return False
+        if "gate_craft_ready" not in self.progress.get("milestones", []):
+            self.record("gate_craft_ready")
+            self.say("=== GATE CRAFT READY: owned craft reports shifter=1 ===")
+        if not squad and time.time() - self.last_crew > CREW_COOLDOWN_S:
+            self.last_crew = time.time()
+            crew_transport(self.d)
+            squad = [f for _, f in craft_flags(self.d)
+                     if f.get("shifter") == "1" and int(f.get("crew", "0")) > 0]
+        if squad and int(alien.get("raidable", "0") or 0) > 0:
+            self.progress["crossing_to"] = "CITYMAP_ALIEN"
+            self.flush()
+            if goto_portal(self.d):
+                self.progress.pop("crossing_to", None)
+                self.last_endgame = 0.0
+                self.say("=== CROSSING INTO THE ALIEN DIMENSION: CITYMAP_ALIEN confirmed ===")
+                self.record("crossed_to_alien_dimension")
+            return True  # A pending crossing must retain its crew and its portal order.
+        return False
+
     def city_turn(self) -> None:
         # Watch the actual game-over condition. fundingTerminated latches for good the first week
         # lifetime score drops below -2400, so this is a countdown that has to be tracked, not a
@@ -414,46 +528,10 @@ class Victory:
                      f"(incidents={money.get('incidents')} damage={money.get('city_damage')} "
                      f"ufos_downed={money.get('ufos_downed')})")
 
-        # --- the endgame, checked before the routine city work ---------------------------
-        # These are the only actions that actually win: cross into the alien dimension and raid
-        # its buildings in order, the last of which fires GameWon. Everything else --
-        # interception, recovery, research -- exists to make these two possible.
-        if time.time() - self.last_endgame > 60.0:
-            self.last_endgame = time.time()
-            alien = self.d.h.gs("alien_buildings")
-            if alien.get("current_city") == "CITYMAP_ALIEN":
-                if int(alien.get("raidable", "0") or 0) > 0:
-                    outcome = raid_alien_building(self.d)
-                    self.say(f"=== ALIEN BUILDING RAID: {outcome} ===")
-                    if outcome == "resolved":
-                        self.progress["alien_buildings_taken"] = (
-                            self.progress.get("alien_buildings_taken", 0) + 1)
-                        self.record("alien_building_raided")
-                        self.flush()
-                    return
-            else:
-                # In the human city: cross over once a shifter-equipped craft exists and there is
-                # something worth crossing for.
-                has_shifter = "shifter=1" in self.d.h.gs("interceptors").get("detail", "")
-                if has_shifter and int(alien.get("raidable", "0") or 0) > 0:
-                    if goto_portal(self.d):
-                        self.say("=== CROSSING INTO THE ALIEN DIMENSION ===")
-                        self.record("crossed_to_alien_dimension")
-                        return
-                elif not has_shifter and not self.progress.get("shifter_started"):
-                    # Only attempt manufacture once the Large workshop actually exists. The call
-                    # declines cleanly without one, but "cleanly" still means a full trip to the
-                    # research screen -- and that trip, made on a timer regardless of whether
-                    # there was anything to do, is exactly what froze the clock for an hour
-                    # earlier. Check the cheap read-only query first.
-                    have_workshop = "FACILITYTYPE_ADVANCED_WORKSHOP" in self.d.h.gs(
-                        "facilities").get("base", "")
-                    if have_workshop and manufacture(self.d, "MANUFACTURE_DIMENSION_SHIFTER", 1):
-                        self.progress["shifter_started"] = True
-                        self.record("dimension_shifter_started")
-                        self.flush()
-                        self.say("=== MANUFACTURING A DIMENSION SHIFTER ===")
-                        return
+        # Dimension work runs before any base/economy action. CityView can be either city;
+        # return_to_city only pops UI screens and never transports the squad between dimensions.
+        if self.dimension_turn():
+            return
 
         v = self.d.h.gs("vehicles")
         crashed = int(v.get("ufos_crashed", "0") or 0)
@@ -539,7 +617,9 @@ class Victory:
                 for kv in part.split(":"):
                     if kv.startswith("skill="):
                         skill += int(kv.split("=")[1] or 0)
-            if skill < MIN_LAB_SKILL and time.time() - self.last_hire > 180.0:
+            empty_lab = any(":built:" in lab and ":staff=0:" in lab
+                            for lab in r.get("labs_detail", "").split("|"))
+            if (skill < MIN_LAB_SKILL or empty_lab) and time.time() - self.last_hire > 180.0:
                 # Scientists get dispatched to incidents along with everyone else and die there,
                 # which silently throttles the whole research chain.
                 self.last_hire = time.time()
@@ -556,7 +636,7 @@ class Victory:
             # 0 recoveries. startable counts topics that could actually be picked right now, so
             # when it is zero the whole trip is wasted and the game is better off left running.
             startable = int(r.get("startable", "0") or 0)
-            if (idle > 0 and startable > 0) or skill < MIN_LAB_SKILL:
+            if (idle > 0 and startable > 0) or skill < MIN_LAB_SKILL or empty_lab:
                 self.say(f"{idle} lab(s) idle, {startable} startable, skill {skill}, "
                          f"{done} complete - reassigning")
                 assign_research(self.d)
@@ -565,20 +645,23 @@ class Victory:
             self.progress["research_complete"] = done
             self.flush()
 
-        # The Large workshop is the gate on MANUFACTURE_DIMENSION_SHIFTER, which is the gate on
-        # reaching the alien dimension at all. It only appears once RESEARCH_ADVANCED_WORKSHOP
-        # lands, so keep checking.
-        if not self.built_workshop and time.time() - self.last_build > 90.0:
+        # Inspect live facilities, including construction, rather than latching a one-shot
+        # flag. A failed placement, a destroyed base, or a resumed save must remain retryable.
+        if time.time() - self.last_build > 90.0:
             self.last_build = time.time()
-            fac = self.d.h.gs("facilities")
-            if "FACILITYTYPE_ADVANCED_WORKSHOP" in fac.get("offer", ""):
-                if "FACILITYTYPE_ADVANCED_WORKSHOP" in fac.get("base", ""):
-                    self.built_workshop = True
-                    self.say("advanced workshop already present")
-                elif build_facility(self.d, "FACILITYTYPE_ADVANCED_WORKSHOP"):
-                    self.built_workshop = True
-                    self.record("advanced_workshop_built")
-                    self.say("=== advanced workshop under construction ===")
+            for facility, milestone, label in (
+                    ("FACILITYTYPE_ADVANCED_QUANTUM_PHYSICS_LAB", "advanced_physics_lab_built",
+                     "advanced quantum physics lab"),
+                    ("FACILITYTYPE_ADVANCED_WORKSHOP", "advanced_workshop_built", "advanced workshop")):
+                fac = self.d.h.gs("facilities")
+                if facility in fac.get("base", ""):
+                    if (f"{facility}:0" in fac.get("base", "") and
+                            milestone + "_ready" not in self.progress.get("milestones", [])):
+                        self.record(milestone + "_ready")
+                        self.say(f"=== {label} ready ===")
+                elif facility in fac.get("offer", "") and build_facility(self.d, facility):
+                    self.record(milestone)
+                    self.say(f"=== {label} under construction ===")
 
         # Arm whoever is unarmed. This is not housekeeping: an unarmed agent in a base defence
         # is a free kill, and losing the base loses the campaign outright.

@@ -11,6 +11,9 @@
 #include "game/state/city/building.h"
 #include "game/state/city/vehicle.h"
 #include "game/state/gamestate.h"
+#include "game/state/rules/agenttype.h"
+#include "game/state/rules/city/vehicletype.h"
+#include "game/state/shared/agent.h"
 #include "game/state/shared/organisation.h"
 #include "game/ui/base/vequipscreen.h"
 #include "game/ui/battle/battlebriefing.h"
@@ -88,10 +91,71 @@ UString BuildingScreen::harnessDetail() const
 		}
 	}
 	const size_t selected = agentAssignment ? agentAssignment->getSelectedAgents().size() : 0;
+	// Read the resolved assignment rows, rather than guessing that the first craft can carry
+	// troops. Nested passenger lists change later rows' positions, and a large fleet needs scroll.
+	UString boarding, soldiers;
+	int group = 0;
+	if (agentAssignment)
+	{
+		const auto viewport = agentAssignment->findControl(AgentAssignment::AGENT_SELECT_BOX);
+		std::function<void(sp<Control>)> collect = [&](sp<Control> control)
+		{
+			if (!control || !control->isVisible())
+			{
+				return;
+			}
+			if (control->Name == AgentAssignment::VEHICLE_LIST_NAME ||
+			    control->Name == AgentAssignment::AGENT_LIST_NAME)
+			{
+				const int currentGroup = group++;
+				for (const auto &row : control->Controls)
+				{
+					if (!row->isVisible())
+					{
+						continue;
+					}
+					const auto pos = row->getLocationInUi() + Vec2<int>{52, 12};
+					const auto top = viewport->getLocationInUi();
+					const bool visible = pos.y >= top.y && pos.y < top.y + viewport->Size.y;
+					if (control->Name == AgentAssignment::VEHICLE_LIST_NAME)
+					{
+						const auto v = row->getData<Vehicle>();
+						if (v)
+						{
+							boarding += (boarding.empty() ? "" : ";") +
+							            format("{0},{1},{2},{3},{4},{5}", pos.x, pos.y,
+							                   v->hasDimensionShifter() ? 1 : 0,
+							                   v->getMaxPassengers(), visible ? 1 : 0,
+							                   v->type->type == VehicleType::Type::Flying ? 1 : 0);
+						}
+					}
+					else
+					{
+						const auto a = row->getData<Agent>();
+						if (a && a->type->role == AgentType::Role::Soldier &&
+						    (!a->currentVehicle || !a->currentVehicle->hasDimensionShifter()))
+						{
+							soldiers +=
+							    (soldiers.empty() ? "" : ";") +
+							    format("{0},{1},{2},{3},{4}", pos.x, pos.y,
+							           a->currentVehicle ? 1 : 0, visible ? 1 : 0, currentGroup);
+						}
+					}
+				}
+			}
+			for (const auto &child : control->Controls)
+			{
+				collect(child);
+			}
+		};
+		collect(agentAssignment);
+	}
 	UString name = building ? building->name : UString("-");
 	std::replace(name.begin(), name.end(), ' ', '_');
-	return format("building={0} crew={1} selected_agents={2}", name.empty() ? UString("-") : name,
-	              (int)crew, (int)selected);
+	return format("building={0} crew={1} selected_agents={2} boarding={3} soldier_rows={4}",
+	              name.empty() ? UString("-") : name, (int)crew, (int)selected,
+	              boarding.empty() ? UString("-") : boarding,
+	              soldiers.empty() ? UString("-") : soldiers);
 }
 
 void BuildingScreen::eventOccurred(Event *e)

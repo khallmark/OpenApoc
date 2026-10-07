@@ -156,6 +156,7 @@ add_test(NAME ${TEST} COMMAND ${TEST}
 # Regression tests recovered from abandoned implementation branches.
 add_openapoc_test(test_aequipment_fire_hazard)
 add_openapoc_test(test_alien_building)
+add_openapoc_test(test_alien_raid_queries)
 add_openapoc_test(test_base_exposure)
 add_openapoc_test(test_battle_item_fire)
 add_openapoc_test(test_battle_mappart_fire)
