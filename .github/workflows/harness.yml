@@ -11,3 +11,12 @@ jobs:
         run: ./tools/check_ignored_binaries.sh
       - name: Compare report matches in-repo sources
         run: python3 tools/regen_compare_report.py --check
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install harness test dependencies
+        run: python3 -m pip install pytest
+      - name: Check harness definitions and regression tests
+        run: |
+          python3 tools/check_dead_defs.py
+          python3 -m pytest -q tools/test_oa_*.py
