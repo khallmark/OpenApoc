@@ -78,9 +78,22 @@ int BattleUnit::getPsiAttackChance(int psiAttack, int psiDefense, PsiStatus stat
 	return chance;
 }
 
-int BattleUnit::applyMindShieldIncrement(int currentBonus)
+int BattleUnit::mindShieldPsiDefence(int base, bool shieldInHand)
 {
-	return std::min(200, currentBonus + 30);
+	return shieldInHand ? std::min(base + 30, 200) : base;
+}
+
+bool BattleUnit::hasMindShieldInHand() const
+{
+	for (const auto slot : {EquipmentSlotType::RightHand, EquipmentSlotType::LeftHand})
+	{
+		const auto item = agent->getFirstItemInSlot(slot);
+		if (item && item->type->type == AEquipmentType::Type::MindShield)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 // docs/original-game/findings/B3-G1-wounds-gadgets.md, "Disruptor Shield", "Follow-up -
@@ -109,7 +122,7 @@ int BattleUnit::getEffectivePsiDefence() const
 	{
 		return 0;
 	}
-	int defense = agent->modified_stats.psi_defence + mindShieldBonus;
+	int defense = mindShieldPsiDefence(agent->modified_stats.psi_defence, hasMindShieldInHand());
 	if (defense > 99)
 	{
 		defense = 99;
@@ -5411,6 +5424,7 @@ bool BattleUnit::useItem(GameState &state, sp<AEquipment> item)
 		case AEquipmentType::Type::DimensionForceField:
 		case AEquipmentType::Type::DisruptorShield:
 		case AEquipmentType::Type::Loot:
+		case AEquipmentType::Type::MindShield:
 		case AEquipmentType::Type::MultiTracker:
 		case AEquipmentType::Type::StructureProbe:
 		case AEquipmentType::Type::VortexAnalyzer:
@@ -5437,10 +5451,6 @@ bool BattleUnit::useItem(GameState &state, sp<AEquipment> item)
 				}
 			}
 			item->inUse = !item->inUse;
-			return true;
-		case AEquipmentType::Type::MindShield:
-			mindShieldBonus = applyMindShieldIncrement(mindShieldBonus);
-			item->inUse = true;
 			return true;
 		case AEquipmentType::Type::MediKit:
 			// Initial use of medikit just brings up interface, action and TU spent happens

@@ -5,12 +5,16 @@
 using namespace OpenApoc;
 using namespace OpenApoc::TestHelpers;
 
-static bool test_mind_shield_increment()
+// TACP FUN_00066474: a held Mind Shield sets psi defence to min(base + 30, 200) every tick. It is
+// a level, not an increment - the previous version added 30 per use, so three uses read 90.
+static bool test_mind_shield_psi_defence()
 {
-	TEST_REQUIRE(BattleUnit::applyMindShieldIncrement(0) == 30, "0+30");
-	TEST_REQUIRE(BattleUnit::applyMindShieldIncrement(30) == 60, "30+30");
-	TEST_REQUIRE(BattleUnit::applyMindShieldIncrement(180) == 200, "180+30 caps at 200");
-	TEST_REQUIRE(BattleUnit::applyMindShieldIncrement(200) == 200, "200 stays capped");
+	TEST_REQUIRE(BattleUnit::mindShieldPsiDefence(40, true) == 70, "held: base + 30");
+	TEST_REQUIRE(BattleUnit::mindShieldPsiDefence(40, false) == 40, "not held: base");
+	TEST_REQUIRE(BattleUnit::mindShieldPsiDefence(185, true) == 200, "capped at 200");
+	const int once = BattleUnit::mindShieldPsiDefence(40, true);
+	TEST_REQUIRE(BattleUnit::mindShieldPsiDefence(40, true) == once,
+	             "re-applying is idempotent: the bonus does not stack");
 	return true;
 }
 
@@ -22,6 +26,6 @@ int main(int argc, char **argv)
 	}
 	applyDeterministicTestConfig();
 	return runTestSuite({
-	    {"mind_shield_increment", test_mind_shield_increment},
+	    {"mind_shield_psi_defence", test_mind_shield_psi_defence},
 	});
 }

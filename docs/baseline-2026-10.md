@@ -43,11 +43,10 @@ driver; only the binary differs. The control is the baseline snapshot, run via `
 | control (`f8693d39`) | 8 | never resolved: 12 "no progress" stalls, summary "other" |
 | ported (`44b17cf7`) | 20 | resolved in 78 s, 14 survivors |
 
-### Upstream merge (`c09a06f4`, `3b71f6fc`) and harness truth (`fca77920`, `0dcd6bf9`)
+### Upstream merge (`c09a06f4`, `3b71f6fc`) and harness truth (`353c3a7c`, `0063772c`)
 - Merged `OpenApoc/master` `d06cc102` (99 commits). The policy: upstream wins unless ours is a
   demonstrable improvement (see `3b71f6fc`).
-- `ctest`: **45/45**, three consecutive runs. This includes `test_serialize` with round-trip
-  equality re-enabled, and the new `test_game_event_pause` and `test_harness_control_click`.
+- `ctest`: **45/45**, three consecutive runs. This includes the new `test_game_event_pause` and `test_harness_control_click`.
 - **Watched gate** (`--watch --days 3`, Metal validation on): exit 0, **0** `AGX` lines, and a
   final state identical to the baseline (day 5, funds 127380, research 1 to 3). Same seed, same
   outcome.

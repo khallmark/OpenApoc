@@ -264,8 +264,6 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	unsigned int regenTicksAccumulated = 0;
 	// Stun damage acquired
 	int stunDamage = 0;
-	// TACP non-4 flat FUN_0009b780 @ 0x9B780: type 5 adds 0x1e to unit +0x8a, cap 200
-	int mindShieldBonus = 0;
 	// Ticks accumulated towards next enzyme hit
 	unsigned int enzymeDebuffTicksAccumulated = 0;
 	// Enzyme debuff intensity remaining
@@ -449,8 +447,11 @@ class BattleUnit : public StateObject<BattleUnit>, public std::enable_shared_fro
 	bool hasLineToPosition(Vec3<float> targetPosition, bool useLOS = false) const;
 
 	// Psi
-	// TACP non-4 flat FUN_0009b780 @ 0x9B780: add 30, cap 200
-	static int applyMindShieldIncrement(int currentBonus);
+	// Mind Shield, TACP FUN_00066474 (B3-G1-wounds-gadgets.md): while a shield is held in either
+	// hand the unit's psi defence is min(base + 30, 200), re-applied every tick; it falls back to
+	// base once the shield leaves the hand. Passive and non-stacking.
+	static int mindShieldPsiDefence(int base, bool shieldInHand);
+	bool hasMindShieldInHand() const;
 
 	// Disruptor Shield
 	struct DisruptorShieldHitResult

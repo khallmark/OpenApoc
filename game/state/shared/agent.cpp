@@ -849,10 +849,10 @@ void Agent::updateModifiedStats()
 
 void Agent::updatePsiDefence()
 {
-	// The Mind Shield's effect lives on the battle unit, as the recovered +30-per-use bonus capped
-	// at 200 (BattleUnit::applyMindShieldIncrement, added in getEffectivePsiDefence). Adding a
-	// second, per-agent bonus here would count the shield twice, so the agent's own psi defence
-	// is just its current stat.
+	// The Mind Shield's effect lives on the battle unit, as the recovered passive bonus while it is
+	// held (BattleUnit::mindShieldPsiDefence, applied in getEffectivePsiDefence). Adding a second,
+	// per-agent bonus here would count the shield twice, so the agent's own psi defence is just
+	// its current stat.
 	modified_stats.psi_defence = current_stats.psi_defence;
 }
 

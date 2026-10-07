@@ -71,7 +71,7 @@ conflict.
 |---|---|
 | `91e1234c` | Metal backend and renderer parity tooling |
 | `4f475f86` | `NotificationScreen::resume()` unguarded `optionsMap.at()`: a covered alien-takeover notice aborted the game (upstream has the same line) |
-| `fca77920` | `Control::click()` sent a click with no mouse button |
+| `353c3a7c` | `Control::click()` sent a click with no mouse button |
 | `2b849afe` | GLES 3.0 on macOS behind an opt-in core profile |
 | `586d8b33` | GL 2.0: batched quads through an index buffer |
 | `63072fa2` | Mod path follows the data path |
