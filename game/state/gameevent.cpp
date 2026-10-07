@@ -1,5 +1,6 @@
 #include "game/state/gameevent.h"
 #include "city/vehicle.h"
+#include "framework/configfile.h"
 #include "framework/logger.h"
 #include "game/state/battle/battle.h"
 #include "game/state/city/base.h"
@@ -55,6 +56,12 @@ const std::map<GameEventType, UString> GameEvent::optionsMap = {
     {GameEventType::AgentPsiOver, "Notifications.Battle.AgentPsiOver"},
 
 };
+
+bool GameEvent::pausesFor(GameEventType type)
+{
+	const auto option = optionsMap.find(type);
+	return option == optionsMap.end() || config().getBool(option->second);
+}
 
 GameEvent::GameEvent(GameEventType type) : Event(EVENT_GAME_STATE), type(type) {}
 

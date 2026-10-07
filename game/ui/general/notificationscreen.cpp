@@ -62,7 +62,10 @@ void NotificationScreen::pause() {}
 
 void NotificationScreen::resume()
 {
-	if (!config().getBool(GameEvent::optionsMap.at(eventType)))
+	// resume() runs when a screen stacked above this one pops -- inside Framework::run's
+	// stage-command drain. An unguarded optionsMap.at() here threw map::at for AlienTakeover,
+	// which has no option, whenever a second modal had covered the takeover notification.
+	if (!GameEvent::pausesFor(eventType))
 	{
 		fw().stageQueueCommand({StageCmd::Command::POP});
 		menuform->findControlTyped<CheckBox>("CHECKBOX_ALWAYS_PAUSE")->setChecked(false);

@@ -28,6 +28,9 @@ class GameEvent : public Event
 	GameEventType type;
 
 	static const std::map<GameEventType, UString> optionsMap;
+	// Whether a notification for this event should stay up and pause the game. Events with no
+	// entry in optionsMap (AlienTakeover, for one) have no option to consult and always pause.
+	static bool pausesFor(GameEventType type);
 
 	GameEvent(GameEventType type);
 	~GameEvent() override = default;
