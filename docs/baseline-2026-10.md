@@ -22,3 +22,23 @@ Known open at baseline (`docs/HANDOFF.md`, `tools/oa_skirmish.py`):
 - battle-generation SIGSEGV after `initialMapPartLinkUp`;
 - skirmish round-2 process vanish;
 - `BATTLEMAP_43sleep` generation failure.
+
+## Changes since baseline
+
+### Skirmish ports from `feat/main-menu-skirmish`
+Commits `6405f509`, `69f67eca` and `44b17cf7`, cherry-picked from `1244e3ac`, `90dfe6c0` and
+`b0cdbfa6`.
+
+**Not ported:**
+- `81fb2feb`: a cosmetic rewrite of the forms. It renames controls that `oa_skirmish.py` addresses by name.
+- `b0da7472` (GL 2.0 `GL_LUMINANCE`): refuted three ways as the black-screen cause, and inert.
+
+**Gate:** clean build; 38/38 `ctest`; `base_gamestate` 306k.
+
+**A/B, `oa_skirmish.py --rounds 1 --map-row 0` (base defence, default roster).** Same data and
+driver; only the binary differs. The control is the baseline snapshot, run via `OA_BUILD_DIR=build-control`.
+
+| arm | foes at start | outcome |
+|---|---|---|
+| control (`f8693d39`) | 8 | never resolved: 12 "no progress" stalls, summary "other" |
+| ported (`44b17cf7`) | 20 | resolved in 78 s, 14 survivors |
