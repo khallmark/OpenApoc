@@ -54,7 +54,8 @@ from oa_play import (
     buy_vehicles,
     stock_best_guns,
     stock_for_template,
-    arm_agents_directly,
+    arm_squad,
+    unarmed_at_base,
     template_weapon_in_stock,
     equip_squad,
     hire_engineers,
@@ -668,22 +669,17 @@ class Victory:
         ag = self.d.h.gs("agents")
         armed = int(ag.get("armed", "0") or 0)
         soldiers = int(ag.get("soldiers", "0") or 0)
-        if armed < soldiers and time.time() - self.last_equip > 40.0:
+        # Only soldiers standing in a base can be equipped from its stores. `armed < soldiers`
+        # alone also counted the ones away on a mission or still in transit, so the pass retried
+        # every forty seconds against people it could not reach.
+        unarmed_home = unarmed_at_base(ag)
+        if unarmed_home > 0 and time.time() - self.last_equip > 40.0:
             self.last_equip = time.time()
-            self.say(f"{armed} armed of {soldiers} soldiers - equipping")
-            if not template_weapon_in_stock(self.d):
-                # The template names a weapon the market no longer sells, so applying it would
-                # strip people and hand back nothing. Hand out whatever IS in the armoury
-                # instead, one agent at a time -- a Lawpistol in every pair of hands beats a
-                # sniper rifle nobody can buy.
-                self.say("loadout weapon not in stores; arming from what the armoury has")
-                if arm_agents_directly(self.d, agents=24) <= 0:
-                    # Nothing to hand out. Buy guns by capability rather than by the template's
-                    # name, which is the whole reason the armoury was empty.
-                    stock_best_guns(self.d, qty=self.armoury_size())
-            elif equip_squad(self.d, agents=24) <= 0:
-                # Stores ran dry rather than the mechanism failing: the market only restocks so
-                # much per week, so keep re-ordering -- the loadout's own items for armour, and
+            self.say(f"{armed} armed of {soldiers} soldiers, {unarmed_home} unarmed at base - "
+                     f"equipping")
+            if arm_squad(self.d, agents=24) <= 0:
+                # Nothing was handed out. Either the armoury is empty or the template names a
+                # weapon the market no longer sells: buy the loadout's own items for armour, and
                 # the best gun on sale for the part the loadout can no longer supply.
                 stock_for_template(self.d, qty=self.armoury_size())
                 stock_best_guns(self.d, qty=self.armoury_size())

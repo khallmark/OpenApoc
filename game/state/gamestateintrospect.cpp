@@ -324,7 +324,7 @@ UString describeTurbo(GameState &state)
 UString describeAgents(GameState &state)
 {
 	const auto player = state.getPlayer();
-	size_t mine = 0, soldiers = 0, soldiersFit = 0, armed = 0;
+	size_t mine = 0, soldiers = 0, soldiersFit = 0, armed = 0, atBase = 0, unarmedAtBase = 0;
 	for (const auto &a : state.agents)
 	{
 		const auto &agent = a.second;
@@ -345,17 +345,40 @@ UString describeAgents(GameState &state)
 		{
 			soldiersFit++;
 		}
+		bool hasWeapon = false;
 		for (const auto &e : agent->equipment)
 		{
 			if (e && e->type && e->type->type == AEquipmentType::Type::Weapon)
 			{
-				armed++;
+				hasWeapon = true;
 				break;
 			}
 		}
+		if (hasWeapon)
+		{
+			armed++;
+		}
+		// Only a soldier standing in a base (itself, or aboard a craft parked in one) can be
+		// handed equipment from that base's stores: the equip screen builds its inventory from
+		// the FRONT agent's base, so a soldier out on a mission or still in transit shows an
+		// empty inventory and every attempt to arm them silently changes nothing. Same chain as
+		// AEquipScreen::getAgentBase.
+		const auto &building = agent->currentBuilding
+		                           ? agent->currentBuilding
+		                           : (agent->currentVehicle ? agent->currentVehicle->currentBuilding
+		                                                    : agent->currentBuilding);
+		if (building && building->base && !agent->isDead())
+		{
+			atBase++;
+			if (!hasWeapon)
+			{
+				unarmedAtBase++;
+			}
+		}
 	}
-	return format("agents_total={0} agents_player={1} soldiers={2} soldiers_fit={3} armed={4}",
-	              state.agents.size(), mine, soldiers, soldiersFit, armed);
+	return format("agents_total={0} agents_player={1} soldiers={2} soldiers_fit={3} armed={4} "
+	              "soldiers_at_base={5} unarmed_at_base={6}",
+	              state.agents.size(), mine, soldiers, soldiersFit, armed, atBase, unarmedAtBase);
 }
 
 

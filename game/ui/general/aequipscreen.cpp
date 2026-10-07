@@ -80,13 +80,9 @@ AEquipScreen::AEquipScreen(sp<GameState> state, sp<Agent> firstAgent)
 			    LogError("No agent in selected data");
 			    return;
 		    }
-		    if (agent->unit && !agent->unit->isConscious())
-		    {
-			    return;
-		    }
-		    selectAgent(agent,
-		                Event::isPressed(e->forms().MouseInfo.Button, Event::MouseButton::Right),
-		                modifierLCtrl || modifierRCtrl);
+		    selectAgentFromList(
+		        agent, Event::isPressed(e->forms().MouseInfo.Button, Event::MouseButton::Right),
+		        modifierLCtrl || modifierRCtrl);
 	    });
 
 	// Agent name edit
@@ -164,7 +160,8 @@ void AEquipScreen::registerAEquipIntrospection()
 	// without this a driver has no way to arm an agent except the equipment-template mechanism --
 	// and that re-equips the template's EXACT types, which strips people when the named weapon
 	// cannot be re-bought. Shift+click on an inventory item puts it straight on the agent
-	// (aequipscreen.cpp:593-598), so knowing where the items are is the whole problem.
+	// (handleItemPickup), so knowing what is in the list, and who is on the roster, is the whole
+	// problem. The actions that use it are registered by registerAEquipActions().
 	previousHarnessHandler = getHarnessQueryHandler();
 	auto previous = previousHarnessHandler;
 	AEquipScreen *screen = this;
@@ -181,6 +178,20 @@ void AEquipScreen::registerAEquipIntrospection()
 		    const auto q = to_lower(query);
 		    if (q == "aequip_items")
 		    {
+			    // `at` is the item's rect in content space. Pickup adds the scroll offset to the
+			    // pointer before testing it (handleItemPickup), so a pixel click has to subtract
+			    // `scroll` again, and items scrolled out of the control cannot be clicked at all:
+			    // `screen` is where the item really is and `visible` says whether it is on show.
+			    // Driving by name (aequip_equip) sidesteps all of it.
+			    const int scroll = screen->inventoryScrollBar->getValue();
+			    const int left =
+			        screen->inventoryControl->Location.x + screen->formMain->Location.x;
+			    const int right = left + screen->inventoryControl->Size.x;
+			    StateRef<Base> base;
+			    if (!screen->selectedAgents.empty() && screen->getMode() == Mode::Base)
+			    {
+				    base = screen->getAgentBase(screen->selectedAgents.front());
+			    }
 			    UString out;
 			    int n = 0;
 			    for (const auto &tuple : screen->inventoryItems)
@@ -193,15 +204,83 @@ void AEquipScreen::registerAEquipIntrospection()
 				    }
 				    UString name = item->type->name;
 				    std::replace(name.begin(), name.end(), ' ', '_');
+				    // Does the weapon come with ammunition? A gun with nothing to shoot counts
+				    // as "armed" to anything that only looks for a weapon in the hands, so say
+				    // whether the base can actually load it (removeItemFromInventoryBase).
+				    bool loaded = true;
+				    if (item->type->type == AEquipmentType::Type::Weapon &&
+				        !item->type->ammo_types.empty())
+				    {
+					    loaded = item->payloadType ? true : false;
+					    if (!loaded && base)
+					    {
+						    for (const auto &ammo : item->type->ammo_types)
+						    {
+							    const auto stock = base->inventoryAgentEquipment.find(ammo.id);
+							    if (stock != base->inventoryAgentEquipment.end() &&
+							        stock->second > 0)
+							    {
+								    loaded = true;
+								    break;
+							    }
+						    }
+					    }
+				    }
+				    const int sx = rect.p0.x - scroll;
+				    const bool visible = sx >= left && sx + (rect.p1.x - rect.p0.x) <= right;
 				    if (n++ > 0)
 				    {
 					    out += "|";
 				    }
-				    out += format("{0}:at={1},{2}:size={3},{4}:weapon={5}:research={6}", name,
-				                   rect.p0.x, rect.p0.y, rect.p1.x - rect.p0.x,
-				                   rect.p1.y - rect.p0.y,
-				                   item->type->type == AEquipmentType::Type::Weapon ? 1 : 0,
-				                   item->type->research_dependency.satisfied() ? 1 : 0);
+				    out += format("{0}:id={1}:at={2},{3}:screen={4},{5}:size={6},{7}:weapon={8}:"
+				                  "research={9}:loaded={10}:visible={11}:count={12}",
+				                  name, item->type->id, rect.p0.x, rect.p0.y, sx, rect.p0.y,
+				                  rect.p1.x - rect.p0.x, rect.p1.y - rect.p0.y,
+				                  item->type->type == AEquipmentType::Type::Weapon ? 1 : 0,
+				                  item->type->research_dependency.satisfied() ? 1 : 0,
+				                  loaded ? 1 : 0, visible ? 1 : 0, std::get<1>(tuple));
+			    }
+			    return format("count={0} mode={1} scroll={2} detail={3}", n,
+			                  screen->selectedAgents.empty() ? "none"
+			                                                 : modeName(screen->getMode()),
+			                  scroll, out.empty() ? UString("-") : out);
+		    }
+		    if (q == "aequip_agents")
+		    {
+			    // The portrait list in on-screen order, with what a driver needs to decide who
+			    // to equip: is the agent in a base (only then does the inventory hold base
+			    // stores -- soldiers out on a mission or in transit show an empty one), and does
+			    // the agent already carry a weapon.
+			    UString out;
+			    int n = 0;
+			    auto agentList = screen->formMain->findControlTyped<ListBox>("AGENT_SELECT_BOX");
+			    for (const auto &row : agentList->Controls)
+			    {
+				    auto agent = row ? row->getData<Agent>() : nullptr;
+				    if (!agent)
+				    {
+					    continue;
+				    }
+				    int weapons = 0;
+				    for (const auto &e : agent->equipment)
+				    {
+					    if (e && e->type && e->type->type == AEquipmentType::Type::Weapon)
+					    {
+						    weapons++;
+					    }
+				    }
+				    const bool selected = !screen->selectedAgents.empty() &&
+				                          screen->selectedAgents.front() == agent;
+				    if (n++ > 0)
+				    {
+					    out += "|";
+				    }
+				    out += format("{0}:{1}:base={2}:weapons={3}:equipment={4}:selected={5}:"
+				                  "conscious={6}",
+				                  n - 1, Agent::getId(*screen->state, agent),
+				                  screen->getAgentBase(agent) ? 1 : 0, weapons,
+				                  agent->equipment.size(), selected ? 1 : 0,
+				                  (!agent->unit || agent->unit->isConscious()) ? 1 : 0);
 			    }
 			    return format("count={0} detail={1}", n, out.empty() ? UString("-") : out);
 		    }
@@ -209,9 +288,178 @@ void AEquipScreen::registerAEquipIntrospection()
 	    });
 }
 
+namespace
+{
+// The screen the named actions act on. Weak, so a closed screen can never be reached through a
+// stale pointer, and a single handler is installed for the life of the process rather than one
+// per screen opened (this screen is pushed and popped constantly mid-campaign).
+std::weak_ptr<AEquipScreen> activeEquipScreen;
+} // namespace
+
+void AEquipScreen::registerAEquipActions()
+{
+	activeEquipScreen = std::static_pointer_cast<AEquipScreen>(shared_from_this());
+	static bool installed = false;
+	if (installed)
+	{
+		return;
+	}
+	installed = true;
+	auto previous = getHarnessActionHandler();
+	setHarnessActionHandler(
+	    [previous](const UString &verb, const std::vector<UString> &args) -> UString
+	    {
+		    if (verb == "aequip_select" || verb == "aequip_equip")
+		    {
+			    auto screen = activeEquipScreen.lock();
+			    if (!screen)
+			    {
+				    return "ERR the agent equipment screen is not open";
+			    }
+			    return screen->harnessAction(verb, args);
+		    }
+		    return previous ? previous(verb, args) : UString("");
+	    });
+}
+
+UString AEquipScreen::harnessAction(const UString &verb, const std::vector<UString> &args)
+{
+	// A dialog on top owns the input, exactly as it would for a player. (An empty stack -- a
+	// headless test that never ran the main loop -- is not a dialog.)
+	const auto current = fw().stageGetCurrent();
+	if (current && current.get() != this)
+	{
+		return "ERR the equipment screen is not the active screen (a dialog is open?)";
+	}
+	if (draggedEquipment)
+	{
+		return "ERR an item is already being dragged";
+	}
+
+	// aequip_select <agent id>: click that agent's portrait.
+	if (verb == "aequip_select")
+	{
+		if (args.size() != 1)
+		{
+			return "ERR usage: aequip_select <agent id>";
+		}
+		const auto found = state->agents.find(args[0]);
+		if (found == state->agents.end() || !found->second)
+		{
+			return format("ERR unknown agent \"{0}\"", args[0]);
+		}
+		auto agent = found->second;
+		auto owner =
+		    state->current_battle ? state->current_battle->currentPlayer : state->getPlayer();
+		// The portrait list only holds agents checkAgent accepts, so only those can be clicked.
+		if (!checkAgent(agent, owner) || getMode() == Mode::Enemy)
+		{
+			return format("ERR {0} has no portrait on this screen", args[0]);
+		}
+		if (!selectAgentFromList(agent, false, false))
+		{
+			return format("ERR {0} is unconscious", args[0]);
+		}
+		// Do not report the click, report what it did.
+		if (selectedAgents.empty() || selectedAgents.front() != agent)
+		{
+			return format("ERR selecting {0} did not make it the front agent", args[0]);
+		}
+		int weapons = 0;
+		for (const auto &e : agent->equipment)
+		{
+			if (e && e->type && e->type->type == AEquipmentType::Type::Weapon)
+			{
+				weapons++;
+			}
+		}
+		return format("OK agent={0} mode={1} base={2} weapons={3} equipment={4} items={5}", args[0],
+		              modeName(getMode()), getAgentBase(agent) ? 1 : 0, weapons,
+		              agent->equipment.size(), inventoryItems.size());
+	}
+
+	// aequip_equip <item type id>: Shift+click that item in the inventory list, which puts it
+	// straight onto the front agent (handleItemPickup -> handleItemPlacement(true)).
+	if (verb == "aequip_equip")
+	{
+		if (args.size() != 1)
+		{
+			return "ERR usage: aequip_equip <item type id>";
+		}
+		if (selectedAgents.empty())
+		{
+			return "ERR no agent is selected";
+		}
+		auto agent = selectedAgents.front();
+		const auto mode = getMode();
+		if (!agent->type->inventory || mode == Mode::Enemy)
+		{
+			return format("ERR {0} cannot carry equipment here (mode={1})",
+			              Agent::getId(*state, agent), modeName(mode));
+		}
+		// The immediate action is the Shift+click shortcut, and the player's own switch turns it
+		// off. Without it only dragging to the paper doll works, so refuse rather than pretend.
+		if (!config().getBool("OpenApoc.NewFeature.AdvancedInventoryControls"))
+		{
+			return "ERR OpenApoc.NewFeature.AdvancedInventoryControls is off, so Shift+click "
+			       "does not place items";
+		}
+		const auto wanted = to_lower(args[0]);
+		const std::tuple<Rect<int>, int, sp<AEquipment>> *entry = nullptr;
+		for (const auto &tuple : inventoryItems)
+		{
+			const auto &item = std::get<2>(tuple);
+			if (!item || !item->type)
+			{
+				continue;
+			}
+			auto name = item->type->name;
+			std::replace(name.begin(), name.end(), ' ', '_');
+			if (to_lower(item->type->id) == wanted || to_lower(name) == wanted)
+			{
+				entry = &tuple;
+				break;
+			}
+		}
+		if (!entry)
+		{
+			return format("ERR {0} is not in the inventory list ({1} item types shown, mode={2}; "
+			              "armour is listed only on the armour tab)",
+			              args[0], inventoryItems.size(), modeName(mode));
+		}
+		const auto type = std::get<2>(*entry)->type;
+		const auto itemName = type->name;
+		const size_t before = agent->equipment.size();
+
+		// Exactly what a click on the item does: take it out of the list...
+		bool alienArtifact = false;
+		const auto picked = tryPickUpItem(std::get<0>(*entry).p0, &alienArtifact);
+		if (!picked.second)
+		{
+			return alienArtifact ? format("ERR {0} is unresearched alien technology", itemName)
+			                     : format("ERR {0} could not be picked up", itemName);
+		}
+		refreshInventoryItems();
+		// ...and then, because Shift is held, put it on the agent.
+		const bool loaded = draggedEquipment->payloadType || type->ammo_types.empty();
+		const bool placed = handleItemPlacement(true);
+		const size_t after = agent->equipment.size();
+		if (!placed || after <= before)
+		{
+			// tryPlaceItem returned the item to the inventory, so nothing was lost.
+			return format("ERR {0} does not fit any free slot on {1}", itemName,
+			              Agent::getId(*state, agent));
+		}
+		return format("OK equipped={0} agent={1} equipment={2}->{3} loaded={4} mode={5}", type->id,
+		              Agent::getId(*state, agent), before, after, loaded ? 1 : 0, modeName(mode));
+	}
+	return "";
+}
+
 void AEquipScreen::begin()
 {
 	registerAEquipIntrospection();
+	registerAEquipActions();
 	if (state->current_battle)
 	{
 		formMain->findControlTyped<Graphic>("DOLLAR")->setVisible(false);
@@ -778,7 +1026,7 @@ void AEquipScreen::handleItemPlacement(Vec2<int> mousePos)
 	}
 }
 
-void AEquipScreen::handleItemPlacement(bool toAgent)
+bool AEquipScreen::handleItemPlacement(bool toAgent)
 {
 	// Expecting to have an agent
 	auto currentAgent = selectedAgents.front();
@@ -790,7 +1038,8 @@ void AEquipScreen::handleItemPlacement(bool toAgent)
 	auto draggedAlternative = draggedEquipmentAlternativePickup;
 
 	bool insufficientTU = false;
-	if (tryPlaceItem(currentAgent, toAgent, &insufficientTU))
+	const bool placed = tryPlaceItem(currentAgent, toAgent, &insufficientTU);
+	if (placed)
 	{
 		displayAgent(currentAgent);
 		updateAgentControl(currentAgent);
@@ -839,6 +1088,38 @@ void AEquipScreen::handleItemPlacement(bool toAgent)
 			}
 		}
 	}
+	return placed;
+}
+
+bool AEquipScreen::selectAgentFromList(sp<Agent> agent, bool inverse, bool additive)
+{
+	// A downed unit cannot be handed equipment, so its portrait does nothing.
+	if (agent->unit && !agent->unit->isConscious())
+	{
+		return false;
+	}
+	selectAgent(agent, inverse, additive);
+	return true;
+}
+
+const char *AEquipScreen::modeName(Mode mode)
+{
+	switch (mode)
+	{
+		case Mode::Enemy:
+			return "Enemy";
+		case Mode::Battle:
+			return "Battle";
+		case Mode::Base:
+			return "Base";
+		case Mode::Vehicle:
+			return "Vehicle";
+		case Mode::Building:
+			return "Building";
+		case Mode::Agent:
+			return "Agent";
+	}
+	return "?";
 }
 
 void AEquipScreen::selectAgent(sp<Agent> agent, bool inverse, bool additive)

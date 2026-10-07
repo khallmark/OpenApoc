@@ -9,6 +9,7 @@
 #include "library/vec.h"
 #include <list>
 #include <map>
+#include <vector>
 
 namespace OpenApoc
 {
@@ -76,6 +77,10 @@ class AEquipScreen : public Stage
 	// rather than unhooked.
 	sp<bool> harnessAlive;
 	void registerAEquipIntrospection();
+	// Harness actions ("aequip_select", "aequip_equip"): the same code a player's portrait click
+	// and Shift+click run, entered by name instead of by pixel. See harnessAction().
+	void registerAEquipActions();
+	UString harnessAction(const UString &verb, const std::vector<UString> &args);
 	sp<ScrollBar> inventoryScrollBar;
 	void updateInventoryScrollRange();
 
@@ -106,6 +111,7 @@ class AEquipScreen : public Stage
 	void displayItem(sp<AEquipment> item);
 
 	Mode getMode();
+	static const char *modeName(Mode mode);
 
 	void refreshInventoryItems();
 	void populateInventoryItemsBattle();
@@ -139,6 +145,9 @@ class AEquipScreen : public Stage
 	bool tryPlaceItem(sp<Agent> agent, Vec2<int> slotPos, bool *insufficientTU = nullptr,
 	                  bool *alienArtifact = nullptr);
 	bool tryPlaceItem(sp<Agent> agent, bool toAgent, bool *insufficientTU = nullptr);
+	// Common tail of a portrait click, shared by the list callback and the harness action.
+	// Returns false when the agent cannot be selected (unconscious in battle).
+	bool selectAgentFromList(sp<Agent> agent, bool inverse, bool additive);
 
 	void processTemplate(int idx, bool remember);
 
@@ -167,7 +176,8 @@ class AEquipScreen : public Stage
 
 	void handleItemPickup(Vec2<int> mousePos);
 	void handleItemPlacement(Vec2<int> mousePos);
-	void handleItemPlacement(bool toAgent);
+	// Returns whether the item ended up on the front agent (false: it went back to the inventory).
+	bool handleItemPlacement(bool toAgent);
 
 	void selectAgent(sp<Agent> agent, bool inverse = false, bool additive = false);
 

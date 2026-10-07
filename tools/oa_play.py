@@ -4204,6 +4204,104 @@ def template_weapon_in_stock(d: Driver) -> bool:
     return any(stock.get(g, 0) > 0 for g in guns)
 
 
+def _parse_rows(detail: str, names: tuple) -> list[dict]:
+    """Rows of a "gs" detail field: "a:b:k=v:k=v|...". Bare leading tokens land in `names`.
+
+    Tolerant by design -- a row that does not parse is skipped, never fatal, because a half-read
+    roster must not stop the whole equip pass.
+    """
+    rows = []
+    if not detail or detail == "-":
+        return rows
+    for part in detail.split("|"):
+        bits = part.split(":")
+        row = {n: bits[i] for i, n in enumerate(names) if i < len(bits)}
+        for kv in bits[len(names):]:
+            if "=" in kv:
+                k, v = kv.split("=", 1)
+                row[k] = v
+        rows.append(row)
+    return rows
+
+
+def aequip_agents(d: Driver) -> list[dict]:
+    """The equip screen's portrait list: idx, id, base, weapons, equipment, selected, conscious."""
+    return _parse_rows(d.h.gs("aequip_agents").get("detail", "-"), ("idx", "id"))
+
+
+def aequip_items(d: Driver) -> list[dict]:
+    """The inventory list for the selected agent: name, id, weapon, research, loaded, visible..."""
+    return _parse_rows(d.h.gs("aequip_items").get("detail", "-"), ("name",))
+
+
+def _is_melee_stunner(row: dict) -> bool:
+    text = (row.get("id", "") + row.get("name", "")).upper()
+    return "GRAPPLE" in text or "STUN" in text
+
+
+def _pick_firearm(items: list[dict]) -> dict | None:
+    """The first researched firearm in the list, preferring one the base can also load.
+
+    A gun with no ammunition in stores goes onto the agent empty. That still counts as "armed"
+    to a driver that only looks for a weapon in the hands, and it is worth nothing in a fight.
+    """
+    guns = [r for r in items if r.get("weapon") == "1" and r.get("research") == "1"
+            and not _is_melee_stunner(r)]
+    return next((r for r in guns if r.get("loaded") == "1"), guns[0] if guns else None)
+
+
+def _pick_grapple(items: list[dict]) -> dict | None:
+    return next((r for r in items if r.get("weapon") == "1" and r.get("research") == "1"
+                 and _is_melee_stunner(r)), None)
+
+
+def _armed_count(d: Driver) -> int:
+    return int(d.h.gs("agents").get("armed", "0") or 0)
+
+
+def unarmed_at_base(ag: dict) -> int:
+    """Soldiers who are in a base and carry no weapon -- the only ones an equip pass can reach.
+
+    Falls back to soldiers minus armed when the game does not report it (an older build), which
+    over-counts the people away on missions but never disables arming outright.
+    """
+    if "unarmed_at_base" in ag:
+        return int(ag["unarmed_at_base"] or 0)
+    return max(0, int(ag.get("soldiers", "0") or 0) - int(ag.get("armed", "0") or 0))
+
+
+def _open_equip_screen(d: Driver) -> bool:
+    """CityView -> BaseScreen -> AEquipScreen. Says why when it cannot."""
+    st = d.status()
+    if st.stage != "CityView":
+        d.say(f"  [equip] not on CityView (on {st.stage}); cannot open the equip screen")
+        return False
+    d.click_id("BUTTON_TAB_1", st)
+    time.sleep(0.35)
+    if not d.click_id("BUTTON_SHOW_BASE", d.status()):
+        d.say("  [equip] could not open the base screen")
+        return False
+    try:
+        d.wait_for("BaseScreen", 30)
+    except TimeoutError:
+        d.say("  [equip] base screen never opened")
+        return False
+    d.click_id("BUTTON_BASE_EQUIPAGENT", d.status())
+    try:
+        d.wait_for("AEquipScreen", 25)
+    except TimeoutError:
+        d.say(f"  [equip] expected AEquipScreen, got {d.status().stage}")
+        return_to_city(d)
+        return False
+    return True
+
+
+def _select_agent(d: Driver, agent_id: str) -> tuple[bool, str]:
+    """Click an agent's portrait by name. Returns (ok, reason) -- judged on the engine's reply."""
+    reply = d.h.send(f"action aequip_select {agent_id}")
+    return reply.startswith("OK"), reply
+
+
 def arm_agents_directly(d: Driver, agents: int = 24) -> int:
     """Put a weapon in every empty pair of hands, without the template. Returns armed delta.
 
@@ -4212,121 +4310,77 @@ def arm_agents_directly(d: Driver, agents: int = 24) -> int:
     A campaign sat at six armed of fifteen soldiers for that reason, with a template demanding a
     Megapol Laser Sniper Gun and stores holding Lawpistols and M4000s instead.
 
-    AEquipScreen has the same immediate action VEquipScreen does: Shift+click an inventory item
-    and it goes straight onto the selected agent (aequipscreen.cpp:593-598), gated on
-    AdvancedInventoryControls, which defaults on. gs aequip_items reports where those items are,
-    which is the only part a driver could not work out for itself.
+    This used to click pixels: a row in AGENT_SELECT_BOX at y = box.y + 18 + row * 36, then
+    Shift+click at the middle of a rect from `gs aequip_items`. Every part of that was wrong
+    in a way that still reported success:
+      * rows are 35px apart and the box shows eight, so the recruits -- listed last -- were never
+        reachable by pixel, however long the loop ran;
+      * a soldier who is away on a mission or in transit has no base to draw from, so their
+        inventory is empty and the visit was spent on nothing;
+      * the first rows are the veterans, who already carry a gun: they were handed a second one
+        and counted as "handed out" while armed stayed put (armed 10->10);
+      * the rects are in scroll space and nothing subtracted the scroll offset.
+    So it addresses agents and items by name, through the engine's own Shift+click path, and
+    judges every agent by whether `gs agents armed` actually rose.
     """
-    before = int(d.h.gs("agents").get("armed", "0") or 0)
-    st = d.status()
-    if st.stage != "CityView":
+    before = _armed_count(d)
+    ag = d.h.gs("agents")
+    need = unarmed_at_base(ag)
+    if need <= 0:
+        away = int(ag.get("soldiers", "0") or 0) - int(ag.get("armed", "0") or 0)
+        d.say(f"  [arm] nobody unarmed is at a base ({away} soldier(s) unarmed but away); "
+              f"nothing to do")
         return 0
-    d.click_id("BUTTON_TAB_1", st)
-    time.sleep(0.35)
-    if not d.click_id("BUTTON_SHOW_BASE", d.status()):
+    if int(d.h.gs("stores").get("weapons", "0") or 0) <= 0:
+        d.say(f"  [arm] {need} unarmed at base but no weapons in stores; nothing to hand out")
         return 0
+    if not _open_equip_screen(d):
+        return 0
+
+    failures: dict[str, int] = {}
+
+    def fail(reason: str) -> None:
+        key = reason.replace("ERR ", "")[:70]
+        failures[key] = failures.get(key, 0) + 1
+
+    armed_here = 0
     try:
-        d.wait_for("BaseScreen", 30)
-    except TimeoutError:
-        return 0
-    d.click_id("BUTTON_BASE_EQUIPAGENT", d.status())
-    try:
-        d.wait_for("AEquipScreen", 25)
-    except TimeoutError:
+        roster = aequip_agents(d)
+        targets = [r for r in roster if r.get("base") == "1" and r.get("weapons") == "0"
+                   and r.get("conscious") == "1"][:agents]
+        for row in targets:
+            ok, reply = _select_agent(d, row["id"])
+            if not ok:
+                fail(reply)
+                continue
+            gun = _pick_firearm(aequip_items(d))
+            if gun is None:
+                # Stores hold no firearm this agent's base can issue; later agents share it.
+                fail("no usable firearm in the inventory list")
+                break
+            armed_before = _armed_count(d)
+            reply = d.h.send(f"action aequip_equip {gun['id']}")
+            if not reply.startswith("OK"):
+                fail(reply)
+                continue
+            # "OK" is the screen's own report; the game state is the evidence.
+            if _armed_count(d) <= armed_before:
+                fail(f"OK from aequip_equip but armed stayed {armed_before}")
+                continue
+            armed_here += 1
+            # The guide wants a stun grapple in the other hand: an alien taken alive keeps its
+            # equipment, and that equipment is the campaign's income. Never worth failing over.
+            grapple = _pick_grapple(aequip_items(d))
+            if grapple is not None:
+                d.h.send(f"action aequip_equip {grapple['id']}")
+    finally:
         return_to_city(d)
-        return 0
 
-    # Only walk as many rows as there are people to arm, and stop the moment everyone has a
-    # weapon. Iterating a flat twenty-four rows and polling the inventory up to six times for each
-    # meant the driver spent most of a pass on the equip screen clicking through empty rows -- it
-    # looks exactly like what it was, aimless row-checking, and it is time the campaign needs.
-    try:
-        ag = d.h.gs("agents")
-        roster = int(ag.get("soldiers", "0") or 0)
-        already = int(ag.get("armed", "0") or 0)
-    except (HarnessError, OSError):
-        roster, already = agents, 0
-    to_visit = max(1, min(agents, roster + 2))
-    armed_now = 0
-    for row in range(to_visit):
-        if armed_now and (already + armed_now) >= roster:
-            break
-        st = d.status()
-        if st.stage != "AEquipScreen":
-            break
-        # A real pixel click, not a ListBox set. AEquipScreen's portrait callback branches on
-        # e->forms().MouseInfo.Button (aequipscreen.cpp:85-87), which Control::click() never sets
-        # -- so "control AGENT_SELECT_BOX set N" highlights the row and never runs selectAgent.
-        # With selectedAgents empty, getMode() populates no inventory at all
-        # (aequipscreen.cpp:912), which is why the equip screen reported an empty warehouse while
-        # twenty-seven weapons sat in stores and two soldiers of thirteen carried anything.
-        box = d.controls(d.status()).get("AGENT_SELECT_BOX")
-        if box is None or box.w <= 0:
-            break
-        row_h = 36
-        y = box.y + 18 + row * row_h
-        if y >= box.y + box.h - 6:
-            break
-        d.h.click_xy(box.x + box.w // 2, y)
-        time.sleep(0.3)
-        # The list is rebuilt as the screen renders, so give it a frame before reading.
-        items = {}
-        for _ in range(2):
-            time.sleep(0.25)
-            items = d.h.gs("aequip_items")
-            if items.get("detail", "-") not in ("", "-"):
-                break
-        detail = items.get("detail", "-")
-        if not detail or detail == "-":
-            continue
-        # Fill both hands. The guide wants a firearm AND a stun grapple on every agent -- "use
-        # stun grapples as often as possible" -- because an alien taken alive keeps its equipment,
-        # and that equipment is the campaign's income. Handing out one gun and leaving the other
-        # hand empty wastes half of every soldier.
-        firearm, grapple = None, None
-        for part in detail.split("|"):
-            bits = part.split(":")
-            if not bits:
-                continue
-            attrs = {}
-            for kv in bits[1:]:
-                if "=" in kv:
-                    k, v = kv.split("=", 1)
-                    attrs[k] = v
-            if attrs.get("weapon") != "1" or attrs.get("research") != "1":
-                continue
-            try:
-                ax, ay = (int(v) for v in attrs.get("at", "0,0").split(","))
-                sw, sh = (int(v) for v in attrs.get("size", "0,0").split(","))
-            except ValueError:
-                continue
-            spot = (bits[0], ax + sw // 2, ay + sh // 2)
-            if "GRAPPLE" in bits[0].upper() or "STUN" in bits[0].upper():
-                grapple = grapple or spot
-            elif firearm is None:
-                firearm = spot
-            if firearm and grapple:
-                break
-        picks = [p for p in (firearm, grapple) if p]
-        if not picks:
-            continue
-        for _name, cx, cy in picks:
-            d.h.send("keydown Left Shift")
-            try:
-                settle(d)
-                d.h.ok(f"down {cx} {cy}")
-                time.sleep(0.15)
-                d.h.ok(f"up {cx} {cy}")
-                time.sleep(0.2)
-            finally:
-                d.h.send("keyup Left Shift")
-            time.sleep(0.15)
-        armed_now += 1
-        time.sleep(0.2)
-
-    return_to_city(d)
-    after = int(d.h.gs("agents").get("armed", "0") or 0)
-    d.say(f"  [arm] handed out {armed_now} weapon(s); armed {before}->{after}")
+    after = _armed_count(d)
+    summary = f"  [arm] armed {armed_here} of {need} unarmed-at-base; armed {before}->{after}"
+    if failures:
+        summary += f"; refused: {failures}"
+    d.say(summary)
     return after - before
 
 
@@ -4338,168 +4392,129 @@ def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
 
     Items reach an agent by being dragged onto a paper doll whose item rects are computed at
     runtime and appear nowhere in the .form file. The engine's own way round that is agent
-    equipment templates (AEquipScreen::processTemplate, aequipscreen.cpp:1567): Ctrl+<n> stores
+    equipment templates (AEquipScreen::processTemplate, aequipscreen.cpp): Ctrl+<n> stores
     the shown agent's loadout, a bare <n> strips every selected agent and re-equips them from
     base stores to match.
 
-    Two traps, both learned the hard way:
-      * AGENT_SELECT_BOX is a ListBox, which selects on MouseDown. Control::click() raises
-        MouseClick, which it ignores, so clicking a row selected nobody and the template applied
-        to nothing at all.
+    Traps, all learned the hard way:
+      * The template acts on the SELECTED agent, and only does anything when that agent is in a
+        base. Selecting by list index drifted from what was on screen, and soldiers away on a
+        mission silently took nothing -- "applied to 10 agents; armed 4->4" was mostly that.
+        Agents are now selected by id, and only those who are at a base, unarmed, are touched.
+        Re-applying to an armed veteran strips and re-equips them for a net change of zero at
+        best, and "armed fell 10->9" at worst, so veterans are left alone.
       * Applying an *empty* template strips agents instead of arming them. Capturing one from a
         row that happened to be a scientist took armed from 10 down to 4. So the captured
-        template is now checked before it is used, and arming is abandoned the moment it starts
-        going backwards.
+        template is checked before it is used, and arming is abandoned the moment it goes
+        backwards.
     """
-    before = int(d.h.gs("agents").get("armed", "0") or 0)
-    st = d.status()
-    if st.stage != "CityView":
-        return 0
-    d.click_id("BUTTON_TAB_1", st)
-    time.sleep(0.35)
-    if not d.click_id("BUTTON_SHOW_BASE", d.status()):
-        return 0
-    try:
-        d.wait_for("BaseScreen", 30)
-    except TimeoutError:
-        return 0
-    d.click_id("BUTTON_BASE_EQUIPAGENT", d.status())
-    time.sleep(1.4)
-    if d.status().stage != "AEquipScreen":
-        d.say(f"  [equip] expected AEquipScreen, got {d.status().stage}")
-        d.escape_key()
+    before = _armed_count(d)
+    if not _open_equip_screen(d):
         return 0
 
-    def capture(row: int) -> int:
-        """Store row's loadout in slot 1; return how many weapons it holds."""
-        try:
-            if not d.h.send(f"control AGENT_SELECT_BOX set {row}").startswith("OK"):
-                return -1
-        except (HarnessError, OSError):
-            return -1
-        time.sleep(0.3)
-        d.h.ok("keydown Left Ctrl")
-        time.sleep(0.1)
-        d.h.key("1")
-        time.sleep(0.1)
-        d.h.ok("keyup Left Ctrl")
-        time.sleep(0.35)
-        detail = d.h.gs("templates").get("detail", "")
-        for part in detail.split("|"):
+    def close() -> None:
+        return_to_city(d)
+
+    def stored_weapons() -> int:
+        for part in d.h.gs("templates").get("detail", "").split("|"):
             if part.startswith("1:"):
                 for kv in part.split(":", 1)[1].split(","):
                     if kv.startswith("weapons="):
                         return int(kv.split("=")[1] or 0)
         return 0
 
+    def capture(agent_id: str) -> int:
+        """Store this agent's loadout in slot 1; return how many weapons it holds."""
+        ok, _ = _select_agent(d, agent_id)
+        if not ok:
+            return -1
+        d.h.ok("keydown Left Ctrl")
+        time.sleep(0.1)
+        d.h.key("1")
+        time.sleep(0.1)
+        d.h.ok("keyup Left Ctrl")
+        time.sleep(0.35)
+        return stored_weapons()
+
     # Templates live in GameState and persist, so a loadout captured once at the start of the
     # campaign -- while the original ten soldiers are all home and armed -- stays usable for
     # ever. Re-capturing later is what failed: called after a mission, the list holds only the
     # people who did not go, and none of them are armed. The refusal was right; the timing was
     # not.
-    source = -1
-    already = 0
-    for part in d.h.gs("templates").get("detail", "").split("|"):
-        if part.startswith("1:"):
-            for kv in part.split(":", 1)[1].split(","):
-                if kv.startswith("weapons="):
-                    already = int(kv.split("=")[1] or 0)
+    already = stored_weapons()
+    roster = aequip_agents(d)
     if already > 0:
         d.say(f"  [equip] reusing the stored {already}-weapon loadout")
     else:
-        for row in range(agents):
-            got = capture(row)
-            if got < 0:
-                break
+        for row in roster[:agents]:
+            if row.get("base") != "1" or row.get("weapons", "0") == "0":
+                continue
+            got = capture(row["id"])
             if got > 0:
-                source = row
-                d.say(f"  [equip] captured a {got}-weapon loadout from row {row}")
+                d.say(f"  [equip] captured a {got}-weapon loadout from {row['id']}")
                 break
-    if source < 0 and already <= 0:
-        d.say("  [equip] no armed agent to copy a loadout from; leaving everyone as they are")
-        for _ in range(6):
-            st = d.status()
-            if st.stage == "CityView":
-                break
-            if st.stage in ("AEquipScreen", "BaseScreen"):
-                d.click_id("BUTTON_OK", st)
-            elif not d.dismiss_modal(st):
-                d.escape_key()
-            time.sleep(0.5)
-        return 0
-
+        else:
+            d.say("  [equip] no armed agent at a base to copy a loadout from; "
+                  "leaving everyone as they are")
+            close()
+            return 0
     if not apply:
         d.say("  [equip] loadout captured; not applying yet")
-        for _ in range(6):
-            st = d.status()
-            if st.stage == "CityView":
-                break
-            if st.stage in ("AEquipScreen", "BaseScreen"):
-                d.click_id("BUTTON_OK", st)
-            elif not d.dismiss_modal(st):
-                d.escape_key()
-            time.sleep(0.5)
+        close()
         return 0
 
     # Applying with an empty armoury strips people rather than arming them: the template is
     # re-equipped from base stores, and purchases take a couple of game-days to arrive.
-    stock = int(d.h.gs("stores").get("weapons", "0") or 0)
-    if stock <= 0:
+    if int(d.h.gs("stores").get("weapons", "0") or 0) <= 0:
         d.say("  [equip] no weapons in stores; not applying (would disarm the squad)")
-        for _ in range(6):
-            st = d.status()
-            if st.stage == "CityView":
-                break
-            if st.stage in ("AEquipScreen", "BaseScreen"):
-                d.click_id("BUTTON_OK", st)
-            elif not d.dismiss_modal(st):
-                d.escape_key()
-            time.sleep(0.5)
+        close()
         return 0
 
-    applied, best = 0, before
-    for i in range(agents):
-        if i == source:
-            continue
-        try:
-            if not d.h.send(f"control AGENT_SELECT_BOX set {i}").startswith("OK"):
+    applied, armed_here, best = 0, 0, before
+    targets = [r for r in aequip_agents(d)
+               if r.get("base") == "1" and r.get("weapons") == "0" and r.get("conscious") == "1"]
+    try:
+        for row in targets[:agents]:
+            ok, reply = _select_agent(d, row["id"])
+            if not ok:
+                d.say(f"  [equip] cannot select {row['id']}: {reply[:80]}")
+                continue
+            d.h.key("1")
+            applied += 1
+            time.sleep(0.3)
+            now = _armed_count(d)
+            if now < best:
+                # Stores ran dry: further applications now strip people rather than arm them.
+                d.say(f"  [equip] stopping at {row['id']}: armed fell {best}->{now}")
                 break
-        except (HarnessError, OSError):
-            break
-        time.sleep(0.2)
-        d.h.key("1")
-        applied += 1
-        time.sleep(0.3)
-        now = int(d.h.gs("agents").get("armed", "0") or 0)
-        if now < best:
-            # Stores ran dry: further applications now strip people rather than arm them.
-            d.say(f"  [equip] stopping at row {i}: armed fell {best}->{now}")
-            break
-        # Deliberately no "give up after N no-ops" rule here. Applying to an agent who is
-        # already armed strips and re-equips them for a net change of zero, and the roster lists
-        # the armed veterans before the empty-handed recruits -- so an early-out fires on the
-        # veterans and never reaches the people who actually need arming. Only a *fall* in armed
-        # is a reason to stop, since that means stores have run dry.
-        best = max(best, now)
+            if now > best:
+                armed_here += 1
+            best = max(best, now)
+    finally:
+        close()
 
-    for _ in range(6):
-        st = d.status()
-        if st.stage == "CityView":
-            break
-        if st.stage in ("AEquipScreen", "BaseScreen"):
-            d.click_id("BUTTON_OK", st)
-        elif not d.dismiss_modal(st):
-            d.escape_key()
-        time.sleep(0.5)
-
-    after = int(d.h.gs("agents").get("armed", "0") or 0)
-    d.say(f"  [equip] applied to {applied} agents; armed {before}->{after}")
-    if after == before and applied:
-        # processTemplate bails out unless getMode() == Mode::Base, which needs the agent
-        # physically at a base -- a freshly hired recruit still in transit silently equips
-        # nothing (aequipscreen.cpp:1569, 867-885).
-        d.say("  [equip] nobody gained a weapon; recruits may still be travelling to base")
+    after = _armed_count(d)
+    d.say(f"  [equip] template applied to {applied} unarmed agent(s), {armed_here} gained a "
+          f"weapon; armed {before}->{after}")
     return after - before
+
+
+def arm_squad(d: Driver, agents: int = 24) -> int:
+    """One arming pass for whoever is unarmed at a base. Returns the change in armed count.
+
+    The full template kit (armour, grenades, medi-kit) when its gun is still in stores, the bare
+    best-available gun otherwise, and the bare gun again if the template armed nobody. Does
+    nothing -- cheaply, without opening a screen -- when everyone at a base already has a weapon,
+    which is the common case: soldiers who are away cannot be equipped at all, so the old
+    `armed < soldiers` trigger kept the pass retrying every forty seconds for nothing.
+    """
+    if unarmed_at_base(d.h.gs("agents")) <= 0:
+        return 0
+    if template_weapon_in_stock(d):
+        gained = equip_squad(d, agents=agents)
+        if gained > 0:
+            return gained
+    return arm_agents_directly(d, agents=agents)
 
 
 def _norm(text: str) -> str:
@@ -5228,6 +5243,27 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
                     d.say(f"  [leg] hired {hired} agent(s)")
             except Exception as exc:
                 d.say(f"  [leg] hiring failed: {type(exc).__name__}: {exc}")
+
+            # 4b. Arm them. This loop hired soldiers every leg and never put a weapon in anyone's
+            #     hands -- arm_squad was reachable only from oa_victory's loop, so a plain
+            #     oa_play campaign grew an unarmed roster that a base defence then threw into the
+            #     fight. Runs after the hiring above and after advance(), so last leg's recruits
+            #     have had time to reach the base. If nothing could be handed out the armoury is
+            #     empty: buy guns for the next leg.
+            try:
+                ag = d.h.gs("agents")
+                gained = arm_squad(d) if unarmed_at_base(ag) > 0 else 0
+                if gained:
+                    d.checks["agents_armed"] = d.checks.get("agents_armed", 0) + gained
+                elif int(ag.get("soldiers", "0") or 0) > int(ag.get("armed", "0") or 0) \
+                        and int(d.h.gs("stores").get("weapons", "0") or 0) <= 0:
+                    # Someone is unarmed (at a base, or still on the way to one) and there is
+                    # nothing to give them: order guns now, so they have arrived by next leg.
+                    stock_best_guns(d, qty=8)
+                if d.status().stage != "CityView":
+                    return_to_city(d)
+            except Exception as exc:
+                d.say(f"  [leg] arming failed: {type(exc).__name__}: {exc}")
 
             # 5. Expand the base. A hire that changed nothing is the signal that quarters are
             #    full -- hire_staff returns the real delta, and the campaign had been discarding
