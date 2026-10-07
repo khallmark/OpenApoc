@@ -383,12 +383,15 @@ def audio_enabled() -> bool:
 
 def screen_args() -> list[str]:
     """OA_FULLSCREEN=1: borderless at the desktop's own resolution (0 = desktop size).
-    OA_TILE="CxR:slot": one borderless cell of a grid, for watching a parallel batch."""
+    OA_TILE="CxR:slot": one borderless cell of a grid, for watching a parallel batch.
+    OA_DISPLAY=N: which monitor (SDL display index; 0 = main) every mode opens on."""
+    display = ([f"--Framework.Screen.Display={os.environ['OA_DISPLAY']}"]
+               if os.environ.get("OA_DISPLAY") else [])
     if os.environ.get("OA_TILE"):
-        return [f"--Framework.Screen.Tile={os.environ['OA_TILE']}"]
+        return display + [f"--Framework.Screen.Tile={os.environ['OA_TILE']}"]
     if os.environ.get("OA_FULLSCREEN") != "1":
-        return []
-    return ["--Framework.Screen.Mode=borderless", "--Framework.Screen.Width=0",
+        return display
+    return display + ["--Framework.Screen.Mode=borderless", "--Framework.Screen.Width=0",
             "--Framework.Screen.Height=0"]
 
 
