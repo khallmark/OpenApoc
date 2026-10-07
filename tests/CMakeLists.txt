@@ -151,3 +151,24 @@ add_test(NAME ${TEST} COMMAND ${TEST}
 		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
 		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate
 		--Framework.CD=${CD_PATH} --Framework.Data=${CMAKE_SOURCE_DIR}/data)
+
+# Regression tests recovered from abandoned implementation branches.
+add_openapoc_test(test_aequipment_fire_hazard)
+add_openapoc_test(test_alien_building)
+add_openapoc_test(test_base_exposure)
+add_openapoc_test(test_battle_item_fire)
+add_openapoc_test(test_battle_mappart_fire)
+add_openapoc_test(test_city_portals ARGS
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
+add_openapoc_test(test_gamestate_ufo_growth_wiring ARGS
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
+add_openapoc_test(test_pathfinding ARGS
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
+add_openapoc_test(test_ufo_withdrawal)
+add_openapoc_test(test_ufoincursion)
+add_openapoc_test(test_unit_ai_behavior)
+add_openapoc_test(test_unit_ai_helper)
+add_openapoc_test(test_vequipmenttype)
