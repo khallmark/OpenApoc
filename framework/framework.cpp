@@ -20,6 +20,7 @@
 #include "framework/stagestack.h"
 #include "library/sp.h"
 #include "library/xorshift.h"
+#include <cstdio>
 #include <SDL.h>
 #ifdef OPENAPOC_METAL
 #include <SDL_metal.h>
@@ -1147,6 +1148,33 @@ void Framework::displayInitialise()
 	}
 #endif
 
+	// Tiling for side-by-side automated runs: one borderless cell of a CxR grid over the
+	// display's usable area, so a batch of games sits in a grid whose lines meet mid-screen.
+	int windowX = SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber);
+	int windowY = SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber);
+	const auto tile = Options::screenTileOption.get();
+	int tileCols = 0, tileRows = 0, tileSlot = 0;
+	SDL_Rect usable;
+	if (mode == ScreenMode::Windowed && !tile.empty() &&
+	    sscanf(tile.c_str(), "%dx%d:%d", &tileCols, &tileRows, &tileSlot) == 3 && tileCols > 0 &&
+	    tileRows > 0 && tileSlot >= 0 && tileSlot < tileCols * tileRows &&
+	    SDL_GetDisplayUsableBounds(displayNumber, &usable) == 0)
+	{
+		const int cellW = usable.w / tileCols;
+		const int cellH = usable.h / tileRows;
+		windowX = usable.x + (tileSlot % tileCols) * cellW;
+		windowY = usable.y + (tileSlot / tileCols) * cellH;
+		resolved = {cellW, cellH};
+		display_flags |= SDL_WINDOW_BORDERLESS;
+		LogInfo("Tiling window {0} of {1}x{2}: {3}x{4} at {5},{6}", tileSlot, tileCols, tileRows,
+		        cellW, cellH, windowX, windowY);
+	}
+	else if (!tile.empty())
+	{
+		LogWarning("Ignoring Framework.Screen.Tile \"{0}\" (needs windowed mode and CxR:slot)",
+		           tile);
+	}
+
 	if (mode == ScreenMode::Windowed)
 	{
 		p->lastWindowedSize = resolved;
@@ -1191,8 +1219,7 @@ void Framework::displayInitialise()
 		}
 
 		p->window = SDL_CreateWindow(
-		    "OpenApoc", SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber),
-		    SDL_WINDOWPOS_UNDEFINED_DISPLAY(displayNumber), resolved.x, resolved.y,
+		    "OpenApoc", windowX, windowY, resolved.x, resolved.y,
 		    display_flags | api_flags);
 
 		if (!p->window)

@@ -21,6 +21,7 @@ extern ConfigOptionInt screenWidthOption;
 extern ConfigOptionInt screenHeightOption;
 extern ConfigOptionString screenModeOption;
 extern ConfigOptionInt screenDisplayNumberOption;
+extern ConfigOptionString screenTileOption;
 extern ConfigOptionInt screenScaleXOption;
 extern ConfigOptionInt screenScaleYOption;
 extern ConfigOptionBool screenAutoScale;

@@ -46,6 +46,7 @@ void dumpOptionsToLog()
 	dumpOption(screenHeightOption);
 	dumpOption(screenModeOption);
 	dumpOption(screenDisplayNumberOption);
+	dumpOption(screenTileOption);
 	dumpOption(screenScaleXOption);
 	dumpOption(screenScaleYOption);
 	dumpOption(screenAutoScale);
@@ -248,6 +249,11 @@ ConfigOptionInt screenHeightOption(
     tr("Initial screen height in pixels (0 = desktop height)"), 720);
 ConfigOptionString screenModeOption("Framework.Screen", "Mode",
                                     tr("Mode: {windowed,fullscreen,borderless}"), "windowed");
+ConfigOptionString screenTileOption(
+    "Framework.Screen", "Tile",
+    tr("Windowed only: \"CxR:slot\" places a borderless window in cell `slot` of a C-by-R grid "
+       "over the display, row-major from the top left (\"2x2:3\" = bottom right). Empty = off."),
+    "");
 ConfigOptionInt screenDisplayNumberOption("Framework.Screen", "Display",
                                           tr("Display number in multi-monitor setup (0..n)"), 0);
 ConfigOptionInt screenScaleXOption("Framework.Screen", "ScaleX",
