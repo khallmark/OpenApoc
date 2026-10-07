@@ -374,6 +374,8 @@ ConfigOptionBool optionPauseOnAgentPsiOver("Notifications.Battle", "AgentPsiOver
                                            tr("Unit freed from Psionic control"), true);
 ConfigOptionBool optionDebugCommandsVisible("OpenApoc.NewFeature", "DebugCommandsVisible",
                                             tr("Show the debug commands on screen"), true);
+ConfigOptionBool optionUiAnimations("OpenApoc.NewFeature", "UiAnimations",
+                                    tr("Subtle UI animations"), true);
 // OFF by default, unlike DebugCommandsVisible. This one is not a UI affordance: it dumps every
 // owned object on the clicked tile plus the unit's full equipment, missions and visible-unit
 // lists, on EVERY Ctrl-click -- which is also the ordinary multi-select gesture. It used to be

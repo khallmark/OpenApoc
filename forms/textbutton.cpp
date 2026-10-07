@@ -22,6 +22,7 @@ TextButton::TextButton(const UString &Text, sp<BitmapFont> font)
       RenderStyle(ButtonRenderStyle::Menu)
 {
 	isClickable = true;
+	animateButton = true;
 	label = mksp<Label>(Text, font);
 }
 

@@ -11,6 +11,7 @@
 #include "framework/options.h"
 #include "framework/os/display_size.h"
 #include "framework/renderer.h"
+#include "framework/uianimation.h"
 #include "library/sp.h"
 #include <SDL_mouse.h>
 #include <iterator>
@@ -174,6 +175,10 @@ void Control::eventOccured(Event *e)
 			{
 				this->pushFormEvent(FormEventType::MouseDown, e);
 				mouseDepressed = true;
+				if (animateButton)
+				{
+					pressStart = std::chrono::steady_clock::now();
+				}
 				if (isClickable)
 				{
 					e->Handled = true;
@@ -332,11 +337,57 @@ void Control::eventOccured(Event *e)
 	}
 }
 
-void Control::render()
+void Control::updateAnimations(std::chrono::steady_clock::time_point now)
+{
+	for (auto &c : Controls)
+	{
+		if (c->Visible)
+		{
+			c->updateAnimations(now);
+		}
+	}
+	if (!animateButton)
+	{
+		return;
+	}
+
+	const float oldHover = hoverBrightness;
+	const float oldPress = pressDarkness;
+	if (Enabled && Options::optionUiAnimations.get())
+	{
+		const float elapsed = std::chrono::duration<float, std::milli>(now - hoverStart).count();
+		hoverBrightness = hoverStartBrightness + (hoverTargetBrightness - hoverStartBrightness) *
+		                                             uiAnimationProgress(elapsed, 120.0f);
+		const float target = mouseInside ? 1.0f : 0.0f;
+		if (target != hoverTargetBrightness)
+		{
+			hoverStartBrightness = hoverBrightness;
+			hoverTargetBrightness = target;
+			hoverStart = now;
+		}
+		const float pressElapsed =
+		    std::chrono::duration<float, std::milli>(now - pressStart).count();
+		pressDarkness = 1.0f - uiAnimationProgress(pressElapsed, 100.0f);
+	}
+	else
+	{
+		hoverBrightness = hoverStartBrightness = hoverTargetBrightness = pressDarkness = 0.0f;
+	}
+	if (hoverBrightness != oldHover || pressDarkness != oldPress)
+	{
+		setDirty();
+	}
+}
+
+void Control::render(float opacity)
 {
 	if (!Visible || Size.x == 0 || Size.y == 0)
 	{
 		return;
+	}
+	if (!getParent())
+	{
+		updateAnimations(std::chrono::steady_clock::now());
 	}
 
 	if (controlArea == nullptr || controlArea->size != Vec2<unsigned int>(Size))
@@ -375,13 +426,49 @@ void Control::render()
 
 	if (Enabled)
 	{
-		if (destSize == Size)
+		if (opacity < 1.0f)
+		{
+			sp<Surface> image = controlArea;
+			if (destSize != Size)
+			{
+				if (!scaledFadeArea || scaledFadeArea->size != Vec2<unsigned int>(destSize))
+				{
+					scaledFadeArea = mksp<Surface>(Vec2<unsigned int>(destSize));
+				}
+				RendererSurfaceBinding b(*fw().renderer, scaledFadeArea);
+				fw().renderer->clear();
+				fw().renderer->drawScaled(controlArea, {0, 0}, destSize);
+				image = scaledFadeArea;
+			}
+			fw().renderer->drawTinted(image, destPos,
+			                          Colour{255, 255, 255, static_cast<uint8_t>(255 * opacity)});
+		}
+		else if (destSize == Size)
 		{
 			fw().renderer->draw(controlArea, destPos);
 		}
 		else
 		{
 			fw().renderer->drawScaled(controlArea, destPos, destSize);
+		}
+		if (opacity >= 1.0f)
+		{
+			scaledFadeArea.reset();
+		}
+		if (animateButton && Options::optionUiAnimations.get())
+		{
+			// Some buttons have their resting artwork baked into the parent form. Image tint
+			// cannot affect those pixels or brighten beyond white, so overlay the composed bounds.
+			const auto hoverAlpha = static_cast<uint8_t>(18 * hoverBrightness * opacity);
+			const auto pressAlpha = static_cast<uint8_t>(28 * pressDarkness * opacity);
+			if (hoverAlpha > 0)
+			{
+				fw().renderer->drawFilledRect(destPos, destSize, Colour{255, 255, 255, hoverAlpha});
+			}
+			if (pressAlpha > 0)
+			{
+				fw().renderer->drawFilledRect(destPos, destSize, Colour{0, 0, 0, pressAlpha});
+			}
 		}
 	}
 	else
@@ -1184,6 +1271,10 @@ bool Control::click()
 	if (!Visible || !Enabled)
 	{
 		return false;
+	}
+	if (animateButton)
+	{
+		pressStart = std::chrono::steady_clock::now();
 	}
 	FormsEvent *event = nullptr;
 	event = new FormsEvent();

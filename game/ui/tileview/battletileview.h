@@ -5,6 +5,7 @@
 #include "library/enum_traits.h"
 #include "library/sp.h"
 #include "library/vec.h"
+#include <chrono>
 #include <list>
 #include <vector>
 
@@ -89,6 +90,8 @@ class BattleTileView : public TileView
 	int colorCurrent = 0;
 	sp<Palette> palette;
 	std::vector<sp<Palette>> modPalette;
+	std::vector<sp<Palette>> liftPalette;
+	std::chrono::steady_clock::time_point liftFadeStart;
 
   public:
 	BattleTileView(TileMap &map, Vec3<int> isoTileSize, Vec2<int> stratTileSize,

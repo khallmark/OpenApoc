@@ -1,6 +1,8 @@
 #include "forms/control.h"
 #include "forms/form.h"
+#include "forms/graphicbutton.h"
 #include "forms/harness_actions.h"
+#include "forms/textbutton.h"
 #include "forms/ui.h"
 #include "framework/configfile.h"
 #include "framework/event.h"
@@ -79,6 +81,44 @@ static bool test_control_click()
 	return true;
 }
 
+static bool test_first_frame_buttons()
+{
+	for (bool animations : {false, true})
+	{
+		config().set("OpenApoc.NewFeature.UiAnimations", animations);
+		auto form = mksp<Form>();
+		form->Size = {200, 100};
+		auto graphic = form->createChild<GraphicButton>();
+		auto text = form->createChild<TextButton>();
+		graphic->Name = "FIRST_FRAME_GRAPHIC";
+		text->Name = "FIRST_FRAME_TEXT";
+		graphic->Size = text->Size = {40, 30};
+		text->Location = {50, 0};
+		form->update();
+
+		// The harness must not need a rendered frame or an animation update before clicking.
+		for (sp<Control> button :
+		     {std::static_pointer_cast<Control>(graphic), std::static_pointer_cast<Control>(text)})
+		{
+			int clicks = 0;
+			button->addCallback(FormEventType::MouseClick, [&](FormsEvent *) { clicks++; });
+			const auto position = button->getLocationOnScreen();
+			HarnessCommand command;
+			TEST_REQUIRE(parseHarnessCommand("CONTROL " + button->Name + " click", command),
+			             "parse first-frame button click");
+			TEST_REQUIRE(getHarnessActionHandler()(command.text, command.args) ==
+			                 "OK clicked " + button->Name,
+			             "button must be available immediately with animations={0}", animations);
+			TEST_REQUIRE(clicks == 1 && button->Enabled && button->isVisible(),
+			             "first-frame click must fire once without changing availability");
+			TEST_REQUIRE(button->getLocationOnScreen() == position &&
+			                 button->Size == Vec2<int>(40, 30),
+			             "feedback must preserve hit rectangles");
+		}
+	}
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -87,7 +127,8 @@ int main(int argc, char **argv)
 	}
 	applyDeterministicTestConfig();
 	Framework fw("OpenApoc", false);
-	const int result = runTestSuite({{"CONTROL left click", test_control_click}});
+	const int result = runTestSuite({{"CONTROL left click", test_control_click},
+	                                 {"first-frame animated buttons", test_first_frame_buttons}});
 	UI::unload();
 	return result;
 }

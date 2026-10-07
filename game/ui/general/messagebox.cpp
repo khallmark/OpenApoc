@@ -7,7 +7,9 @@
 #include "framework/font.h"
 #include "framework/framework.h"
 #include "framework/keycodes.h"
+#include "framework/options.h"
 #include "framework/renderer.h"
+#include "framework/uianimation.h"
 #include "library/strings_format.h"
 
 namespace OpenApoc
@@ -206,10 +208,21 @@ void MessageBox::update() { form->update(); }
 void MessageBox::render()
 {
 	fw().stageGetPrevious(this->shared_from_this())->render();
-	form->render();
-	fw().renderer->drawRect(form->Location, form->Size, Colour{48, 48, 52});
-	fw().renderer->drawRect(form->Location + 2, form->Size - 2, Colour{96, 100, 104});
-	fw().renderer->drawRect(form->Location + 1, form->Size - 2, Colour{236, 236, 236});
+	const auto now = std::chrono::steady_clock::now();
+	if (fadeStart == std::chrono::steady_clock::time_point{})
+	{
+		fadeStart = now;
+	}
+	const float opacity =
+	    Options::optionUiAnimations.get()
+	        ? uiAnimationProgress(std::chrono::duration<float, std::milli>(now - fadeStart).count(),
+	                              150.0f)
+	        : 1.0f;
+	form->render(opacity);
+	const auto alpha = static_cast<uint8_t>(255 * opacity);
+	fw().renderer->drawRect(form->Location, form->Size, Colour{48, 48, 52, alpha});
+	fw().renderer->drawRect(form->Location + 2, form->Size - 2, Colour{96, 100, 104, alpha});
+	fw().renderer->drawRect(form->Location + 1, form->Size - 2, Colour{236, 236, 236, alpha});
 }
 
 bool MessageBox::isTransition() { return false; }

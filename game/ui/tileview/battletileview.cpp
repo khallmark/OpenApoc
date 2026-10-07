@@ -8,9 +8,11 @@
 #include "framework/font.h"
 #include "framework/framework.h"
 #include "framework/keycodes.h"
+#include "framework/options.h"
 #include "framework/palette.h"
 #include "framework/renderer.h"
 #include "framework/sound.h"
+#include "framework/uianimation.h"
 #include "game/state/battle/ai/aitype.h"
 #include "game/state/battle/battle.h"
 #include "game/state/battle/battlehazard.h"
@@ -32,6 +34,11 @@
 
 namespace OpenApoc
 {
+namespace
+{
+constexpr int LIFT_FADE_STEPS = 120;
+} // namespace
+
 void BattleTileView::updateHiddenBar()
 {
 	hiddenBarTicksAccumulated = 0;
@@ -129,6 +136,16 @@ BattleTileView::BattleTileView(TileMap &map, Vec3<int> isoTileSize, Vec2<int> st
 		                                  (colorCurrent * 16 * 5 + 255 * 3) / 8));
 
 		modPalette.push_back(newPal);
+
+		// Palettes are cached by the renderer, so keep each glow shade immutable.
+		for (int step = 0; step <= LIFT_FADE_STEPS; step++)
+		{
+			auto liftPal = mksp<Palette>(*newPal);
+			const int level = step * 240 / LIFT_FADE_STEPS;
+			liftPal->setColour(251, Colour{0, static_cast<uint8_t>((level * 5 + 255 * 3) / 8),
+			                               static_cast<uint8_t>((-level + 255 * 5) / 8)});
+			liftPalette.push_back(liftPal);
+		}
 	}
 
 	layerDrawingMode = LayerDrawingMode::UpToCurrentLevel;
@@ -416,7 +433,21 @@ void BattleTileView::render()
 {
 	Renderer &r = *fw().renderer;
 	r.clear();
-	r.setPalette(this->pal);
+	if (Options::optionUiAnimations.get())
+	{
+		const auto now = std::chrono::steady_clock::now();
+		if (liftFadeStart == std::chrono::steady_clock::time_point{})
+		{
+			liftFadeStart = now;
+		}
+		const float elapsed = std::chrono::duration<float, std::milli>(now - liftFadeStart).count();
+		const int step = static_cast<int>(uiAnimationPulse(elapsed, 2000.0f) * LIFT_FADE_STEPS);
+		r.setPalette(liftPalette[colorCurrent * (LIFT_FADE_STEPS + 1) + step]);
+	}
+	else
+	{
+		r.setPalette(this->pal);
+	}
 
 	if (hideDisplay)
 	{

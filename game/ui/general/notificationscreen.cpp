@@ -7,6 +7,8 @@
 #include "framework/event.h"
 #include "framework/framework.h"
 #include "framework/keycodes.h"
+#include "framework/options.h"
+#include "framework/uianimation.h"
 #include "game/state/gameevent.h"
 #include "game/state/gamestate.h"
 #include "game/ui/tileview/battleview.h"
@@ -110,7 +112,17 @@ void NotificationScreen::update() { menuform->update(); }
 void NotificationScreen::render()
 {
 	fw().stageGetPrevious(this->shared_from_this())->render();
-	menuform->render();
+	const auto now = std::chrono::steady_clock::now();
+	if (fadeStart == std::chrono::steady_clock::time_point{})
+	{
+		fadeStart = now;
+	}
+	const float opacity =
+	    Options::optionUiAnimations.get()
+	        ? uiAnimationProgress(std::chrono::duration<float, std::milli>(now - fadeStart).count(),
+	                              150.0f)
+	        : 1.0f;
+	menuform->render(opacity);
 }
 
 bool NotificationScreen::isTransition() { return false; }

@@ -18,6 +18,7 @@ GraphicButton::GraphicButton(sp<Image> image, sp<Image> imageDepressed, sp<Image
           fw().data->loadSample("RAWSOUND:xcom3/rawsound/strategc/intrface/button1.raw:22050"))
 {
 	isClickable = true;
+	animateButton = true;
 }
 
 GraphicButton::~GraphicButton() = default;

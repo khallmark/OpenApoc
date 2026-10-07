@@ -3,6 +3,7 @@
 #include "framework/stage.h"
 #include "library/sp.h"
 #include "library/strings.h"
+#include <chrono>
 
 namespace OpenApoc
 {
@@ -17,6 +18,7 @@ class NotificationScreen : public Stage
 {
   private:
 	sp<Form> menuform;
+	std::chrono::steady_clock::time_point fadeStart;
 	GameEventType eventType;
 	sp<GameState> state;
 

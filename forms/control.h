@@ -5,6 +5,7 @@
 #include "library/colour.h"
 #include "library/sp.h"
 #include "library/vec.h"
+#include <chrono>
 #include <functional>
 #include <list>
 #include <map>
@@ -30,6 +31,7 @@ class Control : public std::enable_shared_from_this<Control>
 {
   private:
 	sp<Surface> controlArea;
+	sp<Surface> scaledFadeArea;
 	sp<void> data;
 
 	std::map<FormEventType, std::list<std::function<void(FormsEvent *e)>>> callbacks;
@@ -41,12 +43,20 @@ class Control : public std::enable_shared_from_this<Control>
 	std::function<void(sp<Control>)> funcPreRender;
 
 	bool dirty = true;
+	float hoverBrightness = 0.0f;
+	float hoverStartBrightness = 0.0f;
+	float hoverTargetBrightness = 0.0f;
+	float pressDarkness = 0.0f;
+	std::chrono::steady_clock::time_point hoverStart;
+	std::chrono::steady_clock::time_point pressStart;
+	void updateAnimations(std::chrono::steady_clock::time_point now);
 
   protected:
 	sp<Palette> palette;
 	wp<Control> owningControl;
 	bool mouseInside;
 	bool mouseDepressed;
+	bool animateButton = false;
 	Vec2<int> resolvedLocation;
 
 	virtual void postRender();
@@ -112,7 +122,7 @@ class Control : public std::enable_shared_from_this<Control>
 	virtual void eventOccured(Event *e);
 	// Used if controls require computations before rendering.
 	void preRender();
-	void render();
+	void render(float opacity = 1.0f);
 	virtual void update();
 	virtual void unloadResources();
 

@@ -59,6 +59,7 @@ set (FRAMEWORK_HEADER_FILES
 	sound_interface.h
 	stage.h
 	stagestack.h
+	uianimation.h
 	video.h
 	options.h
 	modinfo.h

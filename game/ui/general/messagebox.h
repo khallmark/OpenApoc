@@ -3,6 +3,7 @@
 #include "framework/stage.h"
 #include "library/sp.h"
 #include "library/strings.h"
+#include <chrono>
 #include <functional>
 #include <map>
 
@@ -15,6 +16,7 @@ class MessageBox : public Stage
 {
   private:
 	sp<Form> form;
+	std::chrono::steady_clock::time_point fadeStart;
 	std::function<void()> callbackYes;
 	std::function<void()> callbackNo;
 	std::function<void()> callbackCancel;
