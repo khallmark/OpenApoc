@@ -53,6 +53,7 @@ add_openapoc_test(test_crash_handler)
 
 add_openapoc_test(test_alien_behaviour_option)
 add_openapoc_test(test_game_event_pause)
+add_openapoc_test(test_city_damage_score)
 add_openapoc_test(test_gametime)
 add_openapoc_test(test_vec)
 add_openapoc_test(test_line)

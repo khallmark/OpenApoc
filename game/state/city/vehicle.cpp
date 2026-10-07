@@ -994,6 +994,14 @@ void VehicleMover::updateFalling(GameState &state, unsigned int ticks)
 				plowedThrough = randBoundsExclusive(state.rng, 0, 100) < plowThroughChance;
 				if (plowedThrough)
 				{
+					// The original charges a vehicle clearing obstructing building scenery to X-COM's
+					// "Damage to City" whoever owns the vehicle (UFO2P.EXE FUN_00041644, score call
+					// at VA 0x41B99, responsible org hard-coded to 1). Charged before die() can swap
+					// the tile for its damaged form.
+					if (tile->presentScenery->building)
+					{
+						Scenery::chargeCityDamage(state, tile->presentScenery->type->value);
+					}
 					// Allow "into" to remain damaged, kill others outright
 					tile->presentScenery->die(state, atvMode != SceneryTileType::WalkMode::Into);
 

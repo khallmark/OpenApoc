@@ -59,6 +59,11 @@ class Scenery : public SupportedMapPart, public std::enable_shared_from_this<Sce
 	bool handleCollision(GameState &state, Collision &c);
 	// Returns true if sound and doodad were handled by it
 	bool applyDamage(GameState &state, int power, StateRef<Organisation> attackerOrg = nullptr);
+	// Subtract from X-COM's "Damage to City" score (week and total). See handleCollision.
+	static void chargeCityDamage(GameState &state, int value);
+	// Whether a projectile hit is charged: human city, building scenery, firer is X-COM or Aliens.
+	static bool hitChargesCityDamage(const GameState &state, const UString &cityId,
+	                                 bool partOfBuilding, const StateRef<Organisation> &firerOwner);
 	// Handles scenery ceasing to exist (fatal damage or fell on something)
 	// Forced to destroy regardless of damaged types
 	void die(GameState &state, bool forced = false);

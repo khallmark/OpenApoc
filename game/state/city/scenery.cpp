@@ -1170,8 +1170,33 @@ void Scenery::updateRelationWithAttacker(GameState &state, StateRef<Organisation
 	ourOrg->adjustRelationTo(state, attackerOrg, -5.0f * multiplier, true);
 }
 
+bool Scenery::hitChargesCityDamage(const GameState &state, const UString &cityId,
+                                   bool partOfBuilding, const StateRef<Organisation> &firerOwner)
+{
+	// FUN_00054A28: human city only ([0xD5060]==0), building footprint, firer org 0 or 1.
+	return cityId != "CITYMAP_ALIEN" && partOfBuilding && firerOwner &&
+	       (firerOwner == state.getPlayer() || firerOwner == state.getAliens());
+}
+
+void Scenery::chargeCityDamage(GameState &state, int value)
+{
+	state.totalScore.cityDamage -= value;
+	state.weekScore.cityDamage -= value;
+}
+
 bool Scenery::handleCollision(GameState &state, Collision &c)
 {
+	// "Damage to City", as UFO2P.EXE scores it (docs/original-game/findings/city-damage-scoring.md):
+	// charged per projectile HIT on building scenery in the human city, by the tile's value before
+	// the hit, when the firer belongs to X-COM or to the Aliens - and regardless of whether the hit
+	// damages or destroys anything (FUN_00054A28, score call at VA 0x56458). Other organisations'
+	// fire is never charged, and collapses are not charged at all. This used to subtract the value
+	// of every destroyed tile instead, collapse chains included, whoever caused it.
+	if (c.projectile->firerVehicle &&
+	    hitChargesCityDamage(state, city.id, (bool)building, c.projectile->firerVehicle->owner))
+	{
+		chargeCityDamage(state, type->value);
+	}
 	StateRef<Organisation> attackerOrg;
 	// Adjust relationships
 	if (!type->commonProperty && building && c.projectile->firerVehicle)
@@ -1318,11 +1343,6 @@ void Scenery::die(GameState &state, bool forced)
 		this->tileObject->removeFromMap();
 		this->tileObject.reset();
 		this->destroyed = true;
-		if (city.id != "CITYMAP_ALIEN")
-		{
-			state.totalScore.cityDamage -= type->value;
-			state.weekScore.cityDamage -= type->value;
-		}
 		return;
 	}
 	if (!forced && type->damagedTile)
@@ -1398,11 +1418,6 @@ void Scenery::die(GameState &state, bool forced)
 		if (building)
 		{
 			building->buildingPartChange(state, initialPosition, false);
-		}
-		if (city.id != "CITYMAP_ALIEN")
-		{
-			state.totalScore.cityDamage -= type->value;
-			state.weekScore.cityDamage -= type->value;
 		}
 	}
 }
