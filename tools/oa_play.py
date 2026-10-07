@@ -374,6 +374,21 @@ def target_fps() -> int:
     return 60 if watching() else 1000
 
 
+def audio_enabled() -> bool:
+    """Music and sound effects. OA_AUDIO=1/0 decides; otherwise on exactly when watching."""
+    if os.environ.get("OA_AUDIO") in ("0", "1"):
+        return os.environ["OA_AUDIO"] == "1"
+    return watching()
+
+
+def screen_args() -> list[str]:
+    """OA_FULLSCREEN=1: borderless at the desktop's own resolution (0 = desktop size)."""
+    if os.environ.get("OA_FULLSCREEN") != "1":
+        return []
+    return ["--Framework.Screen.Mode=borderless", "--Framework.Screen.Width=0",
+            "--Framework.Screen.Height=0"]
+
+
 def city_speed_cap() -> int:
     """Highest city clock speed the driver may select (1-5). 5 is turbo. OA_CITY_SPEED sets it."""
     return max(1, min(5, int(os.environ.get("OA_CITY_SPEED", "5"))))
@@ -396,12 +411,21 @@ def add_runner_options(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--step-delay", type=nonnegative_seconds, default=0, metavar="SECONDS",
                     help="sleep between driver actions (default: 0)")
     ap.add_argument("--ai", metavar="NAME", help="built-in or plugin tactical AI")
+    ap.add_argument("--fullscreen", action="store_true",
+                    help="borderless at the desktop's full resolution (sets OA_FULLSCREEN)")
+    ap.add_argument("--audio", dest="audio", action="store_true", default=None,
+                    help="play music and sound (default: on with --watch, off otherwise)")
+    ap.add_argument("--no-audio", dest="audio", action="store_false")
 
 
 def configure_runner(args: argparse.Namespace) -> dict:
     """Apply playback options before launch and return the battle policy."""
     if args.watch:
         os.environ["OA_WATCH"] = "1"
+    if args.fullscreen:
+        os.environ["OA_FULLSCREEN"] = "1"
+    if args.audio is not None:
+        os.environ["OA_AUDIO"] = "1" if args.audio else "0"
     if args.city_speed is not None:
         os.environ["OA_CITY_SPEED"] = str(args.city_speed)
     os.environ["OA_STEP_DELAY"] = str(args.step_delay)
@@ -597,7 +621,6 @@ class GameProcess:
             "--Game.SkipIntro=1",
             "--Config.Save=0",
             "--Config.Read=0",
-            "--Framework.AudioBackends=null",
             # Fixed RNG seed: GameState::startGame() otherwise reseeds from wall-clock.
             "--OpenApoc.NewFeature.SeedRng=0",
             # Explicit seed. 0 keeps the engine's old behaviour; anything else is used verbatim,
@@ -615,7 +638,8 @@ class GameProcess:
             # and ticks advance per frame -- so an automated run asks for the headroom outright
             # rather than relying on the limiter being broken.
             f"--Framework.TargetFPS={target_fps()}",
-        ] + PAUSE_NOTIFICATION_FLAGS + self.extra
+        ] + ([] if audio_enabled() else ["--Framework.AudioBackends=null"]) + screen_args() \
+            + PAUSE_NOTIFICATION_FLAGS + self.extra
         self.logf = open(self.log_path, "w")
         # SDL3 makes window operations synchronous by default: Cocoa_SyncWindow pumps the Cocoa
         # event queue until the window server acknowledges the state change. On this machine that
