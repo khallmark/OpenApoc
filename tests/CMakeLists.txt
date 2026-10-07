@@ -69,6 +69,8 @@ add_openapoc_test(test_battle_hazard)
 add_openapoc_test(test_battle_use_item)
 add_openapoc_test(test_game_end)
 add_openapoc_test(test_harness)
+add_openapoc_test(test_harness_control_click)
+target_link_libraries(test_harness_control_click OpenApoc_Forms)
 add_openapoc_test(test_app_paths)
 add_openapoc_test(test_base_die ARGS
 		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0

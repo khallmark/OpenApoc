@@ -12,6 +12,7 @@
 #include "framework/os/display_size.h"
 #include "framework/renderer.h"
 #include "library/sp.h"
+#include <SDL_mouse.h>
 #include <iterator>
 
 namespace OpenApoc
@@ -1188,6 +1189,10 @@ bool Control::click()
 	event = new FormsEvent();
 	event->forms().RaisedBy = shared_from_this();
 	event->forms().EventFlag = FormEventType::MouseClick;
+	event->forms().MouseInfo = {};
+	event->forms().MouseInfo.X = Size.x / 2;
+	event->forms().MouseInfo.Y = Size.y / 2;
+	event->forms().MouseInfo.Button = SDL_BUTTON_LMASK;
 	fw().pushEvent(event);
 	this->setDirty();
 	this->triggerEventCallbacks(event);
