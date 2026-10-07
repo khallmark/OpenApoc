@@ -109,10 +109,11 @@ CHECKPOINT_EVERY_S = 300.0
 
 class Victory:
     def __init__(self, repo: Path, out: Path, port: int, difficulty: int = 1,
-                 battle_policy: dict | None = None):
+                 battle_policy: dict | None = None, seed: int = 0):
         self.repo, self.out, self.port = Path(repo), Path(out), port
         self.difficulty = difficulty
         self.battle_policy = dict(battle_policy or {})
+        self.seed = seed
         self.out.mkdir(parents=True, exist_ok=True)
         (self.out / "shots").mkdir(exist_ok=True)
         self.checkpoint = self.out / "victory.save"
@@ -214,7 +215,8 @@ class Victory:
     def start(self) -> None:
         resume = self.checkpoint.exists()
         extra = [f"--Game.Load={self.checkpoint}"] if resume else []
-        self.game = GameProcess(self.repo, self.port, self.out / "game.log", extra=extra)
+        self.game = GameProcess(self.repo, self.port, self.out / "game.log", extra=extra,
+                                seed=self.seed)
         self.game.start(wait_s=240)
         self.d = Driver(Harness(port=self.port), self.repo / "data/forms",
                         shots=self.out / "shots", verbose=True, battle_policy=self.battle_policy)
@@ -315,7 +317,9 @@ class Victory:
             self.restarts += 1
             self.progress["restarts"] = self.progress.get("restarts", 0) + 1
             self.flush()
-            self.say(f"game died - restarting from checkpoint (#{self.restarts}, attempt {attempt}/3)")
+            how = self.game.exit_status() if self.game else "unknown"
+            self.say(f"game died ({how or 'still running'}) - restarting from checkpoint "
+                     f"(#{self.restarts}, attempt {attempt}/3)")
             try:
                 if self.game:
                     self.game.stop()
@@ -1015,12 +1019,14 @@ def main() -> int:
     ap.add_argument("--out", default=None)
     ap.add_argument("--difficulty", type=int, default=1, help="1 = Novice")
     ap.add_argument("--hours", type=float, default=72.0)
+    ap.add_argument("--seed", type=int, default=0,
+                    help="RNG seed (0 = engine default); give parallel runs different seeds")
     args = ap.parse_args()
     policy = configure_runner(args)
     args.port = args.port or free_port(17800)
     repo = Path(args.repo)
     out = Path(args.out) if args.out else repo / "build/victory"
-    v = Victory(repo, out, args.port, args.difficulty, battle_policy=policy)
+    v = Victory(repo, out, args.port, args.difficulty, battle_policy=policy, seed=args.seed)
     try:
         return v.run(args.hours)
     finally:

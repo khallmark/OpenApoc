@@ -640,7 +640,11 @@ class GameProcess:
             f"--Framework.TargetFPS={target_fps()}",
         ] + ([] if audio_enabled() else ["--Framework.AudioBackends=null"]) + screen_args() \
             + PAUSE_NOTIFICATION_FLAGS + self.extra
-        self.logf = open(self.log_path, "w")
+        # Append, never truncate: a runner that restarts after a crash used to reopen this with "w"
+        # and overwrite the only record of how the previous instance died.
+        self.logf = open(self.log_path, "a")
+        self.logf.write(f"\n===== launch {time.strftime('%Y-%m-%d %H:%M:%S')} port={self.port} =====\n")
+        self.logf.flush()
         # SDL3 makes window operations synchronous by default: Cocoa_SyncWindow pumps the Cocoa
         # event queue until the window server acknowledges the state change. On this machine that
         # acknowledgement stopped arriving after the engine died hard twice in a row, and every
@@ -5133,6 +5137,9 @@ def main() -> int:
         play_campaign(d, args.difficulty, args.days, args.leg)
     except Exception as exc:
         d.say(f"[FAIL] {type(exc).__name__}: {exc}")
+        if game is not None:
+            time.sleep(1.0)  # let a dying process be reaped so its signal is readable
+            d.say(f"[FAIL] game process: {game.exit_status() or 'still running'}")
         rc = 1
     finally:
         d.say(f"[stages seen] {sorted(d.stages_seen)}")

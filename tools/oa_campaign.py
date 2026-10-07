@@ -127,7 +127,9 @@ class Campaign:
             return False
         self.restarts += 1
         self.progress["restarts"] = self.progress.get("restarts", 0) + 1
-        self.say(f"game died - restarting from checkpoint (restart #{self.restarts})")
+        how = self.game.exit_status() if self.game else "unknown"
+        self.say(f"game died ({how or 'still running'}) - restarting from checkpoint "
+                 f"(restart #{self.restarts})")
         try:
             if self.game:
                 self.game.stop()
