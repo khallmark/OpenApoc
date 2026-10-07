@@ -29,10 +29,14 @@ cmake --build build -j"$(sysctl -n hw.ncpu)"   # also extracts data/mods/base/ba
 ```
 
 - **Play:** `./build/bin/OpenApoc.app/Contents/MacOS/OpenApoc --Framework.Data="$PWD/data" --Framework.CD="$PWD/data/cd.iso"`
-- **Watch a robot play three game days:** `OA_WATCH=1 python3 tools/oa_play.py --days 3`
-  - `OA_WATCH=1` raises the window and caps the game at 60 FPS.
-  - `OA_CITY_SPEED=1..5` caps the city clock; 5 is turbo.
-  - `OA_TARGET_FPS=N` overrides the frame cap.
+- **Watch a robot play three game days:** `python3 tools/oa_play.py --watch --days 3`
+  - `--watch` raises the window, caps the game at 60 FPS, and prints one narration line per
+    decision.
+  - `--city-speed 1..5` caps the city clock; 5 is turbo.
+  - `--step-delay S` pauses between the robot's actions.
+  - `--ai veteran` (or a plugin in `tools/ai_plugins/`) fights the battles.
+  - The same flags work on `oa_campaign.py` (resumable, real-world hours), `oa_victory.py` (play
+    to the win) and `oa_skirmish.py` (one battle).
 - **Test:** `ctest --test-dir build --output-on-failure`. Always run tests through `ctest`. Ten of
   the binaries need the gamestate path that `ctest` supplies, and exit 0 without testing anything
   if run bare.
@@ -66,6 +70,8 @@ conflict.
 | Commit | What |
 |---|---|
 | `91e1234c` | Metal backend and renderer parity tooling |
+| `4f475f86` | `NotificationScreen::resume()` unguarded `optionsMap.at()`: a covered alien-takeover notice aborted the game (upstream has the same line) |
+| `fca77920` | `Control::click()` sent a click with no mouse button |
 | `2b849afe` | GLES 3.0 on macOS behind an opt-in core profile |
 | `586d8b33` | GL 2.0: batched quads through an index buffer |
 | `63072fa2` | Mod path follows the data path |
