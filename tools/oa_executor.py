@@ -70,11 +70,14 @@ def load_plugins(verbose: bool = False) -> dict:
     return found
 
 
-def make_ai(name: str, **kw) -> TacticalAI:
+def make_ai(name: str, *, tuning: dict | None = None, **kw) -> TacticalAI:
+    """Build a built-in or plugin AI, filtering policy tuning against its constructor."""
     table = load_plugins()
     cls = table.get(name)
     if cls is None:
         raise KeyError(f"unknown AI {name!r}; available: {sorted(table)}")
+    accepted = set(inspect.signature(cls.__init__).parameters) - {"self"}
+    kw = {**{k: v for k, v in (tuning or {}).items() if k in accepted}, **kw}
     return cls(**kw)
 
 

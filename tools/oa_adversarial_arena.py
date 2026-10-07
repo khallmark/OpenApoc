@@ -34,7 +34,7 @@ import sys
 import time
 from pathlib import Path
 
-from oa_adversarial import Arena, Evaluator, Policy, new_arena, train
+from oa_adversarial import Evaluator, Policy, new_arena, train
 from oa_play import (
     free_port,
     TICKS_PER_DAY, Driver, GameProcess, Harness, advance, assign_research, buy_interceptor,

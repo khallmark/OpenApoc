@@ -69,8 +69,7 @@ STAGE_FORMS = {
     "SaveMenu": "savemenu",
     "CheatOptions": "cheatoptions",
     # Skirmish mode's three screens. Without these, controls() returns {} on all of them and
-    # every helper built on it -- click_list_row, the resolved-rect fallback in click_id -- is
-    # blind there. Note that Skirmish::begin() unconditionally pushes MapSelector
+    # the resolved-rect fallback in click_id is blind there. Note that Skirmish::begin() unconditionally pushes MapSelector
     # (skirmish.cpp:689-693), so the Skirmish config screen is only current once a location has
     # been chosen and MapSelector has popped back to it, never straight after BUTTON_SKIRMISH.
     "Skirmish": "skirmish",
@@ -191,7 +190,15 @@ class Harness:
                 chunks.append(data)
                 if b"\n" in data:
                     break
-        return b"".join(chunks).decode(errors="replace").strip()
+        reply = b"".join(chunks).decode(errors="replace").strip()
+        # Pace UI mutations once here, including raw send() calls. Observations remain instant.
+        verb = line.split()[0]
+        is_action = verb in {"click", "key", "keydown", "keyup", "move", "down", "up", "action"}
+        is_action |= verb == "control" and line.split()[-1] != "get"
+        delay = float(os.environ.get("OA_STEP_DELAY", "0"))
+        if is_action and delay > 0:
+            time.sleep(delay)
+        return reply
 
     def ok(self, line: str) -> str:
         reply = self.send(line)
@@ -370,6 +377,35 @@ def target_fps() -> int:
 def city_speed_cap() -> int:
     """Highest city clock speed the driver may select (1-5). 5 is turbo. OA_CITY_SPEED sets it."""
     return max(1, min(5, int(os.environ.get("OA_CITY_SPEED", "5"))))
+
+
+def nonnegative_seconds(value: str) -> float:
+    """Argparse type for a finite, nonnegative action delay."""
+    import math
+    seconds = float(value)
+    if not math.isfinite(seconds) or seconds < 0:
+        raise argparse.ArgumentTypeError("must be a finite, nonnegative number of seconds")
+    return seconds
+
+
+def add_runner_options(ap: argparse.ArgumentParser) -> None:
+    """Shared human-paced playback and tactical policy options."""
+    ap.add_argument("--watch", action="store_true", help="watch the game at a human pace")
+    ap.add_argument("--city-speed", type=int, choices=range(1, 6), default=None,
+                    metavar="N", help="maximum city speed (1-5); sets OA_CITY_SPEED")
+    ap.add_argument("--step-delay", type=nonnegative_seconds, default=0, metavar="SECONDS",
+                    help="sleep between driver actions (default: 0)")
+    ap.add_argument("--ai", metavar="NAME", help="built-in or plugin tactical AI")
+
+
+def configure_runner(args: argparse.Namespace) -> dict:
+    """Apply playback options before launch and return the battle policy."""
+    if args.watch:
+        os.environ["OA_WATCH"] = "1"
+    if args.city_speed is not None:
+        os.environ["OA_CITY_SPEED"] = str(args.city_speed)
+    os.environ["OA_STEP_DELAY"] = str(args.step_delay)
+    return {"ai": args.ai} if args.ai else {}
 
 
 def bring_to_front() -> None:
@@ -667,10 +703,12 @@ class GameProcess:
 
 class Driver:
     def __init__(self, harness: Harness, forms_dir: Path, log: Path | None = None,
-                 shots: Path | None = None, verbose: bool = True):
+                 shots: Path | None = None, verbose: bool = True,
+                 battle_policy: dict | None = None):
         self.h = harness
         self.lib = FormLibrary(forms_dir)
         self.verbose = verbose
+        self.battle_policy = dict(battle_policy or {})
         self.shots = shots
         self.shot_n = 0
         self.events: list[str] = []
@@ -714,8 +752,8 @@ class Driver:
 
     def say(self, msg: str) -> None:
         self.events.append(msg)
-        if self.verbose:
-            print(msg, flush=True)
+        if self.verbose or watching():
+            print(" ".join(msg.splitlines()) if watching() else msg, flush=True)
 
     # -- screen awareness ------------------------------------------------
     def status(self) -> Status:
@@ -1069,7 +1107,7 @@ def snapshot(d: Driver, tag: str) -> dict[str, str]:
 
 def set_speed(d: Driver, level: int) -> None:
     """City clock speed via the always-on 0-5 hotkeys (cityview.cpp handleKeyDown)."""
-    d.h.key(str(level))
+    d.h.key(str(min(level, city_speed_cap())) if level > 0 else "0")
 
 
 TICKS_PER_DAY = 12441600
@@ -1166,42 +1204,6 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
             d.say(f"  [clock] {pct:5.1f}% day={t['day']} week={t['week']} {t['time']} turbo={turbo.get('can_turbo')}")
     d.say(f"  [clock] turbo blocked for ~{blocked_s:.0f}s of this leg")
     return d.h.gs("time")
-
-
-
-
-def click_list_row(d: Driver, list_id: str, row: int, st: Status, item_h: int = 20) -> bool:
-    """Listbox contents are runtime data, so address rows geometrically inside the resolved rect.
-
-    Only for lists whose row is clickable across its own width. Where the row is an inert
-    container and the callback sits on a nested child, use the engine's own addressing instead:
-
-        d.h.send(f"control {list_id} item {row} item 1 click")
-
-    which walks the child hierarchy by position with no pixel arithmetic at all
-    (forms/harness_actions.cpp:472-495; worked example in oa_skirmish.py's pick_map, :80-101).
-    MapSelector's LISTBOX_MAPS is the case that forced it: each row is a 488px Label plus a 22px
-    GraphicButton, and only that button calls Skirmish::setLocation (mapselector.cpp:53-144), so
-    a click landing anywhere in the label -- which is where x + min(40, w // 3) lands in a 510px
-    list -- does nothing at all.
-
-    Do not make this helper fall back to `control <list> item <row> click` to cover that case.
-    Control::click() returns true for any visible, enabled control whether or not anything is
-    listening (forms/control.cpp:1255-1269), so an inert row would report success while doing
-    nothing -- the silent no-op this driver keeps having to dig itself out of.
-
-    item_h stays the caller's business: oa_forms.py treats <item> as an attribute node and drops
-    it, so the engine's real row pitch (ItemSize + ItemSpacing, listbox.cpp:83) is not visible
-    here -- it is 25 for LISTBOX_MAPS, not the 20 assumed by default.
-    """
-    c = d.controls(st).get(list_id)
-    if c is None or c.w <= 0:
-        return False
-    y = c.y + row * item_h + item_h // 2
-    if y >= c.y + c.h:
-        return False
-    d.h.click_xy(c.x + min(40, c.w // 3), y)
-    return True
 
 
 def return_to_city(d: Driver, tries: int = 12) -> bool:
@@ -1434,36 +1436,6 @@ PRIORITY_RESEARCH = [
 # occurrence so the order reads as written, and drop the repeats so the list is honest about its
 # length.
 PRIORITY_RESEARCH = list(dict.fromkeys(PRIORITY_RESEARCH))
-
-
-def pick_topic_row(d: Driver) -> int:
-    """Row index in ResearchSelect's LIST for the most valuable topic this lab can take.
-
-    gs research_options mirrors ResearchSelect's own filtering and ordering
-    (researchselect.cpp:222-240), so the index it reports is the index to select.
-    """
-    detail = d.h.gs("research_options").get("detail", "")
-    if not detail or detail == "-":
-        return -1
-    rows = []
-    for part in detail.split("|"):
-        try:
-            idx, rest = part.split("=", 1)
-            fields = rest.split(",")
-            topic = fields[0]
-            done = fields[1].endswith("1")
-            big = fields[2].endswith("1")
-        except (ValueError, IndexError):
-            continue
-        rows.append((int(idx), topic, done, big))
-    # A "too large" topic in a small lab is offered but refused with a message box, so skip it.
-    usable = [r for r in rows if not r[2] and not r[3]]
-    for want in PRIORITY_RESEARCH:
-        for idx, topic, _, _ in usable:
-            if topic == want:
-                d.say(f"  [research] targeting {topic} (row {idx})")
-                return idx
-    return usable[0][0] if usable else -1
 
 
 def pick_topic_rows(d: Driver) -> list[tuple[int, str]]:
@@ -2108,7 +2080,7 @@ def manufacture(d: Driver, want: str = "MANUFACTURE_DIMENSION_SHIFTER", qty: int
     lab type: an Engineering lab is charged the project cost immediately. required_lab_size is
     *not* used to filter the offered list, so a Large-only project appears in a small workshop's
     list too and is refused with a message box when picked -- gs research_options flags that as
-    big=1, and pick_topic_row already skips those.
+    big=1, and pick_topic_rows already skips those.
     """
     before = d.h.gs("stores").get("vehicle_top", "-")
     st = d.status()
@@ -2415,7 +2387,6 @@ def visit_ufopaedia(d: Driver) -> bool:
             break
         d.escape_key(); time.sleep(0.5)
     return ok
-
 
 
 def intercept_ufos(d: Driver) -> int:
@@ -2970,17 +2941,10 @@ def build_battle_ai(policy: dict):
     name = (policy or {}).get("ai")
     if not name:
         return None, None
-    import inspect
     from oa_capabilities import Capabilities
     from oa_executor import make_ai
-    from oa_ai import REGISTRY
 
-    cls = REGISTRY.get(name)
-    accepted = set()
-    if cls is not None:
-        accepted = set(inspect.signature(cls.__init__).parameters) - {"self"}
-    kw = {k: v for k, v in policy.items() if k in accepted}
-    return make_ai(name, **kw), Capabilities
+    return make_ai(name, tuning=policy), Capabilities
 
 
 def battle_gs(d: Driver, query: str) -> dict:
@@ -2995,7 +2959,6 @@ def battle_gs(d: Driver, query: str) -> dict:
         return d.h.gs(query) or {}
     except (HarnessError, OSError):
         return {}
-
 
 
 def on_screen(d: Driver, which: str) -> list:
@@ -3017,7 +2980,6 @@ def on_screen(d: Driver, which: str) -> list:
         return []
 
 
-
 def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) -> str:
     """Fight a tactical mission, and leave the numbers behind on `d.last_battle`.
 
@@ -3027,6 +2989,8 @@ def win_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = None) 
     afterwards -- as the adversarial arena was -- gets an empty dict and scores a real battle as
     though it had no squad.
     """
+    if policy is None:
+        policy = getattr(d, "battle_policy", None)
     t0 = time.time()
     d.last_battle = {"outcome": "running", "seconds": 0.0, "started_with": 0,
                      "survivors": None, "mission_type": "unknown",
@@ -4536,10 +4500,25 @@ def buy_equipment(d: Driver, rows: int = 10, qty: int = 6) -> bool:
     nothing until the armoury actually has spares.
     """
     funds_before = int(d.h.gs("funds").get("balance", "0") or 0)
+    if funds_before <= 40000:
+        d.say(f"  [buy] only ${funds_before}; keeping the campaign reserve")
+        return False
     if not open_buysell(d):
         return False
     changed = buy_category(d, "BUTTON_AGENTS", qty, rows)
-    close_buysell(d, commit=changed > 0)
+    # TEXT_FUNDS is the projected balance, including the pending transaction. Cancel if
+    # prices exceed the budget, or if the screen cannot supply an honest preview.
+    affordable = False
+    try:
+        preview = d.h.send("control TEXT_FUNDS get")
+        if preview.startswith("OK") and "text=" in preview:
+            balance = int(preview.split("text=", 1)[1].split()[0].replace(",", "").replace("$", ""))
+            affordable = 40000 <= balance < funds_before
+    except (HarnessError, OSError, ValueError, IndexError):
+        pass
+    if changed and not affordable:
+        d.say("  [buy] equipment order exceeds reserve or has no valid funds preview; cancelling")
+    close_buysell(d, commit=changed > 0 and affordable)
     funds_after = int(d.h.gs("funds").get("balance", "0") or 0)
     d.say(f"  [buy] {changed} lines of agent equipment, funds {funds_before}->{funds_after}")
     return funds_after != funds_before
@@ -5098,6 +5077,7 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    add_runner_options(ap)
     ap.add_argument("--port", type=int, default=17321)
     ap.add_argument("--repo", default=str(Path(__file__).resolve().parent.parent))
     ap.add_argument("--out", default=None)
@@ -5109,6 +5089,7 @@ def main() -> int:
                     help="explicit RNG seed; 0 keeps the engine default. Logged to the ledger so "
                          "any run can be replayed exactly.")
     args = ap.parse_args()
+    policy = configure_runner(args)
 
     repo = Path(args.repo)
     out = Path(args.out) if args.out else repo / "build/e2e"
@@ -5121,7 +5102,7 @@ def main() -> int:
         print(f"[launch] {game.binary}", flush=True)
         game.start()
 
-    d = Driver(Harness(port=args.port), repo / "data/forms", shots=shots)
+    d = Driver(Harness(port=args.port), repo / "data/forms", shots=shots, battle_policy=policy)
     d.checks = {}
     rc = 0
     try:

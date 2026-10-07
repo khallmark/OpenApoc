@@ -23,6 +23,8 @@ import time
 from pathlib import Path
 
 from oa_play import (
+    add_runner_options,
+    configure_runner,
     free_port,
     Driver,
     GameProcess,
@@ -46,9 +48,11 @@ RESTART_COOLDOWN_S = 2.0
 class Campaign:
     """Owns the game process across restarts and keeps a durable progress record."""
 
-    def __init__(self, repo: Path, out: Path, port: int, difficulty: int = 1):
+    def __init__(self, repo: Path, out: Path, port: int, difficulty: int = 1,
+                 battle_policy: dict | None = None):
         self.repo, self.out, self.port = Path(repo), Path(out), port
         self.difficulty = difficulty
+        self.battle_policy = dict(battle_policy or {})
         self.out.mkdir(parents=True, exist_ok=True)
         (self.out / "shots").mkdir(exist_ok=True)
         self.checkpoint = self.out / "campaign.save"
@@ -97,7 +101,7 @@ class Campaign:
         self.game = GameProcess(self.repo, self.port, self.out / "game.log", extra=extra)
         self.game.start(wait_s=180)
         self.d = Driver(Harness(port=self.port), self.repo / "data/forms",
-                        shots=self.out / "shots", verbose=True)
+                        shots=self.out / "shots", verbose=True, battle_policy=self.battle_policy)
         self.d.checks = {}
         if resume:
             self.say("resumed from checkpoint")
@@ -216,6 +220,7 @@ class Campaign:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    add_runner_options(ap)
     ap.add_argument("--port", type=int, default=0,
                     help="harness port; 0 picks a free one near 17700")
     ap.add_argument("--repo", default=str(Path(__file__).resolve().parent.parent))
@@ -224,11 +229,12 @@ def main() -> int:
     ap.add_argument("--hours", type=float, default=48.0)
     ap.add_argument("--leg", type=float, default=3.0, help="game-days per leg")
     args = ap.parse_args()
+    policy = configure_runner(args)
     args.port = args.port or free_port(17700)
 
     repo = Path(args.repo)
     out = Path(args.out) if args.out else repo / "build/campaign"
-    c = Campaign(repo, out, args.port, args.difficulty)
+    c = Campaign(repo, out, args.port, args.difficulty, battle_policy=policy)
     try:
         return c.run(args.hours, args.leg)
     finally:

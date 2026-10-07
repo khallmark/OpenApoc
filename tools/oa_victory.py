@@ -27,6 +27,10 @@ import traceback
 from pathlib import Path
 
 from oa_play import (
+    add_runner_options,
+    configure_runner,
+    set_speed,
+    free_port,
     Driver,
     GameProcess,
     Harness,
@@ -104,9 +108,11 @@ CHECKPOINT_EVERY_S = 300.0
 
 
 class Victory:
-    def __init__(self, repo: Path, out: Path, port: int, difficulty: int = 1):
+    def __init__(self, repo: Path, out: Path, port: int, difficulty: int = 1,
+                 battle_policy: dict | None = None):
         self.repo, self.out, self.port = Path(repo), Path(out), port
         self.difficulty = difficulty
+        self.battle_policy = dict(battle_policy or {})
         self.out.mkdir(parents=True, exist_ok=True)
         (self.out / "shots").mkdir(exist_ok=True)
         self.checkpoint = self.out / "victory.save"
@@ -126,6 +132,7 @@ class Victory:
         self.built_workshop = False
         self.last_equip = 0.0
         self.last_craft = 0.0
+        self.last_equipment = 0.0
         self.last_score_warn = 0.0
         self.last_endgame = 0.0
         self.last_checkpoint = 0.0
@@ -210,7 +217,7 @@ class Victory:
         self.game = GameProcess(self.repo, self.port, self.out / "game.log", extra=extra)
         self.game.start(wait_s=240)
         self.d = Driver(Harness(port=self.port), self.repo / "data/forms",
-                        shots=self.out / "shots", verbose=True)
+                        shots=self.out / "shots", verbose=True, battle_policy=self.battle_policy)
         self.d.checks = {}
         self.d.say = lambda m: self.say(m)
         if resume:
@@ -584,6 +591,13 @@ class Victory:
                 stock_for_template(self.d, qty=self.armoury_size())
                 stock_best_guns(self.d, qty=self.armoury_size())
 
+        # Restock replacement equipment alongside the gun/craft economy work, with a reserve.
+        if armed < soldiers and time.time() - self.last_equipment > 240.0:
+            self.last_equipment = time.time()
+            if int(self.d.h.gs("funds").get("balance", "0") or 0) > 40000:
+                self.d.say("[economy] stocking replacement equipment")
+                buy_equipment(self.d)
+
         # Replace losses, and arm them if the armoury can.
         fit = int(ag.get("soldiers_fit", "0") or 0)
         if fit < MIN_SOLDIERS and time.time() - self.last_hire > 180.0:
@@ -708,17 +722,17 @@ class Victory:
                     self.say(f"{pending} building(s) awaiting a sweep - holding normal speed "
                              f"rather than fast-forwarding through the invasion")
                     self.turbo_held = pending
-                self.d.h.key("3")
+                set_speed(self.d, 3)
             else:
                 self.turbo_held = 0
-                self.d.h.key("5" if self.d.h.gs("turbo").get("can_turbo") == "1" else "4")
+                set_speed(self.d, 5 if self.d.h.gs("turbo").get("can_turbo") == "1" else 4)
         else:
             # No live UFO left in the city, so anything still holding an attack order is just
             # pinning canTurbo() false and freezing the clock.
             t = self.d.h.gs("turbo")
             if int(t.get("attack_missions", "0") or 0) > 0:
                 clear_attack_orders(self.d)
-            self.d.h.key("5")  # nothing hostile left; turbo is safe and ~1681x faster
+            set_speed(self.d, 5)  # nothing hostile left; turbo is safe and ~1681x faster
 
     def next_campaign(self, why: str) -> bool:
         """Retire the finished run and begin a new one. False if there is no time left to bother.
@@ -993,15 +1007,19 @@ class Victory:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--port", type=int, default=17800)
+    add_runner_options(ap)
+    ap.add_argument("--port", type=int, default=0,
+                    help="harness port; 0 picks a free one near 17800")
     ap.add_argument("--repo", default=str(Path(__file__).resolve().parent.parent))
     ap.add_argument("--out", default=None)
     ap.add_argument("--difficulty", type=int, default=1, help="1 = Novice")
     ap.add_argument("--hours", type=float, default=72.0)
     args = ap.parse_args()
+    policy = configure_runner(args)
+    args.port = args.port or free_port(17800)
     repo = Path(args.repo)
     out = Path(args.out) if args.out else repo / "build/victory"
-    v = Victory(repo, out, args.port, args.difficulty)
+    v = Victory(repo, out, args.port, args.difficulty, battle_policy=policy)
     try:
         return v.run(args.hours)
     finally:

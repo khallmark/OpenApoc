@@ -87,7 +87,10 @@ import sys
 import time
 from pathlib import Path
 
-from oa_play import Driver, GameProcess, Harness, HarnessError, new_game, win_battle
+from oa_play import (
+    add_runner_options, configure_runner, Driver, GameProcess, Harness, HarnessError,
+    free_port, new_game, win_battle,
+)
 
 # Slider ids from data/forms/selectforces.form, keyed by the same short names players know them
 # by. Values are per-mission counts; the sliders themselves cap out well above what is useful for
@@ -275,16 +278,19 @@ def run_one(d: Driver, aliens: dict, map_row: int = 0, real_time: bool = True,
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
+    add_runner_options(ap)
     ap.add_argument("--port", type=int, default=0,
                     help="harness port; 0 picks a free one near 17900")
     ap.add_argument("--repo", default=str(Path(__file__).resolve().parent.parent))
     ap.add_argument("--out", default=None)
-    ap.add_argument("--rounds", type=int, default=5, help="how many battles to fight in a row")
+    ap.add_argument("--rounds", type=int, default=1,
+                    help="how many battles to fight (default: 1; round 2 can crash the game)")
     ap.add_argument("--alien", action="append", default=[],
                      help="name=count, repeatable, e.g. --alien popper=6 --alien brainsucker=3")
     ap.add_argument("--map-row", type=int, default=0)
     ap.add_argument("--budget", type=float, default=300.0, help="seconds per battle")
     args = ap.parse_args()
+    policy = configure_runner(args)
     args.port = args.port or free_port(17900)
 
     aliens = {}
@@ -300,7 +306,8 @@ def main() -> int:
 
     game = GameProcess(repo, args.port, out / "game.log")
     game.start(wait_s=240)
-    d = Driver(Harness(port=args.port), repo / "data/forms", shots=out / "shots", verbose=True)
+    d = Driver(Harness(port=args.port), repo / "data/forms", shots=out / "shots",
+               verbose=True, battle_policy=policy)
     d.checks = {}
     new_game(d, 1)
 
