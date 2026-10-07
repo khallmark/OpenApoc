@@ -228,6 +228,11 @@ void GameTime::clearFlags()
 	weekPassedFlag = false;
 }
 
+uint64_t GameTime::intervalsCrossed(uint64_t before, uint64_t ticks, uint64_t interval)
+{
+	return (before + ticks) / interval - before / interval;
+}
+
 void GameTime::addTicks(uint64_t ticks)
 {
 	this->ticks += ticks;

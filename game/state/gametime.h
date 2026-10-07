@@ -45,6 +45,10 @@ class GameTime
 	GameTime() = default;
 	GameTime(uint64_t ticks);
 
+	// How many boundaries of `interval` ticks lie in (before, before + ticks]. A turbo step jumps
+	// five minutes at once, crossing 300 second boundaries; per-second work has to run for each.
+	static uint64_t intervalsCrossed(uint64_t before, uint64_t ticks, uint64_t interval);
+
 	void addTicks(uint64_t ticks);
 
 	unsigned int getHours() const;

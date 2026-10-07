@@ -138,6 +138,19 @@ static bool test_vanilla_city_speed1_ticks()
 	return true;
 }
 
+// A turbo step (five minutes) must count every second it crosses; per-second work ran once per
+// step before, which let aircraft burn 1/300th of their fuel at turbo.
+static bool test_intervals_crossed()
+{
+	const uint64_t S = TICKS_PER_SECOND;
+	TEST_REQUIRE(GameTime::intervalsCrossed(0, 5 * TICKS_PER_MINUTE, S) == 300,
+	             "a five-minute step from a boundary crosses 300 seconds");
+	TEST_REQUIRE(GameTime::intervalsCrossed(S - 1, 1, S) == 1, "one tick onto a boundary");
+	TEST_REQUIRE(GameTime::intervalsCrossed(S, S - 1, S) == 0, "inside one second");
+	TEST_REQUIRE(GameTime::intervalsCrossed(S / 2, S, S) == 1, "a straddling second");
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	if (config().parseOptions(argc, argv))
@@ -147,6 +160,7 @@ int main(int argc, char **argv)
 	applyDeterministicTestConfig();
 	return runTestSuite({
 	    {"tick_constants", test_tick_constants},
+	    {"intervals_crossed", test_intervals_crossed},
 	    {"midday", test_midday},
 	    {"add_ticks_flags", test_add_ticks_flags},
 	    {"get_ticks_between", test_get_ticks_between_as_implemented},

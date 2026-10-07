@@ -1347,13 +1347,18 @@ void GameState::update(unsigned int ticks)
 
 		cleanUpDeathNote();
 
+		const uint64_t secondsCrossed =
+		    GameTime::intervalsCrossed(gameTime.getTicks(), ticks, TICKS_PER_SECOND);
 		gameTime.addTicks(ticks);
 
 		if (gameTime.getTicks() > nextInvasion)
 		{
 			invasion();
 		}
-		if (gameTime.secondPassed())
+		// Once per second crossed, not once per call: a turbo step crosses 300 seconds, and the
+		// per-second work is fuel burn, so one call per step let craft fly turbo on 1/300th of
+		// their fuel. The per-second hooks accumulate and are safe to repeat at one timestamp.
+		for (uint64_t s = 0; s < secondsCrossed; s++)
 		{
 			this->updateEndOfSecond();
 		}
