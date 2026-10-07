@@ -194,6 +194,24 @@ z = oa_sample.Widget()
             "unused", "documented"}
 
 
+def test_runner_classes_define_every_method_they_call():
+    """self.record() was called four times in Victory and never defined: each call raised
+    AttributeError, swallowed by the run loop, at exactly the endgame milestones. Fail on any
+    self.<name>(...) in a runner class that the class (or its bases) does not provide."""
+    import ast
+    import inspect
+    for module, cls in ((oa_victory, oa_victory.Victory), (oa_campaign, oa_campaign.Campaign)):
+        tree = ast.parse(inspect.getsource(cls))
+        called = {n.func.attr for n in ast.walk(tree)
+                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                  and isinstance(n.func.value, ast.Name) and n.func.value.id == "self"}
+        assigned = {t.attr for n in ast.walk(tree) if isinstance(n, ast.Assign)
+                    for t in n.targets if isinstance(t, ast.Attribute)
+                    and isinstance(t.value, ast.Name) and t.value.id == "self"}
+        missing = sorted(c for c in called if not hasattr(cls, c) and c not in assigned)
+        assert not missing, f"{cls.__name__} calls undefined methods: {missing}"
+
+
 if __name__ == "__main__":
     for name, test in list(globals().items()):
         if name.startswith("test_"):

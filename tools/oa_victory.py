@@ -176,6 +176,16 @@ class Victory:
     def flush(self) -> None:
         self.progress_path.write_text(json.dumps(self.progress, indent=1))
 
+    def record(self, key: str, value=None) -> None:
+        """Note an endgame milestone in progress.json. Was called four times and never defined, so
+        each milestone raised AttributeError and abandoned the rest of that city turn."""
+        milestones = self.progress.setdefault("milestones", [])
+        if key not in milestones:
+            milestones.append(key)
+        if value is not None:
+            self.progress[key] = value
+        self.flush()
+
     def say(self, msg: str) -> None:
         line = f"[{time.strftime('%H:%M:%S')}] {msg}"
         print(line, flush=True)
