@@ -354,6 +354,24 @@ PAUSE_NOTIFICATION_FLAGS = [
             "--Notifications.City.VehicleRepaired=0",
 ]
 
+def watching() -> bool:
+    """OA_WATCH=1: run at a pace a human can follow -- raised window, 60 FPS, and a city clock
+    capped by OA_CITY_SPEED (default 5, turbo). Off by default; automated runs keep full speed."""
+    return os.environ.get("OA_WATCH") == "1"
+
+
+def target_fps() -> int:
+    """Frame cap for the launched game. OA_TARGET_FPS wins; OA_WATCH=1 means 60; else 1000."""
+    if os.environ.get("OA_TARGET_FPS"):
+        return int(os.environ["OA_TARGET_FPS"])
+    return 60 if watching() else 1000
+
+
+def city_speed_cap() -> int:
+    """Highest city clock speed the driver may select (1-5). 5 is turbo. OA_CITY_SPEED sets it."""
+    return max(1, min(5, int(os.environ.get("OA_CITY_SPEED", "5"))))
+
+
 def bring_to_front() -> None:
     """Raise the game window, only when explicitly asked for via OA_RAISE_WINDOW=1.
 
@@ -363,7 +381,7 @@ def bring_to_front() -> None:
     visible without any of this -- raising it is a convenience, not a requirement -- so the
     default is to leave the user's focus alone entirely.
     """
-    if sys.platform != "darwin" or os.environ.get("OA_RAISE_WINDOW") != "1":
+    if sys.platform != "darwin" or not (os.environ.get("OA_RAISE_WINDOW") == "1" or watching()):
         return
     try:
         subprocess.run(
@@ -560,7 +578,7 @@ class GameProcess:
             # Frame limiting is honoured again now that the loop resynchronises after a hitch,
             # and ticks advance per frame -- so an automated run asks for the headroom outright
             # rather than relying on the limiter being broken.
-            "--Framework.TargetFPS=1000",
+            f"--Framework.TargetFPS={target_fps()}",
         ] + PAUSE_NOTIFICATION_FLAGS + self.extra
         self.logf = open(self.log_path, "w")
         # SDL3 makes window operations synchronous by default: Cocoa_SyncWindow pumps the Cocoa
@@ -1120,11 +1138,12 @@ def advance(d: Driver, game_days: float, budget_s: float = 1800.0) -> dict:
             d.checks["stationed"] = d.checks.get("stationed", 0) + station_at_gates(d)
 
         turbo = d.h.gs("turbo")
+        cap = city_speed_cap()
         if turbo.get("can_turbo") == "1":
-            d.h.key("5")  # turbo: ~1681x faster, and canTurbo() gates it by itself
+            set_speed(d, cap)  # 5 is turbo: ~1681x faster, and canTurbo() gates it by itself
         else:
             blocked_s += 1.0
-            d.h.key("4")
+            set_speed(d, min(cap, 4))
             # Turbo is gated on there being no live hostiles; engage them rather than idling.
             if int(turbo.get("hostiles", "0")) > 0 and time.time() - last_intercept > 8:
                 last_intercept = time.time()
