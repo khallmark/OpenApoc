@@ -30,6 +30,7 @@ extern ConfigOptionString languageOption;
 extern ConfigOptionBool mouseCaptureOption;
 
 extern ConfigOptionInt frameLimit;
+extern ConfigOptionInt renderFPS;
 extern ConfigOptionInt targetFPS;
 extern ConfigOptionInt swapInterval;
 extern ConfigOptionInt profileFrames;

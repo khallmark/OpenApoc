@@ -55,6 +55,7 @@ void dumpOptionsToLog()
 	dumpOption(mouseCaptureOption);
 
 	dumpOption(targetFPS);
+	dumpOption(renderFPS);
 	dumpOption(frameLimit);
 	dumpOption(swapInterval);
 	dumpOption(profileFrames);
@@ -277,6 +278,10 @@ ConfigOptionBool mouseCaptureOption("Framework", "MouseCapture",
 
 ConfigOptionInt targetFPS("Framework", "TargetFPS",
                           tr("The target FPS count - affects game speed!"), 60);
+ConfigOptionInt renderFPS("Framework", "RenderFPS",
+                          tr("Frames drawn per second, independent of game speed (0 = the "
+                             "display's refresh rate)"),
+                          0);
 ConfigOptionInt frameLimit("Framework", "FrameLimit",
                            tr("Quit after this many frames - 0 = unlimited"), 0);
 ConfigOptionInt swapInterval("Framework", "SwapInterval",

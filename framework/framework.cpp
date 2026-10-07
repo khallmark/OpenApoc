@@ -401,13 +401,33 @@ void Framework::run(sp<Stage> initialStage)
 	size_t frame = 0;
 	LogInfo("Program loop started");
 
+	// TargetFPS is the SIMULATION rate: every update() advances the game by a fixed step, so it
+	// sets game speed. Rendering runs on its own clock at RenderFPS - by default the display's
+	// refresh rate (120 on a ProMotion panel) - so the picture is as smooth as the screen allows
+	// without the game running faster, and an automated run at TargetFPS=1000 no longer pays
+	// for 1000 presents a second.
 	auto target_frame_duration =
 	    std::chrono::duration<int64_t, std::micro>(1000000 / Options::targetFPS.get());
+	int renderFPS = Options::renderFPS.get();
+	if (renderFPS <= 0)
+	{
+		SDL_DisplayMode displayMode;
+		renderFPS = (SDL_GetCurrentDisplayMode(Options::screenDisplayNumberOption.get(),
+		                                       &displayMode) == 0 &&
+		             displayMode.refresh_rate > 0)
+		                ? displayMode.refresh_rate
+		                : 60;
+	}
+	const auto target_render_duration =
+	    std::chrono::duration<int64_t, std::micro>(1000000 / renderFPS);
+	LogInfo("Simulating at {0} steps/s, rendering at {1} fps", Options::targetFPS.get(),
+	        renderFPS);
 
 	p->ProgramStages.push(initialStage);
 
 	this->renderer->setPalette(this->data->loadPalette("xcom3/ufodata/pal_06.dat"));
 	auto expected_frame_time = std::chrono::steady_clock::now();
+	auto expected_render_time = expected_frame_time;
 
 	bool frame_time_limited_warning_shown = false;
 
@@ -423,18 +443,32 @@ void Framework::run(sp<Stage> initialStage)
 	while (!p->quitProgram)
 	{
 		auto frame_time_now = std::chrono::steady_clock::now();
-		if (expected_frame_time > frame_time_now)
+		const auto next_due = std::min(expected_frame_time, expected_render_time);
+		if (next_due > frame_time_now)
 		{
-			auto time_to_sleep = expected_frame_time - frame_time_now;
+			auto time_to_sleep = next_due - frame_time_now;
 			auto time_to_sleep_us =
 			    std::chrono::duration_cast<std::chrono::microseconds>(time_to_sleep);
 			LogDebug("sleeping for {0} us", time_to_sleep_us.count());
 			std::this_thread::sleep_for(time_to_sleep);
 			continue;
 		}
-		expected_frame_time += target_frame_duration;
-		frame++;
-		frameNumber++;
+		const bool doUpdate = frame_time_now >= expected_frame_time;
+		const bool doRender = frame_time_now >= expected_render_time;
+		if (doRender)
+		{
+			expected_render_time += target_render_duration;
+			if (frame_time_now > expected_render_time + 5 * target_render_duration)
+			{
+				expected_render_time = frame_time_now + target_render_duration;
+			}
+		}
+		if (doUpdate)
+		{
+			expected_frame_time += target_frame_duration;
+			frame++;
+			frameNumber++;
+		}
 
 		// expected_frame_time only ever advances one frame per iteration, so a single long frame
 		// -- city generation on load, a big save -- leaves it arbitrarily far behind wall-clock
@@ -443,7 +477,7 @@ void Framework::run(sp<Stage> initialStage)
 		// That is why this fired on essentially every launch: it was reporting the load hitch,
 		// not a steady-state pacing problem. Resynchronise rather than accumulate a debt that
 		// cannot be paid.
-		if (frame_time_now > expected_frame_time + 5 * target_frame_duration)
+		if (doUpdate && frame_time_now > expected_frame_time + 5 * target_frame_duration)
 		{
 			expected_frame_time = frame_time_now + target_frame_duration;
 		}
@@ -465,6 +499,7 @@ void Framework::run(sp<Stage> initialStage)
 			break;
 		}
 		const auto profileFrameStart = std::chrono::steady_clock::now();
+		if (doUpdate)
 		{
 			p->ProgramStages.current()->update();
 		}
@@ -508,6 +543,16 @@ void Framework::run(sp<Stage> initialStage)
 			}
 		}
 		stageCommands.clear();
+
+		if (!doRender)
+		{
+			if (frameCount && frame == frameCount)
+			{
+				LogWarning("Quitting hitting frame count limit of {0}", (unsigned long long)frame);
+				p->quitProgram = true;
+			}
+			continue;
+		}
 
 		auto surface = p->scaleSurface ? p->scaleSurface : p->defaultSurface;
 		RendererSurfaceBinding b(*this->renderer, surface);
