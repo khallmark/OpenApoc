@@ -1,5 +1,7 @@
 # OpenApocalypse [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Are%20you%20a%20fan%20of%20X-Com%20Apocalypse?%20OpenApoc%20is%20a%20clone%20of%20this%20great%20game%20-%20contribute!%20https://github.com/OpenApoc/OpenApoc&hashtags=games,openapoc,xcom)
 
+> **This is the [khallmark/OpenApoc `develop` fork](FORK.md)** — Metal renderer, a scriptable game harness, and automation you can watch. Upstream is [OpenApoc/OpenApoc](https://github.com/OpenApoc/OpenApoc); take what you want.
+
 > OpenApoc is an open-source re-implementation of the original [X-COM: Apocalypse](https://www.ufopaedia.org/index.php/Apocalypse), that requires the original files to run, licensed under the GPL3 and written in C++ / SDL2. It was originally founded by PmProg in July 2014, and has since grown a significant [community](https://www.ufopaedia.org/index.php/Credits_(OpenApoc)).
 
 [![Windows Build Status](https://img.shields.io/appveyor/build/OpenApoc/openapoc?branch=master&label=AppVeyor%20Windows&logo=appveyor&logoColor=ffffff&labelColor=282828)](https://ci.appveyor.com/project/openapoc/openapoc/branch/master)

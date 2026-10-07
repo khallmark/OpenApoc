@@ -369,12 +369,10 @@ alien Building row uses its own preset crew and skips SelectForces too, *unless*
 `CUSTOMISE_FORCES` is checked before clicking Skirmish's own `BUTTON_OK` -- check it regardless
 of which location type is picked.
 
-**Skirmish battles do not currently start.** Setup is fully reliable up through AEquipScreen, but
-the actual transition into BattleView does not happen -- see the status note at the top of
-`tools/oa_skirmish.py` for what was actually verified. This looks like a genuine pre-existing bug
-in Skirmish's own battlemap generation (a threadpool exception was directly observed on one map),
-separate from the main campaign's battle path, which is unaffected and has been fighting real
-missions all session.
+**Skirmish battles start (fixed 2026-08-26, `43478c85`).** Two stage commands were being swallowed
+in the stage-command drain, so the transition into BattleView never happened. Still open: run one
+round per process (`--rounds 1`) -- the process vanishes during round 2 -- and map
+`BATTLEMAP_43sleep` fails generation. See the status note at the top of `tools/oa_skirmish.py`.
 
 ## Ask the engine, not the XML
 

@@ -125,7 +125,9 @@ plausible, check it before writing it into a commit message.
 ## Mechanics
 
     cd tools
-    python3 oa_campaign.py --days 30                 # play a campaign
+    python3 oa_play.py --days 30                     # play a campaign (game days)
+    python3 oa_campaign.py --hours 48 --leg 3        # resumable campaign (real-world hours)
+    OA_WATCH=1 python3 oa_play.py --days 3           # same, at a pace a human can watch
     python3 oa_adversarial_arena.py --generations 10 --battles-per-gen 9 --pop 3 --seed 801
 
 `--battles-per-gen` must be >= pop² or UCB never covers the pairing grid before the population

@@ -1223,7 +1223,7 @@ Re-checked against **`khallmark/FixShitUp`**. Several items from this document's
 
 | # | Gap | Evidence |
 |---|---|---|
-| 1 | **Alien AI never takes cover.** `getTakeCoverMovement` returns null, so Normal/Cautious/Evasive collapse to kneel-or-prone. The largest fidelity gap in the game. | [§16.2](#162-what-openapoc-implements-and-what-it-does-not) |
+| 1 | ~~**Alien AI never takes cover.**~~ **Resolved:** the recovered TACP cover metric is implemented and reached from production (`unitaivanilla.cpp`, `unitaibehavior.cpp`; see `docs/HANDOFF.md`). Was: `getTakeCoverMovement` returned null, so Normal/Cautious/Evasive collapsed to kneel-or-prone. | [§16.2](#162-what-openapoc-implements-and-what-it-does-not) |
 | 2 | **Wounded penalties and AI medkit use** are absent — no recovered TU/accuracy constants. | gap matrix, issue #265 |
 | 3 | **Cloak tick thresholds** and **Entropy Enzyme** spread constants unbound; `HAZARD_SPREAD_CHANCE` is still a made-up number. | gap matrix |
 | 4 | **`TACDATA/EXPERIEN.DAT` is not extracted.** `processExperience` is X-COM 1/2 prior-art carrying its own `FIXME: Ensure correct`, so agent progression is *plausible*, not *faithful*. | [battleunit.cpp:4171](../game/state/battle/battleunit.cpp#L4171) |
