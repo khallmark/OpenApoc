@@ -1,3 +1,4 @@
+#include <unistd.h>
 // G1 - Personal Disruptor Shield (equipment type 0x08) lock test.
 //
 // docs/original-game/findings/B3-G1-wounds-gadgets.md, "Disruptor Shield" section, is the
@@ -379,7 +380,7 @@ static bool test_disruptor_shield_serializes_roundtrip()
 	const UString unitId = unit->id;
 
 	std::stringstream ss;
-	ss << "openapoc_test_disruptor_shield_serialize-" << std::this_thread::get_id();
+	ss << "openapoc_test_disruptor_shield_serialize-" << getpid() << "-" << std::this_thread::get_id();
 	const auto tempFsPath = fs::temp_directory_path() / ss.str();
 	const UString tempPath(tempFsPath.string());
 

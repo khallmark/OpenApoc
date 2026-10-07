@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include "framework/configfile.h"
 #include "framework/filesystem.h"
 #include "framework/framework.h"
@@ -340,7 +341,7 @@ static bool test_lab_assignment_serialization(OpenApoc::sp<OpenApoc::GameState> 
 	OpenApoc::UString labId = lab.id;
 
 	std::stringstream ss;
-	ss << "openapoc_test_lab_assignment-" << std::this_thread::get_id();
+	ss << "openapoc_test_lab_assignment-" << getpid() << "-" << std::this_thread::get_id();
 	auto tempPath = fs::temp_directory_path() / ss.str();
 	OpenApoc::UString pathString(tempPath.string());
 

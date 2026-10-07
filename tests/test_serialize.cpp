@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include "framework/configfile.h"
 #include "framework/filesystem.h"
 #include "framework/framework.h"
@@ -36,14 +37,10 @@ bool test_gamestate_serialization_roundtrip(OpenApoc::sp<OpenApoc::GameState> st
 		return false;
 	}
 
-#if 0
-	// FIXME: This isn't reliable due to undefined order of containers.
-	// Re-measured 2026-10-07: enabled, it failed 2 of 23 ctest runs (only ever under ctest -j,
-	// 0 of 15 run serially) with no diff to go on. Left off until GameState equality can say
-	// WHICH member differs.
+	// Disabled from 2017 (d55b7216) as unreliable. The flake was ctest -j processes sharing one
+	// temp file - the name used only the thread id, which repeats across processes - not the
+	// comparison itself.
 	if (*state != *read_gamestate)
-#endif
-	if (0)
 	{
 		LogWarning("Gamestate changed over serialization");
 
@@ -56,7 +53,7 @@ bool test_gamestate_serialization(OpenApoc::sp<OpenApoc::GameState> state)
 {
 
 	std::stringstream ss;
-	ss << "openapoc_test_serialize-" << std::this_thread::get_id();
+	ss << "openapoc_test_serialize-" << getpid() << "-" << std::this_thread::get_id();
 	auto tempPath = fs::temp_directory_path() / ss.str();
 	OpenApoc::UString pathString(tempPath.string());
 	LogInfo("Writing temp state to \"{0}\"", pathString);
