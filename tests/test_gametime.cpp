@@ -127,16 +127,6 @@ static bool test_invasion_delay_ticks()
 	return true;
 }
 
-static bool test_vanilla_city_speed1_ticks()
-{
-	bool skip = false;
-	TEST_REQUIRE(vanillaCitySpeed1Ticks(1, skip) == 0, "first Speed1 frame is skipped");
-	TEST_REQUIRE(skip, "skip flag true after first frame");
-	TEST_REQUIRE(vanillaCitySpeed1Ticks(1, skip) == 1, "second Speed1 frame advances");
-	TEST_REQUIRE(!skip, "skip flag false after second frame");
-	TEST_REQUIRE(vanillaCitySpeed1Ticks(1, skip) == 0, "third Speed1 frame is skipped");
-	return true;
-}
 
 // A turbo step (five minutes) must count every second it crosses; per-second work ran once per
 // step before, which let aircraft burn 1/300th of their fuel at turbo.
@@ -166,7 +156,6 @@ int main(int argc, char **argv)
 	    {"get_ticks_between", test_get_ticks_between_as_implemented},
 	    {"hardcoded_fuel_ticks_match_tps", test_hardcoded_fuel_ticks_match_tps},
 	    {"hand_weapon_fire_priority_base", test_hand_weapon_fire_priority_base},
-	    {"vanilla_city_speed1_ticks", test_vanilla_city_speed1_ticks},
 	    {"invasion_delay_ticks", test_invasion_delay_ticks},
 	});
 }

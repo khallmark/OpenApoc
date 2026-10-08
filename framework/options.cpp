@@ -55,7 +55,9 @@ void dumpOptionsToLog()
 	dumpOption(mouseCaptureOption);
 
 	dumpOption(targetFPS);
+	dumpOption(simSpeed);
 	dumpOption(renderFPS);
+	dumpOption(scrollSpeed);
 	dumpOption(frameLimit);
 	dumpOption(swapInterval);
 	dumpOption(profileFrames);
@@ -277,13 +279,19 @@ ConfigOptionBool mouseCaptureOption("Framework", "MouseCapture",
                                     tr("Enable mouse capture for the window"), false);
 
 ConfigOptionInt targetFPS("Framework", "TargetFPS",
-                          tr("The target FPS count - affects game speed!"), 60);
+                          tr("Simulation steps per second, overriding SimSpeed (0 = the original "
+                             "game's pace times SimSpeed)"),
+                          0);
+ConfigOptionFloat simSpeed("Framework", "SimSpeed",
+                           tr("Simulation speed as a multiple of the original game's pace"), 1.0f);
 ConfigOptionInt renderFPS("Framework", "RenderFPS",
                           tr("Frames drawn per second, independent of game speed (0 = the "
                              "display's refresh rate)"),
                           0);
 ConfigOptionInt frameLimit("Framework", "FrameLimit",
                            tr("Quit after this many frames - 0 = unlimited"), 0);
+ConfigOptionInt scrollSpeed("Framework", "ScrollSpeed",
+                            tr("Map scrolling speed, in screen pixels per second"), 600);
 ConfigOptionInt swapInterval("Framework", "SwapInterval",
                              tr("Swap interval (0 = tear, 1 = wait for vsync"), 0);
 ConfigOptionInt profileFrames("Framework", "ProfileFrames",

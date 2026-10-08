@@ -59,6 +59,9 @@ class Renderer
 	// swap (both GL renderers) leave this empty; Metal owns its own swapchain and does
 	// the work here.
 	virtual void present() {};
+	// While a window edge is being dragged: present each frame in step with the window's own
+	// resize, so the picture follows the frame instead of being stretched until the drag settles.
+	virtual void setLiveResize(bool) {}
 
 	virtual void newFrame() {};
 

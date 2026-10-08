@@ -2030,6 +2030,15 @@ void CityView::render()
 {
 	if (fw().stageGetCurrent() != this->shared_from_this())
 	{
+		// Under an open dialog the city is drawn from a snapshot taken when it was covered. If
+		// the window has been resized since, take it again at the new size (drawing re-anchors
+		// the chrome); otherwise the dialog sits over a stale picture of the old window.
+		const Vec2<unsigned int> displayPixels{(unsigned)fw().displayGetWidth(),
+		                                       (unsigned)fw().displayGetHeight()};
+		if (this->surface && this->surface->size != displayPixels)
+		{
+			snapshotCity();
+		}
 		if (this->surface)
 		{
 			fw().renderer->drawTinted(this->surface, {0, 0}, {128, 128, 128, 255});
@@ -2228,6 +2237,32 @@ void CityView::registerCityViewIntrospection()
 		    // cityViewSelectedOwnedVehicles for a Soldier and silently issues no mission when it
 		    // finds none (cityview.cpp:1069-1090), so a driver that has crewed a transport but
 		    // left an interceptor selected gets no error and no recovery -- just nothing.
+		    // "camera": the tile the view is centred on, so a driver or a test can see the view
+		    // move (scrolling, re-centring) without decoding a screenshot.
+		    if (q == "camera")
+		    {
+			    return format("x={0} y={1} z={2}", view->centerPos.x, view->centerPos.y,
+			                  view->centerPos.z);
+		    }
+		    // "drawn": vehicles drawn in the last frame against vehicles whose position is on
+		    // screen, so missing vehicles show as a number rather than an impression.
+		    if (gameState && q == "drawn")
+		    {
+			    int onScreen = 0;
+			    const auto size = fw().displayGetSize();
+			    for (const auto &v : gameState->vehicles)
+			    {
+				    if (!v.second->tileObject || v.second->city != gameState->current_city)
+				    {
+					    continue;
+				    }
+				    const auto s = view->tileToOffsetScreenCoords(v.second->position);
+				    onScreen += s.x >= 0 && s.y >= 0 && s.x < size.x && s.y < size.y ? 1 : 0;
+			    }
+			    return format("vehicles_drawn={0} vehicles_on_screen={1} step_fraction={2}",
+			                  view->vehiclesDrawnLastFrame, onScreen,
+			                  view->map.stepFraction);
+		    }
 		    if (gameState && q == "selected")
 		    {
 			    size_t count = 0, withSoldier = 0;
@@ -2425,6 +2460,40 @@ void CityView::registerCityViewIntrospection()
 			    }
 			    return UString("centred=0 reason=no-such-building");
 		    }
+		    // How many of the player's soldiers a building's own screen would list: those inside
+		    // it, or aboard a craft parked there (AgentAssignment::updateLocation). That screen can
+		    // only send THOSE into a battle, so a raid has to bring a squad to the building first.
+		    if (gameState && q.substr(0, 21) == "soldiers_at_building ")
+		    {
+			    if (!gameState->current_city)
+			    {
+				    return UString("building=- soldiers=0");
+			    }
+			    const UString wanted = query.substr(21);
+			    for (const auto &ref : gameState->current_city->buildings)
+			    {
+				    if (ref.id != wanted)
+				    {
+					    continue;
+				    }
+				    const auto bld = ref.getSp();
+				    int soldiers = 0;
+				    for (const auto &a : gameState->agents)
+				    {
+					    const auto &agent = a.second;
+					    if (agent->owner == gameState->getPlayer() &&
+						    agent->type->role == AgentType::Role::Soldier &&
+						    (agent->currentBuilding == bld ||
+						     (agent->currentVehicle &&
+						      agent->currentVehicle->currentBuilding == bld)))
+					    {
+						    soldiers++;
+					    }
+				    }
+				    return format("building={0} soldiers={1}", ref.id, soldiers);
+			    }
+			    return UString("building=- soldiers=0");
+		    }
 		    if (gameState && q == "centre_on_message")
 		    {
 			    // Walk the player's own message log for the most recent alien-activity report
@@ -2493,9 +2562,9 @@ void CityView::registerCityViewIntrospection()
 				    const auto screen = view->tileToOffsetScreenCoords<float>(at);
 				    UString text = it->text;
 				    std::replace(text.begin(), text.end(), ' ', '_');
-				    return format("centred=1 at={0},{1},0 tile={2},{3},{4} text={5}",
-				                  (int)screen.x, (int)screen.y, it->location.x, it->location.y,
-				                  it->location.z, text);
+				    return format("centred=1 at={0},{1},0 tile={2},{3},{4} building={5} text={6}",
+					              (int)screen.x, (int)screen.y, it->location.x, it->location.y,
+					              it->location.z, atBuilding, text);
 			    }
 			    return UString("centred=0");
 		    }
@@ -2716,7 +2785,10 @@ void CityView::update()
 		case CityUpdateSpeed::Pause:
 			ticks = 0;
 			break;
-		// Vanilla Speed1 advances the city every other frame (half-rate vs later speeds).
+		// UFO2P's speed buttons set the clock's advance per frame, in 1/36 s ticks, to 1, 2, 4
+		// and 6 (handlers 0x50B10-0x50C10), and FUN_0004AC40 adds it every frame -- at Speed1
+		// too. With the simulation stepping four times per original frame, the same numbers in
+		// OpenApoc ticks are the original's pace.
 		case CityUpdateSpeed::Speed1:
 			ticks = 1;
 			break;
@@ -2743,11 +2815,6 @@ void CityView::update()
 	}
 	baseForm->findControl("BUTTON_SPEED5")->Enabled = this->state->canTurbo();
 
-	if (this->updateSpeed == CityUpdateSpeed::Speed1)
-	{
-		ticks = vanillaCitySpeed1Ticks(ticks, skipSpeed1Tick);
-	}
-
 	if (turbo)
 	{
 		this->state->updateTurbo();
@@ -2756,14 +2823,22 @@ void CityView::update()
 			setUpdateSpeed(CityUpdateSpeed::Speed1);
 		}
 	}
-	else
+	else if (ticks > 0)
 	{
+		// Where everything was before this step, for drawing motion between steps
+		// (CityTileView::render).
+		for (auto &entry : state->vehicles)
+		{
+			entry.second->stepStartPosition = entry.second->position;
+			entry.second->hasStepStart = true;
+		}
 		while (ticks > 0)
 		{
 			int ticksPerUpdate = UPDATE_EVERY_TICK ? 1 : ticks;
 			state->update(ticksPerUpdate);
 			ticks -= ticksPerUpdate;
 		}
+		state->current_city->map->lastSimStep = std::chrono::steady_clock::now();
 	}
 
 	// Switch dimensions

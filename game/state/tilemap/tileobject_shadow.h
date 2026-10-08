@@ -19,6 +19,7 @@ class TileObjectShadow : public TileObject
 	~TileObjectShadow() override;
 	void setPosition(Vec3<float> newPosition) override;
 	Vec3<float> getPosition() const override;
+	Vec3<float> getDrawCenter() const override;
 	void addToDrawnTiles(Tile *tile) override;
 
 	wp<Vehicle> ownerVehicle;

@@ -2,10 +2,14 @@
 #include "framework/configfile.h"
 #include "framework/event.h"
 #include "framework/framework.h"
+#include "framework/options.h"
 #include "framework/keycodes.h"
 #include "framework/renderer.h"
 #include "framework/sound.h"
 #include "game/state/battle/battle.h"
+#include <algorithm>
+#include <cmath>
+#include <glm/glm.hpp>
 
 #ifdef __APPLE__
 #include <TargetConditionals.h>
@@ -19,8 +23,7 @@ TileView::TileView(TileMap &map, Vec3<int> isoTileSize, Vec2<int> stratTileSize,
     : Stage(), map(map), isoTileSize(isoTileSize), stratTileSize(stratTileSize),
       viewMode(initialMode), dpySize(fw().displayGetWidth(), fw().displayGetHeight()),
       strategyViewBoxColour(212, 176, 172, 255), strategyViewBoxThickness(2.0f),
-      selectedTilePosition(0, 0, 0), maxZDraw(map.size.z), centerPos(0, 0, 0),
-      isoScrollSpeed(0.5, 0.5), stratScrollSpeed(2.0f, 2.0f)
+      selectedTilePosition(0, 0, 0), maxZDraw(map.size.z), centerPos(0, 0, 0)
 {
 	LogInfo("dpySize: {0}", dpySize);
 }
@@ -294,40 +297,64 @@ void TileView::setSelectedTilePosition(Vec3<int> newPosition)
 
 void TileView::applyScrolling()
 {
+	// Where the input wants to go: a speed in screen pixels per second, the same in every
+	// direction. It used to be a step in tiles per update, so the isometric view moved twice as
+	// fast sideways as up and down, and everything moved faster the faster the simulation ran.
+	constexpr float EASE_SECONDS = 0.06f; // time constant to reach full speed, and to stop
+	constexpr float MAX_STEP_SECONDS = 0.1f;
+	const auto now = std::chrono::steady_clock::now();
+	float dt = 0.0f;
+	if (lastScrollTime != std::chrono::steady_clock::time_point{})
+	{
+		dt = std::min(MAX_STEP_SECONDS,
+		              std::chrono::duration<float>(now - lastScrollTime).count());
+	}
+	lastScrollTime = now;
+	// Frames reach the screen on the display's beat, not when they started drawing, so a step
+	// measured between draw starts jitters by up to a period and so does the motion. Count whole
+	// render periods instead: every displayed frame then moves the view by the same amount.
+	const float period = static_cast<float>(fw().renderPeriodSeconds());
+	if (period > 0.0f && dt > 0.0f)
+	{
+		dt = std::max(1.0f, std::round(dt / period)) * period;
+	}
+
+	Vec2<float> wanted{0.0f, 0.0f};
+	wanted.x -= (scrollLeftKB || scrollLeftM) ? 1.0f : 0.0f;
+	wanted.x += (scrollRightKB || scrollRightM) ? 1.0f : 0.0f;
+	wanted.y -= (scrollUpKB || scrollUpM) ? 1.0f : 0.0f;
+	wanted.y += (scrollDownKB || scrollDownM) ? 1.0f : 0.0f;
+	if (wanted.x != 0.0f || wanted.y != 0.0f)
+	{
+		wanted =
+		    glm::normalize(wanted) * static_cast<float>(std::max(1, Options::scrollSpeed.get()));
+	}
+	// Ease towards it, so starting and stopping glide instead of snapping.
+	scrollVelocity += (wanted - scrollVelocity) * (1.0f - std::exp(-dt / EASE_SECONDS));
+	if (wanted.x == 0.0f && wanted.y == 0.0f && glm::length(scrollVelocity) < 1.0f)
+	{
+		scrollVelocity = {0.0f, 0.0f};
+	}
+	if (scrollVelocity.x == 0.0f && scrollVelocity.y == 0.0f)
+	{
+		return;
+	}
+
+	// Screen movement this frame, mapped back to tiles through the view's own projection.
+	const Vec2<float> d = scrollVelocity * dt;
 	Vec3<float> newPos = this->centerPos;
 	if (this->viewMode == TileViewMode::Isometric)
 	{
-		if (scrollLeftKB || scrollLeftM)
-		{
-			newPos.x -= isoScrollSpeed.x;
-			newPos.y += isoScrollSpeed.y;
-		}
-		if (scrollRightKB || scrollRightM)
-		{
-			newPos.x += isoScrollSpeed.x;
-			newPos.y -= isoScrollSpeed.y;
-		}
-		if (scrollUpKB || scrollUpM)
-		{
-			newPos.y -= isoScrollSpeed.y;
-			newPos.x -= isoScrollSpeed.x;
-		}
-		if (scrollDownKB || scrollDownM)
-		{
-			newPos.y += isoScrollSpeed.y;
-			newPos.x += isoScrollSpeed.x;
-		}
+		// tileToScreenCoords: x = (tx - ty) * w/2, y = (tx + ty) * h/2 at a fixed level.
+		const float a = d.x / (isoTileSize.x / 2.0f);
+		const float b = d.y / (isoTileSize.y / 2.0f);
+		newPos.x += (a + b) / 2.0f;
+		newPos.y += (b - a) / 2.0f;
 	}
 	else if (this->viewMode == TileViewMode::Strategy)
 	{
-		if (scrollLeftKB || scrollLeftM)
-			newPos.x -= stratScrollSpeed.x;
-		if (scrollRightKB || scrollRightM)
-			newPos.x += stratScrollSpeed.x;
-		if (scrollUpKB || scrollUpM)
-			newPos.y -= stratScrollSpeed.y;
-		if (scrollDownKB || scrollDownM)
-			newPos.y += stratScrollSpeed.y;
+		newPos.x += d.x / stratTileSize.x;
+		newPos.y += d.y / stratTileSize.y;
 	}
 	else
 	{
@@ -335,6 +362,22 @@ void TileView::applyScrolling()
 	}
 
 	this->setScreenCenterTile(newPos);
+}
+
+int TileView::uiAnimationSteps()
+{
+	const auto now = std::chrono::steady_clock::now();
+	if (lastUiAnimation == std::chrono::steady_clock::time_point{})
+	{
+		lastUiAnimation = now;
+		return 1;
+	}
+	uiAnimationCarry +=
+	    std::min(0.25, std::chrono::duration<double>(now - lastUiAnimation).count()) * 60.0;
+	lastUiAnimation = now;
+	const int steps = static_cast<int>(uiAnimationCarry);
+	uiAnimationCarry -= steps;
+	return steps;
 }
 
 void TileView::renderStrategyOverlay(Renderer &r)
@@ -399,6 +442,7 @@ void TileView::refreshDisplaySize()
 void TileView::update()
 {
 	refreshDisplaySize();
-	applyScrolling();
+	// Scrolling is applied per rendered frame (CityTileView/BattleTileView::render), not here:
+	// update() runs at the simulation rate, which is neither the display rate nor fixed.
 }
 }; // namespace OpenApoc

@@ -18,6 +18,11 @@ class Form : public Control
 	Vec2<int> lastAlignParent{-1, -1};
 	int lastAlignUiScale = 0;
 
+	// Re-run the form's alignment against the current window and UI scale, if either changed.
+	// Called on every draw as well as from update(): a stage under an open dialog is not updated,
+	// and while a window edge is dragged nothing is -- but both are still drawn.
+	void reanchor() override;
+
   protected:
 	void onRender() override;
 

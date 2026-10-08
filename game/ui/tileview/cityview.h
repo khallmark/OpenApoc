@@ -89,7 +89,6 @@ class CityView : public CityTileView
 	bool modifierRCtrl = false;
 
 	bool vanillaControls = false;
-	bool skipSpeed1Tick = false;
 
 	sp<Surface> surface;
 

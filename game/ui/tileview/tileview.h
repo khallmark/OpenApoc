@@ -6,6 +6,7 @@
 #include "library/colour.h"
 #include "library/sp.h"
 #include "library/vec.h"
+#include <chrono>
 
 #define STRAT_TILE_X 8
 #define STRAT_TILE_Y 8
@@ -44,6 +45,16 @@ class TileView : public Stage, public TileTransform
 	bool scrollRightM = false;
 
 	bool autoScroll = false;
+	// When applyScrolling last ran, and how fast the view is moving, in screen pixels per second.
+	// Scrolling is paced by wall-clock time and eased in and out, on every drawn frame.
+	std::chrono::steady_clock::time_point lastScrollTime{};
+	Vec2<float> scrollVelocity{0.0f, 0.0f};
+	// Icon animations are written in frames at 60 a second ("60 / 4" is a quarter second). This
+	// counts real time in those units, so they keep that speed at any frame rate; it returns the
+	// whole 60ths passed since the last call.
+	int uiAnimationSteps();
+	std::chrono::steady_clock::time_point lastUiAnimation{};
+	double uiAnimationCarry = 0.0;
 
 	Vec2<int> dpySize;
 
@@ -57,8 +68,6 @@ class TileView : public Stage, public TileTransform
   public:
 	int maxZDraw;
 	Vec3<float> centerPos;
-	Vec2<float> isoScrollSpeed;
-	Vec2<float> stratScrollSpeed;
 
 	sp<Palette> pal;
 	bool debugVisible = false;

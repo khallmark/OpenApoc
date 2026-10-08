@@ -67,24 +67,32 @@ void Form::update()
 		notifyVisibleForm(self);
 	}
 	Control::update();
-	if (!getParent())
+	reanchor();
+	resolveLocation();
+}
+
+void Form::reanchor()
+{
+	if (getParent())
 	{
-		const Vec2<int> parent = getParentSize();
-		const int scale = uiScale();
-		if (parent != lastAlignParent || scale != lastAlignUiScale)
-		{
-			if (alignedX)
-			{
-				align(alignmentX);
-			}
-			if (alignedY)
-			{
-				align(alignmentY);
-			}
-			lastAlignParent = parent;
-			lastAlignUiScale = scale;
-		}
+		return;
 	}
+	const Vec2<int> parent = getParentSize();
+	const int scale = uiScale();
+	if (parent == lastAlignParent && scale == lastAlignUiScale)
+	{
+		return;
+	}
+	if (alignedX)
+	{
+		align(alignmentX);
+	}
+	if (alignedY)
+	{
+		align(alignmentY);
+	}
+	lastAlignParent = parent;
+	lastAlignUiScale = scale;
 	resolveLocation();
 }
 

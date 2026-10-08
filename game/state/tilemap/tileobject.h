@@ -48,6 +48,9 @@ class TileObject : public std::enable_shared_from_this<TileObject>
 	// Vector from object position to object center
 	virtual Vec3<float> getCenterOffset() const { return {0.0f, 0.0f, 0.0f}; }
 	virtual Vec3<float> getCenter() const { return getPosition() + getCenterOffset(); };
+	// Where to draw it: the centre, or for something moving, between where it was at the start of
+	// the latest simulation step and where it is now (TileMap::stepFraction).
+	virtual Vec3<float> getDrawCenter() const { return getCenter(); }
 
 	// Used to calculate draw order
 	virtual float getZOrder() const { return getCenter().z + (float)getType() / 1000.0f; }

@@ -26,6 +26,12 @@ class CityTileView : public TileView
 	int selectionFrameTicksAccumulated = 0;
 	int portalImageTicksAccumulated = 0;
 
+  public:
+	// Vehicles drawn in the last frame, for the harness's "drawn" query.
+	int vehiclesDrawnLastFrame = 0;
+
+  protected:
+
 	sp<Palette> day_palette;
 	sp<Palette> twilight_palette;
 	sp<Palette> night_palette;

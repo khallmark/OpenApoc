@@ -387,6 +387,7 @@ void Control::render(float opacity)
 	}
 	if (!getParent())
 	{
+		reanchor();
 		updateAnimations(std::chrono::steady_clock::now());
 	}
 
@@ -1125,6 +1126,13 @@ void Control::copyControlData(sp<Control> CopyOf)
 	CopyOf->showBounds = this->showBounds;
 	CopyOf->Visible = this->Visible;
 	CopyOf->isClickable = this->isClickable;
+	// ui().getForm() hands each stage a copy, and the copy is the one on screen. Without these
+	// the copy does not know it was ever aligned, and Form::update() never re-anchors it when the
+	// window is resized.
+	CopyOf->alignedX = this->alignedX;
+	CopyOf->alignedY = this->alignedY;
+	CopyOf->alignmentX = this->alignmentX;
+	CopyOf->alignmentY = this->alignmentY;
 	CopyOf->ToolTipText = this->ToolTipText;
 	CopyOf->ToolTipFont = this->ToolTipFont;
 	CopyOf->ToolTipBackground = this->ToolTipBackground;

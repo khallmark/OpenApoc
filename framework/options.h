@@ -32,7 +32,9 @@ extern ConfigOptionBool mouseCaptureOption;
 extern ConfigOptionInt frameLimit;
 extern ConfigOptionInt renderFPS;
 extern ConfigOptionInt targetFPS;
+extern ConfigOptionFloat simSpeed;
 extern ConfigOptionInt swapInterval;
+extern ConfigOptionInt scrollSpeed;
 extern ConfigOptionInt profileFrames;
 
 extern ConfigOptionBool autoScrollOption;

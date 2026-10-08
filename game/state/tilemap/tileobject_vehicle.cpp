@@ -231,6 +231,16 @@ sp<VoxelMap> TileObjectVehicle::getVoxelMap(Vec3<int> mapIndex, bool los) const
 
 sp<Vehicle> TileObjectVehicle::getVehicle() const { return this->vehicle.lock(); }
 
+Vec3<float> TileObjectVehicle::getDrawCenter() const
+{
+	auto v = this->vehicle.lock();
+	if (!v)
+	{
+		return getCenter();
+	}
+	return getCenter() + (v->getDrawPosition(map.stepFraction) - v->position);
+}
+
 Vec3<float> TileObjectVehicle::getPosition() const
 {
 	auto v = this->vehicle.lock();

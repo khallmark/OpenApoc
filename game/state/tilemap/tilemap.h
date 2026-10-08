@@ -7,6 +7,7 @@
 #include "game/state/tilemap/tileobject.h"
 #include "library/rect.h"
 #include "library/sp.h"
+#include <chrono>
 #include <list>
 #include <map>
 #include <set>
@@ -130,6 +131,13 @@ class TileMap
 		                     static_cast<int>(pos.z));
 	}
 	Vec3<int> size;
+
+	// When the simulation last stepped this map, and how far the clock has got from there to the
+	// next step (0..1), set by the view each drawn frame. Moving objects are drawn that far
+	// between their positions before and after the step, so motion is smooth at the display's
+	// rate while the simulation keeps the original game's ticks.
+	std::chrono::steady_clock::time_point lastSimStep{};
+	float stepFraction = 1.0f;
 	Vec3<int> voxelMapSize;
 	Vec3<float> velocityScale;
 	bool ceaseUpdates = false;

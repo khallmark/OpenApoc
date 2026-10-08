@@ -169,6 +169,9 @@ class Control : public std::enable_shared_from_this<Control>
 	static int align(HorizontalAlignment HAlign, int ParentWidth, int ChildWidth);
 	static int align(VerticalAlignment VAlign, int ParentHeight, int ChildHeight);
 
+	// A top-level form follows the window: re-run its alignment if the window or UI scale has
+	// changed. A no-op for everything else; called whenever a top-level control is drawn.
+	virtual void reanchor() {}
 	void align(HorizontalAlignment HAlign);
 	void align(VerticalAlignment VAlign);
 	void align(HorizontalAlignment HAlign, VerticalAlignment VAlign);

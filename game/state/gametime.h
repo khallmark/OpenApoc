@@ -117,12 +117,4 @@ class GameTime
 	static GameTime midday();
 };
 
-// UFO2P city Speed1 advances the city clock every other rendered frame.
-// OpenApoc cityview.cpp: skipSpeed1Tick starts false, so the first Speed1 frame is skipped.
-inline unsigned vanillaCitySpeed1Ticks(unsigned proposedTicks, bool &skipThisFrame)
-{
-	skipThisFrame = !skipThisFrame;
-	return skipThisFrame ? 0u : proposedTicks;
-}
-
 } // namespace OpenApoc

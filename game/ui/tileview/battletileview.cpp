@@ -431,6 +431,10 @@ void BattleTileView::eventOccurred(Event *e)
 
 void BattleTileView::render()
 {
+	// Follow the window and move the camera on every drawn frame: drawing happens while the
+	// window is being resized and under open dialogs, when update() does not run.
+	refreshDisplaySize();
+	applyScrolling();
 	Renderer &r = *fw().renderer;
 	r.clear();
 	if (Options::optionUiAnimations.get())
@@ -449,9 +453,11 @@ void BattleTileView::render()
 		r.setPalette(this->pal);
 	}
 
+	// Icon animations count real time at the rate they were written for, not drawn frames.
+	const int animationSteps = uiAnimationSteps();
 	if (hideDisplay)
 	{
-		hiddenBarTicksAccumulated++;
+		hiddenBarTicksAccumulated += animationSteps;
 		if (hiddenBarTicksAccumulated > 10)
 		{
 			updateHiddenBar();
@@ -462,17 +468,17 @@ void BattleTileView::render()
 
 	// Rotate Icons
 	{
-		healingIconTicksAccumulated++;
+		healingIconTicksAccumulated += animationSteps;
 		healingIconTicksAccumulated %= 2 * HEALING_ICON_ANIMATION_DELAY;
-		lowMoraleIconTicksAccumulated++;
+		lowMoraleIconTicksAccumulated += animationSteps;
 		lowMoraleIconTicksAccumulated %= 2 * LOWMORALE_ICON_ANIMATION_DELAY;
-		psiIconTicksAccumulated++;
+		psiIconTicksAccumulated += animationSteps;
 		psiIconTicksAccumulated %= 2 * PSI_ICON_ANIMATION_DELAY;
-		selectionFrameTicksAccumulated++;
+		selectionFrameTicksAccumulated += animationSteps;
 		selectionFrameTicksAccumulated %= 2 * SELECTION_FRAME_ANIMATION_DELAY;
-		iconAnimationTicksAccumulated++;
+		iconAnimationTicksAccumulated += animationSteps;
 		iconAnimationTicksAccumulated %= targetLocationIcons.size() * TARGET_ICONS_ANIMATION_DELAY;
-		focusAnimationTicksAccumulated++;
+		focusAnimationTicksAccumulated += animationSteps;
 		focusAnimationTicksAccumulated %=
 		    (2 * FOCUS_ICONS_ANIMATION_FRAMES - 2) * FOCUS_ICONS_ANIMATION_DELAY;
 	}

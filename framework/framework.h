@@ -1,5 +1,7 @@
 #pragma once
 
+#include <chrono>
+
 #include "framework/modinfo.h"
 #include "library/sp.h"
 #include "library/strings.h"
@@ -61,6 +63,16 @@ class Framework
 
 	void run(sp<Stage> initialStage);
 	void processEvents();
+	// Draw the current stage stack and present it. Returns when the frame was handed to the
+	// display (for the frame profile).
+	std::chrono::steady_clock::time_point renderFrame();
+	// Redraw from inside the window system's event pump while the user drags a window edge, so
+	// the picture grows with the window instead of waiting for the drag to end.
+	void redrawForLiveResize();
+	// The interval between drawn frames the loop aims for (1/RenderFPS), or 0 before it starts.
+	double renderPeriodSeconds() const;
+	// The interval between simulation steps (1/(72.83 x SimSpeed), or 1/TargetFPS).
+	double simStepPeriodSeconds() const;
 	/* PushEvent() take ownership of the Event, and will delete it after use*/
 	void pushEvent(up<Event> e);
 	void pushEvent(Event *e);

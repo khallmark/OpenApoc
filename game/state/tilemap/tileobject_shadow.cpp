@@ -155,4 +155,17 @@ TileObjectShadow::TileObjectShadow(TileMap &map, sp<BattleItem> item)
 
 Vec3<float> TileObjectShadow::getPosition() const { return this->shadowPosition; }
 
+Vec3<float> TileObjectShadow::getDrawCenter() const
+{
+	// A vehicle's shadow slides with it across the ground; it does not climb when it climbs.
+	auto vehicle = this->ownerVehicle.lock();
+	if (!vehicle)
+	{
+		return getCenter();
+	}
+	auto offset = vehicle->getDrawPosition(map.stepFraction) - vehicle->position;
+	offset.z = 0.0f;
+	return getCenter() + offset;
+}
+
 } // namespace OpenApoc

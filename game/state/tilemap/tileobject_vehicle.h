@@ -27,6 +27,7 @@ class TileObjectVehicle : public TileObject
 	bool hasVoxelMap(bool los [[maybe_unused]]) const override { return true; }
 	sp<VoxelMap> getVoxelMap(Vec3<int> mapIndex, bool los) const override;
 	Vec3<float> getPosition() const override;
+	Vec3<float> getDrawCenter() const override;
 	void setPosition(Vec3<float> newPosition) override;
 	void addToDrawnTiles(Tile *tile) override;
 

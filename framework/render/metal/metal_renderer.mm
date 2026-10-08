@@ -1010,6 +1010,8 @@ class MetalRenderer final : public Renderer
 	id<MTLDevice> device;
 	id<MTLCommandQueue> queue;
 	CAMetalLayer *layer;
+	// Set by Framework::redrawForLiveResize for the frames drawn during a window-edge drag.
+	bool liveResize = false;
 
 	id<MTLCommandBuffer> commandBuffer;
 	id<MTLRenderCommandEncoder> encoder;
@@ -1619,8 +1621,29 @@ class MetalRenderer final : public Renderer
 		                              0.0f, dst, {255, 255, 255, 255});
 		[enc endEncoding];
 
-		[this->commandBuffer presentDrawable:drawable];
-		this->commitCommandBuffer();
+		if (this->liveResize)
+		{
+			// presentsWithTransaction: commit, wait until the GPU has the work, then present
+			// inside the current Core Animation transaction -- the one carrying the window's new
+			// size -- so the two land together.
+			id<MTLCommandBuffer> commands = this->commandBuffer;
+			this->commitCommandBuffer();
+			[commands waitUntilScheduled];
+			[drawable present];
+		}
+		else
+		{
+			[this->commandBuffer presentDrawable:drawable];
+			this->commitCommandBuffer();
+		}
+	}
+
+	void setLiveResize(bool on) override
+	{
+		this->liveResize = on;
+#if TARGET_OS_OSX
+		this->layer.presentsWithTransaction = on;
+#endif
 	}
 
 	void newFrame() override

@@ -68,6 +68,16 @@ class FrameworkPrivate
   private:
 	friend class Framework;
 	bool quitProgram;
+	// When processEvents last pumped the window system, and run() the harness (see there).
+	std::chrono::steady_clock::time_point lastSdlPump{};
+	std::chrono::steady_clock::time_point lastHarnessPoll{};
+	// Set while translateSdlEvents() is pumping the window system, which is where macOS parks
+	// the program for as long as a window edge is being dragged; and while a live-resize redraw
+	// is in progress, so one cannot start inside another.
+	bool insideEventPump = false;
+	bool insideLiveRedraw = false;
+	double renderPeriodSeconds = 0.0;
+	double simStepPeriodSeconds = 0.0;
 
 	SDL_DisplayMode screenMode;
 	SDL_Window *window;
@@ -401,13 +411,26 @@ void Framework::run(sp<Stage> initialStage)
 	size_t frame = 0;
 	LogInfo("Program loop started");
 
-	// TargetFPS is the SIMULATION rate: every update() advances the game by a fixed step, so it
-	// sets game speed. Rendering runs on its own clock at RenderFPS - by default the display's
+	// The SIMULATION rate: every update() advances the game by a fixed step, so it sets game
+	// speed. Rendering runs on its own clock at RenderFPS - by default the display's
 	// refresh rate (120 on a ProMotion panel) - so the picture is as smooth as the screen allows
-	// without the game running faster, and an automated run at TargetFPS=1000 no longer pays
-	// for 1000 presents a second.
-	auto target_frame_duration =
-	    std::chrono::duration<int64_t, std::micro>(1000000 / Options::targetFPS.get());
+	// without the game running faster, and a fast automated run (SimSpeed 14) does not pay for a
+	// present every step.
+	// The original game's pace. UFO2P.EXE and TACP.EXE run one frame per BIOS timer tick -- a busy
+	// wait on INT 1Ah at the end of the city loop (FUN_00010908) and the tactical loop
+	// (FUN_00011620) -- so 1193182/65536 = 18.2065 frames a second, each adding the speed setting
+	// ({1,2,4,6} in the city, {1,2,4} in battle) in 1/36 s ticks to the clock (FUN_0004AC40,
+	// FUN_0003CD58). An OpenApoc tick is a quarter of those, and CityView/BattleView advance the
+	// same {1,2,4,6} per step, so four steps per original frame is the original's real-time pace
+	// exactly. SimSpeed multiplies it; an explicit TargetFPS overrides it.
+	constexpr double NATIVE_SIM_STEPS_PER_SECOND = 4.0 * 1193182.0 / 65536.0;
+	const double simStepsPerSecond =
+	    Options::targetFPS.get() > 0
+	        ? static_cast<double>(Options::targetFPS.get())
+	        : NATIVE_SIM_STEPS_PER_SECOND * std::max(0.01, (double)Options::simSpeed.get());
+	const auto target_frame_duration =
+	    std::chrono::nanoseconds(static_cast<int64_t>(std::llround(1e9 / simStepsPerSecond)));
+	p->simStepPeriodSeconds = 1.0 / simStepsPerSecond;
 	int renderFPS = Options::renderFPS.get();
 	if (renderFPS <= 0)
 	{
@@ -420,8 +443,9 @@ void Framework::run(sp<Stage> initialStage)
 	}
 	const auto target_render_duration =
 	    std::chrono::duration<int64_t, std::micro>(1000000 / renderFPS);
-	LogInfo("Simulating at {0} steps/s, rendering at {1} fps", Options::targetFPS.get(),
-	        renderFPS);
+	p->renderPeriodSeconds = 1.0 / renderFPS;
+	LogInfo("Simulating at {0:.2f} steps/s ({1:.2f}x the original pace), rendering at {2} fps",
+	        simStepsPerSecond, simStepsPerSecond / NATIVE_SIM_STEPS_PER_SECOND, renderFPS);
 
 	p->ProgramStages.push(initialStage);
 
@@ -454,13 +478,17 @@ void Framework::run(sp<Stage> initialStage)
 			continue;
 		}
 		const bool doUpdate = frame_time_now >= expected_frame_time;
-		// While the simulation is behind, give passes to it and render only once a frame is
-		// overdue by a whole period. Otherwise each render's wait in present() leaves the next
-		// render already due, every pass renders, and the simulation gets exactly one step per
-		// displayed frame - capping an automated run (TargetFPS=1000) at the display rate.
+		// While the simulation is genuinely behind -- more than a step late -- give passes to it
+		// and render only once a frame is overdue by a whole period. Otherwise each render's wait
+		// in present() leaves the next render already due, every pass renders, and the simulation
+		// gets exactly one step per displayed frame - capping an automated run (TargetFPS=1000) at
+		// the display rate. A step that is merely due now is not "behind": deferring the render
+		// for it, as this used to, held every other frame back a whole period whenever the
+		// simulation and the display ticked together (60 and 120), which is visible judder.
+		const bool simBehind = frame_time_now >= expected_frame_time + target_frame_duration;
 		const bool doRender =
 		    frame_time_now >= expected_render_time &&
-		    (!doUpdate || frame_time_now >= expected_render_time + target_render_duration);
+		    (!simBehind || frame_time_now >= expected_render_time + target_render_duration);
 		if (doRender)
 		{
 			expected_render_time += target_render_duration;
@@ -487,9 +515,8 @@ void Framework::run(sp<Stage> initialStage)
 		// is wrong once the sim step is 1 ms (TargetFPS=1000): every vsync wait in present() is
 		// "5 steps behind", and dropping that backlog capped the simulation at the display rate.
 		// Short stalls are caught up by update-only passes between renders instead.
-		const auto resync_after =
-		    std::max<std::chrono::steady_clock::duration>(5 * target_frame_duration,
-		                                                  std::chrono::milliseconds(250));
+		const auto resync_after = std::max<std::chrono::steady_clock::duration>(
+		    5 * target_frame_duration, std::chrono::milliseconds(250));
 		if (doUpdate && frame_time_now > expected_frame_time + resync_after)
 		{
 			expected_frame_time = frame_time_now + target_frame_duration;
@@ -501,8 +528,12 @@ void Framework::run(sp<Stage> initialStage)
 			LogWarning("Over 5 frames behind - likely vsync limited?");
 		}
 
-		if (p->harness)
+		// The harness socket check is a select() syscall. Every 8 ms is plenty for a driver
+		// that waits on replies, and polling it every iteration of a 300 Hz loop cost 3.5% of the
+		// main thread.
+		if (p->harness && frame_time_now - p->lastHarnessPoll >= std::chrono::milliseconds(8))
 		{
+			p->lastHarnessPoll = frame_time_now;
 			p->harness->poll(*this);
 		}
 		processEvents();
@@ -567,38 +598,7 @@ void Framework::run(sp<Stage> initialStage)
 			continue;
 		}
 
-		auto surface = p->scaleSurface ? p->scaleSurface : p->defaultSurface;
-		RendererSurfaceBinding b(*this->renderer, surface);
-		{
-			this->renderer->clear();
-		}
-		if (!p->ProgramStages.isEmpty())
-		{
-			p->ProgramStages.current()->render();
-			if (p->toolTipImage)
-			{
-				renderer->draw(p->toolTipImage, p->toolTipPosition);
-			}
-			this->cursor->render();
-			if (p->scaleSurface)
-			{
-				RendererSurfaceBinding scaleBind(*this->renderer, p->defaultSurface);
-				this->renderer->clear();
-				this->renderer->drawScaled(p->scaleSurface, {0, 0}, p->drawableSize);
-			}
-			{
-				this->renderer->flush();
-				this->renderer->newFrame();
-				profileSwapStart = std::chrono::steady_clock::now();
-				// Metal owns its swapchain and presents in here; the GL renderers leave
-				// present() empty and are swapped through SDL below.
-				this->renderer->present();
-				if (p->context)
-				{
-					SDL_GL_SwapWindow(p->window);
-				}
-			}
-		}
+		profileSwapStart = renderFrame();
 		if (profileFrames)
 		{
 			const auto profileFrameEnd = std::chrono::steady_clock::now();
@@ -643,6 +643,62 @@ void Framework::run(sp<Stage> initialStage)
 	}
 }
 
+std::chrono::steady_clock::time_point Framework::renderFrame()
+{
+	auto profileSwapStart = std::chrono::steady_clock::now();
+	auto surface = p->scaleSurface ? p->scaleSurface : p->defaultSurface;
+	RendererSurfaceBinding b(*this->renderer, surface);
+	{
+		this->renderer->clear();
+	}
+	if (!p->ProgramStages.isEmpty())
+	{
+		p->ProgramStages.current()->render();
+		if (p->toolTipImage)
+		{
+			renderer->draw(p->toolTipImage, p->toolTipPosition);
+		}
+		this->cursor->render();
+		if (p->scaleSurface)
+		{
+			RendererSurfaceBinding scaleBind(*this->renderer, p->defaultSurface);
+			this->renderer->clear();
+			this->renderer->drawScaled(p->scaleSurface, {0, 0}, p->drawableSize);
+		}
+		{
+			this->renderer->flush();
+			this->renderer->newFrame();
+			profileSwapStart = std::chrono::steady_clock::now();
+			// Metal owns its swapchain and presents in here; the GL renderers leave
+			// present() empty and are swapped through SDL below.
+			this->renderer->present();
+			if (p->context)
+			{
+				SDL_GL_SwapWindow(p->window);
+			}
+		}
+	}
+	return profileSwapStart;
+}
+
+double Framework::renderPeriodSeconds() const { return p->renderPeriodSeconds; }
+
+double Framework::simStepPeriodSeconds() const { return p->simStepPeriodSeconds; }
+
+void Framework::redrawForLiveResize()
+{
+	if (!p->insideEventPump || p->insideLiveRedraw || !p->window || p->ProgramStages.isEmpty())
+	{
+		return;
+	}
+	p->insideLiveRedraw = true;
+	displayRefreshSize();
+	renderer->setLiveResize(true);
+	renderFrame();
+	renderer->setLiveResize(false);
+	p->insideLiveRedraw = false;
+}
+
 void Framework::processEvents()
 {
 	if (p->ProgramStages.isEmpty())
@@ -652,7 +708,16 @@ void Framework::processEvents()
 	}
 
 	// TODO: Consider threading the translation
-	translateSdlEvents();
+	// Pumping the window system is a trip through Cocoa on every call. At a 300 Hz simulation
+	// target that was every 3 ms -- 2% of a core per game, times sixteen in a grid -- for input
+	// nobody gives that fast. Every 8 ms (125 Hz) is still quicker than the display refreshes;
+	// the game's own events below, the harness's included, are still dispatched every call.
+	const auto pumpNow = std::chrono::steady_clock::now();
+	if (pumpNow - p->lastSdlPump >= std::chrono::milliseconds(8))
+	{
+		p->lastSdlPump = pumpNow;
+		translateSdlEvents();
+	}
 
 	while (p->eventQueue.size() > 0 && !p->ProgramStages.isEmpty())
 	{
@@ -736,6 +801,23 @@ void Framework::pushEvent(up<Event> e)
 
 void Framework::pushEvent(Event *e) { this->pushEvent(up<Event>(e)); }
 
+namespace
+{
+// SDL calls event watchers synchronously as it queues each event -- including from inside the
+// modal loop macOS runs while a window edge is dragged, when nothing else of ours runs. Redraw on
+// the size changes it reports there, so the picture follows the drag.
+int SDLCALL liveResizeWatch(void *userdata, SDL_Event *event)
+{
+	if (event->type == SDL_WINDOWEVENT && (event->window.event == SDL_WINDOWEVENT_SIZE_CHANGED ||
+	                                       event->window.event == SDL_WINDOWEVENT_RESIZED ||
+	                                       event->window.event == SDL_WINDOWEVENT_EXPOSED))
+	{
+		static_cast<Framework *>(userdata)->redrawForLiveResize();
+	}
+	return 1;
+}
+} // namespace
+
 void Framework::translateSdlEvents()
 {
 	SDL_Event e;
@@ -769,6 +851,11 @@ void Framework::translateSdlEvents()
 	};
 #endif
 
+	// macOS runs a modal loop for as long as a window edge is dragged, and it runs inside this
+	// pump; liveResizeWatch() redraws from there while the flag is up.
+	// Every SDL_PollEvent pumps, so the flag covers the whole loop; the watcher only runs inside
+	// SDL's own calls, never in the middle of this loop's handling of an event.
+	p->insideEventPump = true;
 	while (SDL_PollEvent(&e))
 	{
 		// A background window must not be playable: neither the click that raises it nor
@@ -1070,6 +1157,7 @@ void Framework::translateSdlEvents()
 				break;
 		}
 	}
+	p->insideEventPump = false;
 
 #if defined(__APPLE__) && TARGET_OS_IPHONE
 	// The finger may simply be held still with no new SDL event arriving at all, so the
@@ -1285,6 +1373,7 @@ void Framework::displayInitialise()
 			LogError("Failed to create window \"{0}\"", SDL_GetError());
 			exit(1);
 		}
+		SDL_AddEventWatch(liveResizeWatch, this);
 
 		if (useMetal)
 		{
@@ -1453,6 +1542,7 @@ void Framework::displayShutdown()
 	{
 		return;
 	}
+	SDL_DelEventWatch(liveResizeWatch, this);
 	LogInfo("Shutdown Display");
 	p->defaultSurface.reset();
 	p->scaleSurface.reset();
@@ -1554,6 +1644,9 @@ void Framework::displayRefreshSize()
 	{
 		return;
 	}
+	LogWarning("Display size: window {0} drawable {1} display {2} uiScale {3}{4}", newWindow,
+	           newDrawable, newDisplay, newUiScale,
+	           p->insideLiveRedraw ? " (live resize)" : "");
 
 	if (p->defaultSurface)
 	{

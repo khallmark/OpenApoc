@@ -302,14 +302,36 @@ void CityTileView::eventOccurred(Event *e)
 
 void CityTileView::render()
 {
+	// Follow the window and move the camera on every drawn frame: drawing happens while the
+	// window is being resized and under open dialogs, when update() does not run.
+	refreshDisplaySize();
+	applyScrolling();
 	Renderer &r = *fw().renderer;
 	r.clear();
 
-	// Rotate Icons
+	// How far the clock has got from the last simulation step to the next. Moving things are
+	// drawn that far along, so they glide at the display's rate instead of jumping once a step.
 	{
-		selectionFrameTicksAccumulated++;
+		const double period = fw().simStepPeriodSeconds();
+		float fraction = 1.0f;
+		if (period > 0.0 && map.lastSimStep != std::chrono::steady_clock::time_point{})
+		{
+			fraction = static_cast<float>(
+			    std::chrono::duration<double>(std::chrono::steady_clock::now() - map.lastSimStep)
+			        .count() /
+			    period);
+		}
+		map.stepFraction = std::clamp(fraction, 0.0f, 1.0f);
+	}
+
+	int vehiclesDrawn = 0;
+
+	// Rotate Icons, at the speed they were written for whatever the frame rate.
+	{
+		const int steps = uiAnimationSteps();
+		selectionFrameTicksAccumulated += steps;
 		selectionFrameTicksAccumulated %= 2 * SELECTION_FRAME_ANIMATION_DELAY;
-		portalImageTicksAccumulated++;
+		portalImageTicksAccumulated += steps;
 		portalImageTicksAccumulated %=
 		    state.city_common_image_list->portalStrategic.size() * PORTAL_FRAME_ANIMATION_DELAY;
 	}
@@ -373,6 +395,8 @@ void CityTileView::render()
 			const float cullMaxX = (float)dpySize.x + cullMargin;
 			const float cullMinY = -cullMargin;
 			const float cullMaxY = (float)dpySize.y + cullMargin;
+			// Extra room for the tile-level cull, beyond any object's offset from its tile.
+			const float tileCullSlack = 128.0f;
 
 			for (int z = 0; z < maxZDraw; z++)
 			{
@@ -384,10 +408,28 @@ void CityTileView::render()
 						{
 							auto tile = map.getTile(x, y, z);
 							auto object_count = tile->drawnObjects[layer].size();
+							if (object_count == 0)
+							{
+								continue;
+							}
+							// Cull the whole tile first. An object is drawn within about a tile
+							// of its tile's centre, so a tile this far off screen holds nothing
+							// the per-object test below would keep -- and that test costs a
+							// weak_ptr lock per scenery part per frame for every part in the
+							// view box, most of which are culled.
+							const Vec2<float> tilePos =
+							    tileToOffsetScreenCoords(Vec3<float>{x + 0.5f, y + 0.5f, z + 0.5f});
+							if (tilePos.x < cullMinX - tileCullSlack ||
+							    tilePos.x > cullMaxX + tileCullSlack ||
+							    tilePos.y < cullMinY - tileCullSlack ||
+							    tilePos.y > cullMaxY + tileCullSlack)
+							{
+								continue;
+							}
 							for (size_t obj_id = 0; obj_id < object_count; obj_id++)
 							{
 								auto &obj = tile->drawnObjects[layer][obj_id];
-								Vec2<float> pos = tileToOffsetScreenCoords(obj->getCenter());
+								Vec2<float> pos = tileToOffsetScreenCoords(obj->getDrawCenter());
 								if (pos.x < cullMinX || pos.x > cullMaxX || pos.y < cullMinY ||
 								    pos.y > cullMaxY)
 								{
@@ -520,6 +562,7 @@ void CityTileView::render()
 								}
 
 								obj->draw(r, *this, pos, this->viewMode, visible);
+								vehiclesDrawn += obj->getType() == TileObject::Type::Vehicle ? 1 : 0;
 							}
 							if (tile->pathfindingDebugFlag)
 								r.draw(selectedTileImageFront,
@@ -591,7 +634,7 @@ void CityTileView::render()
 								bool friendly = false;
 								bool hostile = false;
 								auto &obj = tile->drawnObjects[layer][obj_id];
-								Vec2<float> pos = tileToOffsetScreenCoords(obj->getCenter());
+								Vec2<float> pos = tileToOffsetScreenCoords(obj->getDrawCenter());
 
 								switch (obj->getType())
 								{
@@ -878,9 +921,11 @@ void CityTileView::render()
 			for (auto &obj : vehiclesToDraw)
 			{
 				auto vehicle = std::get<0>(obj);
-				Vec2<float> pos = tileToOffsetScreenCoords(vehicle->position);
+				Vec2<float> pos =
+				    tileToOffsetScreenCoords(vehicle->getDrawPosition(map.stepFraction));
 				if (vehicle->tileObject)
 				{
+					vehiclesDrawn++;
 					vehicle->tileObject->draw(r, *this, pos, this->viewMode, true, 0,
 					                          std::get<1>(obj), std::get<2>(obj));
 				}
@@ -1021,6 +1066,7 @@ void CityTileView::render()
 		}
 		break;
 	}
+	vehiclesDrawnLastFrame = vehiclesDrawn;
 }
 
 void CityTileView::update()
