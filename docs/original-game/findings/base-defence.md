@@ -53,6 +53,32 @@ message. There is no fight.
 **Outcome.** A win costs X-COM 50 × destroyed map parts in funds. Retreat or loss deallocates the
 base (`FUN_000b3114`), which matches the TACP briefing text (file `0x2E0931`).
 
+## Any mission: retreat and wipe-out end the same way
+
+This is why the driver withdraws from a battle it is clearly losing, but never from a base defence.
+
+- TACP `FUN_00022f90` (file `0x7DA34`) computes the outcome:
+  - +1 if X-COM has a conscious unit and no conscious hostile remains;
+  - −1 if X-COM has none and hostiles remain;
+  - 0 otherwise.
+- Units that leave the zone are removed first (`FUN_000126d0`, file `0x6D174`), so an abort scores
+  −1, the same as a wipe-out. UFO2P only tests for +1.
+- TACP's own abort and defeat codes are not written to the result files that UFO2P reads back
+  (`FUN_000b1dc0`, file `0x114464`). So the city cannot tell them apart.
+- Score category 0 gets TACP's score either way. No extra penalty for retreating was found.
+- The one difference is the soldiers. Evacuated units are not exported as lost, so those agents
+  survive. Units left on the map are lost. Without a win, only items X-COM carried out are kept.
+- The survivors' fate depends on the mission (from the post-tactical applier `FUN_000b32ac`, file
+  `0x115950`):
+
+  | Mission | What happens to them |
+  |---|---|
+  | infiltrated human building | the whole population moves to one random building nearby (`FUN_0006f738`), whatever the outcome |
+  | UFO crash | the UFO is removed |
+  | alien building | regenerated, so they vanish |
+  | hostile organisation | regenerated, so they vanish |
+  | base defence | not a win, so the base is lost |
+
 ## What does not start one
 
 - **Alien movement.** The hourly spread between buildings, `FUN_0006f7f8`, and the post-mission
