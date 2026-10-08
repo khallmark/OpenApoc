@@ -5751,9 +5751,9 @@ void BattleUnit::playWalkSound(GameState &state)
 	else
 	{
 		auto t = tileObject->getOwningTile();
-		if (t->walkSfx && t->walkSfx->size() > 0)
+		if (t->battleView().walkSfx && t->battleView().walkSfx->size() > 0)
 		{
-			walkSfx = t->walkSfx->at(getWalkSoundIndex() % t->walkSfx->size());
+			walkSfx = t->battleView().walkSfx->at(getWalkSoundIndex() % t->battleView().walkSfx->size());
 		}
 	}
 	if (walkSfx)

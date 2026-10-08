@@ -111,7 +111,7 @@ Collision TileMap::findCollision(Vec3<float> lineSegmentStart, Vec3<float> lineS
 					}
 
 					// Add this tile's vision blockage to accumulated since last tile blockage
-					auto thisBlockage = t->visionBlockValue;
+					auto thisBlockage = t->battleView().visionBlockValue;
 					if (thisBlockage > 0)
 					{
 						accumulatedSinceLastTile += thisBlockage;

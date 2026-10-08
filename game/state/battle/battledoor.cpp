@@ -122,11 +122,11 @@ void BattleDoor::update(GameState &state, unsigned int ticks)
 		int xDiff = right ? 0 : 1;
 		int yDiff = right ? 1 : 0;
 		auto tile = i->tileObject->getOwningTile();
-		if (tile->doorOpeningUnitPresent ||
+		if (tile->battleView().doorOpeningUnitPresent ||
 		    (tile->position.x - xDiff > 0 && tile->position.y - yDiff > 0 &&
 		     tile->map
 		         .getTile(tile->position.x - xDiff, tile->position.y - yDiff, tile->position.z)
-		         ->doorOpeningUnitPresent))
+		         ->battleView().doorOpeningUnitPresent))
 		{
 			shouldStayOpen = true;
 			break;

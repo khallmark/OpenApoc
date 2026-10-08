@@ -4,6 +4,8 @@
 #include "library/backtrace.h"
 
 #include <fstream>
+#include <cstdlib>
+#include <chrono>
 
 namespace OpenApoc
 {
@@ -69,8 +71,16 @@ void FileLogFunction(LogLevel level, UString prefix, const UString &text)
 		logFile() << *backtrace << '\n';
 		flush = true;
 	}
-	if (flush)
+	// Info/Debug lines are buffered, but never for long: flush at least once a second so a
+	// process that dies or is killed loses at most a second of them (the stream is leaked on
+	// purpose, so nothing flushes it at exit except the handler enableFileLogger registers).
+	static auto lastFlush = std::chrono::steady_clock::now();
+	const auto now = std::chrono::steady_clock::now();
+	if (flush || now - lastFlush > std::chrono::seconds(1))
+	{
 		logFile().flush();
+		lastFlush = now;
+	}
 }
 
 } // namespace
@@ -89,6 +99,7 @@ void enableFileLogger(const char *outputFile)
 	raiseLogMaxEnabledLevel(backtraceLogLevel);
 	previousFunction() = getLogCallback();
 	setLogCallback(FileLogFunction);
+	std::atexit([]() { logFile().flush(); });
 }
 
 } // namespace OpenApoc

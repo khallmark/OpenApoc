@@ -318,9 +318,9 @@ void BattleItem::update(GameState &state, unsigned int ticks)
 		{
 			getSupport();
 			auto tile = tileObject->getOwningTile();
-			if (tile->objectDropSfx)
+			if (tile->battleView().objectDropSfx)
 			{
-				fw().soundBackend->playSample(tile->objectDropSfx, getPosition(), 0.25f);
+				fw().soundBackend->playSample(tile->battleView().objectDropSfx, getPosition(), 0.25f);
 			}
 		}
 	}

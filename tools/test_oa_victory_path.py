@@ -205,10 +205,12 @@ def test_portal_selects_crewed_gate_craft_and_waits_for_view():
               "2:Explorer:flying=1,shifter=1,crew=6,city=CITYMAP_HUMAN,transit=0,ui=2")
     d = portal_driver(detail)
     with patch.object(oa_play.time, "sleep"), \
+            patch.object(oa_play, "prepare_loadouts", return_value={"ready": True}) as prep, \
             patch.object(oa_play, "wait_for_dimension", return_value=False) as wait:
         assert not oa_play.goto_portal(d)  # Order accepted is not an arrival receipt.
     assert [(c.args, c.kwargs) for c in d.h.click_xy.call_args_list] == [
-        ((192, 650), {"button": "right"}), ((192, 650), {})]
+        ((192, 650), {"button": "right"}), ((192, 650), {})] * 2
+    prep.assert_called_once_with(d, "alien_dimension", vehicle="selected")
     d.h.ok.assert_called_once_with("click 400 300 right")
     wait.assert_called_once_with(d, "CITYMAP_ALIEN")
     d = portal_driver("0:Bio:flying=1,shifter=1,crew=0")
@@ -295,15 +297,20 @@ def test_crew_chooses_gate_craft_even_when_an_ordinary_craft_has_the_squad():
         if q == "agents":
             return {"soldiers": "12"}
         if q == "interceptors":
-            return {"detail": "0:Valk:flying=1,crew=6,shifter=0|"
-                    f"1:Bio:flying=1,crew={6 if boarded[0] else 0},shifter=1"}
+            return {"detail": "0:Valk:flying=1,crew=6,shifter=0,pax=6,row=0|"
+                    f"1:Bio:flying=1,crew={6 if boarded[0] else 0},shifter=1,pax=12,row=1"}
         return {}
     d.h.gs.side_effect = gs
+    def select(x, y):
+        st = stage[0]
+        count = int(st.detail.split("selected_agents=", 1)[1].split("_", 1)[0]) + 1
+        st.detail = st.detail.replace(f"selected_agents={count-1}_", f"selected_agents={count}_")
+    d.h.click_xy.side_effect = select
     def ok(command):
         if command == "click 400 300 right":
             stage[0] = oa_play.Status("BuildingScreen", 1280, 720, "", detail=
-                "selected_agents=0_boarding=300,80,0,6,1,1;300,250,1,12,1,1_"
-                "soldier_rows=300,110,1,1,1;300,136,1,1,1;100,80,0,1,0")
+                "selected_agents=0_boarding=300,80,0,6,1,1,0;300,250,1,12,1,1,1_"
+                "soldier_rows=300,110,1,1,1,0;300,136,1,1,1,0;100,80,0,1,0,-1")
         if command == "up 300 250":
             boarded[0] = True
         return "OK"
@@ -321,7 +328,7 @@ def test_crew_waits_for_gate_craft_instead_of_falling_back_to_ordinary_transport
                            oa_play.Status("BuildingScreen", 1280, 720, ""),
                            oa_play.Status("BuildingScreen", 1280, 720, "", detail=
                                "boarding=300,80,0,6,1,1_soldier_rows=100,80,0,1,0")]
-    d.h.gs.side_effect = lambda q: {"interceptors": {"detail": "0:Bio:flying=1,shifter=1,crew=0"},
+    d.h.gs.side_effect = lambda q: {"interceptors": {"detail": "0:Bio:flying=1,shifter=1,crew=0,pax=12,row=-1"},
                                    "centre_on_base": {"centred": "1", "at": "400,300,0"}}.get(q, {})
     with patch.object(oa_play.time, "sleep"), patch.object(oa_play, "return_to_city"):
         assert oa_play.crew_transport(d) == 0
@@ -421,6 +428,7 @@ def test_alien_raid_delivers_squad_to_target_before_opening_raid_screen():
         return True
     d.click_id.side_effect = click
     with patch.object(oa_play.time, "sleep"), patch.object(oa_play, "select_gate_craft", return_value=True), \
+            patch.object(oa_play, "prepare_loadouts", return_value={"ready": True}), \
             patch.object(oa_play, "win_battle", return_value="resolved") as fight:
         assert oa_play.raid_alien_building(d) == "resolved"
     assert [c.args[0] for c in d.h.ok.call_args_list] == ["click 400 300", "click 400 300 right"]
@@ -444,6 +452,24 @@ def test_victory_run_reaches_dimension_turn_through_city_turn():
         dimension = stack.enter_context(patch.object(v, "dimension_turn", return_value=True))
         assert v.run(0.1) == 0
         dimension.assert_called_once()
+
+
+def test_portal_loadout_failure_holds_departure_and_resumes_home_economy():
+    d = portal_driver("0:Bio:flying=1,shifter=1,crew=6,city=CITYMAP_HUMAN")
+    with patch.object(oa_play.time, "sleep"), \
+            patch.object(oa_play, "prepare_loadouts", return_value={"ready": False}) as prep:
+        assert not oa_play.goto_portal(d)
+    assert d.loadout_blocked is True
+    prep.assert_called_once_with(d, "alien_dimension", vehicle="selected")
+    d.h.ok.assert_not_called()
+    with TemporaryDirectory() as tmp:
+        v = oa_victory.Victory(Path(tmp), Path(tmp), 1234)
+        v.d = d
+        v.last_endgame = 0
+        v.progress["crossing_to"] = "CITYMAP_ALIEN"
+        with patch.object(oa_victory, "goto_portal", return_value=False):
+            assert not v.dimension_turn(), "home procurement must remain reachable"
+        assert "crossing_to" not in v.progress
 
 
 if __name__ == "__main__":

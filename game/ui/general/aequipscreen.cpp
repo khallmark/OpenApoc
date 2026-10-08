@@ -69,21 +69,21 @@ AEquipScreen::AEquipScreen(sp<GameState> state, sp<Agent> firstAgent)
 
 	// Agent list functionality
 	auto agentList = formMain->findControlTyped<ListBox>("AGENT_SELECT_BOX");
-	agentList->addCallback(
-	    FormEventType::ListBoxChangeSelected,
-	    [this](FormsEvent *e)
-	    {
-		    auto list = std::static_pointer_cast<ListBox>(e->forms().RaisedBy);
-		    auto agent = list->getSelectedData<Agent>();
-		    if (!agent)
-		    {
-			    LogError("No agent in selected data");
-			    return;
-		    }
-		    selectAgentFromList(
-		        agent, Event::isPressed(e->forms().MouseInfo.Button, Event::MouseButton::Right),
-		        modifierLCtrl || modifierRCtrl);
-	    });
+	agentList->addCallback(FormEventType::ListBoxChangeSelected,
+	                       [this](FormsEvent *e)
+	                       {
+		                       auto list = std::static_pointer_cast<ListBox>(e->forms().RaisedBy);
+		                       auto agent = list->getSelectedData<Agent>();
+		                       if (!agent)
+		                       {
+			                       LogError("No agent in selected data");
+			                       return;
+		                       }
+		                       selectAgentFromList(agent,
+		                                           Event::isPressed(e->forms().MouseInfo.Button,
+		                                                            Event::MouseButton::Right),
+		                                           modifierLCtrl || modifierRCtrl);
+	                       });
 
 	// Agent name edit
 	formAgentProfile->findControlTyped<TextEdit>("AGENT_NAME")
@@ -241,8 +241,7 @@ void AEquipScreen::registerAEquipIntrospection()
 				                  loaded ? 1 : 0, visible ? 1 : 0, std::get<1>(tuple));
 			    }
 			    return format("count={0} mode={1} scroll={2} detail={3}", n,
-			                  screen->selectedAgents.empty() ? "none"
-			                                                 : modeName(screen->getMode()),
+			                  screen->selectedAgents.empty() ? "none" : modeName(screen->getMode()),
 			                  scroll, out.empty() ? UString("-") : out);
 		    }
 		    if (q == "aequip_agents")
@@ -269,8 +268,8 @@ void AEquipScreen::registerAEquipIntrospection()
 						    weapons++;
 					    }
 				    }
-				    const bool selected = !screen->selectedAgents.empty() &&
-				                          screen->selectedAgents.front() == agent;
+				    const bool selected =
+				        !screen->selectedAgents.empty() && screen->selectedAgents.front() == agent;
 				    if (n++ > 0)
 				    {
 					    out += "|";
@@ -309,7 +308,8 @@ void AEquipScreen::registerAEquipActions()
 	setHarnessActionHandler(
 	    [previous](const UString &verb, const std::vector<UString> &args) -> UString
 	    {
-		    if (verb == "aequip_select" || verb == "aequip_equip")
+		    if (verb == "aequip_select" || verb == "aequip_equip" || verb == "aequip_unequip" ||
+		        verb == "aequip_reload")
 		    {
 			    auto screen = activeEquipScreen.lock();
 			    if (!screen)
@@ -376,6 +376,87 @@ UString AEquipScreen::harnessAction(const UString &verb, const std::vector<UStri
 		return format("OK agent={0} mode={1} base={2} weapons={3} equipment={4} items={5}", args[0],
 		              modeName(getMode()), getAgentBase(agent) ? 1 : 0, weapons,
 		              agent->equipment.size(), inventoryItems.size());
+	}
+
+	// Named paper-doll operations for pre-mission refits. These use the very same pickup,
+	// unload and placement methods as a player's Shift+click / Ctrl+click and ammo drag.
+	if (verb == "aequip_unequip" || verb == "aequip_reload")
+	{
+		const bool reload = verb == "aequip_reload";
+		if (args.size() != (reload ? 2 : 1))
+		{
+			return reload ? "ERR usage: aequip_reload <weapon id> <ammo id>"
+			              : "ERR usage: aequip_unequip <item type id>";
+		}
+		if (selectedAgents.empty() || getMode() != Mode::Base ||
+		    !config().getBool("OpenApoc.NewFeature.AdvancedInventoryControls"))
+		{
+			return "ERR refits require a selected agent at a base and AdvancedInventoryControls";
+		}
+		auto agent = selectedAgents.front();
+		sp<AEquipment> item;
+		for (const auto &e : agent->equipment)
+		{
+			if (e && e->type.id == args[0])
+			{
+				item = e;
+				break;
+			}
+		}
+		if (!item)
+			return "ERR item is not on the selected agent";
+		const auto position = item->equippedPosition;
+		if (!reload)
+		{
+			const auto before = agent->equipment.size();
+			if (!tryPickUpItem(agent, position, false))
+				return "ERR item cannot be picked up";
+			handleItemPlacement(false);
+			return agent->equipment.size() < before ? "OK returned=" + args[0]
+			                                        : "ERR item did not leave the agent";
+		}
+		StateRef<AEquipmentType> ammo;
+		for (const auto &a : item->type->ammo_types)
+		{
+			if (a.id == args[1])
+			{
+				ammo = a;
+				break;
+			}
+		}
+		if (!ammo || !ammo->canBeUsed(*state, state->getPlayer()))
+			return "ERR incompatible or locked ammo";
+		const auto base = getAgentBase(agent);
+		const auto stock = base->inventoryAgentEquipment.find(ammo.id);
+		if (stock == base->inventoryAgentEquipment.end() || stock->second <= 0)
+		{
+			return "ERR no matching ammo in base stores";
+		}
+		bool listed = false;
+		for (const auto &entry : inventoryItems)
+		{
+			listed |= std::get<2>(entry)->type == ammo;
+		}
+		if (!listed)
+		{
+			return "ERR ammo is not on the weapons tab";
+		}
+		if (item->payloadType)
+		{
+			if (!tryPickUpItem(agent, position, true))
+				return "ERR cannot unload weapon";
+			handleItemPlacement(false);
+		}
+		if (!tryPickUpItem(*ammo))
+			return "ERR ammo is not on the weapons tab";
+		const bool placed = tryPlaceItem(agent, position);
+		refreshInventoryItems();
+		displayAgent(agent);
+		updateAgentControl(agent);
+		paperDoll->updateEquipment();
+		return placed && item->payloadType == ammo && item->ammo > 0
+		           ? format("OK loaded={0} ammo={1}", ammo.id, item->ammo)
+		           : UString("ERR reload did not load the weapon");
 	}
 
 	// aequip_equip <item type id>: Shift+click that item in the inventory list, which puts it
@@ -829,9 +910,9 @@ void AEquipScreen::render()
 			int wound = 0;
 			while (wound < ftw.second && wound < FATAL_WOUND_LOCATIONS[ftw.first].size())
 			{
-				fw().renderer->draw(
-				    woundImage, formMain->getLocationOnScreen() +
-				                    FATAL_WOUND_LOCATIONS[ftw.first][wound] * fw().uiGetScale());
+				fw().renderer->draw(woundImage, formMain->getLocationOnScreen() +
+				                                    FATAL_WOUND_LOCATIONS[ftw.first][wound] *
+				                                        fw().uiGetScale());
 				wound++;
 			}
 		}

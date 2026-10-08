@@ -14,7 +14,9 @@ Stage in this engine -- are detected and dismissed automatically instead of dead
 from __future__ import annotations
 
 import argparse
+from oa_loadouts import prepare_loadouts
 import json
+import re
 import socket
 import sys
 import time
@@ -26,6 +28,7 @@ import shutil
 import subprocess
 
 from oa_forms import FormLibrary
+from oa_strategy import Strategy, add_strategy_option, parse_strategy, reorder_research
 
 # Durable, append-only run ledger. One JSON record per leg per run.
 LEDGER = Path(__file__).resolve().parent.parent / "build" / "campaign-ledger.jsonl"
@@ -113,6 +116,10 @@ RESPONSES = {
     # so the driver lands here by accident. play_battle drives it deliberately (Exit Battle) in
     # one synchronous block of its own, so simply closing it here is safe.
     "InGameOptions":          {"ack": "BUTTON_OK"},
+    # Never press Return here. In battle a bare L opens this screen in LOAD mode, and the
+    # unknown-stage fallback's Return loaded whatever save was first in the list - another run's
+    # - tearing the game down mid-battle (run 411, 2026-10-07). BUTTON_QUIT just closes it.
+    "SaveMenu":               {"ack": "BUTTON_QUIT"},
     # Same accidental-arrival problem as the UFOpaedia stages, and the one that actually stranded
     # two runs. manage_research() drives this screen deliberately via wait_for(), which returns as
     # soon as the stage matches and so never routes through respond_to_event() -- but when the
@@ -438,6 +445,18 @@ def configure_runner(args: argparse.Namespace) -> dict:
     return {"ai": args.ai} if args.ai else {}
 
 
+def resolve_strategy(args: argparse.Namespace, policy: dict) -> tuple[Strategy, dict]:
+    """The campaign genome named by --strategy, and the battle policy it implies.
+
+    Only runners that actually read the genome (oa_victory, oa_play) call this and offer
+    --strategy; offering the flag on a runner that ignored it would be a knob wired to nothing. An
+    explicit --ai still names the AI; the genome's doctrine genes ride along either way, and a
+    default genome contributes nothing, so a run that names no strategy keeps its old policy.
+    """
+    strategy = parse_strategy(getattr(args, "strategy", None))
+    return strategy, {**strategy.battle_policy(), **policy}
+
+
 def bring_to_front() -> None:
     """Raise the game window, only when explicitly asked for via OA_RAISE_WINDOW=1.
 
@@ -516,7 +535,7 @@ def free_port(preferred: int) -> int:
             except OSError:
                 continue
         # Nothing is listening AND nothing is mid-shutdown holding it as a stale game.
-        if not reap_stale_game.__globals__["subprocess"].run(
+        if not subprocess.run(
             ["pgrep", "-f", f"Harness.Port={candidate}"],
             capture_output=True, text=True, timeout=10,
         ).stdout.strip():
@@ -612,6 +631,7 @@ class GameProcess:
 
     def start(self, wait_s: float = 90.0) -> None:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        (self.log_path.parent / "saves").mkdir(exist_ok=True)
         # Take a private copy of the binary first: see snapshot_binary().
         self._run_binary = self.snapshot_binary()
         # Clear any wedged instance still holding this port before trying to bind it.
@@ -640,6 +660,9 @@ class GameProcess:
             # Belt and braces alongside the engine-side guard: a modal error dialog blocks the
             # main loop forever when there is no human to dismiss it.
             "--Logger.dialogLevel=0",
+            # A save directory per run: they all shared ./saves, so a stray load picked up some
+            # other run's game.
+            f"--Game.Save.Directory={self.log_path.parent / 'saves'}",
             # Warnings and errors only: an Info line per vehicle route attempt and mission change
             # is thousands of formatted strings a second in a busy city, for a log nobody reads.
             "--Logger.FileLevel=2",
@@ -647,6 +670,10 @@ class GameProcess:
             # and ticks advance per frame -- so an automated run asks for the headroom outright
             # rather than relying on the limiter being broken.
             f"--Framework.TargetFPS={target_fps()}",
+            # Draw at most 30 frames a second unless a human is watching. Each present waits on
+            # the window server's vsync, and at 120 fps that wait capped the simulation at ~120
+            # steps/s; at 30 the same game ran 7x more steps for a third of the CPU per step.
+            f"--Framework.RenderFPS={0 if watching() else 30}",
         ] + ([] if audio_enabled() else ["--Framework.AudioBackends=null"]) + screen_args() \
             + PAUSE_NOTIFICATION_FLAGS + self.extra
         # Append, never truncate: a runner that restarts after a crash used to reopen this with "w"
@@ -741,11 +768,14 @@ class GameProcess:
 class Driver:
     def __init__(self, harness: Harness, forms_dir: Path, log: Path | None = None,
                  shots: Path | None = None, verbose: bool = True,
-                 battle_policy: dict | None = None):
+                 battle_policy: dict | None = None, strategy: Strategy | None = None):
         self.h = harness
         self.lib = FormLibrary(forms_dir)
         self.verbose = verbose
         self.battle_policy = dict(battle_policy or {})
+        # The campaign genome (tools/oa_strategy.py). The default Strategy() is today's constants,
+        # so a Driver built without one behaves exactly as it always did.
+        self.strategy = strategy or Strategy()
         self.shots = shots
         self.shot_n = 0
         self.events: list[str] = []
@@ -762,6 +792,10 @@ class Driver:
         self.last_battle: dict = {}
         self.act_counts: dict[str, int] = {}
         self.act_reset_at = time.time()
+        # Craft kinds that crew_transport tried and failed to put a squad aboard, by consecutive
+        # failures. rank_transports sinks a kind that keeps failing, so a transport that cannot be
+        # loaded stops being chosen first every leg -- the run learns which craft actually work.
+        self.crew_failures: dict[str, int] = {}
 
     # Screens where Escape does NOT mean "back". CityView and BattleView both PUSH InGameOptions
     # on SDLK_ESCAPE (cityview.cpp:4156, battleview.cpp:3380), so pressing it there OPENS the
@@ -975,6 +1009,14 @@ class Driver:
 
     def respond_to_event(self, st: Status) -> bool:
         """Engage with an interrupting screen. Returns True if we acted on it."""
+        if st.stage == "AlertScreen":
+            # Remember the incident, then refit in the city before dispatching (12.2).
+            self.note_alert(st)
+            if not self.click_id("BUTTON_QUIT", st):
+                self.escape_key(st.stage)
+            if self.status().stage == "CityView":
+                raid_infiltrated_building(self)
+            return True
         if st.stage == "MessageBox":
             # A MessageBox is not always an acknowledgement. YesNoCancel boxes -- RecruitScreen's
             # "Confirm Orders" among them (recruitscreen.cpp:482-484) -- carry no BUTTON_OK and do
@@ -1495,9 +1537,20 @@ PRIORITY_MANUFACTURE = [
 ]
 
 
+def driver_strategy(d: Driver) -> Strategy:
+    """Helpers also accept lightweight test/embedding drivers without an injected genome."""
+    strategy = getattr(d, "strategy", None)
+    return strategy if isinstance(strategy, Strategy) else Strategy()
+
+
+def research_priority(d: Driver) -> list:
+    """Reorder research only; engineering keeps the explicit gate-craft preflight."""
+    return reorder_research(PRIORITY_RESEARCH, driver_strategy(d)["research_order"])
+
+
 def gate_craft_project(d: Driver) -> str:
     """Cheap read-only preflight for one gate craft at the currently selected base."""
-    if "shifter=1" in d.h.gs("interceptors").get("detail", ""):
+    if any(f.get("shifter") == "1" for _, f in craft_flags(d)):
         return ""
     labs = d.h.gs("research").get("labs_detail", "").split("|")
     if any(topic in lab for lab in labs for topic in PRIORITY_MANUFACTURE):
@@ -1505,7 +1558,10 @@ def gate_craft_project(d: Driver) -> str:
     if "FACILITYTYPE_ADVANCED_WORKSHOP:0" not in d.h.gs("facilities").get("base", ""):
         return ""
     funds = int(d.h.gs("funds").get("balance", "0") or 0)
-    for want in PRIORITY_MANUFACTURE:
+    priority = PRIORITY_MANUFACTURE
+    if driver_strategy(d)["gate_craft_order"] == "transport_first":
+        priority = list(reversed(priority))
+    for want in priority:
         topic = d.h.gs(f"topic {want}")
         if (topic.get("found") == "1" and topic.get("hidden") == "0"
                 and topic.get("deps_satisfied") == "1"
@@ -1542,7 +1598,7 @@ def pick_topic_rows(d: Driver) -> list[tuple[int, str]]:
         want = gate_craft_project(d)
         return [(idx, topic) for idx, topic in rows if topic == want]
     ranked = []
-    for want in PRIORITY_RESEARCH:
+    for want in research_priority(d):
         for idx, topic in rows:
             if topic == want and (idx, topic) not in ranked:
                 ranked.append((idx, topic))
@@ -1629,6 +1685,9 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
         if info.get("centred") != "1":
             return "nothing-reported"
         d.say(f"  [raid] from the message log: {info.get('text', '?')[:60]}")
+    prepare_loadouts(d, "alien_building")
+    # Buying/refitting visits base screens. Re-observe the target's screen coordinates.
+    info = d.h.gs(f"centre_on_building {target}") if target else d.h.gs("centre_on_message")
     at = info.get("at", "")
     try:
         bx, by = (int(v) for v in at.split(",")[:2])
@@ -1752,8 +1811,8 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
         try:
             ic = d.h.gs("interceptors")
             ag = d.h.gs("agents")
-            free = sum(1 for part in (ic.get("detail", "") or "").split("|")
-                       if "flying=1" in part and "crew=0" in part)
+            free = sum(1 for _, _, flags in parse_craft_flags(ic.get("detail", ""))
+                       if flags.get("flying") == "1" and flags.get("crew") == "0")
             d.say(f"  [raid] nobody selectable: {ag.get('soldiers_fit')} fit soldier(s), "
                   f"{ic.get('craft')} craft, {free} of them empty and flying")
         except (HarnessError, OSError):
@@ -1806,6 +1865,10 @@ def raid_alien_building(d: Driver) -> str:
 
     if not select_gate_craft(d, "CITYMAP_ALIEN"):
         return "no-gate-squad"
+    if not prepare_loadouts(d, "alien_dimension", vehicle="selected")["ready"]:
+        return "loadout-not-verified"
+    if not select_gate_craft(d, "CITYMAP_ALIEN"):
+        return "no-gate-squad"
 
     target = d.h.gs("centre_on_raidable")
     if target.get("centred") != "1":
@@ -1844,7 +1907,7 @@ def raid_alien_building(d: Driver) -> str:
         return_to_city(d)
         return "no-building-screen"
 
-    craft = [r for r in assignment_rows(st, "boarding") if len(r) == 6 and r[2] == 1 and r[4] == 1]
+    craft = [r for r in assignment_rows(st, "boarding") if len(r) >= 6 and r[2] == 1 and r[4] == 1]
     if not craft:
         return_to_city(d)
         return "no-gate-craft-at-building"
@@ -1900,34 +1963,10 @@ def station_at_gates(d: Driver) -> int:
         return 0
 
     fighters = []
-    for part in d.h.gs("interceptors").get("detail", "").split("|"):
-        bits = part.split(":")
-        if len(bits) < 3 or not bits[0].isdigit():
+    for idx, flags in craft_flags(d):
+        if flags.get("armed") != "1" or flags.get("flying") != "1":
             continue
-        flags = bits[-1]
-        # Two earlier filters were wrong, both provable from the fleet the game actually starts
-        # you with:
-        #   0:Valkyrie_Interceptor_1 flying=1,armed=1,crew=0,pax=12
-        #   1:Stormdog_1             flying=0,armed=1,crew=0,pax=4
-        #   2:Phoenix_Hovercar_1     flying=1,armed=1,crew=0,pax=4
-        #   3:Phoenix_Hovercar_2     flying=1,armed=1,crew=0,pax=4
-        #   4:Wolfhound_APC_1        flying=0,armed=1,crew=0,pax=14
-        # crew=0 sent the APC and the Stormdog to hold a gate -- crew is who is aboard RIGHT NOW,
-        # so an empty transport looks identical to a fighter. pax=0 then stationed NOTHING,
-        # because no craft in this game has zero capacity: every one of them carries someone.
-        # flying=1 is a TYPE check (VehicleType::Type::Flying), not "currently airborne", so it
-        # drops road vehicles without dropping craft parked in the hangar -- and a hangar queen
-        # is exactly what should be holding a gate.
-        if "armed=1" not in flags or "flying=1" not in flags:
-            continue
-        pax = 0
-        for f in flags.split(","):
-            if f.startswith("pax="):
-                try:
-                    pax = int(f[4:])
-                except ValueError:
-                    pax = 0
-        fighters.append((pax, int(bits[0])))
+        fighters.append((int(flags.get("pax", "0") or 0), idx))
     if not fighters:
         return 0
 
@@ -1972,23 +2011,30 @@ def station_at_gates(d: Driver) -> int:
     return sent
 
 
-def craft_flags(d: Driver) -> list[tuple[int, dict[str, str]]]:
-    """Owned craft in state order, including their city and actual passenger count."""
+def parse_craft_flags(detail: str) -> list[tuple[int, str, dict[str, str]]]:
+    """Parse the shared fleet wire format, retaining every string and numeric field."""
     result = []
-    for part in d.h.gs("interceptors").get("detail", "").split("|"):
+    for part in (detail or "").split("|"):
         bits = part.split(":")
         if len(bits) < 3 or not bits[0].isdigit():
             continue
         flags = dict(f.split("=", 1) for f in bits[-1].split(",") if "=" in f)
-        result.append((int(bits[0]), flags))
+        result.append((int(bits[0]), ":".join(bits[1:-1]), flags))
     return result
+
+
+def craft_flags(d: Driver) -> list[tuple[int, dict[str, str]]]:
+    """Owned craft in state order, retaining every gs interceptors field."""
+    return [(idx, flags) for idx, _, flags in
+            parse_craft_flags(d.h.gs("interceptors").get("detail", ""))]
 
 
 def select_gate_craft(d: Driver, city: str, require_crew: bool = True) -> bool:
     """Select a gate-capable transport with soldiers in this city, through its UI list."""
+    minimum = driver_strategy(d)["cross_min_crew"] if city == "CITYMAP_HUMAN" else 1
     candidates = [(idx, f) for idx, f in craft_flags(d)
                   if f.get("shifter") == "1" and f.get("flying") == "1"
-                  and (not require_crew or int(f.get("crew", "0")) > 0)
+                  and (not require_crew or int(f.get("crew", "0")) >= minimum)
                   and f.get("city", city) == city
                   and f.get("transit", "0") == "0"]
     if not candidates:
@@ -2057,6 +2103,7 @@ def wait_for_dimension(d: Driver, city: str, budget_s: float = 120.0) -> bool:
 
 def goto_portal(d: Driver, destination: str = "CITYMAP_ALIEN") -> bool:
     """Order the crewed gate craft across, then observe the normal day-rollover view switch."""
+    d.loadout_blocked = False
     if d.status().stage != "CityView":
         return False
     current = d.h.gs("alien_buildings").get("current_city", "CITYMAP_HUMAN")
@@ -2071,6 +2118,16 @@ def goto_portal(d: Driver, destination: str = "CITYMAP_ALIEN") -> bool:
         return wait_for_dimension(d, destination)
     if not select_gate_craft(d, current, require_crew=require_crew):
         return False
+    if require_crew:
+        prepared = prepare_loadouts(d, "alien_dimension", vehicle="selected")
+        if not prepared["ready"]:
+            d.loadout_blocked = True
+            d.say("  [loadout-deferred] alien-dimension departure held for a verified role kit; "
+                  "research, procure or wait for delivery at home")
+            return False
+        # The refit's base screens may have changed the selected vehicle.
+        if not select_gate_craft(d, current, require_crew=True):
+            return False
     info = d.h.gs("centre_on_portal")
     if info.get("centred") != "1":
         d.say("  [portal] no portal found in this city")
@@ -2621,17 +2678,13 @@ def intercept_ufos(d: Driver) -> int:
     # victory, so crewed craft are used for interception only if there is nothing else flying.
     ICON_W = 36
     fighters, crewed_fighters = [], []
-    for part in d.h.gs("interceptors").get("detail", "").split("|"):
-        bits = part.split(":")
-        if len(bits) < 3 or not bits[0].isdigit():
+    for idx, flags in craft_flags(d):
+        if flags.get("flying") != "1" or flags.get("armed") != "1":
             continue
-        flags = bits[-1]
-        if "flying=1" not in flags or "armed=1" not in flags:
-            continue
-        if "crew=0" in flags:
-            fighters.append(int(bits[0]))
+        if flags.get("crew") == "0":
+            fighters.append(idx)
         else:
-            crewed_fighters.append(int(bits[0]))
+            crewed_fighters.append(idx)
     if not fighters:
         # Do not send the troop transport to dogfight. It carries the squad that wins ground
         # missions, and losing it costs the craft, the agents aboard, and the ability to reach the
@@ -3591,49 +3644,6 @@ def close_buysell(d: Driver, commit: bool) -> bool:
     return d.status().stage == "CityView"
 
 
-def buy_category(d: Driver, category: str, qty: int, rows: int, sub: str = "") -> int:
-    """Set a quantity on the first `rows` lines of a buy/sell category. Returns lines changed.
-
-    The purchase rows are the case the named-action layer could not reach on its own: they are
-    runtime-built controls with no ids, and the quantity is an unnamed ScrollBar inside each row
-    (transactioncontrol.cpp:702). Addressing them by position -- CONTROL LIST item <N> set <q> --
-    keeps this driving the real UI rather than writing into GameState behind it.
-    """
-    if not d.click_id(category, d.status()):
-        return 0
-    time.sleep(0.8)
-    if sub:
-        d.click_id(sub, d.status())
-        time.sleep(0.8)
-    changed = 0
-    for i in range(rows):
-        try:
-            # A row's quantity is a *balance*, not an order size: setting it below what the base
-            # already holds sells the difference. Blindly writing a fixed number therefore sold
-            # equipment while the log claimed a purchase -- funds went up, not down. Read first
-            # and only ever increase.
-            # A row's scrollbar is a balance across the two sides of the trade, and on the
-            # buy/sell screen *raising* it sells: measured directly, setting have+qty took stores
-            # from 60 items to 30 and put money back in the bank while the log claimed a
-            # purchase. Buying means moving the balance the other way.
-            cur = d.h.send(f"control LIST item {i} get")
-            have, low = 0, 0
-            for kv in cur.split():
-                if kv.startswith("value="):
-                    have = int(kv.split("=")[1] or 0)
-                elif kv.startswith("min="):
-                    low = int(kv.split("=")[1] or 0)
-            target = max(low, have - qty)
-            if target == have:
-                continue
-            if not d.h.send(f"control LIST item {i} set {target}").startswith("OK"):
-                continue
-            changed += 1
-        except (HarnessError, OSError):
-            break
-    return changed
-
-
 def equip_craft(d: Driver) -> str:
     """Fit the hardest-hitting air weapon in stores to a craft. Returns what happened.
 
@@ -3836,8 +3846,7 @@ def sell_surplus_loot(d: Driver, keep: int = 1) -> int:
     Three rules keep this from being self-harm:
       * Never sell anything still unresearched, and always keep one specimen. Selling the only
         corpse or artifact stalls the tech tree on a topic that can never start again.
-      * Never sell what the squad's own equipment template names -- processTemplate re-equips
-        those exact types, so selling them disarms everybody at the next equip.
+      * Never sell the current role plan or the alien-dimension objective/wall kit.
       * Keep a working reserve of each kind rather than stripping stores to nothing.
     """
     info = d.h.gs("loot")
@@ -3845,13 +3854,10 @@ def sell_surplus_loot(d: Driver, keep: int = 1) -> int:
     if not detail or detail == "-":
         return 0
 
-    template_types = set()
-    for part in d.h.gs("templates").get("detail", "").split("|"):
-        if not part.startswith("1:"):
-            continue
-        for kv in part.split(":", 1)[1].split(","):
-            if kv.startswith("types="):
-                template_types = {_norm(t) for t in kv[6:].split("+") if t and t != "-"}
+    protected = {_norm(t) for t in getattr(d, "loadout_keep", set())}
+    # Never liquidate the 10.3 endgame tools between ordinary missions.
+    protected.update(_norm(t) for t in ("AEQUIPMENTTYPE_TOXIGUN", "AEQUIPMENTTYPE_TOXIGUN_B-CLIP",
+        "AEQUIPMENTTYPE_TOXIGUN_C-CLIP", "AEQUIPMENTTYPE_DEVASTATOR_CANNON", "AEQUIPMENTTYPE_VORTEX_MINE"))
 
     surplus = []
     for part in detail.split("|"):
@@ -3866,7 +3872,7 @@ def sell_surplus_loot(d: Driver, keep: int = 1) -> int:
                 attrs[k] = v
         if attrs.get("researched") != "1":
             continue                      # unresearched: keep every one, it is a specimen
-        if _norm(item) in template_types:
+        if _norm(item) in protected:
             continue                      # the squad wears this
         # Only sell alien gear. "researched" is true of ordinary human kit too, so the first pass
         # cheerfully offered up Marsec M4000 clips and Megapol Lawpistol clips -- the ammunition
@@ -4172,41 +4178,6 @@ def hire_engineers(d: Driver, want: int = 6) -> int:
     return hire_staff(d, want, "BUTTON_ENGINRS", "agents_player")
 
 
-def template_weapon_in_stock(d: Driver) -> bool:
-    """Is the stored loadout's weapon actually in stores?
-
-    processTemplate strips an agent and re-equips the template's EXACT types, so applying it when
-    the weapon is missing takes working guns off people and hands back nothing. Observed doing
-    precisely that: "applied to 14 agents; armed 7->6", with the template naming a Megapol Laser
-    Sniper Gun and stores holding none -- only Lawpistols, M4000s and a plasma gun. The template
-    was captured from the starting squad, whose rifles cannot always be re-bought.
-    """
-    types = []
-    for part in d.h.gs("templates").get("detail", "").split("|"):
-        if not part.startswith("1:"):
-            continue
-        for kv in part.split(":", 1)[1].split(","):
-            if kv.startswith("types="):
-                types = [t for t in kv[6:].split("+") if t and t != "-"]
-    if not types:
-        return False
-    stock = {}
-    for part in d.h.gs("loot").get("detail", "-").split("|"):
-        bits = part.split(":")
-        if len(bits) < 2:
-            continue
-        try:
-            stock[bits[0]] = int(bits[1].split("=", 1)[1])
-        except (ValueError, IndexError):
-            continue
-    guns = [t for t in types if any(m in t.upper()
-                                    for m in ("GUN", "RIFLE", "PISTOL", "LAUNCHER", "CANNON"))
-            and "CLIP" not in t.upper() and "AMMO" not in t.upper()]
-    if not guns:
-        return True
-    return any(stock.get(g, 0) > 0 for g in guns)
-
-
 def _parse_rows(detail: str, names: tuple) -> list[dict]:
     """Rows of a "gs" detail field: "a:b:k=v:k=v|...". Bare leading tokens land in `names`.
 
@@ -4227,39 +4198,9 @@ def _parse_rows(detail: str, names: tuple) -> list[dict]:
     return rows
 
 
-def aequip_agents(d: Driver) -> list[dict]:
-    """The equip screen's portrait list: idx, id, base, weapons, equipment, selected, conscious."""
-    return _parse_rows(d.h.gs("aequip_agents").get("detail", "-"), ("idx", "id"))
-
-
 def aequip_items(d: Driver) -> list[dict]:
     """The inventory list for the selected agent: name, id, weapon, research, loaded, visible..."""
     return _parse_rows(d.h.gs("aequip_items").get("detail", "-"), ("name",))
-
-
-def _is_melee_stunner(row: dict) -> bool:
-    text = (row.get("id", "") + row.get("name", "")).upper()
-    return "GRAPPLE" in text or "STUN" in text
-
-
-def _pick_firearm(items: list[dict]) -> dict | None:
-    """The first researched firearm in the list, preferring one the base can also load.
-
-    A gun with no ammunition in stores goes onto the agent empty. That still counts as "armed"
-    to a driver that only looks for a weapon in the hands, and it is worth nothing in a fight.
-    """
-    guns = [r for r in items if r.get("weapon") == "1" and r.get("research") == "1"
-            and not _is_melee_stunner(r)]
-    return next((r for r in guns if r.get("loaded") == "1"), guns[0] if guns else None)
-
-
-def _pick_grapple(items: list[dict]) -> dict | None:
-    return next((r for r in items if r.get("weapon") == "1" and r.get("research") == "1"
-                 and _is_melee_stunner(r)), None)
-
-
-def _armed_count(d: Driver) -> int:
-    return int(d.h.gs("agents").get("armed", "0") or 0)
 
 
 def unarmed_at_base(ag: dict) -> int:
@@ -4305,219 +4246,9 @@ def _select_agent(d: Driver, agent_id: str) -> tuple[bool, str]:
     return reply.startswith("OK"), reply
 
 
-def arm_agents_directly(d: Driver, agents: int = 24) -> int:
-    """Put a weapon in every empty pair of hands, without the template. Returns armed delta.
-
-    The equipment-template mechanism re-equips a template's EXACT types, so it is useless -- worse
-    than useless, it strips people -- once the loadout names a weapon the market no longer sells.
-    A campaign sat at six armed of fifteen soldiers for that reason, with a template demanding a
-    Megapol Laser Sniper Gun and stores holding Lawpistols and M4000s instead.
-
-    This used to click pixels: a row in AGENT_SELECT_BOX at y = box.y + 18 + row * 36, then
-    Shift+click at the middle of a rect from `gs aequip_items`. Every part of that was wrong
-    in a way that still reported success:
-      * rows are 35px apart and the box shows eight, so the recruits -- listed last -- were never
-        reachable by pixel, however long the loop ran;
-      * a soldier who is away on a mission or in transit has no base to draw from, so their
-        inventory is empty and the visit was spent on nothing;
-      * the first rows are the veterans, who already carry a gun: they were handed a second one
-        and counted as "handed out" while armed stayed put (armed 10->10);
-      * the rects are in scroll space and nothing subtracted the scroll offset.
-    So it addresses agents and items by name, through the engine's own Shift+click path, and
-    judges every agent by whether `gs agents armed` actually rose.
-    """
-    before = _armed_count(d)
-    ag = d.h.gs("agents")
-    need = unarmed_at_base(ag)
-    if need <= 0:
-        away = int(ag.get("soldiers", "0") or 0) - int(ag.get("armed", "0") or 0)
-        d.say(f"  [arm] nobody unarmed is at a base ({away} soldier(s) unarmed but away); "
-              f"nothing to do")
-        return 0
-    if int(d.h.gs("stores").get("weapons", "0") or 0) <= 0:
-        d.say(f"  [arm] {need} unarmed at base but no weapons in stores; nothing to hand out")
-        return 0
-    if not _open_equip_screen(d):
-        return 0
-
-    failures: dict[str, int] = {}
-
-    def fail(reason: str) -> None:
-        key = reason.replace("ERR ", "")[:70]
-        failures[key] = failures.get(key, 0) + 1
-
-    armed_here = 0
-    try:
-        roster = aequip_agents(d)
-        targets = [r for r in roster if r.get("base") == "1" and r.get("weapons") == "0"
-                   and r.get("conscious") == "1"][:agents]
-        for row in targets:
-            ok, reply = _select_agent(d, row["id"])
-            if not ok:
-                fail(reply)
-                continue
-            gun = _pick_firearm(aequip_items(d))
-            if gun is None:
-                # Stores hold no firearm this agent's base can issue; later agents share it.
-                fail("no usable firearm in the inventory list")
-                break
-            armed_before = _armed_count(d)
-            reply = d.h.send(f"action aequip_equip {gun['id']}")
-            if not reply.startswith("OK"):
-                fail(reply)
-                continue
-            # "OK" is the screen's own report; the game state is the evidence.
-            if _armed_count(d) <= armed_before:
-                fail(f"OK from aequip_equip but armed stayed {armed_before}")
-                continue
-            armed_here += 1
-            # The guide wants a stun grapple in the other hand: an alien taken alive keeps its
-            # equipment, and that equipment is the campaign's income. Never worth failing over.
-            grapple = _pick_grapple(aequip_items(d))
-            if grapple is not None:
-                d.h.send(f"action aequip_equip {grapple['id']}")
-    finally:
-        return_to_city(d)
-
-    after = _armed_count(d)
-    summary = f"  [arm] armed {armed_here} of {need} unarmed-at-base; armed {before}->{after}"
-    if failures:
-        summary += f"; refused: {failures}"
-    d.say(summary)
-    return after - before
-
-
-def equip_squad(d: Driver, agents: int = 16, apply: bool = True) -> int:
-    """Arm unequipped soldiers from base stores. Returns the change in armed count.
-
-    New recruits arrive carrying nothing -- after hiring, soldiers went 10 to 15 while armed
-    stayed at 10 -- and an unarmed soldier is a casualty waiting to happen.
-
-    Items reach an agent by being dragged onto a paper doll whose item rects are computed at
-    runtime and appear nowhere in the .form file. The engine's own way round that is agent
-    equipment templates (AEquipScreen::processTemplate, aequipscreen.cpp): Ctrl+<n> stores
-    the shown agent's loadout, a bare <n> strips every selected agent and re-equips them from
-    base stores to match.
-
-    Traps, all learned the hard way:
-      * The template acts on the SELECTED agent, and only does anything when that agent is in a
-        base. Selecting by list index drifted from what was on screen, and soldiers away on a
-        mission silently took nothing -- "applied to 10 agents; armed 4->4" was mostly that.
-        Agents are now selected by id, and only those who are at a base, unarmed, are touched.
-        Re-applying to an armed veteran strips and re-equips them for a net change of zero at
-        best, and "armed fell 10->9" at worst, so veterans are left alone.
-      * Applying an *empty* template strips agents instead of arming them. Capturing one from a
-        row that happened to be a scientist took armed from 10 down to 4. So the captured
-        template is checked before it is used, and arming is abandoned the moment it goes
-        backwards.
-    """
-    before = _armed_count(d)
-    if not _open_equip_screen(d):
-        return 0
-
-    def close() -> None:
-        return_to_city(d)
-
-    def stored_weapons() -> int:
-        for part in d.h.gs("templates").get("detail", "").split("|"):
-            if part.startswith("1:"):
-                for kv in part.split(":", 1)[1].split(","):
-                    if kv.startswith("weapons="):
-                        return int(kv.split("=")[1] or 0)
-        return 0
-
-    def capture(agent_id: str) -> int:
-        """Store this agent's loadout in slot 1; return how many weapons it holds."""
-        ok, _ = _select_agent(d, agent_id)
-        if not ok:
-            return -1
-        d.h.ok("keydown Left Ctrl")
-        time.sleep(0.1)
-        d.h.key("1")
-        time.sleep(0.1)
-        d.h.ok("keyup Left Ctrl")
-        time.sleep(0.35)
-        return stored_weapons()
-
-    # Templates live in GameState and persist, so a loadout captured once at the start of the
-    # campaign -- while the original ten soldiers are all home and armed -- stays usable for
-    # ever. Re-capturing later is what failed: called after a mission, the list holds only the
-    # people who did not go, and none of them are armed. The refusal was right; the timing was
-    # not.
-    already = stored_weapons()
-    roster = aequip_agents(d)
-    if already > 0:
-        d.say(f"  [equip] reusing the stored {already}-weapon loadout")
-    else:
-        for row in roster[:agents]:
-            if row.get("base") != "1" or row.get("weapons", "0") == "0":
-                continue
-            got = capture(row["id"])
-            if got > 0:
-                d.say(f"  [equip] captured a {got}-weapon loadout from {row['id']}")
-                break
-        else:
-            d.say("  [equip] no armed agent at a base to copy a loadout from; "
-                  "leaving everyone as they are")
-            close()
-            return 0
-    if not apply:
-        d.say("  [equip] loadout captured; not applying yet")
-        close()
-        return 0
-
-    # Applying with an empty armoury strips people rather than arming them: the template is
-    # re-equipped from base stores, and purchases take a couple of game-days to arrive.
-    if int(d.h.gs("stores").get("weapons", "0") or 0) <= 0:
-        d.say("  [equip] no weapons in stores; not applying (would disarm the squad)")
-        close()
-        return 0
-
-    applied, armed_here, best = 0, 0, before
-    targets = [r for r in aequip_agents(d)
-               if r.get("base") == "1" and r.get("weapons") == "0" and r.get("conscious") == "1"]
-    try:
-        for row in targets[:agents]:
-            ok, reply = _select_agent(d, row["id"])
-            if not ok:
-                d.say(f"  [equip] cannot select {row['id']}: {reply[:80]}")
-                continue
-            d.h.key("1")
-            applied += 1
-            time.sleep(0.3)
-            now = _armed_count(d)
-            if now < best:
-                # Stores ran dry: further applications now strip people rather than arm them.
-                d.say(f"  [equip] stopping at {row['id']}: armed fell {best}->{now}")
-                break
-            if now > best:
-                armed_here += 1
-            best = max(best, now)
-    finally:
-        close()
-
-    after = _armed_count(d)
-    d.say(f"  [equip] template applied to {applied} unarmed agent(s), {armed_here} gained a "
-          f"weapon; armed {before}->{after}")
-    return after - before
-
-
-def arm_squad(d: Driver, agents: int = 24) -> int:
-    """One arming pass for whoever is unarmed at a base. Returns the change in armed count.
-
-    The full template kit (armour, grenades, medi-kit) when its gun is still in stores, the bare
-    best-available gun otherwise, and the bare gun again if the template armed nobody. Does
-    nothing -- cheaply, without opening a screen -- when everyone at a base already has a weapon,
-    which is the common case: soldiers who are away cannot be equipped at all, so the old
-    `armed < soldiers` trigger kept the pass retrying every forty seconds for nothing.
-    """
-    if unarmed_at_base(d.h.gs("agents")) <= 0:
-        return 0
-    if template_weapon_in_stock(d):
-        gained = equip_squad(d, agents=agents)
-        if gained > 0:
-            return gained
-    return arm_agents_directly(d, agents=agents)
+def arm_squad(d: Driver, agents: int = 24, mission: str = "base_defence") -> int:
+    """Refit armed veterans and recruits by role; return the observed loaded-soldier delta."""
+    return prepare_loadouts(d, mission, agents=agents)["gained"]
 
 
 def _norm(text: str) -> str:
@@ -4526,15 +4257,15 @@ def _norm(text: str) -> str:
     return "".join(ch for ch in t if ch.isalnum())
 
 
-def buy_named(d: Driver, wanted: list, qty: int = 8, category: str = "BUTTON_AGENTS") -> int:
-    """Buy specific items by name. Returns the number of lines ordered.
-
-    Purchase rows carry their identity only as a child Label, so until the harness could read
-    that text the driver could address a row by position but had no idea what was in it -- it
-    bought whatever sat in slot 3. Buying the wrong things is not harmless here: applying an
-    equipment template re-equips the template's *exact* item types, so stocking plausible weapons
-    instead of the named ones arms nobody.
-    """
+def buy_named(d: Driver, wanted: list | dict, qty: int = 8, category: str = "BUTTON_AGENTS",
+              reserve: int = 40000) -> int:
+    """Buy named market rows, using per-item clip/item quantities and a live funds preview."""
+    funds_before = int(d.h.gs("funds").get("balance", "0") or 0)
+    if funds_before <= reserve:
+        d.say(f"  [loadout-buy] balance=${funds_before}; keeping reserve=${reserve}")
+        return 0
+    requests = {_norm(w): int(n) for w, n in wanted.items()} if isinstance(wanted, dict) else {
+        _norm(w): qty for w in wanted}
     if not open_buysell(d):
         return 0
     if not d.click_id(category, d.status()):
@@ -4576,14 +4307,24 @@ def buy_named(d: Driver, wanted: list, qty: int = 8, category: str = "BUTTON_AGE
                     have = int(kv.split("=")[1] or 0)
                 elif kv.startswith("min="):
                     low = int(kv.split("=")[1] or 0)
-            target = max(low, have - qty)
+            target = max(low, have - requests[key])
             if target != have and d.h.send(f"control LIST item {idx} set {target}").startswith("OK"):
                 ordered += 1
         except (HarnessError, OSError):
             break
-    funds_before = int(d.h.gs("funds").get("balance", "0") or 0)
-    close_buysell(d, commit=ordered > 0)
+    affordable = False
+    try:
+        preview = d.h.send("control TEXT_FUNDS get")
+        if preview.startswith("OK") and "text=" in preview:
+            projected = int(preview.split("text=", 1)[1].split()[0].replace(",", "").replace("$", ""))
+            affordable = reserve <= projected < funds_before
+    except (HarnessError, OSError, ValueError, IndexError):
+        pass
+    if ordered and not affordable:
+        d.say("  [loadout-buy] order exceeds reserve or funds preview unavailable; cancelling")
+    accepted = close_buysell(d, commit=ordered > 0 and affordable)
     funds_after = int(d.h.gs("funds").get("balance", "0") or 0)
+    ordered = ordered if accepted and affordable and funds_after < funds_before else 0
     d.say(f"  [buy] ordered {ordered} of {len(keys)} wanted lines, funds {funds_before}->{funds_after}")
     missing = keys - matched
     if missing:
@@ -4595,155 +4336,162 @@ def buy_named(d: Driver, wanted: list, qty: int = 8, category: str = "BUTTON_AGE
     return ordered
 
 
-def stock_best_guns(d: Driver, qty: int = 20) -> int:
-    """Buy the hardest-hitting agent weapon the market will actually sell. Returns lines ordered.
+# Fewest soldiers worth flying a mission with -- so also the fewest seats a craft needs to count
+# as a troop transport at all -- and the most one craft is asked to carry.
+MIN_SQUAD = 4
+MAX_SQUAD = 6
 
-    The armoury was being stocked from the squad's equipment template, which names the exact
-    rifles the starting soldiers happened to carry -- and those cannot always be re-bought. So the
-    template ordered a Megapol Laser Sniper Gun every few minutes, none arrived, and a campaign
-    fielded six armed soldiers of fifteen while the money sat in the bank. Buy by capability
-    instead of by name: whatever hits hardest among the guns actually on sale, plus its ammunition.
+
+@dataclass(frozen=True)
+class Craft:
+    """One craft from `gs interceptors`."""
+    idx: int
+    name: str
+    flying: bool
+    armed: bool
+    crew: int        # soldiers aboard right now
+    shifter: bool
+    pax: int         # passenger CAPACITY, not passengers aboard
+    row: int         # fleet rank at the current base; UI coordinates come from assignment_rows
+    city: str = ""
+    transit: bool = False
+    home: bool = False
+    id: str = ""
+    portal: bool = False
+
+    @property
+    def kind(self) -> str:
+        """The craft type without its fleet number: Hoverbike_22 and Hoverbike_23 are one kind."""
+        return re.sub(r"_\d+$", "", self.name)
+
+
+def parse_fleet(detail: str) -> list[Craft]:
+    """Parse the `detail=` field of `gs interceptors`; unknown or missing fields read as 0/-1."""
+    fleet = []
+    for idx, name, flags in parse_craft_flags(detail):
+        def number(key: str, default: int = 0) -> int:
+            try:
+                return int(flags.get(key, default))
+            except ValueError:
+                return default
+        fleet.append(Craft(idx, name, number("flying") == 1,
+                           number("armed") == 1, number("crew"), number("shifter") == 1,
+                           number("pax"), number("row", -1), flags.get("city", ""),
+                           number("transit") == 1, number("home") == 1,
+                           flags.get("id", ""), number("portal") == 1))
+    return fleet
+
+
+def rank_transports(fleet: list[Craft], want: int = MAX_SQUAD,
+                    failed: dict[str, int] | None = None, loaded: bool = False) -> list[Craft]:
+    """Gate capability first, then usable seats/squad, reliable loading and spare weapons.
+
+    Boarding requires a parked flyer with at least four seats. Dispatch uses the actual squad.
+    Within the gate/ordinary group a repeatedly failed craft sinks below working alternatives.
+    Capacity is capped at want so a larger hull does not win when both seat the whole squad.
     """
-    info = d.h.gs("buyable_guns")
-    detail = info.get("detail", "-")
-    if not detail or detail == "-":
-        d.say("  [buy] no agent weapons on sale")
-        return 0
-    funds = int(d.h.gs("funds").get("balance", "0") or 0)
-
-    # The guide's weapon policy is phased, not "buy the hardest hitter":
-    #
-    #   "At the beginning when all they have is brainsuckers, you can use the AutoCannon or
-    #    missles on everything with no harm done. Soon, however, they have disruptor guns, which
-    #    are $2500 a pop and should be saved ... stun, lasers, and machine guns as MUCH as
-    #    possible, as soon as they get boomeroid/disruptors."
-    #
-    # Explosives destroy the loot that pays for the campaign -- "Personal Shields are one of the
-    # most valuable assets in the game, and destroying them all with explosions doesn't help you
-    # at all" -- so once the aliens are carrying anything worth recovering, switch to lasers and
-    # machine guns. Detect the phase from what has already turned up in stores.
-    loot = d.h.gs("loot").get("detail", "-")
-    valuable_aliens = any(m in (loot or "").upper()
-                          for m in ("DISRUPTOR", "BOOMEROID", "DEVASTATOR", "SHIELD", "VORTEX"))
-    if valuable_aliens:
-        preferred = ("LASER", "MACHINE_GUN", "MACHINE GUN")
-        avoid = ("GRENADE", "MISSILE", "MISSLE", "CANNON", "LAUNCHER", "EXPLOSIVE")
+    failed = failed or {}
+    if loaded:
+        pool = [c for c in fleet if c.flying and c.crew > 0]
     else:
-        preferred = ()
-        avoid = ()
+        pool = [c for c in fleet if c.flying and c.row >= 0 and c.pax >= MIN_SQUAD]
+    return sorted(pool, key=lambda c: (-c.shifter, failed.get(c.kind, 0) >= 2,
+                                       -min(c.crew if loaded else c.pax, want),
+                                       -c.crew, c.armed, c.pax, c.idx))
 
-    best = None
-    for part in detail.split("|"):
+
+def squad_size(soldiers: int, pax: int, garrison: int = 4) -> tuple[int, int]:
+    """(soldiers to put aboard a craft with `pax` seats, soldiers held back at the base).
+
+    Aliens attack the BASE, so a garrison stays; but the reserve scales with the roster, because a
+    flat reserve of four means a campaign with four soldiers never flies a mission, and at least
+    one soldier always goes. The squad is then capped by the seats: asking for six on a four-seater
+    seats four and leaves two standing on the pad.
+    """
+    held = min(max(0, garrison), soldiers // 2) if soldiers > 1 else 0
+    spare = max(0, min(MAX_SQUAD, soldiers - held))
+    return max(0, min(spare, pax)), held
+
+
+def parse_offers(detail: str) -> list[dict]:
+    """Parse the `detail=` field of `gs buyable_craft` into dicts of ints, plus the name."""
+    offers = []
+    for part in (detail or "").split("|"):
         bits = part.split(":")
-        if not bits:
+        if len(bits) < 2 or not bits[0]:
             continue
-        attrs = {}
+        offer: dict = {"name": bits[0].replace("_", " ")}
         for kv in bits[1:]:
             if "=" in kv:
                 k, v = kv.split("=", 1)
                 try:
-                    attrs[k] = int(v)
+                    offer[k] = int(v)
                 except ValueError:
-                    attrs[k] = 0
-        price = attrs.get("price", 0)
-        if not price or price * 4 > funds:
-            continue
-        # Rank firearms only. A Megapol Stun Grapple reports damage 90 and wins on raw numbers,
-        # but it is a melee stunner -- the guide wants those carried as a SECOND item to take
-        # aliens alive, not as the thing a soldier defends the base with. Buying them as the
-        # primary weapon armed the squad with truncheons.
-        if any(m in bits[0].upper() for m in ("GRAPPLE", "STUN", "MEDI", "SCANNER", "SHIELD")):
-            continue
-        if avoid and any(m in bits[0].upper() for m in avoid):
-            continue
-        # Score preferred families above raw damage so a laser beats a bigger explosive once
-        # there is alien equipment on the field worth bringing home intact.
-        rank = (1 if any(m in bits[0].upper() for m in preferred) else 0, attrs.get("damage", 0))
-        if best is None or rank > best[0]:
-            best = (rank, bits[0].replace("_", " "), price)
-    if not best:
-        d.say(f"  [buy] nothing affordable among the guns on sale (${funds})")
-        return 0
-    rank, name, price = best
-    # And always a stun grapple each. The guide is explicit -- "use stun grapples as often as
-    # possible" -- because an alien taken alive keeps its equipment, and that equipment is the
-    # campaign's income. Agents have two hands; there is no reason to fill only one.
-    want = [name, f"{name} Clip", f"{name} Ammo", "Megapol Stun Grapple", "Stun Grapple"]
-    phase = "lasers and machine guns" if rank[0] else "whatever hits hardest"
-    d.say(f"  [buy] stocking {qty} x {name} (damage {rank[1]}, ${price}) plus stun grapples "
-          f"[{phase}]")
-    return buy_named(d, want, qty=qty, category="BUTTON_AGENTS")
+                    offer[k] = 0
+        offers.append(offer)
+    return offers
 
 
-def stock_for_template(d: Driver, qty: int = 8) -> int:
-    """Buy exactly the items the stored equipment template names.
+def choose_transport_purchase(offers: list[dict], funds: int, reserve: int = 40000) -> dict | None:
+    """The market craft to buy as a troop transport, or None when none qualifies.
 
-    processTemplate strips an agent and re-equips the template's exact types, so this is the only
-    way the template can actually arm anybody. The captured loadout turned out to be Megapol
-    armour plus a Megapol Laser Sniper Gun -- none of which the earlier scattergun buying
-    happened to stock.
+    It must fly and seat MIN_SQUAD, be in stock, and leave `reserve` in the bank for wages and
+    weapons. Cheapest first, then more seats: the point is a squad in the air, not a flagship.
     """
-    types = []
-    for part in d.h.gs("templates").get("detail", "").split("|"):
-        if not part.startswith("1:"):
-            continue
-        for kv in part.split(":", 1)[1].split(","):
-            if kv.startswith("types="):
-                types = [t for t in kv[6:].split("+") if t and t != "-"]
-    if not types:
-        d.say("  [buy] no template to stock for")
-        return 0
-    d.say(f"  [buy] stocking {len(set(types))} item types the loadout needs")
-    return buy_named(d, sorted(set(types)), qty=qty)
+    ok = [o for o in offers if o.get("flying") == 1 and o.get("pax", 0) >= MIN_SQUAD
+          and o.get("stock", 0) > 0 and 0 < o.get("price", 0) <= funds - reserve]
+    return min(ok, key=lambda o: (o["price"], -o["pax"])) if ok else None
 
 
-def buy_equipment(d: Driver, rows: int = 10, qty: int = 6) -> bool:
-    """Stock the armoury so replacement soldiers have something to carry.
+def _fleet(d: Driver) -> list[Craft]:
+    return parse_fleet(d.h.gs("interceptors").get("detail", ""))
 
-    On the buy/sell screen BUTTON_AGENTS means agent *equipment*, not personnel -- the role
-    buttons are explicitly hidden there and belong to RecruitScreen
-    (buyandsellscreen.cpp:36-60). Recruits arrive empty-handed and the veterans are carrying
-    every weapon the base owns, so applying an equipment template to a new soldier equips
-    nothing until the armoury actually has spares.
-    """
-    funds_before = int(d.h.gs("funds").get("balance", "0") or 0)
-    if funds_before <= 40000:
-        d.say(f"  [buy] only ${funds_before}; keeping the campaign reserve")
-        return False
-    if not open_buysell(d):
-        return False
-    changed = buy_category(d, "BUTTON_AGENTS", qty, rows)
-    # TEXT_FUNDS is the projected balance, including the pending transaction. Cancel if
-    # prices exceed the budget, or if the screen cannot supply an honest preview.
-    affordable = False
+
+def _soldier_count(d: Driver) -> int:
     try:
-        preview = d.h.send("control TEXT_FUNDS get")
-        if preview.startswith("OK") and "text=" in preview:
-            balance = int(preview.split("text=", 1)[1].split()[0].replace(",", "").replace("$", ""))
-            affordable = 40000 <= balance < funds_before
-    except (HarnessError, OSError, ValueError, IndexError):
-        pass
-    if changed and not affordable:
-        d.say("  [buy] equipment order exceeds reserve or has no valid funds preview; cancelling")
-    close_buysell(d, commit=changed > 0 and affordable)
-    funds_after = int(d.h.gs("funds").get("balance", "0") or 0)
-    d.say(f"  [buy] {changed} lines of agent equipment, funds {funds_before}->{funds_after}")
-    return funds_after != funds_before
+        return int(d.h.gs("agents").get("soldiers", "0") or 0)
+    except (ValueError, AttributeError):
+        return 0
 
 
 def _flying_crewed(d: Driver) -> int:
-    """How many *flying* craft are carrying troops.
+    """How many *flying* craft carry a usable squad.
 
     Plain crewed counts are not enough: a Stormdog or Wolfhound APC can hold a squad and still be
     useless for reaching a downed UFO, and recovery is refused outright when the selected craft
-    cannot get there. Recovery unlocks the research chain, so this distinction gates the endgame.
+    cannot get there. Nor is one soldier on a hoverbike a crewed craft: it counted as one, so the
+    gates that re-crew stayed shut while recoveries flew with a single soldier. A squad is
+    MIN_SQUAD soldiers, or the available squad after the scaled garrison when that is smaller.
     """
-    n = 0
-    for part in d.h.gs("interceptors").get("detail", "").split("|"):
-        flags = part.split(":")[-1]
-        if "flying=1" in flags and "crew=0" not in flags:
-            n += 1
-    return n
+    take, _ = squad_size(_soldier_count(d), MAX_SQUAD, driver_strategy(d)["garrison"])
+    need = min(MIN_SQUAD, max(1, take))
+    return sum(1 for c in _fleet(d) if c.flying and c.crew >= need)
+
+
+def buy_troop_transport(d: Driver, fleet: list[Craft]) -> int:
+    """Buy a flying craft that seats a squad when the fleet has none. Returns craft gained.
+
+    Only when NO owned flying craft has MIN_SQUAD seats: a Valkyrie that is merely out on a
+    mission is still the transport, and buying a second one because it is not home yet is waste.
+    Verified against the fleet afterwards, so an order the screen declined is not reported as
+    a purchase.
+    """
+    if any(c.flying and c.pax >= MIN_SQUAD for c in fleet):
+        return 0
+    funds = int(d.h.gs("funds").get("balance", "0") or 0)
+    pick = choose_transport_purchase(
+        parse_offers(d.h.gs("buyable_craft").get("detail", "-")), funds)
+    if pick is None:
+        d.say(f"  [crew] no flying craft seats {MIN_SQUAD} and none can be bought with ${funds}")
+        return 0
+    d.say(f"  [crew] no troop transport owned; buying a {pick['name']} "
+          f"({pick['pax']} seats, ${pick['price']}, ${funds} on hand)")
+    buy_named(d, [pick["name"]], qty=1, category="BUTTON_VEHICLES")
+    gained = len([c for c in _fleet(d) if c.flying and c.pax >= MIN_SQUAD])
+    if not gained:
+        d.say("  [crew] purchase ordered but no troop transport has arrived")
+    return gained
+
 
 
 def assignment_rows(st: Status, field: str) -> list[tuple[int, ...]]:
@@ -4761,20 +4509,36 @@ def assignment_rows(st: Status, field: str) -> list[tuple[int, ...]]:
     return rows
 
 
-def crew_transport(d: Driver, garrison: int = 4) -> int:
-    """Board a flying transport, preferring a gate craft and retaining a base garrison.
+def crew_transport(d: Driver, garrison: int | None = None) -> int:
+    """Board a capacity-ranked flyer using resolved UI rows and verify every drop via gs.
 
-    Resolved widget rows identify the actual craft. If a gate craft exists elsewhere, wait for
-    it to park here; loading an ordinary transport would keep the dimension assault impossible.
-    Soldiers already aboard an ordinary transport can be dragged from its passenger list.
+    Once a gate craft exists, wait for it rather than strand the assault squad on an ordinary
+    transport. Pull soldiers from other craft as well as the base, keeping the scaled garrison.
+    Fleet indices join the screen's resolved rows to the chosen craft; they never set pixels.
     """
-    st = d.status()
-    if st.stage != "CityView":
+    if garrison is None:
+        garrison = driver_strategy(d)["garrison"]
+    if d.status().stage != "CityView":
         return 0
-    fleet = craft_flags(d)
-    gate = any(f.get("shifter") == "1" for _, f in fleet)
-    if any(f.get("shifter") == "1" and int(f.get("crew", "0")) > 0 for _, f in fleet):
+    failures = d.__dict__.setdefault("crew_failures", {})
+    fleet = _fleet(d)
+    gate = any(c.flying and c.shifter for c in fleet)
+    ranked = rank_transports(fleet, MAX_SQUAD, failures)
+    if gate:
+        ranked = [c for c in ranked if c.shifter]
+    elif not ranked and buy_troop_transport(d, fleet):
+        fleet = _fleet(d)
+        ranked = rank_transports(fleet, MAX_SQUAD, failures)
+    if not ranked:
+        d.say("  [crew] waiting for gate craft at the base" if gate else
+              "  [crew] no flying transport parked at the base")
         return _flying_crewed(d)
+    best = ranked[0]
+    soldiers = _soldier_count(d)
+    take, held = squad_size(soldiers, best.pax, garrison)
+    if best.crew >= take:
+        return _flying_crewed(d)
+    d.say(f"  [crew] {held} stay to defend the base; {take} fit in {best.name}")
     at = d.h.gs("centre_on_base")
     if at.get("centred") != "1":
         return 0
@@ -4784,75 +4548,105 @@ def crew_transport(d: Driver, garrison: int = 4) -> int:
     if d.status().stage != "BuildingScreen":
         return_to_city(d)
         return 0
+
+    def target_row(st: Status) -> tuple[int, ...] | None:
+        return next((r for r in assignment_rows(st, "boarding")
+                     if len(r) >= 7 and r[6] == best.idx and r[5] == 1
+                     and r[3] >= take and (not gate or r[2] == 1)), None)
+
+    def scroll_to(y: int) -> bool:
+        viewport = d.live_rect("AGENT_SELECT_BOX")
+        reply = d.h.send("control AGENT_SELECT_SCROLL get")
+        scroll = dict(p.split("=", 1) for p in reply.split() if "=" in p)
+        if not viewport or "max" not in scroll:
+            return False
+        value = int(scroll.get("value", "0")) + y - (viewport["y"] + viewport["h"] // 2)
+        value = max(int(scroll.get("min", "0")), min(int(scroll["max"]), value))
+        d.h.send(f"control AGENT_SELECT_SCROLL set {value}")
+        time.sleep(0.25)
+        return True
+
+    aboard = best.crew
+    attempted: set[int] = set()
     try:
-        d.h.send("control AGENT_SELECT_SCROLL set 0")  # An unchanged scrollbar returns ERR.
+        d.h.send("control AGENT_SELECT_SCROLL set 0")
         time.sleep(0.2)
-        st = d.status()
-        targets = [r for r in assignment_rows(st, "boarding")
-                   if len(r) == 6 and r[3] > 0 and r[5] == 1 and (not gate or r[2] == 1)]
-        if not targets:
-            d.say("  [crew] waiting for gate craft at the base" if gate else
-                  "  [crew] no flying transport parked at the base")
-            return 0
-        target = targets[0]
-        soldiers = int(d.h.gs("agents").get("soldiers", "0") or 0)
-        held = min(max(0, garrison), soldiers // 2) if soldiers > 1 else 0
-        take = max(1, min(6, target[3], soldiers - held))
-        rows = [r for r in assignment_rows(st, "soldier_rows") if len(r) == 5 and r[3] == 1]
-        # A drag copies ONE source list. Prefer the existing assault squad over new recruits.
-        rows.sort(key=lambda r: -r[2])
-        if not rows:
-            d.say("  [crew] no soldiers visible at the base yet")
-            return 0
-        group = rows[0][4]
-        squad = [r for r in rows if r[4] == group][:take]
-        before = _flying_crewed(d)
-        for x, y, *_ in squad:
-            d.h.click_xy(x, y)
-            time.sleep(0.1)
-        sx, sy = squad[0][:2]
-        d.say(f"  [crew] taking {len(squad)} of {soldiers} soldier(s); reserve {held}")
-        d.h.ok(f"down {sx} {sy}")
-        # The first >5px movement creates the dragged list from the selected soldiers.
-        d.h.ok(f"move {sx + 12} {sy}")
-        time.sleep(0.15)
-        try:
-            if target[4] == 0:
-                viewport = d.live_rect("AGENT_SELECT_BOX")
-                reply = d.h.send("control AGENT_SELECT_SCROLL get")
-                scroll = dict(p.split("=", 1) for p in reply.split() if "=" in p)
-                if viewport and "max" in scroll:
-                    value = int(scroll.get("value", "0")) + target[1] - (
-                        viewport["y"] + viewport["h"] // 2)
-                    value = max(int(scroll.get("min", "0")), min(int(scroll["max"]), value))
-                    d.h.send(f"control AGENT_SELECT_SCROLL set {value}")
-                    time.sleep(0.25)
-                    targets = [r for r in assignment_rows(d.status(), "boarding")
-                               if len(r) == 6 and r[3] > 0 and r[4] == 1 and r[5] == 1
-                               and (not gate or r[2] == 1)]
-                    if not targets:
-                        return 0
-                    target = targets[0]
-                else:
-                    return 0
-            tx, ty = target[:2]
-            for step in range(1, 7):
-                d.h.ok(f"move {sx + (tx - sx) * step // 6} {sy + (ty - sy) * step // 6}")
-                time.sleep(0.08)
-            d.h.ok(f"up {tx} {ty}")
-            time.sleep(0.6)
-        finally:
-            d.h.ok(f"up {sx} {sy}")  # Release even when scroll/target lookup failed.
-        after = craft_flags(d)
-        if gate and any(f.get("shifter") == "1" and int(f.get("crew", "0")) > 0
-                        for _, f in after):
-            d.say("  [crew] assault squad boarded a gate-capable craft")
-        elif not gate and _flying_crewed(d) > before:
-            d.say("  [crew] squad boarded a flying craft")
-        return _flying_crewed(d)
+        for _ in range(len(fleet) + 2):
+            if aboard >= take:
+                break
+            st = d.status()
+            target = target_row(st)
+            if target is None:
+                d.say(f"  [crew] no resolved assignment row for {best.name}")
+                break
+            rows = [r for r in assignment_rows(st, "soldier_rows")
+                    if len(r) >= 6 and r[5] != best.idx and r[5] not in attempted]
+            # A drag copies one source list. Prefer the existing squad on another craft.
+            rows.sort(key=lambda r: (-r[2], -r[3]))
+            if not rows:
+                break
+            source = rows[0][5]
+            group = rows[0][4]
+            if rows[0][3] == 0:
+                if not scroll_to(rows[0][1]):
+                    break
+                rows = [r for r in assignment_rows(d.status(), "soldier_rows")
+                        if len(r) >= 6 and r[5] == source and r[4] == group]
+            squad = [r for r in rows if r[4] == group and r[3] == 1][:take - aboard]
+            if not squad:
+                attempted.add(source)
+                continue
+            selected = 0
+            for x, y, *_ in squad:
+                d.h.click_xy(x, y)
+                time.sleep(0.1)
+                detail = d.status().detail or ""
+                if "selected_agents=" not in detail:
+                    break
+                selected = int(detail.split("selected_agents=", 1)[1].split("_", 1)[0].split()[0])
+            if selected != len(squad):
+                d.say("  [crew] selection did not match the resolved soldier rows; stopping")
+                break
+            sx, sy = squad[0][:2]
+            d.say(f"  [crew] taking {len(squad)} of {soldiers} soldier(s) onto {best.name}; "
+                  f"reserve {held}")
+            d.h.ok(f"down {sx} {sy}")
+            d.h.ok(f"move {sx + 12} {sy}")  # Create the drag before scrolling the source away.
+            time.sleep(0.15)
+            try:
+                target = target_row(d.status())
+                if target is None:
+                    break
+                if target[4] == 0:
+                    if not scroll_to(target[1]):
+                        break
+                    target = target_row(d.status())
+                    if target is None or target[4] == 0:
+                        break
+                tx, ty = target[:2]
+                for step in range(1, 7):
+                    d.h.ok(f"move {sx + (tx - sx) * step // 6} {sy + (ty - sy) * step // 6}")
+                    time.sleep(0.08)
+                d.h.ok(f"up {tx} {ty}")
+                time.sleep(0.6)
+            finally:
+                d.h.ok(f"up {sx} {sy}")
+            now = next((c for c in _fleet(d) if c.idx == best.idx), None)
+            seated = (now.crew if now else aboard) - aboard
+            d.say(f"  [crew] dropped {selected} onto {best.name}: {seated} seated")
+            aboard += max(0, seated)
+            if seated < selected:
+                break
     finally:
-        # BuildingScreen's generic response is RAID; use its normal exit explicitly.
         return_to_city(d)
+    final = next((c for c in _fleet(d) if c.idx == best.idx), None)
+    crew_now = final.crew if final else 0
+    if crew_now >= min(take, MIN_SQUAD):
+        failures[best.kind] = 0
+    elif crew_now <= best.crew:
+        failures[best.kind] = failures.get(best.kind, 0) + 1
+    d.say(f"  [crew] {best.name}: {best.crew} -> {crew_now} of {take} soldier(s)")
+    return _flying_crewed(d)
 
 
 def select_crewed_craft(d: Driver) -> bool:
@@ -4882,14 +4676,9 @@ def select_crewed_craft(d: Driver) -> bool:
     # Selecting the first crewed craft regardless of type picked a Stormdog -- a road vehicle --
     # and every recovery was refused with "mission: none", stalling the whole research chain,
     # since recovering UFOs is what unlocks it.
-    wanted = []
-    for part in d.h.gs("interceptors").get("detail", "").split("|"):
-        bits = part.split(":")
-        if len(bits) < 3 or not bits[0].isdigit():
-            continue
-        flags = bits[-1]
-        if "flying=1" in flags and "crew=0" not in flags:
-            wanted.append(int(bits[0]))
+    # Of the flying craft with troops aboard, the one carrying the biggest squad: a hoverbike with
+    # one soldier on it is "crewed" too, and taking the first such craft sent it to the wreck.
+    wanted = [c.idx for c in rank_transports(_fleet(d), MAX_SQUAD, loaded=True)]
     if not wanted:
         d.say("  [select] no flying craft with troops aboard")
         return False
@@ -4969,6 +4758,7 @@ def recover_crash_sites(d: Driver) -> int:
     st = d.status()
     if st.stage != "CityView":
         return 0
+    prepare_loadouts(d, "ufo_recovery")
     # Selection first: it is pure UI and does not move the camera, so centring stays valid.
     if not select_crewed_craft(d):
         d.say("  [recover] no crewed craft could be selected")
@@ -5147,10 +4937,11 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
     # troops aboard" on every attempt, across every run, from a fleet that had the transport parked
     # in the hangar the whole time.
     try:
+        arm_squad(d)
         d.checks["crewed"] = crew_transport(d)
     except Exception as exc:
         d.say(f"  [open] crew_transport failed: {type(exc).__name__}: {exc}")
-    log_leg(d, run_id, 0.0, "opening", dict(d.checks))
+    log_leg(d, run_id, 0.0, "opening", {**d.checks, "strategy": d.strategy.key()})
 
     d.checks["research_started"] = assign_research(d)
     d.checks["ufopaedia_opened"] = visit_ufopaedia(d)
@@ -5254,15 +5045,9 @@ def play_campaign(d: Driver, difficulty: int, total_days: float, leg_days: float
             #     have had time to reach the base. If nothing could be handed out the armoury is
             #     empty: buy guns for the next leg.
             try:
-                ag = d.h.gs("agents")
-                gained = arm_squad(d) if unarmed_at_base(ag) > 0 else 0
+                gained = arm_squad(d)
                 if gained:
                     d.checks["agents_armed"] = d.checks.get("agents_armed", 0) + gained
-                elif int(ag.get("soldiers", "0") or 0) > int(ag.get("armed", "0") or 0) \
-                        and int(d.h.gs("stores").get("weapons", "0") or 0) <= 0:
-                    # Someone is unarmed (at a base, or still on the way to one) and there is
-                    # nothing to give them: order guns now, so they have arrived by next leg.
-                    stock_best_guns(d, qty=8)
                 if d.status().stage != "CityView":
                     return_to_city(d)
             except Exception as exc:
@@ -5306,8 +5091,10 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="explicit RNG seed; 0 keeps the engine default. Logged to the ledger so "
                          "any run can be replayed exactly.")
+    add_strategy_option(ap)
     args = ap.parse_args()
     policy = configure_runner(args)
+    strategy, policy = resolve_strategy(args, policy)
 
     repo = Path(args.repo)
     out = Path(args.out) if args.out else repo / "build/e2e"
@@ -5320,8 +5107,10 @@ def main() -> int:
         print(f"[launch] {game.binary}", flush=True)
         game.start()
 
-    d = Driver(Harness(port=args.port), repo / "data/forms", shots=shots, battle_policy=policy)
+    d = Driver(Harness(port=args.port), repo / "data/forms", shots=shots, battle_policy=policy,
+               strategy=strategy)
     d.checks = {}
+    d.say(f"[strategy] {strategy.key()} battle policy {policy or 'engine default'}")
     rc = 0
     try:
         play_campaign(d, args.difficulty, args.days, args.leg)

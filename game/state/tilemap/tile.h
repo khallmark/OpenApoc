@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include "framework/logger.h"
 #include "library/rect.h"
 #include "library/sp.h"
@@ -37,9 +38,41 @@ class Sample;
 class TileObject;
 class Organisation;
 
+// Battlescape-only per-tile state. A city map holds ~240k tiles that never use any of it, so
+// it lives behind a pointer allocated on first write rather than inline in every Tile.
+struct BattleTileData
+{
+	sp<TileObjectBattleUnit> firstUnitPresent;
+	bool doorOpeningUnitPresent = false;
+	// position in drawnObjects vector to draw back selection bracket at
+	unsigned int drawBattlescapeSelectionBackAt = 0;
+	// position in drawnObjects vector to draw target location at
+	unsigned int drawTargetLocationIconAt = 0;
+	sp<std::vector<sp<Sample>>> walkSfx;
+	sp<Sample> objectDropSfx;
+	sp<BattleMapPart> supportProviderForItems;
+	int visionBlockValue = 0;
+};
+
 class Tile
 {
   public:
+	std::unique_ptr<BattleTileData> battleData;
+	// Writable battle state, allocated on first use.
+	BattleTileData &battle()
+	{
+		if (!battleData)
+		{
+			battleData = std::make_unique<BattleTileData>();
+		}
+		return *battleData;
+	}
+	// Read-only view: tiles that never had battle state read the defaults, without allocating.
+	const BattleTileData &battleView() const
+	{
+		static const BattleTileData defaults;
+		return battleData ? *battleData : defaults;
+	}
 	TileMap &map;
 	Vec3<int> position;
 
@@ -87,21 +120,11 @@ class Tile
 	// and will override squad movement pattern (everybody will move only to exists in the vicinity)
 	bool hasExit = false;
 	// True = unit is present in this tile
-	sp<TileObjectBattleUnit> firstUnitPresent;
 	// True = unit that qualifies as a door opener present in this tile
-	bool doorOpeningUnitPresent = false;
-	// position in drawnObjects vector to draw back selection bracket at
-	unsigned int drawBattlescapeSelectionBackAt = 0;
-	// position in drawnObjects vector to draw target location at
-	unsigned int drawTargetLocationIconAt = 0;
 	// sfx to use when passing through tile
-	sp<std::vector<sp<Sample>>> walkSfx;
 	// sfx to use when object falls on tile
-	sp<Sample> objectDropSfx;
 	// Solid tileobject in the tile with the highest height that supports items
-	sp<BattleMapPart> supportProviderForItems;
 	// How much tiles are added to vision distance after passing this tile
-	int visionBlockValue = 0;
 	// Non-dead scenery present in this tile
 	sp<Scenery> presentScenery;
 

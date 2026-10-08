@@ -33,6 +33,7 @@ void BootUp::update()
 	bool skipIntro = Options::skipIntroOption.get();
 	// The first forms instance causes it to get loaded
 	sp<GameState> loadedState;
+	sp<bool> loadFailed = mksp<bool>(false);
 	std::shared_future<void> loadTask;
 	bool loadGame = false;
 
@@ -53,8 +54,9 @@ void BootUp::update()
 		loadGame = true;
 		auto path = Options::loadGameOption.get();
 		loadedState = mksp<GameState>();
+		loadFailed = mksp<bool>(false);
 		loadTask = fw().threadPoolEnqueue(
-		    [loadedState, path]()
+		    [loadedState, path, failed = loadFailed]()
 		    {
 			    auto &ui_instance = ui();
 			    std::ignore = ui_instance;
@@ -62,7 +64,12 @@ void BootUp::update()
 
 			    if (!loadedState->loadGame(path))
 			    {
+				    // Do not initState() a half-deserialised state: it segfaulted on the first
+				    // missing reference, and a runner restarting from the same save hit the same
+				    // crash every time. Fall back to the main menu instead.
 				    LogError("Failed to load supplied game \"{0}\"", path);
+				    *failed = true;
+				    return;
 			    }
 			    loadedState->initState();
 		    });
@@ -72,8 +79,12 @@ void BootUp::update()
 	if (loadGame == true)
 	{
 		nextScreen = mksp<LoadingScreen>(nullptr, std::move(loadTask),
-		                                 [loadedState]() -> sp<Stage>
+		                                 [loadedState, failed = loadFailed]() -> sp<Stage>
 		                                 {
+			                                 if (*failed)
+			                                 {
+				                                 return mksp<MainMenu>();
+			                                 }
 			                                 if (loadedState->current_battle)
 			                                 {
 				                                 return mksp<BattleView>(loadedState);

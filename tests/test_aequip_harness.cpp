@@ -14,6 +14,8 @@
 #include "framework/harness.h"
 #include "game/state/city/base.h"
 #include "game/state/city/building.h"
+#include "game/state/city/city.h"
+#include "game/state/city/vehicle.h"
 #include "game/state/gamestate.h"
 #include "game/state/gamestateintrospect.h"
 #include "game/state/rules/aequipmenttype.h"
@@ -39,6 +41,14 @@ static UString action(const UString &line)
 }
 
 static UString query(const UString &q) { return getHarnessQueryHandler()(q); }
+
+static UString control(const UString &line)
+{
+	HarnessCommand command;
+	if (!parseHarnessCommand("CONTROL " + line, command))
+		return "PARSE-ERROR";
+	return getHarnessActionHandler()(command.text, command.args);
+}
 
 static size_t weaponsOn(const sp<Agent> &agent)
 {
@@ -188,6 +198,111 @@ static bool test_select_and_equip_by_name()
 	return true;
 }
 
+static bool test_named_refit_and_roster()
+{
+	auto &state = *g_state;
+	StateRef<Base> base{&state, state.player_bases.begin()->first};
+	sp<Agent> soldier;
+	UString id;
+	for (const auto &a : state.agents)
+	{
+		if (a.second->owner == state.getPlayer() &&
+		    a.second->type->role == AgentType::Role::Soldier)
+		{
+			soldier = a.second;
+			id = a.first;
+			break;
+		}
+	}
+	TEST_REQUIRE(soldier, "player soldier");
+	soldier->enterBuilding(state, base->building);
+	for (auto e : std::list<sp<AEquipment>>(soldier->equipment))
+		soldier->removeEquipment(state, e);
+	base->inventoryAgentEquipment.clear();
+	const UString gunId = "AEQUIPMENTTYPE_MEGAPOL_AUTO_CANNON";
+	const UString apId = "AEQUIPMENTTYPE_AUTO_CANNON_AP_CLIP";
+	const UString heId = "AEQUIPMENTTYPE_AUTO_CANNON_HE_CLIP";
+	const UString armorId = "AEQUIPMENTTYPE_MARSEC_BODY_UNIT";
+	const int capacity = state.agent_equipment[apId]->max_ammo;
+	base->inventoryAgentEquipment[gunId] = 1;
+	base->inventoryAgentEquipment[apId] = capacity * 2;
+	base->inventoryAgentEquipment[heId] = capacity * 2;
+	base->inventoryAgentEquipment[armorId] = 1;
+	const auto screen = mksp<AEquipScreen>(g_state, soldier);
+	screen->begin();
+	screen->selectAgent(soldier);
+	TEST_REQUIRE(startsWith(action("aequip_equip " + gunId), "OK"), "issue firearm");
+	auto gun = soldier->equipment.front();
+	TEST_REQUIRE(startsWith(action("aequip_reload " + gunId + " " + apId), "OK"), "select AP ammo");
+	TEST_REQUIRE(gun->payloadType.id == apId && gun->ammo == capacity, "AP loaded from stores");
+	const int beforeAP = base->inventoryAgentEquipment[apId];
+	const int beforeHE = base->inventoryAgentEquipment[heId];
+	TEST_REQUIRE(startsWith(action("aequip_reload " + gunId + " " + heId), "OK"), "swap ammo");
+	TEST_REQUIRE(gun->payloadType.id == heId && gun->ammo == capacity &&
+	                 base->inventoryAgentEquipment[apId] == beforeAP + capacity &&
+	                 base->inventoryAgentEquipment[heId] == beforeHE - capacity,
+	             "swapping conserves both payload types");
+	TEST_REQUIRE(startsWith(action("aequip_reload " + gunId + " " + armorId), "ERR"),
+	             "incompatible reload refused");
+	base->inventoryAgentEquipment[apId] = 0;
+	TEST_REQUIRE(startsWith(action("aequip_reload " + gunId + " " + apId), "ERR") &&
+	                 gun->payloadType.id == heId && gun->ammo == capacity,
+	             "empty stock cannot unload a working gun");
+	config().set("OpenApoc.NewFeature.AdvancedInventoryControls", false);
+	TEST_REQUIRE(startsWith(action("aequip_unequip " + gunId), "ERR"), "shortcut disabled");
+	config().set("OpenApoc.NewFeature.AdvancedInventoryControls", true);
+	TEST_REQUIRE(query("loadout_agents").find(gunId + "~RightHand~" + heId) != UString::npos,
+	             "roster reports actual hand and payload");
+	TEST_REQUIRE(startsWith(action("aequip_unequip " + gunId), "OK"), "return firearm to stores");
+	TEST_REQUIRE(soldier->equipment.empty() && base->inventoryAgentEquipment[gunId] == 1 &&
+	                 base->inventoryAgentEquipment[heId] == beforeHE,
+	             "returning loaded gun conserves weapon and ammo");
+	base->inventoryAgentEquipment[apId] = capacity;
+	screen->selectAgent(soldier);
+	TEST_REQUIRE(startsWith(action("aequip_equip " + gunId), "OK"), "reissue firearm");
+	gun = soldier->equipment.front();
+	const auto payload = gun->payloadType;
+	const int rounds = gun->ammo;
+	screen->update(); // Register live controls just as a frame does, without rendering or a window.
+	// setChecked is the radio button's player event path. The headless test has no loop to
+	// deliver the queued CheckBoxChange, so refresh through the existing portrait action.
+	const auto armorTab = control("BUTTON_SHOW_ARMOUR set 1");
+	TEST_REQUIRE(startsWith(armorTab, "OK"), "armor tab: {0}", armorTab);
+	screen->selectAgent(soldier);
+	TEST_REQUIRE(startsWith(action("aequip_reload " + gunId + " " + apId), "ERR") &&
+	                 gun->payloadType == payload && gun->ammo == rounds,
+	             "wrong tab cannot unload a working gun");
+	TEST_REQUIRE(startsWith(action("aequip_equip " + armorId), "OK"), "issue flight body piece");
+	TEST_REQUIRE(query("loadout_agents").find(armorId + "~Body~") != UString::npos,
+	             "roster reports armor body slot");
+	TEST_REQUIRE(startsWith(action("aequip_unequip " + armorId), "OK") &&
+	                 base->inventoryAgentEquipment[armorId] == 1,
+	             "return body armor");
+	// Selected-vehicle scope uses stable ids and still resolves a base for parked passengers.
+	StateRef<Vehicle> parked;
+	for (const auto &v : state.vehicles)
+	{
+		if (v.second->owner == state.getPlayer() && v.second->currentBuilding == base->building)
+		{
+			parked = {&state, v.first};
+			break;
+		}
+	}
+	TEST_REQUIRE(parked, "starting parked vehicle");
+	soldier->currentVehicle = parked;
+	soldier->currentBuilding.clear();
+	state.current_city->cityViewSelectedOwnedVehicles = {parked};
+	const auto roster = query("loadout_agents");
+	TEST_REQUIRE(roster.find("selected_vehicle=" + parked.id) != UString::npos &&
+	                 roster.find(id + ":base=" + base.id) != UString::npos,
+	             "selected parked transport and passenger base: {0}", roster);
+	state.current_city->cityViewSelectedOwnedVehicles.clear();
+	soldier->currentVehicle.clear();
+	soldier->currentBuilding = base->building;
+	screen->finish();
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	config().addPositionalArgument("common", "Common gamestate to load");
@@ -212,7 +327,8 @@ int main(int argc, char **argv)
 	{
 		return EXIT_FAILURE;
 	}
-	const int rc = runTestSuite({{"select and equip by name", test_select_and_equip_by_name}});
+	const int rc = runTestSuite({{"select and equip by name", test_select_and_equip_by_name},
+	                             {"named refit and roster", test_named_refit_and_roster}});
 	g_state.reset();
 	UI::unload();
 	return rc;

@@ -152,16 +152,54 @@ def test_equipment_affordability():
                                    (100000, "ERR no preview", False)]:
         d = Mock()
         d.h.gs.return_value = {"balance": str(funds)}
-        d.h.send.return_value = preview
+        def send(command):
+            if command == "controls LIST":
+                return "OK LIST 0:ROW:text=Rifle"
+            if command == "control TEXT_FUNDS get":
+                return preview
+            if command.endswith(" get"):
+                return "OK value=0 min=-100 max=0"
+            return "OK"
+        d.h.send.side_effect = send
         with patch.object(oa_play, "open_buysell", return_value=True) as opened, \
-                patch.object(oa_play, "buy_category", return_value=2), \
+                patch.object(oa_play.time, "sleep"), \
                 patch.object(oa_play, "close_buysell") as closed:
-            oa_play.buy_equipment(d)
+            oa_play.buy_named(d, {"AEQUIPMENTTYPE_RIFLE": 2})
             if commit is None:
                 opened.assert_not_called()
                 closed.assert_not_called()
             else:
+                d.h.send.assert_any_call("control LIST item 0 set -2")
                 closed.assert_called_once_with(d, commit=commit)
+
+
+def test_new_loadout_functions_reachable_from_each_main_loop():
+    """Follow executable names across modules; test-only references cannot mask dead policy."""
+    import ast
+    import inspect
+    import oa_loadouts
+    modules = (oa_play, oa_victory, oa_loadouts)
+    edges = {}
+    policy_defs = set()
+    for module in modules:
+        tree = ast.parse(inspect.getsource(module))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                continue
+            references = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+            references.update(n.attr for n in ast.walk(node) if isinstance(n, ast.Attribute))
+            edges.setdefault(node.name, set()).update(references)
+            if module is oa_loadouts and node in tree.body:
+                policy_defs.add(node.name)
+    for root in ("run", "play_campaign"):
+        reached, pending = set(), [root]
+        while pending:
+            name = pending.pop()
+            if name in reached:
+                continue
+            reached.add(name)
+            pending.extend(edges.get(name, set()) - reached)
+        assert policy_defs <= reached, (root, policy_defs - reached)
 
 
 def test_dead_defs_ignores_documentation_and_detects_indirect_use():

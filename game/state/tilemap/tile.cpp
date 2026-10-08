@@ -63,7 +63,7 @@ Vec3<float> Tile::getRestingPosition(bool large, bool overlay)
 	                   position.z + (overlay ? overlayHeight : height)};
 }
 
-sp<BattleMapPart> Tile::getItemSupportingObject() { return supportProviderForItems; }
+sp<BattleMapPart> Tile::getItemSupportingObject() { return battleView().supportProviderForItems; }
 
 bool Tile::getSolidGround(bool large)
 {
@@ -245,6 +245,7 @@ bool Tile::getHeadFits(bool large, int height)
 
 void Tile::updateBattlescapeUIDrawOrder()
 {
+	auto &b = battle();
 	if (map.ceaseUpdates)
 	{
 		return;
@@ -259,52 +260,53 @@ void Tile::updateBattlescapeUIDrawOrder()
 		auto &obj = drawnObjects[0][obj_id];
 		if (!backFound && obj->getType() != TileObject::Type::Ground)
 		{
-			drawBattlescapeSelectionBackAt = obj_id;
+			b.drawBattlescapeSelectionBackAt = obj_id;
 			backFound = true;
 		}
 		if (!targetFound && (int)obj->getType() > 3)
 		{
-			drawTargetLocationIconAt = obj_id;
+			b.drawTargetLocationIconAt = obj_id;
 			targetFound = true;
 		}
 	}
 	if (!backFound)
 	{
-		drawBattlescapeSelectionBackAt = obj_id;
+		b.drawBattlescapeSelectionBackAt = obj_id;
 	}
 	if (!targetFound)
 	{
-		drawTargetLocationIconAt = obj_id;
+		b.drawTargetLocationIconAt = obj_id;
 	}
 }
 
 void Tile::updateBattlescapeUnitPresent()
 {
-	firstUnitPresent = nullptr;
+	auto &b = battle();
+	b.firstUnitPresent = nullptr;
 	for (auto &o : intersectingObjects)
 	{
 		if (o->getType() == TileObject::Type::Unit)
 		{
 			auto u = std::static_pointer_cast<TileObjectBattleUnit>(o);
-			if (!firstUnitPresent)
+			if (!b.firstUnitPresent)
 			{
-				firstUnitPresent = u;
+				b.firstUnitPresent = u;
 			}
 			auto pos = o->getPosition();
 			auto x = pos.x - position.x;
 			auto y = pos.y - position.y;
-			doorOpeningUnitPresent =
-			    doorOpeningUnitPresent | (x > 0.45f && x < 0.55f && y > 0.45f && y < 0.55f) ||
+			b.doorOpeningUnitPresent =
+			    b.doorOpeningUnitPresent | (x > 0.45f && x < 0.55f && y > 0.45f && y < 0.55f) ||
 			    u->getUnit()->isLarge();
-			if (firstUnitPresent && doorOpeningUnitPresent)
+			if (b.firstUnitPresent && b.doorOpeningUnitPresent)
 			{
 				break;
 			}
 		}
 	}
-	if (!firstUnitPresent)
+	if (!b.firstUnitPresent)
 	{
-		doorOpeningUnitPresent = false;
+		b.doorOpeningUnitPresent = false;
 	}
 }
 
@@ -336,6 +338,7 @@ void Tile::updateCityscapeParameters()
 
 void Tile::updateBattlescapeParameters()
 {
+	auto &b = battle();
 	if (map.ceaseUpdates)
 	{
 		return;
@@ -350,9 +353,9 @@ void Tile::updateBattlescapeParameters()
 	canStand = false;
 	hasLift = false;
 	hasExit = false;
-	walkSfx = nullptr;
-	objectDropSfx = nullptr;
-	supportProviderForItems = nullptr;
+	b.walkSfx = nullptr;
+	b.objectDropSfx = nullptr;
+	b.supportProviderForItems = nullptr;
 	closedDoorLeft = false;
 	closedDoorRight = false;
 	for (auto &o : ownedObjects)
@@ -368,10 +371,10 @@ void Tile::updateBattlescapeParameters()
 			if (mp->type->floor ||
 			    (o->getType() == TileObject::Type::Feature && !mp->type->gravlift))
 			{
-				if (!supportProviderForItems ||
-				    supportProviderForItems->type->height < mp->type->height)
+				if (!b.supportProviderForItems ||
+				    b.supportProviderForItems->type->height < mp->type->height)
 				{
-					supportProviderForItems = mp;
+					b.supportProviderForItems = mp;
 				}
 			}
 			solidGround = solidGround || (mp->type->floor && !mp->type->gravlift) ||
@@ -381,8 +384,8 @@ void Tile::updateBattlescapeParameters()
 			movementCostIn = std::max(movementCostIn, mp->type->movement_cost);
 			if (mp->type->sfxIndex != -1)
 			{
-				walkSfx = mp->type->walkSounds;
-				objectDropSfx = mp->type->objectDropSound;
+				b.walkSfx = mp->type->walkSounds;
+				b.objectDropSfx = mp->type->objectDropSound;
 			}
 		}
 		if (o->getType() == TileObject::Type::LeftWall)
@@ -450,15 +453,15 @@ void Tile::updateBattlescapeParameters()
 
 bool Tile::updateVisionBlockage(int value)
 {
-	if (visionBlockValue == value)
+	if (battleView().visionBlockValue == value)
 	{
 		return false;
 	}
-	visionBlockValue = value;
+	battle().visionBlockValue = value;
 	return true;
 }
 
-sp<TileObjectBattleUnit> Tile::getUnitIfPresent() const { return firstUnitPresent; }
+sp<TileObjectBattleUnit> Tile::getUnitIfPresent() const { return battleView().firstUnitPresent; }
 
 sp<TileObjectBattleUnit> Tile::getUnitIfPresent(bool onlyConscious, bool mustOccupy,
                                                 bool mustBeStatic,

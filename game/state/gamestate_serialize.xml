@@ -423,6 +423,9 @@
     <value>GameWon</value>
     <value>GameLost</value>
     <value>None</value>
+    <value>VehicleModuleScrapped</value>
+    <value>AgentOutOfAmmo</value>
+    <value>DailyReport</value>
   </enum>
   <enum>
     <name>Cargo::Type</name>
@@ -1678,6 +1681,7 @@
     <value>RestartNextMission</value>
     <value>Snooze</value>
     <value>Teleport</value>
+    <value>InvestigateBuilding</value>
   </enum>
   <enum>
     <name>BattleUnitMission::Type</name>
@@ -2033,6 +2037,7 @@
     <value>GetInRange</value>
     <value>TakeCover</value>
     <value>Retreat</value>
+    <value>Turn</value>
   </enum>
   <enum external = "true">
     <name>UnitAI::Type</name>

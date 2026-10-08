@@ -95,6 +95,16 @@ UString BuildingScreen::harnessDetail() const
 	// troops. Nested passenger lists change later rows' positions, and a large fleet needs scroll.
 	UString boarding, soldiers;
 	int group = 0;
+	// Use the same fleet index as gs interceptors to join resolved UI rows to craft identity.
+	std::map<sp<Vehicle>, int> craftIndices;
+	int craftIndex = 0;
+	for (const auto &entry : state->vehicles)
+	{
+		if (entry.second && entry.second->owner == state->getPlayer())
+		{
+			craftIndices.emplace(entry.second, craftIndex++);
+		}
+	}
 	if (agentAssignment)
 	{
 		const auto viewport = agentAssignment->findControl(AgentAssignment::AGENT_SELECT_BOX);
@@ -123,22 +133,25 @@ UString BuildingScreen::harnessDetail() const
 						if (v)
 						{
 							boarding += (boarding.empty() ? "" : ";") +
-							            format("{0},{1},{2},{3},{4},{5}", pos.x, pos.y,
+							            format("{0},{1},{2},{3},{4},{5},{6}", pos.x, pos.y,
 							                   v->hasDimensionShifter() ? 1 : 0,
 							                   v->getMaxPassengers(), visible ? 1 : 0,
-							                   v->type->type == VehicleType::Type::Flying ? 1 : 0);
+							                   v->type->type == VehicleType::Type::Flying ? 1 : 0,
+							                   craftIndices.at(v));
 						}
 					}
 					else
 					{
 						const auto a = row->getData<Agent>();
-						if (a && a->type->role == AgentType::Role::Soldier &&
-						    (!a->currentVehicle || !a->currentVehicle->hasDimensionShifter()))
+						if (a && a->type->role == AgentType::Role::Soldier)
 						{
 							soldiers +=
 							    (soldiers.empty() ? "" : ";") +
-							    format("{0},{1},{2},{3},{4}", pos.x, pos.y,
-							           a->currentVehicle ? 1 : 0, visible ? 1 : 0, currentGroup);
+							    format("{0},{1},{2},{3},{4},{5}", pos.x, pos.y,
+							           a->currentVehicle ? 1 : 0, visible ? 1 : 0, currentGroup,
+							           a->currentVehicle
+							               ? craftIndices.at(a->currentVehicle.getSp())
+							               : -1);
 						}
 					}
 				}

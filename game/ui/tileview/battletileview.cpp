@@ -688,13 +688,13 @@ void BattleTileView::render()
 							do
 							{
 								if (tile == selTileOnCurLevel && layer == 0 &&
-								    selTileOnCurLevel->drawBattlescapeSelectionBackAt == obj_id)
+								    selTileOnCurLevel->battleView().drawBattlescapeSelectionBackAt == obj_id)
 								{
 									r.draw(selectionImageBack,
 									       tileToOffsetScreenCoords(selTilePosOnCurLevel) -
 									           selectedTileImageOffset);
 								}
-								if (tile->drawTargetLocationIconAt == obj_id)
+								if (tile->battleView().drawTargetLocationIconAt == obj_id)
 								{
 									if (targetIconLocations.find({x, y, z}) !=
 									    targetIconLocations.end())

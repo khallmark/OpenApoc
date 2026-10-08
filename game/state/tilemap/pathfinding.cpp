@@ -1174,10 +1174,33 @@ void Battle::groupMove(GameState &state, std::list<StateRef<BattleUnit>> &select
 	LogInfo("{0}", log);
 }
 
+// Read by GS vehicle_census: how often ground routing runs and how hard it works.
+uint64_t cityPathCalls = 0, cityPathIterations = 0, cityPathFailures = 0, cityPathCacheHits = 0;
+
 std::list<Vec3<int>> City::findShortestPath(Vec3<int> origin, Vec3<int> destination,
                                             const GroundVehicleTileHelper &canEnterTile
                                             [[maybe_unused]],
                                             bool approachOnly [[maybe_unused]], bool, bool, bool)
+{
+	cityPathCalls++;
+	const auto pack = [](const Vec3<int> &p)
+	{ return ((uint64_t)(p.x & 0x3FF) << 20) | ((uint64_t)(p.y & 0x3FF) << 10) | (p.z & 0x3FF); };
+	const uint64_t key = (pack(origin) << 30) | pack(destination);
+	const auto it = routeCache.find(key);
+	if (it != routeCache.end())
+	{
+		cityPathCacheHits++;
+		return it->second;
+	}
+	// Bounded: a city that never damages a road would otherwise grow this without limit.
+	if (routeCache.size() > 100000)
+	{
+		routeCache.clear();
+	}
+	return routeCache.emplace(key, findShortestPathUncached(origin, destination)).first->second;
+}
+
+std::list<Vec3<int>> City::findShortestPathUncached(Vec3<int> origin, Vec3<int> destination)
 {
 	int originID = getRoadSegmentID(origin);
 	int destinationID = getRoadSegmentID(destination);
@@ -1417,8 +1440,10 @@ std::list<Vec3<int>> City::findShortestPath(Vec3<int> origin, Vec3<int> destinat
 		}
 	}
 
+	cityPathIterations += iterationCount;
 	if (iterationCount > iterationLimit)
 	{
+		cityPathFailures++;
 		LogWarning("No route from lb {0} to {1} found after {2} iterations, returning "
 		           "closest path ending at {3}",
 		           origin, destination, iterationCount, closestNodeSoFar->segment);
@@ -1760,6 +1785,7 @@ void City::fillRoadSegmentMap(GameState &state [[maybe_unused]])
 	// Expecting this to be done on clean intact map
 	tileToRoadSegmentMap.clear();
 	roadSegments.clear();
+	clearRouteCache();
 	auto &m = *map;
 	auto helper = GroundVehicleTileHelper{m, VehicleType::Type::Road};
 

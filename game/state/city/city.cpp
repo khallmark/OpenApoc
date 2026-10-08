@@ -189,6 +189,7 @@ void City::notifyRoadChange(const Vec3<int> &position, bool intact)
 	{
 		roadSegments.at(segId).notifyRoadChange(position, intact);
 	}
+	clearRouteCache();
 }
 
 void City::handleProjectileHit(GameState &state, sp<Projectile> projectile, bool displayDoodad,

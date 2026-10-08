@@ -4,6 +4,7 @@
 #include "library/sp.h"
 #include "library/vec.h"
 #include <list>
+#include <unordered_map>
 #include <map>
 #include <set>
 
@@ -166,6 +167,13 @@ class City : public StateObject<City>, public std::enable_shared_from_this<City>
 	                                      bool approachOnly = false, bool ignoreStaticUnits = false,
 	                                      bool ignoreMovingUnits = true,
 	                                      bool ignoreAllUnits = false);
+	// The search itself. findShortestPath memoizes it: the result depends only on origin,
+	// destination and which roads are intact, and road traffic asks for the same routes tick after
+	// tick - tens of thousands a second in a busy city.
+	std::list<Vec3<int>> findShortestPathUncached(Vec3<int> origin, Vec3<int> destination);
+	std::unordered_map<uint64_t, std::list<Vec3<int>>> routeCache;
+	// Any change to which roads are intact invalidates every cached route.
+	void clearRouteCache() { routeCache.clear(); }
 
 	// Move a group of vehicles in formation
 	void groupMove(GameState &state, std::list<StateRef<Vehicle>> &selectedVehicles,

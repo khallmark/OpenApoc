@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import time
 import traceback
 from pathlib import Path
@@ -50,24 +51,22 @@ from oa_play import (
     manufacture,
     gate_craft_project,
     craft_flags,
-    buy_equipment,
     buy_vehicles,
-    stock_best_guns,
-    stock_for_template,
     arm_squad,
     unarmed_at_base,
-    template_weapon_in_stock,
-    equip_squad,
     hire_engineers,
     hire_scientists,
     hire_soldiers,
+    _flying_crewed,
     crew_transport,
     clear_attack_orders,
     intercept_ufos,
     new_game,
     recover_crash_sites,
+    resolve_strategy,
     win_battle,
 )
+from oa_strategy import Strategy, add_strategy_option
 
 BATTLE_STAGES = ("BattleBriefing", "BattlePreStart", "BattleView", "BaseDefenseScreen")
 MAX_RESTARTS = 40
@@ -108,15 +107,36 @@ MIN_SQUAD = 6
 # Below this much total lab skill the research chain is crawling and worth spending money on.
 MIN_LAB_SKILL = 1100
 CHECKPOINT_EVERY_S = 300.0
+# Government relation below which a UFO over the city is left alone rather than shot at: every shot
+# that misses and hits a building costs relation with its owner, and below -50 funding is cut for
+# good. This was a bare 25 inside city_turn; it is a constant so the strategy genome can tune it.
+INTERCEPT_MIN_RELATION = 25
+# Armed agents needed before an infiltrated building is worth a sweep, and before the clock is
+# slowed to keep pace with the infiltration (both were a bare 3), and the city clock speed used
+# while buildings await a sweep (a bare 3 -- 30 game-minutes per five wall-minutes).
+INFIL_MIN_ARMED = 3
+INFIL_SPEED = 3
+# How often the end-of-run metrics cache is refreshed. The game is gone on the crash and
+# restart-give-up paths, so the numbers the learner scores have to be captured while it is alive.
+METRICS_EVERY_S = 30.0
+FINAL_SCHEMA = 1
 
 
 class Victory:
     def __init__(self, repo: Path, out: Path, port: int, difficulty: int = 1,
-                 battle_policy: dict | None = None, seed: int = 0):
+                 battle_policy: dict | None = None, seed: int = 0,
+                 strategy: Strategy | None = None, single_campaign: bool = False):
         self.repo, self.out, self.port = Path(repo), Path(out), port
         self.difficulty = difficulty
         self.battle_policy = dict(battle_policy or {})
         self.seed = seed
+        # The campaign genome (tools/oa_strategy.py). The default is exactly the constants this
+        # file had before it existed, so a run that names none behaves as it always did.
+        self.strategy = strategy or Strategy()
+        # One campaign per run: a defeat ends the run instead of starting the next campaign. The
+        # cross-run learner scores one genome on one campaign; letting a lost run roll into a fresh
+        # one would blend two campaigns' outcomes into a single reward.
+        self.single_campaign = single_campaign
         self.out.mkdir(parents=True, exist_ok=True)
         (self.out / "shots").mkdir(exist_ok=True)
         self.checkpoint = self.out / "victory.save"
@@ -128,14 +148,12 @@ class Victory:
         self.last_recover = 0.0
         self.last_intercept = 0.0
         self.last_crew = 0.0
-        self.alert_refusals = 0
         self.last_research = 0.0
         self.last_hire = 0.0
         self.stuck_since = 0.0
         self.last_build = 0.0
         self.last_equip = 0.0
         self.last_craft = 0.0
-        self.last_equipment = 0.0
         self.last_score_warn = 0.0
         self.last_endgame = 0.0
         self.last_checkpoint = 0.0
@@ -151,6 +169,13 @@ class Victory:
         self.last_deferred_why = ""
         self.second_base = False
         self.best_crashed = 0
+        # End-of-run summary state (see write_final).
+        self.final_path = self.out / "final.json"
+        self.exit_reason = ""
+        self.finished: list[dict] = []        # progress of campaigns that ended before this one
+        self.metrics: dict = {}
+        self.last_sample = 0.0
+        self.started_at = time.time()
 
     # -- durability -------------------------------------------------------
     def _load(self) -> dict:
@@ -231,9 +256,14 @@ class Victory:
                                 seed=self.seed)
         self.game.start(wait_s=240)
         self.d = Driver(Harness(port=self.port), self.repo / "data/forms",
-                        shots=self.out / "shots", verbose=True, battle_policy=self.battle_policy)
+                        shots=self.out / "shots", verbose=True, battle_policy=self.battle_policy,
+                        strategy=self.strategy)
         self.d.checks = {}
         self.d.say = lambda m: self.say(m)
+        # Log the effective genome on every (re)start so a log alone proves which strategy a run
+        # was playing, and that it reached the Driver the helpers read it from.
+        self.say(f"[strategy] {self.strategy.key()} | genes {self.strategy.to_json()} | "
+                 f"battle policy {self.battle_policy or 'engine default'}")
         if resume:
             self.say("resumed from checkpoint")
             # A checkpoint is written wherever the campaign happened to be, including partway
@@ -271,15 +301,8 @@ class Victory:
             # fund the fleet that does the work. Do it before anything else is bought.
             sold = sell_ground_fleet(self.d)
             self.say(f"sold {sold} ground vehicle line(s) to fund the air fleet")
-            stock_for_template(self.d, qty=self.armoury_size())
-            # The template covers armour and grenades, which stay on sale. It cannot cover the
-            # weapon once the starting rifle leaves the market, and that is what left recruits
-            # unarmed, so buy guns by capability alongside it.
-            stock_best_guns(self.d, qty=self.armoury_size())
+            arm_squad(self.d, agents=self.armoury_size())
             crew_transport(self.d)
-            # Capture the squad loadout now, while the starting ten are all home and armed.
-            # It persists in GameState, so every later recruit can be equipped from it.
-            equip_squad(self.d, agents=20, apply=False)
             self.save("campaign start")
 
     def alive(self) -> bool:
@@ -408,6 +431,10 @@ class Victory:
                 if time.time() - self.last_endgame > 60.0:
                     self.last_endgame = time.time()
                     goto_portal(self.d)
+                    if getattr(self.d, "loadout_blocked", False) is True:
+                        self.progress.pop("crossing_to", None)
+                        self.flush()
+                        return False  # Keep procurement/research running while still at home.
                 set_speed(self.d, 4)
                 set_speed(self.d, 5)
                 return True
@@ -485,12 +512,15 @@ class Victory:
         if "gate_craft_ready" not in self.progress.get("milestones", []):
             self.record("gate_craft_ready")
             self.say("=== GATE CRAFT READY: owned craft reports shifter=1 ===")
-        if not squad and time.time() - self.last_crew > CREW_COOLDOWN_S:
+        ready = [f for f in squad if int(f.get("crew", "0")) >= self.strategy["cross_min_crew"]]
+        if not ready and time.time() - self.last_crew > CREW_COOLDOWN_S:
             self.last_crew = time.time()
             crew_transport(self.d)
             squad = [f for _, f in craft_flags(self.d)
                      if f.get("shifter") == "1" and int(f.get("crew", "0")) > 0]
-        if squad and int(alien.get("raidable", "0") or 0) > 0:
+            ready = [f for f in squad
+                     if int(f.get("crew", "0")) >= self.strategy["cross_min_crew"]]
+        if ready and int(alien.get("raidable", "0") or 0) > 0:
             self.progress["crossing_to"] = "CITYMAP_ALIEN"
             self.flush()
             if goto_portal(self.d):
@@ -498,6 +528,10 @@ class Victory:
                 self.last_endgame = 0.0
                 self.say("=== CROSSING INTO THE ALIEN DIMENSION: CITYMAP_ALIEN confirmed ===")
                 self.record("crossed_to_alien_dimension")
+            elif getattr(self.d, "loadout_blocked", False) is True:
+                self.progress.pop("crossing_to", None)
+                self.flush()
+                return False
             return True  # A pending crossing must retain its crew and its portal order.
         return False
 
@@ -537,7 +571,10 @@ class Victory:
         v = self.d.h.gs("vehicles")
         crashed = int(v.get("ufos_crashed", "0") or 0)
         in_city = int(v.get("ufos_in_city", "0") or 0)
-        crewed = int(v.get("crewed", "0") or 0)
+        # Flying craft carrying a real squad, not vehicles-with-a-soldier: gs vehicles counts a road
+        # bike with one soldier aboard, which kept the re-crew gate shut while every recovery
+        # was refused.
+        crewed = _flying_crewed(self.d)
 
         if crashed > self.best_crashed:
             self.progress["ufos_down"] += crashed - self.best_crashed
@@ -577,7 +614,8 @@ class Victory:
         # just delay, and delay is what loses the infiltration race.
         armed_now = int(self.d.h.gs("agents").get("armed", "0") or 0)
         due = INFIL_COOLDOWN_S if not self.d.alerted_buildings else 0.0
-        if armed_now >= 3 and time.time() - self.last_infil_raid >= due:
+        if armed_now >= self.strategy["infil_min_armed"] and \
+                time.time() - self.last_infil_raid >= due:
             self.last_infil_raid = time.time()
             outcome = raid_infiltrated_building(self.d)
             if outcome != "nothing-reported":
@@ -618,13 +656,15 @@ class Victory:
                 for kv in part.split(":"):
                     if kv.startswith("skill="):
                         skill += int(kv.split("=")[1] or 0)
+            min_lab_skill = self.strategy["min_lab_skill"]
             empty_lab = any(":built:" in lab and ":staff=0:" in lab
                             for lab in r.get("labs_detail", "").split("|"))
-            if (skill < MIN_LAB_SKILL or empty_lab) and time.time() - self.last_hire > 180.0:
+            if (skill < min_lab_skill or empty_lab) and time.time() - self.last_hire > 180.0:
                 # Scientists get dispatched to incidents along with everyone else and die there,
                 # which silently throttles the whole research chain.
                 self.last_hire = time.time()
-                self.say(f"lab skill down to {skill} - recruiting scientists")
+                self.say(f"lab skill {skill} < min_lab_skill {min_lab_skill}, empty={empty_lab} "
+                         "- recruiting scientists and engineers")
                 hire_scientists(self.d, want=4)
                 # And engineers, which nothing was hiring at all. The workshop is what pays for
                 # the campaign once there is anything worth manufacturing, and the guide says to
@@ -637,7 +677,7 @@ class Victory:
             # 0 recoveries. startable counts topics that could actually be picked right now, so
             # when it is zero the whole trip is wasted and the game is better off left running.
             startable = int(r.get("startable", "0") or 0)
-            if (idle > 0 and startable > 0) or skill < MIN_LAB_SKILL or empty_lab:
+            if (idle > 0 and startable > 0) or skill < min_lab_skill or empty_lab:
                 self.say(f"{idle} lab(s) idle, {startable} startable, skill {skill}, "
                          f"{done} complete - reassigning")
                 assign_research(self.d)
@@ -673,27 +713,16 @@ class Victory:
         # alone also counted the ones away on a mission or still in transit, so the pass retried
         # every forty seconds against people it could not reach.
         unarmed_home = unarmed_at_base(ag)
-        if unarmed_home > 0 and time.time() - self.last_equip > 40.0:
+        # Refit veterans too: research unlocks and armor upgrades matter even when everyone
+        # already carries a gun. The role planner orders only deficits, including inbound stock.
+        if time.time() - self.last_equip > 240.0 or (unarmed_home and time.time() - self.last_equip > 40.0):
             self.last_equip = time.time()
-            self.say(f"{armed} armed of {soldiers} soldiers, {unarmed_home} unarmed at base - "
-                     f"equipping")
-            if arm_squad(self.d, agents=24) <= 0:
-                # Nothing was handed out. Either the armoury is empty or the template names a
-                # weapon the market no longer sells: buy the loadout's own items for armour, and
-                # the best gun on sale for the part the loadout can no longer supply.
-                stock_for_template(self.d, qty=self.armoury_size())
-                stock_best_guns(self.d, qty=self.armoury_size())
-
-        # Restock replacement equipment alongside the gun/craft economy work, with a reserve.
-        if armed < soldiers and time.time() - self.last_equipment > 240.0:
-            self.last_equipment = time.time()
-            if int(self.d.h.gs("funds").get("balance", "0") or 0) > 40000:
-                self.d.say("[economy] stocking replacement equipment")
-                buy_equipment(self.d)
+            arm_squad(self.d, agents=self.armoury_size())
 
         # Replace losses, and arm them if the armoury can.
         fit = int(ag.get("soldiers_fit", "0") or 0)
-        if fit < MIN_SOLDIERS and time.time() - self.last_hire > 180.0:
+        min_soldiers = self.strategy["min_soldiers"]
+        if fit < min_soldiers and time.time() - self.last_hire > 180.0:
             # Only recruit people we can actually arm. An unarmed agent is not a neutral
             # addition: in a base defence every person present is dropped into the fight whether
             # they can shoot or not, and the campaign that was lost went down with 21 mostly
@@ -703,11 +732,12 @@ class Victory:
             if stock <= 0:
                 self.last_hire = time.time()
                 self.say(f"{fit} fit soldiers but no weapons in stores - buying before hiring")
-                stock_for_template(self.d, qty=self.armoury_size())
+                arm_squad(self.d, agents=self.armoury_size())
             else:
                 self.last_hire = time.time()
-                want = min(MIN_SOLDIERS - fit + 2, stock)
-                self.say(f"only {fit} fit soldiers, {stock} weapons in stock - recruiting {want}")
+                want = min(min_soldiers - fit + 2, stock)
+                self.say(f"{fit} fit soldiers < min_soldiers {min_soldiers}, {stock} weapons in "
+                         f"stock - recruiting {want}")
                 hire_soldiers(self.d, want=want)
 
         # Follow the action in the city too, so a watching human sees what the driver is doing
@@ -725,8 +755,8 @@ class Victory:
         # meant no air capability whatsoever: ufos_downed sat at 0 while incursions and city
         # damage -- the two buckets that actually end these runs -- climbed unopposed.
         fliers = 0
-        for part in (self.d.h.gs("interceptors").get("detail", "") or "").split("|"):
-            if "flying=1" in part and "armed=1" in part:
+        for _, flags in craft_flags(self.d):
+            if flags.get("flying") == "1" and flags.get("armed") == "1":
                 fliers += 1
         mine = int(v.get("player_vehicles", "0") or 0)
         # Two interceptors cannot cover a city. Measured: 39 buildings infiltrated by day 17,
@@ -735,9 +765,11 @@ class Victory:
         # eleven UFOs had been shot down. Infiltration is what turns the government hostile, and
         # interception is the only thing that prevents it, so buy a real patrol. At $12,607 for
         # two guns they are cheap next to losing the campaign.
-        if fliers < AIR_PATROL and time.time() - self.last_craft > 240.0:
+        air_patrol = self.strategy["air_patrol"]
+        if fliers < air_patrol and time.time() - self.last_craft > 240.0:
             self.last_craft = time.time()
-            self.say(f"{fliers} armed flier(s) of {mine} craft - buying air cover")
+            self.say(f"{fliers} armed flier(s) < air_patrol {air_patrol} of {mine} craft - "
+                     f"buying air cover")
             if not buy_interceptor(self.d, want=2) and mine < 3:
                 buy_vehicles(self.d, want=1)
         # Turn captured gear into money. The guide treats recovered equipment as the campaign's
@@ -775,9 +807,11 @@ class Victory:
                     rel = int(self.d.h.gs("infiltrated").get("gov_relation", "100") or 100)
                 except (HarnessError, OSError):
                     rel = 100
-                if rel < 25:
-                    self.say(f"government relation {rel}: holding fire over the city rather "
-                             f"than shooting the buildings we are paid to protect")
+                min_rel = self.strategy["intercept_min_relation"]
+                if rel < min_rel:
+                    self.say(f"government relation {rel} < intercept_min_relation {min_rel}: "
+                             f"holding fire over the city rather than shooting the buildings we "
+                             f"are paid to protect")
                 else:
                     intercept_ufos(self.d)
             # Turbo, whenever the engine will grant it. GameState::updateTurbo advances
@@ -807,15 +841,17 @@ class Victory:
             # losing on a different axis.
             pending = len(self.d.alerted_buildings)
             try:
-                can_act = int(self.d.h.gs("agents").get("armed", "0") or 0) >= 3
+                can_act = (int(self.d.h.gs("agents").get("armed", "0") or 0)
+                           >= self.strategy["infil_min_armed"])
             except (HarnessError, OSError):
                 can_act = False
             if pending and can_act:
                 if self.turbo_held != pending:
-                    self.say(f"{pending} building(s) awaiting a sweep - holding normal speed "
-                             f"rather than fast-forwarding through the invasion")
+                    self.say(f"{pending} building(s) awaiting a sweep - holding speed "
+                             f"{self.strategy['infil_speed']} rather than fast-forwarding through "
+                             f"the invasion")
                     self.turbo_held = pending
-                set_speed(self.d, 3)
+                set_speed(self.d, self.strategy["infil_speed"])
             else:
                 self.turbo_held = 0
                 set_speed(self.d, 5 if self.d.h.gs("turbo").get("can_turbo") == "1" else 4)
@@ -851,6 +887,11 @@ class Victory:
                                                   f"-{stamp}.save")
         except OSError as exc:
             self.say(f"could not archive checkpoint: {exc}")
+        # The campaign that just ended goes into the end-of-run summary before progress is reset;
+        # without this, final.json described only the LAST campaign and a run that lost one and
+        # started another reported the second as if the first never happened.
+        self.finished.append(dict(self.progress, metrics=dict(self.metrics)))
+        self.metrics = {}
         self.progress = {"battles": 0, "wins": 0, "ufos_down": 0, "recoveries": 0,
                          "restarts": 0, "research_complete": 0}
         self.flush()
@@ -920,7 +961,132 @@ class Victory:
             return True
         return False
 
+    # -- end-of-run summary ----------------------------------------------------------------------
+    def sample_metrics(self, force: bool = False) -> bool:
+        """Refresh the cached end-of-run numbers from read-only gs queries.
+
+        The cross-run learner scores a run from final.json, and by the time a run ends the game is
+        often gone: it crashed, the restart budget ran out, or the campaign was lost and the stage
+        stack no longer answers gs. So the numbers are captured WHILE the game is alive, every
+        METRICS_EVERY_S, and write_final falls back to this cache when a fresh read is impossible.
+        Returns True when at least the clock was read.
+        """
+        now = time.time()
+        if not force and now - self.last_sample < METRICS_EVERY_S:
+            return False
+        self.last_sample = now
+        if self.d is None:
+            return False
+
+        def q(name: str) -> dict:
+            try:
+                return self.d.h.gs(name) or {}
+            except (HarnessError, OSError, ValueError):
+                return {}
+
+        def num(src: dict, key: str, default=None):
+            try:
+                return int(src.get(key, ""))
+            except (TypeError, ValueError):
+                return default
+
+        t, f, r = q("time"), q("funds"), q("research")
+        a, inf, b = q("agents"), q("infiltrated"), q("bases")
+        day = num(t, "day")
+        if day is None:
+            return False
+        m = self.metrics
+        m["day"] = day
+        m["max_day"] = max(day, m.get("max_day", 0))
+        for key, src, field in (("score_total", f, "score_total"), ("balance", f, "balance"),
+                                ("ufos_downed", f, "ufos_downed"),
+                                ("tactical_missions", f, "tactical"),
+                                ("research_complete", r, "complete"), ("armed", a, "armed"),
+                                ("soldiers", a, "soldiers"), ("gov_relation", inf, "gov_relation"),
+                                ("bases", b, "bases")):
+            v = num(src, field)
+            if v is not None:
+                m[key] = v
+        if "research_complete" in m:
+            # Research done before the first sample is the starting tech, not the campaign's work.
+            m.setdefault("research_complete_start", m["research_complete"])
+        if f.get("funding_terminated") == "1":
+            m["funding_terminated"] = True
+            # The day the money stopped is the day the campaign effectively ended, however long
+            # the limping husk survives after it.
+            m.setdefault("funding_lost_day", day)
+        elif f:
+            m["funding_terminated"] = False
+        m["sampled_at"] = round(now - self.started_at, 1)
+        return True
+
+    def finish(self, reason: str, rc: int) -> int:
+        """Name why run() is returning. Every return path goes through here, so final.json can
+        say what ended the run rather than leaving the learner to guess from a missing file."""
+        self.exit_reason = reason
+        return rc
+
+    def build_final(self) -> dict:
+        ended = self.progress.get("ended")
+        return {
+            "schema": FINAL_SCHEMA,
+            "exit": self.exit_reason or "interrupted",
+            "campaign_ended": ended,
+            "seed": self.seed,
+            "difficulty": self.difficulty,
+            "strategy": self.strategy.canonical(),
+            "strategy_key": self.strategy.key(),
+            "battle_policy": self.battle_policy,
+            "single_campaign": self.single_campaign,
+            "wall_seconds": round(time.time() - self.started_at, 1),
+            "restarts": self.restarts,
+            "metrics": dict(self.metrics),
+            "progress": dict(self.progress),
+            "earlier_campaigns": list(self.finished),
+        }
+
+    def write_final(self) -> None:
+        """Write final.json next to progress.json. Called from run()'s finally, so it happens on
+        every exit path -- including an exception and a SIGTERM turned into SystemExit -- and it
+        never raises: a failure to summarise must not mask the failure being summarised."""
+        try:
+            source = "cached"
+            try:
+                if self.d is not None and self.game is not None and self.alive():
+                    if self.sample_metrics(force=True):
+                        source = "live"
+            except Exception:
+                pass
+            if not self.metrics:
+                source = "none"
+            final = self.build_final()
+            final["metrics_source"] = source
+            tmp = self.final_path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(final, indent=1))
+            tmp.replace(self.final_path)
+            self.say(f"final summary written ({self.exit_reason or 'interrupted'}, "
+                     f"{source} metrics): {self.final_path}")
+        except Exception as exc:
+            try:
+                print(f"[final] could not write {self.final_path}: {exc}", flush=True)
+            except Exception:
+                pass
+
     def run(self, max_hours: float) -> int:
+        """Play until victory, the time budget, or an unrecoverable failure; always summarise."""
+        self.started_at = time.time()
+        try:
+            return self._run(max_hours)
+        except (SystemExit, KeyboardInterrupt):
+            self.exit_reason = self.exit_reason or "signal"
+            raise
+        except BaseException:
+            self.exit_reason = self.exit_reason or "crash"
+            raise
+        finally:
+            self.write_final()
+
+    def _run(self, max_hours: float) -> int:
         deadline = time.time() + max_hours * 3600
         # start() can raise: it waits for stages and issues STATUS, and if the game dies during a
         # resume those calls raise ConnectionRefusedError from inside wait_for, outside the loop's
@@ -956,31 +1122,36 @@ class Victory:
                 time.sleep(5.0)
         else:
             self.say("could not start the game at all")
-            return 1
+            return self.finish("start_failed", 1)
         last_report = 0.0
 
         while time.time() < deadline:
             try:
                 if not self.alive():
                     if not self.restart():
-                        return 1
+                        return self.finish("restart_failed", 1)
                     continue
             except (HarnessError, OSError, TimeoutError) as exc:
                 self.say(f"liveness check failed ({exc}); restarting")
                 if not self.restart():
-                    return 1
+                    return self.finish("restart_failed", 1)
                 continue
             try:
+                self.sample_metrics()
                 st = self.d.status()
                 if st.stage == "VideoScreen" and self.victorious():
                     if self.progress.get("ended") == "victory":
-                        return 0
+                        return self.finish("victory", 0)
+                    if self.single_campaign:
+                        return self.finish("defeat", 0)
                     if not self.next_campaign("defeat"):
-                        return 1
+                        return self.finish("next_campaign_failed", 1)
                     continue
                 if self.bankrupt():
+                    if self.single_campaign:
+                        return self.finish("bankrupt", 0)
                     if not self.next_campaign("bankruptcy"):
-                        return 1
+                        return self.finish("next_campaign_failed", 1)
                     continue
                 if st.stage == "VideoScreen":
                     # Some other cutscene (the intro, most likely). Skip it and carry on.
@@ -1027,30 +1198,22 @@ class Victory:
                         continue
 
                     fit_now = int(self.d.h.gs("agents").get("soldiers_fit", "0") or 0)
-                    if fit_now < MIN_SQUAD:
-                        self.say(f"only {fit_now} fit soldiers; not dispatching a token force")
+                    min_squad = self.strategy["min_squad"]
+                    if fit_now < min_squad:
+                        self.say(f"only {fit_now} fit soldiers < min_squad {min_squad}; not "
+                                 f"dispatching a token force")
                         if not self.d.click_id("BUTTON_QUIT", st):
                             self.d.h.key("Escape")
                         time.sleep(0.6)
                         continue
-                    n = self.d.select_assignment_rows(st)
-                    self.d.click_id("BUTTON_EXTERMINATE", st)
-                    time.sleep(1.2)
-                    cur = self.d.status()
-                    for _ in range(4):
-                        if cur.stage != "MessageBox":
-                            break
-                        self.d.h.key("Return")
-                        time.sleep(0.4)
-                        cur = self.d.status()
-                    if cur.stage == "AlertScreen":
-                        if not self.d.click_id("BUTTON_QUIT", cur):
-                            self.d.h.key("Escape")
-                        self.alert_refusals += 1
-                        self.say(f"incident dispatch refused ({self.alert_refusals}); dismissed")
-                    else:
-                        self.say(f"squad dispatched to incident ({n} rows)")
+                    # The remembered incident can be dispatched from BuildingScreen after
+                    # the ordinary UI refit. AlertScreen itself cannot buy or issue equipment.
+                    if not self.d.click_id("BUTTON_QUIT", st):
+                        self.d.escape_key(st.stage)
                     time.sleep(0.5)
+                    if self.d.status().stage == "CityView":
+                        outcome = raid_infiltrated_building(self.d)
+                        self.say(f"incident after role refit: {outcome}")
                     continue
                 if st.stage == "CityView":
                     self.stuck_since = 0.0
@@ -1090,13 +1253,17 @@ class Victory:
             except OSError as exc:
                 self.say(f"connection lost: {exc}")
                 if not self.restart():
-                    return 1
+                    return self.finish("restart_failed", 1)
             except Exception:
                 self.say("unexpected error:\n" + traceback.format_exc())
                 time.sleep(2.0)
 
         self.say(f"time budget reached; progress: {self.progress}")
-        return 0
+        return self.finish("time_budget", 0)
+
+
+def _on_sigterm(signum, frame):
+    raise SystemExit(143)
 
 
 def main() -> int:
@@ -1110,12 +1277,22 @@ def main() -> int:
     ap.add_argument("--hours", type=float, default=72.0)
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed (0 = engine default); give parallel runs different seeds")
+    ap.add_argument("--single-campaign", action="store_true",
+                    help="end the run when the campaign is lost instead of starting the next one "
+                         "(what the cross-run learner scores)")
+    add_strategy_option(ap)
     args = ap.parse_args()
     policy = configure_runner(args)
+    strategy, policy = resolve_strategy(args, policy)
     args.port = args.port or free_port(17800)
     repo = Path(args.repo)
     out = Path(args.out) if args.out else repo / "build/victory"
-    v = Victory(repo, out, args.port, args.difficulty, battle_policy=policy, seed=args.seed)
+    v = Victory(repo, out, args.port, args.difficulty, battle_policy=policy, seed=args.seed,
+                strategy=strategy, single_campaign=args.single_campaign)
+    # A learner stops a run with SIGTERM when its wall-clock budget is spent. Python's default
+    # handler kills the process without running finally blocks, which would skip final.json and
+    # leave the game orphaned; turning it into SystemExit lets run()'s finally summarise.
+    signal.signal(signal.SIGTERM, _on_sigterm)
     try:
         return v.run(args.hours)
     finally:

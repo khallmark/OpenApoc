@@ -454,7 +454,13 @@ void Framework::run(sp<Stage> initialStage)
 			continue;
 		}
 		const bool doUpdate = frame_time_now >= expected_frame_time;
-		const bool doRender = frame_time_now >= expected_render_time;
+		// While the simulation is behind, give passes to it and render only once a frame is
+		// overdue by a whole period. Otherwise each render's wait in present() leaves the next
+		// render already due, every pass renders, and the simulation gets exactly one step per
+		// displayed frame - capping an automated run (TargetFPS=1000) at the display rate.
+		const bool doRender =
+		    frame_time_now >= expected_render_time &&
+		    (!doUpdate || frame_time_now >= expected_render_time + target_render_duration);
 		if (doRender)
 		{
 			expected_render_time += target_render_duration;
@@ -477,12 +483,19 @@ void Framework::run(sp<Stage> initialStage)
 		// That is why this fired on essentially every launch: it was reporting the load hitch,
 		// not a steady-state pacing problem. Resynchronise rather than accumulate a debt that
 		// cannot be paid.
-		if (doUpdate && frame_time_now > expected_frame_time + 5 * target_frame_duration)
+		// Resynchronise only after a real hitch (a load, a big save). A threshold in sim steps
+		// is wrong once the sim step is 1 ms (TargetFPS=1000): every vsync wait in present() is
+		// "5 steps behind", and dropping that backlog capped the simulation at the display rate.
+		// Short stalls are caught up by update-only passes between renders instead.
+		const auto resync_after =
+		    std::max<std::chrono::steady_clock::duration>(5 * target_frame_duration,
+		                                                  std::chrono::milliseconds(250));
+		if (doUpdate && frame_time_now > expected_frame_time + resync_after)
 		{
 			expected_frame_time = frame_time_now + target_frame_duration;
 		}
 		if (!frame_time_limited_warning_shown &&
-		    frame_time_now > expected_frame_time + 5 * target_frame_duration)
+		    frame_time_now > expected_frame_time + resync_after)
 		{
 			frame_time_limited_warning_shown = true;
 			LogWarning("Over 5 frames behind - likely vsync limited?");

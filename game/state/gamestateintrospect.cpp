@@ -1,3 +1,4 @@
+#include "framework/framework.h"
 #include "game/state/gamestateintrospect.h"
 #include "framework/harness.h"
 #include "game/state/battle/battle.h"
@@ -15,6 +16,7 @@
 #include "game/state/rules/aequipmenttype.h"
 #include "game/state/rules/agenttype.h"
 #include "game/state/rules/battle/battlemap.h"
+#include "game/state/rules/battle/damage.h"
 #include "game/state/rules/city/facilitytype.h"
 #include "game/state/rules/city/vehicletype.h"
 #include "game/state/rules/city/vequipmenttype.h"
@@ -25,11 +27,242 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <vector>
 
 namespace OpenApoc
 {
 namespace
 {
+
+const char *loadoutSlot(EquipmentSlotType slot)
+{
+	switch (slot)
+	{
+		case EquipmentSlotType::ArmorBody:
+			return "Body";
+		case EquipmentSlotType::ArmorLegs:
+			return "Legs";
+		case EquipmentSlotType::ArmorHelmet:
+			return "Helmet";
+		case EquipmentSlotType::ArmorLeftHand:
+			return "LeftArm";
+		case EquipmentSlotType::ArmorRightHand:
+			return "RightArm";
+		case EquipmentSlotType::LeftHand:
+			return "LeftHand";
+		case EquipmentSlotType::RightHand:
+			return "RightHand";
+		default:
+			return "General";
+	}
+}
+
+const char *loadoutKind(AEquipmentType::Type type)
+{
+	switch (type)
+	{
+		case AEquipmentType::Type::Armor:
+			return "Armor";
+		case AEquipmentType::Type::Weapon:
+			return "Weapon";
+		case AEquipmentType::Type::Ammo:
+			return "Ammo";
+		case AEquipmentType::Type::Grenade:
+			return "Grenade";
+		case AEquipmentType::Type::MotionScanner:
+			return "MotionScanner";
+		case AEquipmentType::Type::MediKit:
+			return "MediKit";
+		default:
+			return "Other";
+	}
+}
+
+UString loadoutToken(UString text)
+{
+	for (auto &ch : text)
+	{
+		if (ch == ' ' || ch == ':' || ch == '|' || ch == '+' || ch == '~' || ch == '=')
+		{
+			ch = '_';
+		}
+	}
+	return text;
+}
+
+UString describeLoadoutAgents(GameState &state)
+{
+	UString out;
+	int n = 0;
+	for (const auto &a : state.agents)
+	{
+		const auto &agent = a.second;
+		if (!agent || agent->owner != state.getPlayer() || !agent->type ||
+		    agent->type->role != AgentType::Role::Soldier || !agent->type->inventory ||
+		    !agent->type->allowsDirectControl || agent->isDead())
+		{
+			continue;
+		}
+		const auto building = agent->currentBuilding
+		                          ? agent->currentBuilding
+		                          : (agent->currentVehicle ? agent->currentVehicle->currentBuilding
+		                                                   : StateRef<Building>{});
+		UString kit;
+		for (const auto &e : agent->equipment)
+		{
+			if (!e || !e->type)
+				continue;
+			EquipmentSlotType slot = EquipmentSlotType::General;
+			for (const auto &s : agent->getSlots())
+			{
+				if (s.bounds.within(e->equippedPosition))
+				{
+					slot = s.type;
+					break;
+				}
+			}
+			kit += (kit.empty() ? "" : "+") +
+			       format("{0}~{1}~{2}~{3}~{4}", e->type.id, loadoutSlot(slot),
+			              e->payloadType ? e->payloadType.id : UString("-"), e->ammo, e->armor);
+		}
+		out +=
+		    (out.empty() ? "" : "|") +
+		    format("{0}:base={1}:home={2}:vehicle={3}:speed={4}:strength={5}:accuracy={6}:kit={7}",
+		           a.first, building && building->base ? building->base.id : UString("-"),
+		           agent->homeBuilding && agent->homeBuilding->base ? agent->homeBuilding->base.id
+		                                                            : UString("-"),
+		           agent->currentVehicle ? agent->currentVehicle.id : UString("-"),
+		           agent->current_stats.speed, agent->modified_stats.strength,
+		           agent->modified_stats.accuracy, kit.empty() ? UString("-") : kit);
+		n++;
+	}
+	UString selectedVehicle = "-";
+	if (state.current_city && state.current_city->cityViewSelectedOwnedVehicles.size() == 1)
+	{
+		const auto &vehicle = state.current_city->cityViewSelectedOwnedVehicles.front();
+		if (vehicle && vehicle->owner == state.getPlayer())
+			selectedVehicle = vehicle.id;
+	}
+	return format("count={0} selected_vehicle={1} detail={2}", n, selectedVehicle,
+	              out.empty() ? UString("-") : out);
+}
+
+UString describeEquipmentCatalog(GameState &state)
+{
+	// Player knowledge only: researched equipment present in the market, our stores or our kit.
+	// No alien loadout/score tables, unseen crews, or unrevealed research statistics.
+	std::set<UString> owned, knownModifiers;
+	for (const auto &a : state.agents)
+	{
+		if (!a.second || a.second->owner != state.getPlayer())
+			continue;
+		for (const auto &e : a.second->equipment)
+		{
+			if (!e || !e->type)
+				continue;
+			owned.insert(e->type.id);
+			if (e->payloadType)
+				owned.insert(e->payloadType.id);
+		}
+	}
+	for (const auto &a : state.agent_types)
+	{
+		if (!a.second || !a.second->damage_modifier)
+			continue;
+		for (const auto &topic : state.research.topics)
+		{
+			if (topic.second && !topic.second->hidden && topic.second->isComplete() &&
+			    topic.second->name == a.second->name)
+			{
+				knownModifiers.insert(a.second->damage_modifier.id);
+			}
+		}
+	}
+	std::map<UString, std::map<UString, int>> pending;
+	auto cargo = [&pending](const Cargo &c)
+	{
+		if (c.type == Cargo::Type::Agent && c.count > 0 && c.destination && c.destination->base)
+		{
+			pending[c.id][c.destination->base.id] += c.count;
+		}
+	};
+	for (const auto &b : state.buildings)
+		if (b.second)
+			for (const auto &c : b.second->cargo)
+				cargo(c);
+	for (const auto &v : state.vehicles)
+		if (v.second)
+			for (const auto &c : v.second->cargo)
+				cargo(c);
+	UString out;
+	int n = 0;
+	for (const auto &entry : state.agent_equipment)
+	{
+		const auto &e = entry.second;
+		if (!e || e->bioStorage || !e->isResearched() || e->equipscreen_size.x <= 0 ||
+		    e->equipscreen_size.y <= 0)
+			continue;
+		UString stores, incoming;
+		bool stocked = false;
+		for (const auto &b : state.player_bases)
+		{
+			if (!b.second)
+				continue;
+			const auto found = b.second->inventoryAgentEquipment.find(entry.first);
+			const int count = found == b.second->inventoryAgentEquipment.end() ? 0 : found->second;
+			stocked |= count > 0;
+			stores += (stores.empty() ? "" : "+") + format("{0}~{1}", b.first, count);
+			incoming += (incoming.empty() ? "" : "+") +
+			            format("{0}~{1}", b.first, pending[entry.first][b.first]);
+		}
+		const bool listed = e->isMarketListed(state);
+		if (!listed && !stocked && !owned.count(entry.first))
+			continue;
+		const auto economy = state.economy.find(entry.first);
+		UString ammo, modifiers;
+		for (const auto &a : e->ammo_types)
+		{
+			if (a && a->isResearched())
+				ammo += (ammo.empty() ? "" : "+") + a.id;
+		}
+		if (e->damage_type)
+		{
+			for (const auto &m : e->damage_type->modifiers)
+			{
+				// Terrain susceptibility and researched species are rules, not hidden enemies.
+				if (knownModifiers.count(m.first.id) || m.first.id.find("TERRAIN") != UString::npos)
+					modifiers +=
+					    (modifiers.empty() ? "" : "+") + format("{0}~{1}", m.first.id, m.second);
+			}
+		}
+		out += (out.empty() ? "" : "|") +
+		       format("{0}:name={1}:kind={2}:slot={3}:armor={4}:weight={5}:flight={6}:damage={7}:"
+		              "range={8}:"
+		              "accuracy={9}:fire_ticks={10}:capacity={11}:recharge={12}:burst={13}:damage_"
+		              "type={14}:"
+		              "explosive={15}:ammo={16}:research=1:usable={17}:price={18}:market={19}:"
+		              "store_space={20}:"
+		              "stores={21}:incoming={22}:modifiers={23}:damage_modifier={24}",
+		              entry.first, loadoutToken(e->name), loadoutKind(e->type),
+		              loadoutSlot(AgentType::getArmorSlotType(e->body_part)), e->armor, e->weight,
+		              e->provides_flight ? 1 : 0, e->damage, e->getRangeInTiles(), e->accuracy,
+		              e->fire_delay, e->max_ammo, e->recharge, e->burst,
+		              e->damage_type ? e->damage_type.id : UString("-"),
+		              e->damage_type && e->damage_type->explosive ? 1 : 0,
+		              ammo.empty() ? UString("-") : ammo,
+		              e->canBeUsed(state, state.getPlayer()) ? 1 : 0,
+		              listed && economy != state.economy.end() ? economy->second.currentPrice : 0,
+		              listed && economy != state.economy.end() ? economy->second.currentStock : 0,
+		              e->store_space, stores.empty() ? UString("-") : stores,
+		              incoming.empty() ? UString("-") : incoming,
+		              modifiers.empty() ? UString("-") : modifiers,
+		              e->damage_modifier ? e->damage_modifier.id : UString("-"));
+		n++;
+	}
+	return format("count={0} purchase_base={1} difficulty={2} detail={3}", n,
+	              state.current_base ? state.current_base.id : UString("-"), state.difficulty,
+	              out.empty() ? UString("-") : out);
+}
 
 UString describeTime(GameState &state)
 {
@@ -106,7 +339,7 @@ UString describeResearch(GameState &state)
 			busyLabs++;
 		}
 	}
-		// Per-lab detail, and how many topics could be started right now. Research throughput is the
+	// Per-lab detail, and how many topics could be started right now. Research throughput is the
 	// gate on everything after the early game -- dimension travel, the alien-building chain, the
 	// victory raid -- and "labs_busy=1 of 5" is invisible in a bare completion count. This is the
 	// campaign's progress meter: without it there is no way to tell a campaign that is advancing
@@ -148,9 +381,9 @@ UString describeResearch(GameState &state)
 				assignableBusy++;
 			}
 		}
-		const char *kind = l.second->type == ResearchTopic::Type::BioChem     ? "biochem"
-		                   : l.second->type == ResearchTopic::Type::Physics   ? "physics"
-		                                                                      : "engineering";
+		const char *kind = l.second->type == ResearchTopic::Type::BioChem   ? "biochem"
+		                   : l.second->type == ResearchTopic::Type::Physics ? "physics"
+		                                                                    : "engineering";
 		// Staffing and progress, not just "is something assigned". Lab::update returns
 		// immediately when getTotalSkill() is zero (research.cpp:445-449), so a lab with a
 		// project and no scientists in it looks busy and advances nothing, for ever.
@@ -187,7 +420,6 @@ UString describeResearch(GameState &state)
 	              "assignable_busy={5} startable={6} labs_detail={7}",
 	              total, complete, labs, busyLabs, assignable, assignableBusy, startable,
 	              labDetail.empty() ? UString("-") : labDetail);
-
 }
 
 UString describeOrgs(GameState &state)
@@ -213,8 +445,8 @@ UString describeOrgs(GameState &state)
 			allied++;
 		}
 	}
-	return format("orgs={0} hostile={1} allied={2} infiltration_sum={3}", state.organisations.size(),
-	              hostile, allied, infiltration);
+	return format("orgs={0} hostile={1} allied={2} infiltration_sum={3}",
+	              state.organisations.size(), hostile, allied, infiltration);
 }
 
 UString describeVehicles(GameState &state)
@@ -381,7 +613,6 @@ UString describeAgents(GameState &state)
 	              state.agents.size(), mine, soldiers, soldiersFit, armed, atBase, unarmedAtBase);
 }
 
-
 UString describeBattle(GameState &state)
 {
 	if (!state.current_battle)
@@ -446,11 +677,12 @@ UString describeBattle(GameState &state)
 			missionType = "ufo_recovery";
 			break;
 	}
-	return format("player_won={0} ", battle.playerWon ? 1 : 0) + format("in_battle=1 mode={0} units={1} mine={2} mine_alive={3} mine_retreated={4} "
+	return format("player_won={0} ", battle.playerWon ? 1 : 0) +
+	       format("in_battle=1 mode={0} units={1} mine={2} mine_alive={3} mine_retreated={4} "
 	              "foes={5} foes_alive={6} hazards={7} mission_type={8} bases={9}",
 	              battle.mode == Battle::Mode::RealTime ? "rt" : "tb", battle.units.size(), mine,
-	              mineAlive, retreated, hostiles, hostilesAlive, battle.hazards.size(),
-	              missionType, state.player_bases.size());
+	              mineAlive, retreated, hostiles, hostilesAlive, battle.hazards.size(), missionType,
+	              state.player_bases.size());
 }
 
 UString describeStage(GameState &state)
@@ -559,9 +791,9 @@ UString introspectGameState(GameState &state, const UString &query)
 					names += (names.empty() ? "" : "+") + e.type.id;
 				}
 			}
-			out += (out.empty() ? "" : "|") +
-			       format("{0}:items={1},weapons={2},types={3}", i, t.equipment.size(), weapons,
-			              names.empty() ? UString("-") : names);
+			out += (out.empty() ? "" : "|") + format("{0}:items={1},weapons={2},types={3}", i,
+			                                         t.equipment.size(), weapons,
+			                                         names.empty() ? UString("-") : names);
 		}
 		return format("templates={0} detail={1}", state.agentEquipmentTemplates.size(),
 		              out.empty() ? UString("-") : out);
@@ -590,9 +822,9 @@ UString introspectGameState(GameState &state, const UString &query)
 			return format("found=0 id={0}", id);
 		}
 		const auto &t = it->second;
-		const char *kind = t->type == ResearchTopic::Type::BioChem     ? "biochem"
-		                   : t->type == ResearchTopic::Type::Physics   ? "physics"
-		                                                              : "engineering";
+		const char *kind = t->type == ResearchTopic::Type::BioChem   ? "biochem"
+		                   : t->type == ResearchTopic::Type::Physics ? "physics"
+		                                                             : "engineering";
 		bool satisfied = false;
 		if (!state.player_bases.empty())
 		{
@@ -703,8 +935,8 @@ UString introspectGameState(GameState &state, const UString &query)
 				{
 					pending++;
 				}
-				built += (built.empty() ? "" : ",") +
-				         format("{0}:{1}", fac->type.id, fac->buildTime);
+				built +=
+				    (built.empty() ? "" : ",") + format("{0}:{1}", fac->type.id, fac->buildTime);
 			}
 		}
 		return format("buildable={0} pending={1} offer={2} base={3} costs={4}", idx, pending,
@@ -753,6 +985,14 @@ UString introspectGameState(GameState &state, const UString &query)
 	// a Stormdog -- a road vehicle -- after an airborne UFO is not interception, it is a craft
 	// wandering the streets while the UFO bombs the city. Reported in list order so the driver
 	// can pick the right icons out of OWNED_VEHICLE_LIST.
+	if (q == "equipment_catalog")
+	{
+		return describeEquipmentCatalog(state);
+	}
+	if (q == "loadout_agents")
+	{
+		return describeLoadoutAgents(state);
+	}
 	if (q == "buyable_guns")
 	{
 		// Which agent weapons the market will actually sell, and how hard they hit. The driver
@@ -798,7 +1038,7 @@ UString introspectGameState(GameState &state, const UString &query)
 				out += "|";
 			}
 			out += format("{0}:damage={1}:price={2}:stock={3}", name, damage,
-			               econ->second.currentPrice, econ->second.currentStock);
+			              econ->second.currentPrice, econ->second.currentStock);
 		}
 		return format("count={0} detail={1}", n, out.empty() ? UString("-") : out);
 	}
@@ -832,13 +1072,25 @@ UString introspectGameState(GameState &state, const UString &query)
 			}
 			UString name = vt.second->name;
 			std::replace(name.begin(), name.end(), ' ', '_');
+			// Seats the craft will have when delivered: the type's own plus whatever its default
+			// loadout adds. A driver sizing a squad has to know this BEFORE buying, because the
+			// assignment screen silently seats only as many agents as there are seats.
+			std::vector<sp<VEquipmentType>> loadout;
+			for (const auto &pair : vt.second->initial_equipment_list)
+			{
+				if (pair.second)
+				{
+					loadout.push_back(pair.second.getSp());
+				}
+			}
+			const int pax = vt.second->getMaxPassengers(loadout.begin(), loadout.end());
 			if (n++ > 0)
 			{
 				out += "|";
 			}
-			out += format("{0}:flying={1}:weapons={2}:price={3}:stock={4}", name,
-			               vt.second->type == VehicleType::Type::Flying ? 1 : 0, weaponSlots,
-			               econ->second.currentPrice, econ->second.currentStock);
+			out += format("{0}:flying={1}:weapons={2}:price={3}:stock={4}:pax={5}", name,
+			              vt.second->type == VehicleType::Type::Flying ? 1 : 0, weaponSlots,
+			              econ->second.currentPrice, econ->second.currentStock, pax);
 		}
 		return format("count={0} detail={1}", n, out.empty() ? UString("-") : out);
 	}
@@ -895,6 +1147,31 @@ UString introspectGameState(GameState &state, const UString &query)
 			// crew=0 will happily send the APC that carries the squad, and losing it is what
 			// left a whole campaign unable to fly a single ground mission.
 			const int pax = veh->getMaxPassengers();
+			// Where the craft sits in the base's assignment screen, or -1 when it is not parked
+			// at the current base. BuildingScreen lists the player's vehicles that are in that
+			// building in state.vehicles order (agentassignment.cpp updateLocation), so a craft's
+			// row is its rank among those -- which is NOT its index in this list, because this
+			// list also holds craft that are out on a mission. Driving "row 0" meant whatever
+			// happened to be parked first: a road bike, a hoverbike, anything but the transport.
+			int row = -1;
+			const auto curBase = state.current_base;
+			if (curBase && curBase->building && veh->currentBuilding == curBase->building)
+			{
+				row = 0;
+				for (const auto &other : state.vehicles)
+				{
+					if (other.second == veh)
+					{
+						break;
+					}
+					if (other.second && other.second->owner &&
+					    other.second->owner.id == player.id &&
+					    other.second->currentBuilding == curBase->building)
+					{
+						row++;
+					}
+				}
+			}
 			bool portal = false;
 			for (const auto &mission : veh->missions)
 			{
@@ -902,12 +1179,12 @@ UString introspectGameState(GameState &state, const UString &query)
 			}
 			out += (out.empty() ? "" : "|") +
 			       format("{0}:{1}:flying={2},armed={3},crew={4},shifter={5},pax={6},city={7},"
-			              "transit={8},home={9},id={10},portal={11}",
+			              "transit={8},home={9},id={10},portal={11},row={12}",
 			              idx, safeName, flying ? 1 : 0, armed ? 1 : 0, crew,
 			              veh->hasDimensionShifter() ? 1 : 0, pax, veh->city.id,
 			              veh->betweenDimensions ? 1 : 0,
 			              veh->currentBuilding && veh->currentBuilding == veh->homeBuilding ? 1 : 0,
-			              v.first, portal ? 1 : 0);
+			              v.first, portal ? 1 : 0, row);
 			idx++;
 		}
 		return format("craft={0} interceptors={1} detail={2}", idx, usable,
@@ -996,7 +1273,7 @@ UString introspectGameState(GameState &state, const UString &query)
 		// specimen and stalling its own tech tree.
 		UString out;
 		int n = 0;
-		std::map<UString, std::pair<int, int>> merged;  // id -> (count, researched)
+		std::map<UString, std::pair<int, int>> merged; // id -> (count, researched)
 		for (const auto &b : state.player_bases)
 		{
 			if (!b.second)
@@ -1108,10 +1385,10 @@ UString introspectGameState(GameState &state, const UString &query)
 			              "pos={7},{8},{9}",
 			              v.first, vehicle->type ? vehicle->type.id : UString("-"),
 			              (vehicle->type && vehicle->type->battle_map) ? 1 : 0,
-			              vehicle->tileObject ? 1 : 0,
-			              vehicle->city == state.current_city ? 1 : 0, vehicle->falling ? 1 : 0,
-			              vehicle->sliding ? 1 : 0, (int)vehicle->getPosition().x,
-			              (int)vehicle->getPosition().y, (int)vehicle->getPosition().z);
+			              vehicle->tileObject ? 1 : 0, vehicle->city == state.current_city ? 1 : 0,
+			              vehicle->falling ? 1 : 0, vehicle->sliding ? 1 : 0,
+			              (int)vehicle->getPosition().x, (int)vehicle->getPosition().y,
+			              (int)vehicle->getPosition().z);
 		}
 		return format("crashes={0} detail={1}", n, out.empty() ? UString("-") : out);
 	}
@@ -1143,8 +1420,13 @@ UString introspectGameState(GameState &state, const UString &query)
 		{
 			owners += format("{0}{1}={2}", owners.empty() ? "" : "|", o.first, o.second);
 		}
-		return format("total={0} dead={1} crashed={2} on_map={3} owners={4}", total, dead, crashed,
-		              inCity, owners.empty() ? UString("-") : owners);
+		extern uint64_t cityPathCalls, cityPathIterations, cityPathFailures, cityPathCacheHits;
+		return format("total={0} dead={1} crashed={2} on_map={3} route_calls={4} "
+		              "route_cache_hits={5} route_iterations={6} route_failures={7} sim_steps={8} "
+		              "owners={9}",
+		              total, dead, crashed, inCity, cityPathCalls, cityPathCacheHits,
+		              cityPathIterations, cityPathFailures, fw().getFrameNumber(),
+		              owners.empty() ? UString("-") : owners);
 	}
 	if (q == "agents")
 	{

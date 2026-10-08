@@ -180,9 +180,10 @@ def test_harness_regressions():
     # But the reserve must SCALE. A flat "hold back four" means a campaign with four soldiers never
     # flies a mission, which is the same cannot-fight failure in a different costume. Every roster
     # size must both send someone and keep someone.
+    # Calls the real sizing function, not a copy of its formula: a copy keeps passing while the
+    # driver does something else. A twelve-seater, so the seats never bind and the garrison rule does.
     def _crew_split(soldiers, garrison=4):
-        held = min(max(0, garrison), soldiers // 2) if soldiers > 1 else 0
-        take = 6 if soldiers <= 0 else max(1, min(6, soldiers - held))
+        take, _held = oa_play.squad_size(soldiers, 12, garrison)
         return take, max(0, soldiers - take)
 
     for _n in (12, 10, 6, 4, 3, 2):

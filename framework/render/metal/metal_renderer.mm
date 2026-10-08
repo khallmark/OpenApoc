@@ -782,9 +782,9 @@ class SpriteMachine
 	Spritesheet rgb_spritesheet;
 
 	SpriteMachine(id<MTLDevice> device, id<MTLLibrary> library, unsigned int bufferSize,
-	              Vec2<int> pageSize)
+	              Vec2<int> pageSize, Vec2<int> rgbPageSize)
 	    : staging(bufferSize), palette_spritesheet(device, pageSize, MTLPixelFormatR8Uint),
-	      rgb_spritesheet(device, pageSize, MTLPixelFormatRGBA8Unorm)
+	      rgb_spritesheet(device, rgbPageSize, MTLPixelFormatRGBA8Unorm)
 	{
 		LogAssert(bufferSize > 0);
 		this->pipeline = makePipeline(device, library, "sprite_vertex", "sprite_fragment",
@@ -1031,6 +1031,9 @@ class MetalRenderer final : public Renderer
 	std::shared_ptr<GpuTimer> gpuTimer = std::make_shared<GpuTimer>();
 
 	Vec2<int> spritesheetPageSize = {4096, 4096};
+	// True-colour sprites are rare in a palette game; a 4096x4096 RGBA page is 64MB per process
+	// for a handful of them. Smaller pages, added only when one fills.
+	Vec2<int> rgbSpritesheetPageSize = {2048, 2048};
 	Vec2<unsigned int> maxSpriteSizeToPack{256, 256};
 	unsigned int spriteBufferSize = 16384;
 
@@ -1320,7 +1323,8 @@ class MetalRenderer final : public Renderer
 		LogInfo("Set spritesheet size to {0}", this->spritesheetPageSize);
 
 		this->spriteMachine.reset(
-		    new SpriteMachine(device, library, this->spriteBufferSize, this->spritesheetPageSize));
+		    new SpriteMachine(device, library, this->spriteBufferSize, this->spritesheetPageSize,
+		                      this->rgbSpritesheetPageSize));
 		this->texturedMachine.reset(new TexturedMachine(device, library));
 		this->colouredMachine.reset(new ColouredMachine(device, library));
 		this->spriteBuffers = std::make_shared<BufferPool>(

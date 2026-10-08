@@ -19,4 +19,5 @@ jobs:
       - name: Check harness definitions and regression tests
         run: |
           python3 tools/check_dead_defs.py
+          python3 tools/check_serialize_enums.py
           python3 -m pytest -q tools/test_oa_*.py
