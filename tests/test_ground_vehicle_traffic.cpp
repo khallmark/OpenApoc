@@ -458,6 +458,135 @@ bool test_ambient_traffic_replenishes_without_parked_fleet()
 	return true;
 }
 
+// Speed 5 advances five minutes in one GameState update, crossing ten civilian dispatch
+// intervals. Observe those real updates, including the movement after turbo, rather than
+// driving the dispatcher directly or leaving every new batch queued at the end of the frame.
+bool test_ambient_traffic_keeps_its_cadence_in_turbo()
+{
+	struct RestoreLogger
+	{
+		LogFunction callback = getLogCallback();
+		int level = logMaxEnabledLevel;
+		~RestoreLogger()
+		{
+			setLogCallback(std::move(callback));
+			logMaxEnabledLevel = level;
+		}
+	} restoreLogger;
+	struct Dispatch
+	{
+		uint64_t clock;
+		unsigned hour;
+		unsigned live;
+	};
+	sp<GameState> observedState;
+	std::vector<Dispatch> dispatches;
+	raiseLogMaxEnabledLevel(LogLevel::Info);
+	setLogCallback(
+	    [&](LogLevel level, UString prefix, const UString &message)
+	    {
+		    if (observedState && message.rfind("Traffic batch at ", 0) == 0)
+		    {
+			    unsigned live = 0;
+			    for (const auto &[id, v] : observedState->vehicles)
+			    {
+				    live +=
+				        v->ambientTraffic && !v->isDead() && v->city == observedState->current_city;
+			    }
+			    dispatches.push_back(
+			        {observedState->gameTime.getTicks(), observedState->gameTime.getHours(), live});
+		    }
+		    restoreLogger.callback(level, std::move(prefix), message);
+	    });
+	auto loadFixture = [&]()
+	{
+		observedState = mksp<GameState>();
+		return loadStartedGameState(*observedState, config().getString("common"),
+		                            config().getString("gamestate"));
+	};
+	auto created = [&]()
+	{
+		unsigned total = 0;
+		for (const auto &id : City::ambientTrafficTypes())
+		{
+			total += observedState->vehicle_types.at(id)->numCreated;
+		}
+		return total;
+	};
+	TEST_REQUIRE(loadFixture(), "could not load the turbo traffic fixture");
+	observedState->rng.seed(137);
+	// Straddle noon so repeating every draw at one timestamp cannot pass the cadence check.
+	const uint64_t start = 12 * TICKS_PER_HOUR - TURBO_TICKS / 2;
+	observedState->gameTime = GameTime(start);
+	const auto createdBefore = created();
+	observedState->update(TURBO_TICKS);
+	TEST_CHECK(observedState->gameTime.getTicks() == start + TURBO_TICKS,
+	           "a coarse city update did not advance exactly five minutes");
+	TEST_CHECK(dispatches.size() == 10, "a five-minute city update dispatched {0} of 10 batches",
+	           dispatches.size());
+	std::set<unsigned> hours;
+	for (size_t i = 0; i < dispatches.size(); i++)
+	{
+		TEST_CHECK(dispatches[i].clock == start + i * City::AMBIENT_TRAFFIC_TICKS,
+		           "traffic batch {0} used clock {1}, expected its own interval at {2}", i,
+		           dispatches[i].clock, start + i * City::AMBIENT_TRAFFIC_TICKS);
+		TEST_CHECK(dispatches[i].live <= 35, "turbo traffic exceeded its admission cap with {0}",
+		           dispatches[i].live);
+		hours.insert(dispatches[i].hour);
+	}
+	TEST_CHECK(hours.count(11) && hours.count(12), "turbo traffic did not observe the hour change");
+	TEST_CHECK(created() - createdBefore > 9,
+	           "turbo traffic generated only {0} trips, no more than one 11:00 batch",
+	           created() - createdBefore);
+	const auto coarseCreated = created() - createdBefore;
+	observedState.reset();
+	dispatches.clear();
+	TEST_REQUIRE(loadFixture(), "could not load the Speed 5 traffic fixture");
+	observedState->rng.seed(137);
+	const uint64_t turboStart = observedState->gameTime.getTicks();
+	TEST_REQUIRE(turboStart % TURBO_TICKS == 0, "Speed 5 fixture is not on a five-minute boundary");
+	unsigned minimumRoads = 35, movingFrames = 0, maxLive = 0;
+	const auto turboCreatedBefore = created();
+	for (unsigned frame = 0; frame < 12; frame++)
+	{
+		TEST_REQUIRE(observedState->canTurbo(), "Speed 5 became unavailable in frame {0}", frame);
+		const auto batchesBefore = dispatches.size();
+		observedState->updateTurbo();
+		TEST_CHECK(dispatches.size() - batchesBefore == 10,
+		           "Speed 5 frame {0} dispatched {1} of 10 traffic batches", frame,
+		           dispatches.size() - batchesBefore);
+		TEST_CHECK(observedState->gameTime.getTicks() == turboStart + (frame + 1) * TURBO_TICKS,
+		           "Speed 5 advanced the clock incorrectly in frame {0}", frame);
+		unsigned roads = 0, moving = 0, live = 0;
+		for (const auto &[id, v] : observedState->vehicles)
+		{
+			if (!v->ambientTraffic || v->isDead() || v->city != observedState->current_city)
+			{
+				continue;
+			}
+			live++;
+			if (v->tileObject && v->type->type == VehicleType::Type::Road)
+			{
+				roads++;
+				moving += v->velocity != Vec3<float>{0.0f, 0.0f, 0.0f};
+			}
+		}
+		minimumRoads = std::min(minimumRoads, roads);
+		movingFrames += moving > 0;
+		maxLive = std::max(maxLive, live);
+		TEST_CHECK(roads > 0, "Speed 5 frame {0} left all road traffic off the map", frame);
+		TEST_CHECK(live <= 35, "Speed 5 frame {0} retained {1} civilian trips", frame, live);
+	}
+	TEST_CHECK(movingFrames > 0, "Speed 5 road traffic was visible but never moving");
+	std::cout << format("turbo civilian traffic: crossing-hour update created {0} trips; "
+	                    "12 Speed 5 frames created {1}, dispatched {2} batches, "
+	                    "minimum {3} visible road vehicles, {4} moving frames, at most {5} live\n",
+	                    coarseCreated, created() - turboCreatedBefore, dispatches.size(),
+	                    minimumRoads, movingFrames, maxLive);
+	observedState.reset();
+	return true;
+}
+
 // Civilian trips are temporary city traffic, not an organisation's purchased fleet. Exercise both
 // purchase paths with one temporary car already owned, so it cannot satisfy the permanent quota.
 bool test_ambient_traffic_does_not_replace_permanent_fleet()
@@ -820,6 +949,8 @@ int main(int argc, char **argv)
 	    {"queue_then_turn_round", test_queue_then_turn_round},
 	    {"ambient_traffic_replenishes_without_parked_fleet",
 	     test_ambient_traffic_replenishes_without_parked_fleet},
+	    {"ambient_traffic_keeps_its_cadence_in_turbo",
+	     test_ambient_traffic_keeps_its_cadence_in_turbo},
 	    {"ambient_traffic_marker_roundtrips", test_ambient_traffic_marker_roundtrips},
 	    {"ambient_traffic_does_not_replace_permanent_fleet",
 	     test_ambient_traffic_does_not_replace_permanent_fleet},

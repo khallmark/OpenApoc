@@ -1370,6 +1370,22 @@ void GameState::update(unsigned int ticks)
 			updateAfterBattle();
 		}
 
+		if (current_city.id == "CITYMAP_HUMAN" && ticks > City::AMBIENT_TRAFFIC_TICKS)
+		{
+			// Speed 5 crosses ten traffic intervals in one update. Advance the city between
+			// batches so completed trips release slots and each draw uses its own clock/hour.
+			// Ordinary city steps and battle updates retain their existing cadence.
+			while (ticks > 0)
+			{
+				const unsigned untilTraffic =
+				    City::AMBIENT_TRAFFIC_TICKS - gameTime.getTicks() % City::AMBIENT_TRAFFIC_TICKS;
+				const unsigned step = std::min(ticks, untilTraffic);
+				update(step);
+				ticks -= step;
+			}
+			return;
+		}
+
 		current_city->update(*this, ticks);
 
 		// What a rescue craft could go for (VehicleMission::canRecoverVehicle's target test),

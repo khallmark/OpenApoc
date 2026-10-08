@@ -1,4 +1,4 @@
-// Manual census: traffic_census SAVE [TICKS=1000000] [STEP=6] --Framework.Data=...
+// Manual census: traffic_census SAVE [TICKS=1000000] [STEP=6] [MODE=update] --Framework.Data=...
 // --Framework.CD=... Resumes the saved city without startGame(), reseeding, changing missions, or
 // deleting vehicles. Map entries are observed departures/spawns, not a count of
 // dispatchAmbientTraffic calls.
@@ -10,6 +10,7 @@
 #include "game/state/city/vehicle.h"
 #include "game/state/city/vehiclemission.h"
 #include "game/state/gamestate.h"
+#include "game/state/gametime.h"
 #include "game/state/rules/city/scenerytiletype.h"
 #include "game/state/tilemap/tile.h"
 #include "game/state/tilemap/tileobject_vehicle.h"
@@ -159,6 +160,8 @@ void report(GameState &s, const Tracks &tracks, const Events &e, uint64_t elapse
 	int aliens = 0, crashedAliens = 0, playerFleet = 0, otherMap = 0, crashed = 0;
 	int moving = 0, measuredMoving = 0, bearing = 0, stuck = 0, initialAlive = 0, initialMoved = 0;
 	int initialDead = 0, initialParked = 0, initialAbsent = 0;
+	unsigned maxRoadStoppedTicks = 0;
+	int roadStopped12000 = 0;
 	uint64_t changes = 0, reversals = 0;
 	double travelled = 0;
 	for (const auto &[id, t] : tracks)
@@ -192,13 +195,20 @@ void report(GameState &s, const Tracks &tracks, const Events &e, uint64_t elapse
 		measuredMoving += ground(v) && t.moved;
 		bearing += ground(v) && !v.missions.empty();
 		stuck += t.stationary >= INTERVAL;
+		if (ground(v) && !v.missions.empty())
+		{
+			const auto stopped = v.missions.front().roadStoppedTicks;
+			maxRoadStoppedTicks = std::max(maxRoadStoppedTicks, stopped);
+			roadStopped12000 += stopped >= INTERVAL;
+		}
 	}
 	std::cout << format(
 	    "CENSUS elapsed={0} clock={1} road={2} atv={3} flying={4} civilian={5} "
 	    "police={6} parked={7} ground_velocity_moving={8} ground_moved_last_step={9} "
-	    "ground_mission_bearing={10} stationary_12000={11}\n",
+	    "ground_mission_bearing={10} stationary_12000={11} max_road_stopped_ticks={12} "
+	    "road_stopped_12000={13}\n",
 	    elapsed, s.gameTime.getTicks(), roads, atvs, flyers, civilians, police, parked, moving,
-	    measuredMoving, bearing, stuck);
+	    measuredMoving, bearing, stuck, maxRoadStoppedTicks, roadStopped12000);
 	std::cout << format("DISPATCH_CONTEXT player_fleet={0} nonplayer_onmap={1} aliens_onmap={2} "
 	                    "crashed_aliens_onmap={3} crashed_onmap={4}\n",
 	                    playerFleet, otherMap, aliens, crashedAliens, crashed);
@@ -281,20 +291,28 @@ int main(int argc, char **argv)
 	config().addPositionalArgument("save", "Saved city to resume without starting a new game");
 	config().addPositionalArgument("ticks", "Ticks to simulate (default 1000000)");
 	config().addPositionalArgument("step", "Ticks per update (default 6)");
+	config().addPositionalArgument("mode", "update, turbo, or turbo-unchecked (default update)");
 	if (config().parseOptions(argc, argv))
 		return EXIT_FAILURE;
 	config().set("Config.Save", false);
 	uint64_t total;
 	unsigned step;
+	const auto mode = config().getString("mode");
+	const bool uncheckedTurbo = mode == "turbo-unchecked";
+	const bool turbo = mode == "turbo" || uncheckedTurbo;
 	try
 	{
 		total = config().getString("ticks").empty() ? 1000000
 		                                            : std::stoull(config().getString("ticks"));
 		const auto parsed =
 		    config().getString("step").empty() ? 6 : std::stoul(config().getString("step"));
-		if (!total || !parsed || parsed > 12000 || config().getString("save").empty())
+		if (!total || !parsed || parsed > TURBO_TICKS || config().getString("save").empty() ||
+		    (!mode.empty() && mode != "update" && !turbo) ||
+		    (turbo && (parsed != TURBO_TICKS || total % TURBO_TICKS)))
 			throw std::invalid_argument(
-			    "provide SAVE, positive TICKS, and STEP between 1 and 12000");
+			    "provide SAVE, positive TICKS, STEP between 1 and 43200, and MODE update, turbo, "
+			    "or turbo-unchecked; "
+			    "turbo requires STEP 43200 and a TICKS multiple of 43200");
 		step = static_cast<unsigned>(parsed);
 	}
 	catch (const std::exception &e)
@@ -313,13 +331,18 @@ int main(int argc, char **argv)
 		std::cerr << "A resumable city save without an active or pending battle is required\n";
 		return EXIT_FAILURE;
 	}
+	if (turbo && state->gameTime.getTicks() % TURBO_TICKS)
+	{
+		std::cerr << "Turbo observation requires a save on a five-minute boundary\n";
+		return EXIT_FAILURE;
+	}
 	uint64_t rng[2];
 	state->rng.getState(rng);
 	raiseLogMaxEnabledLevel(
 	    LogLevel::Info); // Dispatch logs include attempts and reasons for zero sent.
-	std::cout << format("RUN save={0} requested_ticks={1} step={2} rng={3},{4} city={5}\n",
+	std::cout << format("RUN save={0} requested_ticks={1} step={2} rng={3},{4} city={5} mode={6}\n",
 	                    config().getString("save"), total, step, rng[0], rng[1],
-	                    state->current_city.id);
+	                    state->current_city.id, mode.empty() ? "update" : mode);
 	Tracks tracks;
 	Events events;
 	observe(*state, tracks, events, 0, true);
@@ -327,11 +350,27 @@ int main(int argc, char **argv)
 	reportInventory(tracks, "initial");
 	const auto startClock = state->gameTime.getTicks();
 	const auto start = std::chrono::steady_clock::now();
+	unsigned unavailableTurboFrames = 0;
 	for (uint64_t elapsed = 0, checkpoint = INTERVAL; elapsed < total;)
 	{
 		const unsigned ticks = static_cast<unsigned>(std::min<uint64_t>(step, total - elapsed));
 		const auto before = state->gameTime.getTicks();
-		state->update(ticks);
+		if (turbo)
+		{
+			if (!state->canTurbo())
+			{
+				unavailableTurboFrames++;
+				if (!uncheckedTurbo)
+				{
+					std::cerr << format("STOPPED turbo unavailable elapsed={0} clock={1}\n",
+					                    elapsed, state->gameTime.getTicks());
+					return EXIT_FAILURE;
+				}
+			}
+			state->updateTurbo();
+		}
+		else
+			state->update(ticks);
 		if (state->gameTime.getTicks() != before + ticks)
 		{
 			std::cerr << "Simulation clock failed to advance by the requested ticks\n";
@@ -347,6 +386,9 @@ int main(int argc, char **argv)
 	}
 	reportBlockers(*state, tracks);
 	reportInventory(tracks, "final");
+	if (turbo)
+		std::cout << format("TURBO_ELIGIBILITY unchecked={0} unavailable_frames={1}\n",
+		                    uncheckedTurbo, unavailableTurboFrames);
 	const double wall =
 	    std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 	std::cout << format("FINISHED actual_clock_delta={0} wall_seconds={1}\n",

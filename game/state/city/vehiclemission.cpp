@@ -3456,9 +3456,12 @@ sp<Vehicle> VehicleMission::roadBlocker(const Vehicle &v, const Tile *from, Tile
 		}
 		else
 		{
-			theirIn = facingHeading(*other); // standing on it
 			theirOut = routeHeadingAfter(*other, at);
-			theirOut = theirOut < 0 ? theirIn : theirOut;
+			// A queue wait sets goalPosition to the current position. Its old approach facing
+			// must not turn a known departure back into a crossing turn: adjacent junctions
+			// would then hold opposite lanes forever. Classify it as leaving by its route.
+			theirOut = theirOut < 0 ? facingHeading(*other) : theirOut;
+			theirIn = theirOut;
 		}
 		if (theirIn < 0 || theirOut < 0)
 		{
@@ -3548,7 +3551,9 @@ bool VehicleMission::roadUTurn(Vehicle &v, Tile *from, int heading)
 	const auto *jc = roadConnections(*lastTile);
 	if (jc && isRoadJunction(*lastTile) && target != last && v.city)
 	{
-		const std::vector<Vec3<int>> *best = nullptr;
+		// Another candidate lookup can clear routeCache, so retain an owned copy of the winner.
+		std::vector<Vec3<int>> best;
+		bool foundBest = false;
 		Vec3<int> bestFirst;
 		for (int d = 0; d < 4; d++)
 		{
@@ -3565,18 +3570,19 @@ bool VehicleMission::roadUTurn(Vehicle &v, Tile *from, int heading)
 				}
 				const auto &route = v.city->findShortestPath(p, target, road);
 				if ((p == target || (!route.empty() && route.back() == target)) &&
-				    (!best || route.size() < best->size()))
+				    (!foundBest || route.size() < best.size()))
 				{
-					best = &route;
+					best = route;
+					foundBest = true;
 					bestFirst = p;
 				}
 				break;
 			}
 		}
-		if (best)
+		if (foundBest)
 		{
 			path.push_back(bestFirst);
-			path.insert(path.end(), best->begin(), best->end());
+			path.insert(path.end(), best.begin(), best.end());
 		}
 	}
 	LogInfo("{0} turned round at {1}, stopped for {2} ticks", v.name, from->position,

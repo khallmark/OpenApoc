@@ -32,6 +32,7 @@
 #include "game/state/tilemap/tileobject_shadow.h"
 #include "game/state/tilemap/tileobject_vehicle.h"
 #include "library/sp.h"
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <glm/glm.hpp>
@@ -2420,16 +2421,32 @@ void Vehicle::update(GameState &state, unsigned int ticks)
 		}
 	}
 	manualFire = false;
-	if (ambientTraffic && currentBuilding && owner != state.getPlayer() && currentAgents.empty() &&
-	    cargo.empty())
+	if (ambientTraffic && owner != state.getPlayer() && currentAgents.empty() && cargo.empty())
 	{
 		// Land can finish during the mover update. Pop it only after those callbacks return, so
 		// this empty trip cannot be borrowed as a parked fleet vehicle between city updates.
-		popFinishedMissions(state);
-		if (currentBuilding &&
-		    (missions.empty() || (city && !city->hasVehicleAccess(*currentBuilding, *type))))
+		if (currentBuilding)
 		{
-			// Release a completed trip or a departure with a destroyed exit without an explosion.
+			popFinishedMissions(state);
+		}
+		bool retire =
+		    currentBuilding &&
+		    (missions.empty() || (city && !city->hasVehicleAccess(*currentBuilding, *type)));
+		if (!currentBuilding && city)
+		{
+			// GotoBuilding sits behind its movement sub-missions. If its entrance disappears in
+			// flight, flyers otherwise keep choosing nearby points and retrying forever.
+			const auto destination =
+			    std::find_if(missions.begin(), missions.end(), [](const auto &m)
+			                 { return m.type == VehicleMission::MissionType::GotoBuilding; });
+			retire = destination != missions.end() &&
+			         (!destination->targetBuilding ||
+			          !city->hasVehicleAccess(*destination->targetBuilding, *type));
+		}
+		if (retire && owner != state.getPlayer() && currentAgents.empty() && cargo.empty())
+		{
+			// Release completed or inaccessible empty trips without an explosion. Mission callbacks
+			// may have launched the return leg or loaded cargo/passengers, so recheck their state.
 			die(state, true);
 		}
 	}
