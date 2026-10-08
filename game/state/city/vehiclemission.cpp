@@ -3183,10 +3183,14 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 				if (onRoad)
 				{
 					auto skipTo = tFrom->map.getTile(*it);
+					const int heading = roadHeading(tFrom->position, *it);
+					const auto onward = std::next(it);
+					const int exit =
+					    onward != currentPlannedPath.end() ? roadHeading(*it, *onward) : heading;
 					cantSkip = cantSkip ||
 					           !GroundVehicleTileHelper{tFrom->map, v.type->type}.canEnterTile(
 					               tFrom, skipTo) ||
-					           roadBlocker(v, tFrom, skipTo, roadHeading(tFrom->position, *it));
+					           roadBlocker(v, tFrom, skipTo, exit < 0 ? heading : exit);
 				}
 				else if (v.type->isGround())
 				{
@@ -3219,8 +3223,12 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 		if (onRoad)
 		{
 			auto turboTo = tTo->map.getTile(*it);
+			const int heading = roadHeading(tTo->position, *it);
+			const auto onward = std::next(it);
+			const int exit =
+			    onward != currentPlannedPath.end() ? roadHeading(*it, *onward) : heading;
 			if (!GroundVehicleTileHelper{tFrom->map, v.type->type}.canEnterTile(tTo, turboTo) ||
-			    roadBlocker(v, tTo, turboTo, roadHeading(tTo->position, *it)))
+			    roadBlocker(v, tTo, turboTo, exit < 0 ? heading : exit))
 			{
 				break;
 			}

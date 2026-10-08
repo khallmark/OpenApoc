@@ -175,6 +175,84 @@ bool test_queues_and_crossing_entrants_still_block(GameState &state)
 	           "an entering car's crossing trajectory no longer blocks the junction");
 	return true;
 }
+
+bool test_skipped_left_turn_keeps_its_exit(GameState &state, bool shortcut)
+{
+	Cars cars{state};
+	auto city = state.current_city;
+	const Vec3<int> approach{87, 40, 2}, start{87, 41, 2}, west{86, 39, 2}, target{85, 39, 2};
+	const Vec3<int> from = shortcut ? approach : start;
+	cars.taxi = city->placeVehicle(state, {&state, "VEHICLETYPE_AUTOTAXI"}, state.getPlayer(),
+	                               {87.640625f, from.y + 0.5f, 2}, 0);
+	cars.police = city->placeVehicle(state, {&state, "VEHICLETYPE_POLICE_CAR"}, state.getPlayer(),
+	                                 {87.359375f, 39.5f, 2}, 3.1415927f);
+	TEST_REQUIRE(cars.taxi && cars.police, "could not place the left-turn conflict fixture");
+	cars.taxi->setMission(state, VehicleMission::gotoLocation(state, *cars.taxi, target));
+	cars.police->setMission(state, VehicleMission::gotoLocation(state, *cars.police, southTarget));
+	TEST_REQUIRE(!cars.taxi->missions.empty() && !cars.police->missions.empty(),
+	             "left-turn conflict missions were not created");
+	auto &mission = cars.taxi->missions.front();
+	// Natural goto paths can repeat their current tile. The shortcut check can therefore be
+	// the first check of an adjacent junction even with ordinary, small movement updates.
+	const std::deque<Vec3<int>> route =
+	    shortcut ? std::deque<Vec3<int>>{approach, approach, southJunction, west, target}
+	             : std::deque<Vec3<int>>{start, approach, southJunction, west, target};
+	mission.currentPlannedPath = route;
+	cars.police->missions.front().currentPlannedPath = {southJunction, approach, start};
+	for (const auto &v : {cars.taxi, cars.police})
+	{
+		v->goalPosition = v->position;
+		v->velocity = {0, 0, 0};
+	}
+	const GroundVehicleTileHelper road{*city->map, VehicleType::Type::Road};
+	for (auto it = route.begin(); std::next(it) != route.end(); ++it)
+	{
+		const auto next = std::next(it);
+		TEST_REQUIRE(*it == *next ||
+		                 road.canEnterTile(city->map->getTile(*it), city->map->getTile(*next)),
+		             "left-turn route fixture is disconnected at {0}", *it);
+	}
+	auto *junction = city->map->getTile(southJunction);
+	auto *before = city->map->getTile(approach);
+	// Northbound turning west is trajectory 14, which crosses southbound straight (8).
+	// Passing the inbound north heading as the exit instead describes straight (2), which
+	// clears 8. These direct calls establish why the following route node matters.
+	TEST_REQUIRE(mission.roadBlocker(*cars.taxi, before, junction, 3).get() == cars.police.get(),
+	             "the north-to-west left turn does not conflict with the southbound occupant");
+	TEST_REQUIRE(!mission.roadBlocker(*cars.taxi, before, junction, 0),
+	             "the opposite straight lanes unexpectedly conflict in the fixture");
+	Vec3<float> destination;
+	float facing = 0;
+	int turboTiles = shortcut ? 0 : 20;
+	TEST_REQUIRE(mission.advanceAlongPath(state, *cars.taxi, destination, facing, turboTiles),
+	             "left-turn mission did not supply a movement goal");
+	TEST_CHECK(Vec3<int>(destination) == approach,
+	           "{0} skipped through a crossing left turn to {1}", shortcut ? "shortcut" : "turbo",
+	           destination);
+	TEST_CHECK(mission.currentPlannedPath.front() == approach,
+	           "left-turn skip consumed the blocked junction from its route");
+	// Exercise the actual mover independently of the goal calculation above. Ordinary
+	// movement must wait too; hold the occupant still and stay below the U-turn timeout.
+	mission.currentPlannedPath = route;
+	const bool previousTurbo = state.skipTurboCalculations;
+	state.skipTurboCalculations = !shortcut;
+	const unsigned step = shortcut ? 6 : City::AMBIENT_TRAFFIC_TICKS;
+	const unsigned duration = shortcut ? 3 * TICKS_PER_SECOND : step;
+	for (unsigned elapsed = 0; elapsed < duration; elapsed += step)
+	{
+		cars.taxi->update(state, step);
+		state.gameTime.addTicks(step);
+	}
+	state.skipTurboCalculations = previousTurbo;
+	TEST_CHECK(cars.taxi->tileObject, "left-turn requester disappeared instead of waiting");
+	const Vec3<int> actualPosition = cars.taxi->position;
+	TEST_CHECK(actualPosition.x == approach.x && actualPosition.y >= approach.y,
+	           "actual {0} position crossed the blocked left turn to {1}",
+	           shortcut ? "shortcut" : "turbo", cars.taxi->position);
+	std::cout << format("JUNCTION_LEFT_TURN shortcut={0} destination={1} position={2}\n", shortcut,
+	                    destination, cars.taxi->position);
+	return true;
+}
 } // namespace
 
 int main(int argc, char **argv)
@@ -202,5 +280,7 @@ int main(int argc, char **argv)
 	bool ok = test_stopped_opposite_lanes_progress(state, 6, false);
 	ok = test_stopped_opposite_lanes_progress(state, City::AMBIENT_TRAFFIC_TICKS, true) && ok;
 	ok = test_queues_and_crossing_entrants_still_block(state) && ok;
+	ok = test_skipped_left_turn_keeps_its_exit(state, false) && ok;
+	ok = test_skipped_left_turn_keeps_its_exit(state, true) && ok;
 	return !ok || testCheckFailed ? EXIT_FAILURE : EXIT_SUCCESS;
 }

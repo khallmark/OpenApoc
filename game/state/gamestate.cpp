@@ -188,21 +188,61 @@ void GameState::initState()
 		}
 	}
 
-	// Civilian trips are City::dispatchAmbientTraffic's. Drop the hand-written recurring patterns
-	// that used to send them -- cars and bikes from every organisation, which every older save
-	// carries, one of them naming a type that does not exist (VEHICLETYPE_AIRRANS).
-	const auto &ambientTypes = City::ambientTrafficTypes();
-	auto isAmbientPattern = [&](const Organisation::RecurringMission &m)
+	// Remove only the human-city ambient signatures emitted by the old base extractor.
+	// Mods may schedule the same vehicle types for other purposes. Scheduled time is mutable
+	// runtime state, so it cannot distinguish the legacy definitions in a saved campaign.
+	using Target = Organisation::MissionPattern::Target;
+	using Relation = Organisation::Relation;
+	const std::set<UString> ordinaryOrgs = {
+	    "ORG_CYBERWEB",        "ORG_ENERGEN",         "ORG_EVONET",        "ORG_EXTROPIANS",
+	    "ORG_GENERAL_METRO",   "ORG_GRAVBALL_LEAGUE", "ORG_LIFETREE",      "ORG_MARSEC",
+	    "ORG_MUTANT_ALLIANCE", "ORG_NANOTECH",        "ORG_NUTRIVEND",     "ORG_SANCTUARY_CLINIC",
+	    "ORG_SENSOVISION",     "ORG_SOLMINE",         "ORG_SUPERDYNAMICS", "ORG_SYNTHEMESH",
+	    "ORG_S_E_L_F_",        "ORG_TECHNOCRATS"};
+	auto isLegacyAmbientPattern =
+	    [&](const UString &orgId, const Organisation::RecurringMission &mission)
 	{
-		for (const auto &t : m.pattern.allowedTypes)
+		const auto &p = mission.pattern;
+		std::set<UString> types;
+		for (const auto &type : p.allowedTypes)
 		{
-			if (t.id != "VEHICLETYPE_AIRRANS" &&
-			    std::find(ambientTypes.begin(), ambientTypes.end(), t.id) == ambientTypes.end())
-			{
-				return false;
-			}
+			types.insert(type.id);
 		}
-		return !m.pattern.allowedTypes.empty();
+		auto matches = [&](uint64_t minMinutes, uint64_t maxMinutes, unsigned maxAmount,
+		                   const std::set<UString> &allowedTypes, Target target,
+		                   const std::set<Relation> &relations = {})
+		{
+			return mission.maxLiners == 16 &&
+			       p.minIntervalRepeat == minMinutes * TICKS_PER_MINUTE &&
+			       p.maxIntervalRepeat == maxMinutes * TICKS_PER_MINUTE && p.minAmount == 1 &&
+			       p.maxAmount == maxAmount && types == allowedTypes && p.target == target &&
+			       p.relation == relations;
+		};
+		const std::set<UString> carsAndBikes = {"VEHICLETYPE_CIVILIAN_CAR",
+		                                        "VEHICLETYPE_BLAZER_TURBO_BIKE"};
+		if (orgId == "ORG_GOVERNMENT")
+		{
+			return matches(3, 7, 1, {"VEHICLETYPE_RESCUE_TRANSPORT"}, Target::OwnedOrOther) ||
+			       matches(3, 7, 1, {"VEHICLETYPE_CONSTRUCTION_VEHICLE"}, Target::OwnedOrOther) ||
+			       matches(2, 4, 1, carsAndBikes, Target::OwnedOrOther);
+		}
+		if (orgId == "ORG_TRANSTELLAR")
+		{
+			const std::set<Relation> neutralPlus = {Relation::Allied, Relation::Friendly,
+			                                        Relation::Neutral};
+			return matches(5, 11, 1, {"VEHICLETYPE_AUTOTRANS"}, Target::Other, neutralPlus) ||
+			       matches(5, 11, 3, {"VEHICLETYPE_AIRRANS"}, Target::Other, neutralPlus);
+		}
+		if (orgId == "ORG_CULT_OF_SIRIUS")
+		{
+			return matches(7, 13, 1, carsAndBikes, Target::OwnedOrOther);
+		}
+		if (orgId == "ORG_PSYKE" || orgId == "ORG_DIABLO" || orgId == "ORG_OSIRON")
+		{
+			return matches(11, 19, 1, carsAndBikes, Target::OwnedOrOther);
+		}
+		return ordinaryOrgs.count(orgId) &&
+		       matches(15, 25, 1, carsAndBikes, Target::OwnedOrOther, {Relation::Allied});
 	};
 	for (auto &o : organisations)
 	{
@@ -212,7 +252,11 @@ void GameState::initState()
 		}
 		for (auto &cityMissions : o.second->recurring_missions)
 		{
-			cityMissions.second.remove_if(isAmbientPattern);
+			if (cityMissions.first.id == "CITYMAP_HUMAN")
+			{
+				cityMissions.second.remove_if([&](const auto &m)
+				                              { return isLegacyAmbientPattern(o.first, m); });
+			}
 		}
 	}
 
