@@ -524,6 +524,7 @@
     <member>boxedIn</member>
     <member>vehicleBlocks</member>
     <member>blockedStep</member>
+    <member>roadStoppedTicks</member>
   </object>
   <object>
     <name>AgentMission</name>

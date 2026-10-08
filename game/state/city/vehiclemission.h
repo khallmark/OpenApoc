@@ -238,10 +238,28 @@ class VehicleMission
 	void setFollowPath(GameState &state, Vehicle &v);
 	bool advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> &destPos, float &destFacing,
 	                      int &turboTiles);
-	// A ground vehicle blocked by another vehicle: plan a short walk around it, treating vehicles
-	// as walls (UFO2P FUN_0003f704). Replaces the planned path and returns true, or returns false
-	// when every way out is blocked.
+	// An ATV blocked by another vehicle: plan a short walk around it, treating vehicles as walls
+	// (UFO2P FUN_0003f704, the planner of the kind-2 vehicles FUN_000395E4 moves). Replaces the
+	// planned path and returns true, or returns false when every way out is blocked.
 	bool planAroundVehicles(Vehicle &v, Vec3<int> target);
+	// UFO2P's road-vehicle rules (kind 0, FUN_000303e4 -> FUN_00033818 / FUN_00032428): two lanes,
+	// right-hand traffic. The road vehicle that stops v stepping from `from` to `to` and then out
+	// of `to` heading `exitHeading`: one in `to` leaving it the same way (queue behind it), or, on
+	// a junction tile only, one whose way across it crosses v's. Cars going other ways pass.
+	sp<Vehicle> roadBlocker(const Vehicle &v, const Tile *from, Tile *to, int exitHeading) const;
+	// Stopped long enough on a straight road: turn round where it stands (FUN_00032428), then drive
+	// back to the last junction and on from it by any way but back into the jam. Replaces the
+	// planned path; returns false if it cannot turn here.
+	bool roadUTurn(Vehicle &v, Tile *from, int heading);
+	// NESW index of a one-tile step, -1 if it is not one.
+	static int roadHeading(Vec3<int> from, Vec3<int> to);
+	// How far right of the road's centre line a road vehicle drives: UFO2P's straight in-tile
+	// trajectories (table 0xD6A00) run at 20 and 11 of a 32-unit tile, ±4.5 about 15.5.
+	static constexpr float ROAD_LANE_OFFSET = 4.5f / 32.0f;
+	// FUN_00032428 turns a stopped car round when its stopped count reaches 0x3d. The count gains
+	// half the speed setting a frame while the clock gains the whole setting: 122 vanilla ticks,
+	// which is 488 OpenApoc ticks.
+	static constexpr unsigned int ROAD_UTURN_TICKS = 488;
 	// The vehicle, other than v, that stops v stepping onto the tile.
 	sp<Vehicle> blockingVehicle(const Vehicle &v, Tile *to) const;
 	// What a ground vehicle does about the vehicle blocking its step from a tile.
@@ -392,6 +410,8 @@ class VehicleMission
 	unsigned int blockedWaitTicks = 0;
 	// The wait above is for being boxed in, not for queueing behind a car that is moving on.
 	bool boxedIn = false;
+	// Road vehicle held up by another: ticks since it stopped, plus one (0 while it is moving).
+	unsigned int roadStoppedTicks = 0;
 	// Times blocked by a vehicle (other than queueing) since last getting past one, and the tile
 	// it was last stopped from entering.
 	unsigned int vehicleBlocks = 0;

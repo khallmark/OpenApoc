@@ -6,12 +6,15 @@
 #include "game/state/city/building.h"
 #include "game/state/city/scenery.h"
 #include "game/state/city/vehicle.h"
+#include "game/state/city/vehiclemission.h"
 #include "game/state/gamestate.h"
 #include "game/state/rules/city/citycommonimagelist.h"
 #include "game/state/rules/city/scenerytiletype.h"
+#include "game/state/rules/city/vehicletype.h"
 #include "game/state/rules/city/vequipmenttype.h"
 #include "game/state/rules/doodadtype.h"
 #include "game/state/shared/doodad.h"
+#include "game/state/shared/organisation.h"
 #include "game/state/shared/projectile.h"
 #include "game/state/tilemap/collision.h"
 #include "game/state/tilemap/tilemap.h"
@@ -572,6 +575,150 @@ void City::generatePortals(GameState &state)
 			}
 		}
 	}
+}
+
+const std::vector<UString> &City::ambientTrafficTypes()
+{
+	static const std::vector<UString> types = {
+	    "VEHICLETYPE_CIVILIAN_CAR",     "VEHICLETYPE_CONSTRUCTION_VEHICLE",
+	    "VEHICLETYPE_AUTOTAXI",         "VEHICLETYPE_AIRTAXI",
+	    "VEHICLETYPE_AIRTRANS",         "VEHICLETYPE_AUTOTRANS",
+	    "VEHICLETYPE_RESCUE_TRANSPORT", "VEHICLETYPE_BLAZER_TURBO_BIKE"};
+	return types;
+}
+
+int City::dispatchAmbientTraffic(GameState &state)
+{
+	// UFO2P FUN_00034860, run by FUN_0006d384 in the human city when its countdown runs out.
+	// Trips per batch: B/2 + rand(0..B), B by the hour from the table at VA 0x2FB40 (indexed by
+	// the word at 0xD4D68, taken here to be the hour): rush hours at 9, 13 and 18-19.
+	static const int perHour[24] = {4,  2, 2, 2, 2, 2,  4,  8, 12, 8, 6, 4,
+	                                10, 8, 6, 4, 4, 12, 12, 8, 4,  4, 4, 4};
+	const int b = perHour[(state.gameTime.getHours() + 23) % 24];
+	const int wanted = b / 2 + randBoundsInclusive(state.rng, 0, b);
+
+	// FUN_00034b14: of the EXE's 80 vehicle slots, keep 45 free less one per X-COM vehicle (25 once
+	// X-COM has 20), so at most 35 others are about -- 55 less X-COM's, from 20 X-COM vehicles.
+	// Counted here over this city's map; the EXE's 80 slots cover both cities.
+	const auto player = state.getPlayer();
+	const auto aliens = state.getAliens();
+	int playerVehicles = 0, othersAbout = 0;
+	bool aliensAbout = false;
+	for (const auto &entry : state.vehicles)
+	{
+		const auto &veh = entry.second;
+		if (!veh || veh->isDead())
+		{
+			continue;
+		}
+		if (veh->owner == player)
+		{
+			playerVehicles++;
+		}
+		else if (veh->tileObject && veh->city.id == id)
+		{
+			othersAbout++;
+			aliensAbout = aliensAbout || veh->owner == aliens;
+		}
+	}
+	const int room = (playerVehicles < 20 ? 35 : 55 - playerVehicles) - othersAbout;
+	const int batch = std::max(0, std::min(wanted, room));
+
+	// The draw: a roll of 0..16 (FUN_0005d1d8(16) at 0x348ff) mapped to a vehicle type.
+	static const int rollToType[17] = {0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 3, 4, 5, 6, 7, 7, 7};
+	const auto &types = ambientTrafficTypes();
+	const GroundVehicleTileHelper roadHelper{*map, VehicleType::Type::Road};
+	int sent = 0, noneParked = 0, nowhereToGo = 0;
+	for (int i = 0; i < batch; i++)
+	{
+		const auto &typeId = types[rollToType[randBoundsInclusive(state.rng, 0, 16)]];
+		// The EXE spawns the vehicle at a random building, owned by the building's owner. Here a
+		// building's own parked one goes. While aliens are about, only an owner allied to them
+		// sends any (FUN_00091de4: relation > 74, 0x349ec).
+		std::vector<std::pair<StateRef<Building>, sp<Vehicle>>> sources;
+		for (const auto &b : buildings)
+		{
+			if (!b || !b->owner || b->owner == player || b->owner == aliens ||
+			    (aliensAbout && b->owner->getRelationTo(aliens) <= 74))
+			{
+				continue;
+			}
+			for (const auto &veh : b->currentVehicles)
+			{
+				if (veh && veh->type.id == typeId && veh->owner == b->owner &&
+				    veh->missions.empty() && !veh->isDead())
+				{
+					sources.emplace_back(b, veh.getSp());
+					break;
+				}
+			}
+		}
+		if (sources.empty())
+		{
+			noneParked++;
+			continue;
+		}
+		const auto &[source, veh] =
+		    sources[randBoundsExclusive(state.rng, 0, static_cast<int>(sources.size()))];
+		const bool road = veh->type->type == VehicleType::Type::Road;
+		auto canUse = [&](const StateRef<Building> &bld)
+		{
+			if (road)
+			{
+				return bld->carEntranceLocation.x >= 0 &&
+				       map->tileIsValid(bld->carEntranceLocation);
+			}
+			return !bld->landingPadLocations.empty();
+		};
+		if (!canUse(source))
+		{
+			nowhereToGo++;
+			continue;
+		}
+		// To another building, somewhere it can get to: a road car sent where no road goes is
+		// taken off the map when its route comes up empty.
+		StateRef<Building> dest;
+		for (int tries = 0; tries < 8 && !dest; tries++)
+		{
+			const auto &candidate =
+			    buildings[randBoundsExclusive(state.rng, 0, static_cast<int>(buildings.size()))];
+			if (!candidate || candidate == source || !candidate->owner ||
+			    candidate->owner == player || candidate->owner == aliens || !canUse(candidate))
+			{
+				continue;
+			}
+			if (road)
+			{
+				const auto &route = findShortestPath(source->carEntranceLocation,
+				                                     candidate->carEntranceLocation, roadHelper);
+				if (route.empty() || route.back() != candidate->carEntranceLocation)
+				{
+					continue;
+				}
+			}
+			dest = candidate;
+		}
+		if (!dest)
+		{
+			nowhereToGo++;
+			continue;
+		}
+		veh->setMission(state, VehicleMission::gotoBuilding(state, *veh, dest, false));
+		// Home again afterwards if it went to another organisation's building.
+		if (dest->owner != veh->owner)
+		{
+			veh->addMission(state, VehicleMission::snooze(state, *veh, 10 * TICKS_PER_SECOND),
+			                true);
+			veh->addMission(state, VehicleMission::gotoBuilding(state, *veh, source), true);
+		}
+		LogInfo("Traffic: {0} {1} from {2} to {3}", veh->owner.id, veh->type.id, source.id,
+		        dest.id);
+		sent++;
+	}
+	LogInfo("Traffic batch at {0}:00: {1} wanted, room for {2}, sent {3} ({4} with none parked, "
+	        "{5} with nowhere to go)",
+	        state.gameTime.getHours(), wanted, room, sent, noneParked, nowhereToGo);
+	return sent;
 }
 
 void City::updateInfiltration(GameState &state)

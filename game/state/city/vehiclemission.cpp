@@ -1348,6 +1348,10 @@ bool VehicleMission::getNextDestination(GameState &state, Vehicle &v, Vec3<float
 void VehicleMission::update(GameState &state, Vehicle &v, unsigned int ticks, bool finished)
 {
 	blockedWaitTicks -= std::min(ticks, blockedWaitTicks);
+	if (roadStoppedTicks > 0)
+	{
+		roadStoppedTicks += ticks;
+	}
 	finished = finished || isFinishedInternal(state, v);
 	switch (this->type)
 	{
@@ -2827,7 +2831,8 @@ void VehicleMission::setPathTo(GameState &state, Vehicle &v, Vec3<int> target, i
 		// moved and GotoLocation re-planned the same unreachable target forever.
 		const bool stuckInPlace = noPath && maxIterations > (int)distance;
 		// A road vehicle whose vehicle-blind route takes it nowhere has no road left to its
-		// destination. UFO2P deactivates its slot (FUN_00058280, from 0x3a016). Left on the map,
+		// destination. UFO2P deactivates a road vehicle that has no road route (FUN_00058280,
+		// called at 0x34af2 when FUN_00034860's route request at 0x34a4b fails). Left on the map,
 		// it was given the same destination again and again at the end of a severed road, and
 		// every car routed toward that side ended up shuttling round it.
 		if (v.type->type == VehicleType::Type::Road && position != target &&
@@ -2963,8 +2968,8 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 {
 	if (blockedWaitTicks > 0 && v.tileObject && !(boxedIn && nextStepIsFree(v)))
 	{
-		// Waiting on other vehicles: hold position until the wait runs out.
-		destPos = v.tileObject->getOwningTile()->getRestingPosition();
+		// Waiting on other vehicles: hold position, in lane, until the wait runs out.
+		destPos = v.position;
 		return true;
 	}
 	blockedWaitTicks = 0;
@@ -3013,7 +3018,68 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 	// See if we can actually go there
 	auto tFrom = v.tileObject->getOwningTile();
 	auto tTo = tFrom->map.getTile(pos);
-	if (tFrom->position != pos)
+	const bool onRoad = v.type->type == VehicleType::Type::Road;
+	if (tFrom->position != pos && onRoad)
+	{
+		// UFO2P moves road vehicles (kind 0) apart from flyers and ATVs, on its own rules: two
+		// lanes, queue behind a car going your way, give way across junctions, turn round when
+		// stuck (FUN_000303e4, FUN_00033818, FUN_00031a4c/FUN_00031be0/FUN_00031f1c, FUN_00032428).
+		const bool adjacent = std::abs(tFrom->position.x - pos.x) <= 1 &&
+		                      std::abs(tFrom->position.y - pos.y) <= 1 &&
+		                      std::abs(tFrom->position.z - pos.z) <= 1;
+		if (!adjacent ||
+		    !GroundVehicleTileHelper{tFrom->map, v.type->type}.canEnterTile(tFrom, tTo))
+		{
+			// Next tile became impassable, pick a new path
+			roadStoppedTicks = 0;
+			currentPlannedPath.clear();
+			v.addMission(state, restartNextMission(state, v));
+			return false;
+		}
+		const int heading = roadHeading(tFrom->position, pos);
+		const auto after = std::next(currentPlannedPath.begin());
+		const int exitHeading = after != currentPlannedPath.end() && roadHeading(pos, *after) >= 0
+		                            ? roadHeading(pos, *after)
+		                            : heading;
+		if (roadBlocker(v, tFrom, tTo, exitHeading))
+		{
+			if (roadStoppedTicks == 0)
+			{
+				roadStoppedTicks = 1;
+			}
+			bool blocked = true;
+			if (roadStoppedTicks > ROAD_UTURN_TICKS && roadUTurn(v, tFrom, heading))
+			{
+				// Turned round where it stands, as UFO2P's U-turn trajectories do: from now on it
+				// is going the other way, so the cars behind it pass. The path runs back to the
+				// last junction and on; take its first step when that is clear.
+				roadStoppedTicks = 1;
+				currentPlannedPath.pop_front();
+				pos = currentPlannedPath.front();
+				tTo = tFrom->map.getTile(pos);
+				const auto onward = std::next(currentPlannedPath.begin());
+				const int back = roadHeading(tFrom->position, pos);
+				const int onwardHeading =
+				    onward != currentPlannedPath.end() ? roadHeading(pos, *onward) : back;
+				blocked =
+				    roadBlocker(v, tFrom, tTo, onwardHeading < 0 ? back : onwardHeading) != nullptr;
+			}
+			if (blocked)
+			{
+				// Keep the route, hold position in lane, and try the step again shortly.
+				currentPlannedPath.push_front(tFrom->position);
+				blockedWaitTicks = QUEUE_WAIT_TICKS;
+				destPos = v.position;
+				return true;
+			}
+			roadStoppedTicks = 0;
+		}
+		else
+		{
+			roadStoppedTicks = 0;
+		}
+	}
+	else if (tFrom->position != pos)
 	{
 		bool cantGo = std::abs(tFrom->position.x - pos.x) > 1 ||
 		              std::abs(tFrom->position.y - pos.y) > 1 ||
@@ -3069,9 +3135,10 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 		}
 		if (blockedByVehicle)
 		{
-			// Re-requesting the route would only return the same vehicle-blind one, every step,
-			// for ever. Walk around the vehicles instead and take the first step of that walk now
-			// (UFO2P FUN_000395E4 0x3a210 -> FUN_0003f704, retried once at 0x3a25e).
+			// An ATV (road vehicles took their own branch above). Re-requesting the route would
+			// only return the same vehicle-blind one, every step, for ever. Walk around the
+			// vehicles instead and take the first step of that walk now (UFO2P FUN_000395E4
+			// 0x3a210 -> FUN_0003f704, retried once at 0x3a25e).
 			if (!planAroundVehicles(v, currentPlannedPath.back()))
 			{
 				// Boxed in: stay where we are, wait, then try again (0x3a21e-0x3a290). Unlike the
@@ -3113,7 +3180,15 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 				bool cantSkip = std::abs(tFrom->position.x - it->x) > 1 ||
 				                std::abs(tFrom->position.y - it->y) > 1 ||
 				                std::abs(tFrom->position.z - it->z) > 1;
-				if (v.type->isGround())
+				if (onRoad)
+				{
+					auto skipTo = tFrom->map.getTile(*it);
+					cantSkip = cantSkip ||
+					           !GroundVehicleTileHelper{tFrom->map, v.type->type}.canEnterTile(
+					               tFrom, skipTo) ||
+					           roadBlocker(v, tFrom, skipTo, roadHeading(tFrom->position, *it));
+				}
+				else if (v.type->isGround())
 				{
 					cantSkip = cantSkip || !GroundVehicleTileHelper{tFrom->map, v}.canEnterTile(
 					                           tFrom, tFrom->map.getTile(*it));
@@ -3141,7 +3216,16 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 	while (turboTiles > 0 && currentPlannedPath.size() > 1)
 	{
 		auto it = ++currentPlannedPath.begin();
-		if (v.type->isGround())
+		if (onRoad)
+		{
+			auto turboTo = tTo->map.getTile(*it);
+			if (!GroundVehicleTileHelper{tFrom->map, v.type->type}.canEnterTile(tTo, turboTo) ||
+			    roadBlocker(v, tTo, turboTo, roadHeading(tTo->position, *it)))
+			{
+				break;
+			}
+		}
+		else if (v.type->isGround())
 		{
 			if (!GroundVehicleTileHelper{tFrom->map, v}.canEnterTile(tTo, tTo->map.getTile(*it)))
 			{
@@ -3167,6 +3251,14 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 	if (v.type->isGround())
 	{
 		destPos = tTo->getRestingPosition();
+		const int lane = onRoad ? roadHeading(tFrom->position, tTo->position) : -1;
+		if (lane >= 0)
+		{
+			// Keep right: northbound east of the centre line, eastbound south of it.
+			static const int dx[4] = {0, 1, 0, -1}, dy[4] = {-1, 0, 1, 0};
+			destPos.x -= dy[lane] * ROAD_LANE_OFFSET;
+			destPos.y += dx[lane] * ROAD_LANE_OFFSET;
+		}
 	}
 	else
 	{
@@ -3218,11 +3310,287 @@ bool VehicleMission::nextStepIsFree(Vehicle &v) const
 	return false;
 }
 
-// Measured on a long learner save, planning round every block left 96 of 97 cars oscillating --
-// over a quarter of all their moves undid the one before -- and 71 making no progress at all: a
-// car behind a moving one backed away from it, and both cars of a head-on pair backed off, came
-// back and met again. So: wait behind a car that is moving on; of a head-on pair, the car with the
-// later name waits and the other gives way; plan round anything that is not going anywhere.
+namespace
+{
+// UFO2P DAT_000e6a30 (VA 0xE6A30): whether two road vehicles' ways across a junction tile cross,
+// indexed [mine][theirs] by in-tile trajectory, entry side + exit heading * 4 (NESW). Read by
+// FUN_00031be0 and FUN_00031f1c. Right-hand traffic: northbound straight (2) clears southbound
+// straight (8), the left turn W->S (11) and the right turn N->W (12).
+constexpr std::array<std::array<bool, 16>, 16> ROAD_CONFLICT = {{
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1},
+    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1},
+    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1},
+    {1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1},
+    {1, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+}};
+
+const std::vector<bool> *roadConnections(const Tile &tile)
+{
+	const auto &scenery = tile.presentScenery;
+	if (!scenery || scenery->type->tile_type != SceneryTileType::TileType::Road ||
+	    scenery->type->connection.size() < 4)
+	{
+		return nullptr;
+	}
+	return &scenery->type->connection;
+}
+
+// A road tile joining three or four roads: byte 1 of UFO2P's road record, the tiles where
+// FUN_00031be0 checks crossing traffic and FUN_00033818 takes the route's next turn.
+bool isRoadJunction(const Tile &tile)
+{
+	const auto *c = roadConnections(tile);
+	return c && (*c)[0] + (*c)[1] + (*c)[2] + (*c)[3] >= 3;
+}
+
+// The heading the vehicle faces, to the nearest of NESW (facing 0 is north, clockwise).
+int facingHeading(const Vehicle &v)
+{
+	const int h = static_cast<int>(std::lround(v.facing / (M_PI / 2.0)));
+	return ((h % 4) + 4) % 4;
+}
+
+// The heading of a vehicle's route out of `at`, or -1 if its route does not say.
+int routeHeadingAfter(const Vehicle &v, Vec3<int> at)
+{
+	if (v.missions.empty())
+	{
+		return -1;
+	}
+	const auto &path = v.missions.front().currentPlannedPath;
+	auto it = std::find(path.begin(), path.end(), at);
+	if (it == path.end())
+	{
+		return -1;
+	}
+	for (++it; it != path.end(); ++it)
+	{
+		if (*it != at)
+		{
+			return VehicleMission::roadHeading(at, *it);
+		}
+	}
+	return -1;
+}
+} // namespace
+
+int VehicleMission::roadHeading(Vec3<int> from, Vec3<int> to)
+{
+	const int dx = to.x - from.x, dy = to.y - from.y;
+	if (dx == 0 && dy == -1)
+	{
+		return 0;
+	}
+	if (dx == 1 && dy == 0)
+	{
+		return 1;
+	}
+	if (dx == 0 && dy == 1)
+	{
+		return 2;
+	}
+	if (dx == -1 && dy == 0)
+	{
+		return 3;
+	}
+	return -1;
+}
+
+sp<Vehicle> VehicleMission::roadBlocker(const Vehicle &v, const Tile *from, Tile *to,
+                                        int exitHeading) const
+{
+	const int inHeading = roadHeading(from->position, to->position);
+	if (inHeading < 0 || exitHeading < 0)
+	{
+		return nullptr;
+	}
+	const bool junction = isRoadJunction(*to);
+	const int mine = (inHeading + 2) % 4 + exitHeading * 4;
+	for (auto &obj : to->intersectingObjects)
+	{
+		if (obj->getType() != TileObject::Type::Vehicle)
+		{
+			continue;
+		}
+		// Only road vehicles take part (UFO2P's scans skip every slot whose kind is not 0).
+		auto other = std::static_pointer_cast<TileObjectVehicle>(obj)->getVehicle();
+		if (!other || other.get() == &v || other->crashed || !other->tileObject ||
+		    other->type->type != VehicleType::Type::Road)
+		{
+			continue;
+		}
+		// On the tile, or on its way into it. A car on a parallel road can overlap this tile's
+		// edge from its lane; it is not on it.
+		const auto at = other->tileObject->getOwningTile()->position;
+		const Vec3<int> goal{static_cast<int>(floorf(other->goalPosition.x)),
+		                     static_cast<int>(floorf(other->goalPosition.y)),
+		                     static_cast<int>(floorf(other->goalPosition.z))};
+		const bool entering =
+		    at != to->position && goal.x == to->position.x && goal.y == to->position.y;
+		if (!entering && at != to->position)
+		{
+			continue;
+		}
+		int theirIn, theirOut;
+		if (entering)
+		{
+			theirIn = roadHeading(at, to->position);
+			theirOut = routeHeadingAfter(*other, to->position);
+			theirOut = theirOut < 0 ? theirIn : theirOut;
+		}
+		else if (goal.x != at.x || goal.y != at.y)
+		{
+			theirOut = roadHeading(at, goal); // leaving the tile
+			theirIn = theirOut;
+		}
+		else
+		{
+			theirIn = facingHeading(*other); // standing on it
+			theirOut = routeHeadingAfter(*other, at);
+			theirOut = theirOut < 0 ? theirIn : theirOut;
+		}
+		if (theirIn < 0 || theirOut < 0)
+		{
+			return other; // cannot tell which way it goes: treat it as in the way
+		}
+		// Going our way out of the tile: queue behind it (FUN_00031be0, FUN_00031a4c).
+		if (theirOut == exitHeading)
+		{
+			return other;
+		}
+		// Off junctions the other lane is free; on one, give way where the ways cross.
+		if (junction && ROAD_CONFLICT[mine][(theirIn + 2) % 4 + theirOut * 4])
+		{
+			return other;
+		}
+	}
+	return nullptr;
+}
+
+bool VehicleMission::roadUTurn(Vehicle &v, Tile *from, int heading)
+{
+	const auto *c = roadConnections(*from);
+	if (heading < 0 || !c)
+	{
+		return false;
+	}
+	// Only on a straight: FUN_00032428 turns a car round on trajectories 2, 7, 8 and 0xd only.
+	const int back = (heading + 2) % 4;
+	if (!(*c)[heading] || !(*c)[back] || (*c)[(heading + 1) % 4] || (*c)[(heading + 3) % 4])
+	{
+		return false;
+	}
+	static const int dx[4] = {0, 1, 0, -1}, dy[4] = {-1, 0, 1, 0};
+	const GroundVehicleTileHelper road{from->map, v.type->type};
+	std::deque<Vec3<int>> path{from->position};
+	Tile *at = from;
+	int dir = back;
+	// Back along the road to the first junction or dead end; the route is planned again there,
+	// as FUN_00032428's path reset (+0xce = 0x31) has the EXE do.
+	for (int steps = 0; steps < 32; steps++)
+	{
+		Tile *next = nullptr;
+		for (int dz : {0, 1, -1})
+		{
+			const Vec3<int> p{at->position.x + dx[dir], at->position.y + dy[dir],
+			                  at->position.z + dz};
+			if (from->map.tileIsValid(p) && road.canEnterTile(at, from->map.getTile(p)))
+			{
+				next = from->map.getTile(p);
+				break;
+			}
+		}
+		if (!next)
+		{
+			break;
+		}
+		path.push_back(next->position);
+		const auto *nc = roadConnections(*next);
+		if (!nc || isRoadJunction(*next))
+		{
+			break;
+		}
+		int onward = -1, exits = 0;
+		for (int d = 0; d < 4; d++)
+		{
+			if ((*nc)[d] && d != (dir + 2) % 4)
+			{
+				onward = d;
+				exits++;
+			}
+		}
+		if (exits != 1)
+		{
+			break;
+		}
+		dir = onward;
+		at = next;
+	}
+	if (path.size() < 2)
+	{
+		return false;
+	}
+	// Then on from that junction, but not straight back the way it came: the jam is that way.
+	const auto &last = path.back();
+	auto *lastTile = from->map.getTile(last);
+	const auto target = currentPlannedPath.empty() ? last : currentPlannedPath.back();
+	const auto *jc = roadConnections(*lastTile);
+	if (jc && isRoadJunction(*lastTile) && target != last && v.city)
+	{
+		const std::vector<Vec3<int>> *best = nullptr;
+		Vec3<int> bestFirst;
+		for (int d = 0; d < 4; d++)
+		{
+			if (!(*jc)[d] || d == (dir + 2) % 4)
+			{
+				continue;
+			}
+			for (int dz : {0, 1, -1})
+			{
+				const Vec3<int> p{last.x + dx[d], last.y + dy[d], last.z + dz};
+				if (!from->map.tileIsValid(p) || !road.canEnterTile(lastTile, from->map.getTile(p)))
+				{
+					continue;
+				}
+				const auto &route = v.city->findShortestPath(p, target, road);
+				if ((p == target || (!route.empty() && route.back() == target)) &&
+				    (!best || route.size() < best->size()))
+				{
+					best = &route;
+					bestFirst = p;
+				}
+				break;
+			}
+		}
+		if (best)
+		{
+			path.push_back(bestFirst);
+			path.insert(path.end(), best->begin(), best->end());
+		}
+	}
+	LogInfo("{0} turned round at {1}, stopped for {2} ticks", v.name, from->position,
+	        roadStoppedTicks - 1);
+	currentPlannedPath.assign(path.begin(), path.end());
+	return true;
+}
+
+// ATVs (kind 2) only, which FUN_000395E4 moves with the flyers: one vehicle per tile, a local
+// replan round a blocker (FUN_0003f704), then a 12-count wait. Measured on a long learner save
+// when road cars used these rules too, planning round every block left 96 of 97 cars oscillating
+// -- over a quarter of all their moves undid the one before -- and 71 making no progress at all.
+// So: wait behind a vehicle that is moving on; pass a head-on one; plan round anything that is
+// not going anywhere.
 sp<Vehicle> VehicleMission::blockingVehicle(const Vehicle &v, Tile *to) const
 {
 	for (auto &obj : to->intersectingObjects)
@@ -3240,12 +3608,10 @@ sp<Vehicle> VehicleMission::blockingVehicle(const Vehicle &v, Tile *to) const
 	return nullptr;
 }
 
-// Two cars meeting head-on pass each other, as on the two-lane road the tiles draw. The EXE has
-// one car per tile and sends one of the pair round the other (FUN_0003f704), which with OpenApoc's
-// traffic -- a long game had 130-150 ground vehicles on one map, against the EXE's 80 across both
-// -- left single-lane stretches gridlocked: cars gave way, came back and gave way again. On a long
-// learner save over 60,000 ticks that was 11-27% of all moves undoing the one before and most cars
-// never arriving; passing, 0.6% and 49 of 68 arrived. A car still waits behind one going its way.
+// Two ATVs meeting head-on pass each other. The EXE has one kind-2 vehicle per tile and sends one
+// of the pair round the other (FUN_0003f704), which with OpenApoc's vehicle counts gridlocked
+// single-lane stretches: they gave way, came back and gave way again. A vehicle still waits behind
+// one going its way. (Road vehicles do not come here: see roadBlocker.)
 VehicleMission::Blocked VehicleMission::respondToBlocker(const Vehicle &v [[maybe_unused]],
                                                          const Tile *from,
                                                          const Vehicle &blocker) const
@@ -3280,7 +3646,8 @@ VehicleMission::Blocked VehicleMission::respondToBlocker(const Vehicle &v [[mayb
 	return Blocked::Wait; // moving on: queue behind it
 }
 
-// UFO2P FUN_0003f704 (VA 0x3f704), the ground planner run when a step is blocked by a vehicle.
+// UFO2P FUN_0003f704 (VA 0x3f704), the planner FUN_000395E4 runs when a kind-2 vehicle (an ATV)
+// is blocked by a vehicle. Road vehicles never use it: see roadBlocker and roadUTurn.
 // Candidates are greedy walks of up to 8 cardinal steps within 8 tiles of the start: each step
 // takes the first move, in order of preference toward the target, onto a road tile that is free of
 // vehicles and not yet visited by this walk. The walk ending nearest the target wins -- even one

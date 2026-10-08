@@ -1,32 +1,33 @@
-// Ground traffic must not gridlock. One vehicle per road tile is UFO2P's rule (the occupancy scan
-// in the per-frame city vehicle update, FUN_000395E4 @ VA 0x3a093-0x3a133), and a vehicle already
-// overlapping its own tile never blocks it (FUN_00041d80). See
+// Ground traffic must not gridlock, and must look like UFO2P's. The EXE moves road vehicles (kind
+// 0) apart from flyers and ATVs (FUN_000303e4 -> FUN_00033818), on two-lane roads: a road vehicle
+// is held up only by one going its way (FUN_00031a4c, FUN_00031be0) or, on a junction tile, by one
+// whose way across crosses its own (the conflict table DAT_000e6a30); cars going the other way
+// pass; a car stopped long enough on a straight turns round (FUN_00032428). Its civilian traffic is
+// a fixed mix of eight vehicle types (FUN_00034860), not the cars and bikes alone that OpenApoc's
+// hand-written organisation patterns sent. See
 // docs/original-game/findings/ground-vehicle-occupancy.md.
 //
-// OpenApoc had the block and no response to it: a blocked car cleared its path, re-requested the
-// same vehicle-blind route from City::findShortestPath every step, and could never get past a
-// head-on pair. On a long learner save every one of the city's 147 ground vehicles was frozen in
-// queues ending at such a pair, re-routing ~25 times a tick between them. Answering with the EXE's
-// local replan (FUN_0003f704) instead had both cars of the pair give way, come back and give way
-// again: cars visibly going back and forth. A car now waits behind one going its way, and passes
-// one coming the other way.
-//
-// This builds the smallest version of that on real CITYMAP_HUMAN road -- two cars head-on on a
-// straight segment next to a junction, a third queued behind one of them -- and steps only those
-// cars, the way GroundVehicleMover::update is driven every frame.
+// OpenApoc had one vehicle per road tile and no answer to it: on a long learner save every one of
+// the city's 147 ground vehicles was frozen in queues ending at head-on pairs. This builds the
+// shapes on real CITYMAP_HUMAN road and steps only those cars, the way GroundVehicleMover::update
+// is driven every frame.
 
 #include "framework/configfile.h"
 #include "framework/framework.h"
+#include "game/state/city/building.h"
 #include "game/state/city/city.h"
 #include "game/state/city/vehicle.h"
 #include "game/state/city/vehiclemission.h"
 #include "game/state/gamestate.h"
 #include "game/state/rules/city/vehicletype.h"
+#include "game/state/shared/organisation.h"
 #include "game/state/tilemap/tilemap.h"
 #include "game/state/tilemap/tileobject_vehicle.h"
 #include "tests/test_helpers.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
+#include <map>
 #include <vector>
 
 using namespace OpenApoc;
@@ -132,6 +133,26 @@ sp<Vehicle> carAt(GameState &state, City &city, Vec3<int> tile, Vec3<int> target
 	return v;
 }
 
+// A car with nowhere to go, standing on `tile` facing NESW `heading` (facing 0 is north).
+sp<Vehicle> parkedCarAt(GameState &state, City &city, Vec3<int> tile, int heading)
+{
+	return city.placeVehicle(state, {&state, "VEHICLETYPE_CIVILIAN_CAR"}, state.getPlayer(),
+	                         Vec3<float>{tile.x + 0.5f, tile.y + 0.5f, tile.z + 0.5f},
+	                         static_cast<float>(heading * M_PI / 2.0));
+}
+
+void removeCars(GameState &state, std::initializer_list<sp<Vehicle>> cars)
+{
+	for (auto &v : cars)
+	{
+		if (v && v->tileObject)
+		{
+			v->die(state, true);
+		}
+	}
+	state.cleanUpDeathNote();
+}
+
 Vec3<int> tileOf(const Vehicle &v) { return v.tileObject->getOwningTile()->position; }
 
 bool test_head_on_pair_does_not_gridlock()
@@ -208,6 +229,159 @@ bool test_head_on_pair_does_not_gridlock()
 			LogInfo("{0} ended at {1} ({2} mission(s))", v->name, tileOf(*v), v->missions.size());
 		}
 	}
+	removeCars(state, {a, b, c});
+	return true;
+}
+
+// Right-hand traffic: a road vehicle's goal is off the tile centre to the right of its way, by
+// UFO2P's lane (straight trajectories at 20 and 11 of a 32-unit tile).
+bool test_road_vehicles_keep_right()
+{
+	auto &state = *g_state;
+	auto city = state.current_city;
+	const auto *seg = findStraightRoadByJunction(*city);
+	TEST_REQUIRE(seg, "no straight road segment beside a junction in CITYMAP_HUMAN");
+	Vec3<int> pastLast;
+	beyondEnd(*city, *seg, 1, pastLast);
+	const auto &road = seg->tilePosition;
+	auto car = carAt(state, *city, road[0], pastLast);
+	TEST_REQUIRE(car, "could not place the car");
+	car->update(state, TICKS_PER_STEP);
+	// Where the step ends: the mover may first insert a waypoint to change height.
+	const auto goal = car->goalWaypoints.empty() ? car->goalPosition : car->goalWaypoints.back();
+	const auto d = road[1] - road[0];
+	const auto centre = city->map->getTile(road[1])->getRestingPosition();
+	const float side = (goal.x - centre.x) * -d.y + (goal.y - centre.y) * d.x;
+	const float along = (goal.x - centre.x) * d.x + (goal.y - centre.y) * d.y;
+	LogInfo("heading {0}: goal {1}, centre {2}, right of centre by {3}", d, goal, centre, side);
+	removeCars(state, {car});
+	TEST_REQUIRE(std::abs(side - VehicleMission::ROAD_LANE_OFFSET) < 0.01f &&
+	                 std::abs(along) < 0.01f,
+	             "goal {0} is not in the right-hand lane of tile {1}", side, road[1]);
+	return true;
+}
+
+// A car stopped behind one that is going nowhere queues behind it -- it does not drive through
+// it -- and once stopped for FUN_00032428's count, turns round and drives back the way it came.
+bool test_queue_then_turn_round()
+{
+	auto &state = *g_state;
+	auto city = state.current_city;
+	const auto *seg = findStraightRoadByJunction(*city);
+	TEST_REQUIRE(seg, "no straight road segment beside a junction in CITYMAP_HUMAN");
+	Vec3<int> pastLast;
+	beyondEnd(*city, *seg, 1, pastLast);
+	const auto &road = seg->tilePosition;
+	const int heading = VehicleMission::roadHeading(road[1], road[2]);
+	TEST_REQUIRE(heading >= 0, "segment is not a row of tiles");
+	auto stopped = parkedCarAt(state, *city, road[2], heading);
+	auto car = carAt(state, *city, road[1], pastLast);
+	TEST_REQUIRE(stopped && car, "could not place the cars");
+	const auto callsBefore = cityPathCalls;
+	int turnedAt = -1;
+	bool enteredStoppedTile = false;
+	constexpr int LIMIT = VehicleMission::ROAD_UTURN_TICKS + 600;
+	for (int t = 0; t < LIMIT && turnedAt < 0; t += TICKS_PER_STEP)
+	{
+		car->update(state, TICKS_PER_STEP);
+		if (!car->tileObject)
+		{
+			break;
+		}
+		enteredStoppedTile = enteredStoppedTile || tileOf(*car) == road[2];
+		if (tileOf(*car) == road[0])
+		{
+			turnedAt = t;
+		}
+	}
+	const auto calls = cityPathCalls - callsBefore;
+	LogInfo("turned round after {0} ticks; {1} route calls", turnedAt, calls);
+	removeCars(state, {stopped, car});
+	TEST_REQUIRE(!enteredStoppedTile, "the car drove into the stopped car's tile");
+	TEST_REQUIRE(turnedAt >= 0, "the car never turned round in {0} ticks", LIMIT);
+	TEST_REQUIRE(turnedAt >= (int)VehicleMission::ROAD_UTURN_TICKS - 2 * TICKS_PER_STEP,
+	             "the car turned round after {0} ticks, before UFO2P's {1}", turnedAt,
+	             VehicleMission::ROAD_UTURN_TICKS);
+	TEST_REQUIRE(calls <= 10, "a queued car re-routed {0} times", calls);
+	return true;
+}
+
+// The civilian traffic mix. Every organisation used to send only Civilian Cars and Blazer Turbo
+// Bikes (Megapol Police Cars), from patterns hand-written in the extractor, one naming a type that
+// does not exist (VEHICLETYPE_AIRRANS). UFO2P sends Civilian Cars, Autotaxis, Blazer Turbo Bikes,
+// Construction Vehicles, Airtaxis, Airtrans, Autotrans and Rescue Transports (FUN_00034860).
+bool test_ambient_traffic_mix()
+{
+	auto &state = *g_state;
+	auto city = state.current_city;
+	const auto &ambient = City::ambientTrafficTypes();
+	for (const auto &o : state.organisations)
+	{
+		for (const auto &cityMissions : o.second->recurring_missions)
+		{
+			for (const auto &m : cityMissions.second)
+			{
+				for (const auto &t : m.pattern.allowedTypes)
+				{
+					TEST_REQUIRE(t.id != "VEHICLETYPE_AIRRANS" &&
+					                 std::find(ambient.begin(), ambient.end(), t.id) ==
+					                     ambient.end(),
+					             "{0} still schedules {1} trips itself", o.first, t.id);
+				}
+			}
+		}
+	}
+	// A new game's organisations have not stocked their vehicle parks yet; the game does it
+	// daily (GameState::updateEndOfDay).
+	for (auto &o : state.organisations)
+	{
+		o.second->updateVehicleAgentPark(state);
+	}
+	std::map<UString, int> sent;
+	auto idle = [&]()
+	{
+		std::set<UString> ids;
+		for (const auto &v : state.vehicles)
+		{
+			if (v.second->missions.empty() && v.second->currentBuilding)
+			{
+				ids.insert(v.first);
+			}
+		}
+		return ids;
+	};
+	int total = 0;
+	for (int batch = 0; batch < 30; batch++)
+	{
+		const auto before = idle();
+		total += city->dispatchAmbientTraffic(state);
+		const auto after = idle();
+		for (const auto &id : before)
+		{
+			if (!after.count(id))
+			{
+				sent[state.vehicles[id]->type.id]++;
+			}
+		}
+	}
+	UString mix;
+	for (const auto &e : sent)
+	{
+		mix += format(" {0}={1}", e.first, e.second);
+	}
+	LogInfo("sent {0}:{1}", total, mix);
+	TEST_REQUIRE(total > 0, "no traffic sent");
+	for (const auto &t : sent)
+	{
+		TEST_REQUIRE(std::find(ambient.begin(), ambient.end(), t.first) != ambient.end(),
+		             "sent a {0}, which is not civilian traffic", t.first);
+	}
+	for (const char *t : {"VEHICLETYPE_CIVILIAN_CAR", "VEHICLETYPE_AUTOTAXI",
+	                      "VEHICLETYPE_BLAZER_TURBO_BIKE", "VEHICLETYPE_AIRTAXI",
+	                      "VEHICLETYPE_CONSTRUCTION_VEHICLE", "VEHICLETYPE_RESCUE_TRANSPORT"})
+	{
+		TEST_REQUIRE(sent[t] > 0, "no {0} in {1} trips", t, total);
+	}
 	return true;
 }
 
@@ -255,6 +429,10 @@ int main(int argc, char **argv)
 	}
 	const int rc = runTestSuite({
 	    {"head_on_pair_does_not_gridlock", test_head_on_pair_does_not_gridlock},
+	    {"road_vehicles_keep_right", test_road_vehicles_keep_right},
+	    {"queue_then_turn_round", test_queue_then_turn_round},
+	    // Last: it sends parked vehicles off on trips.
+	    {"ambient_traffic_mix", test_ambient_traffic_mix},
 	    {"draw_position_interpolates_between_steps", test_draw_position_interpolates_between_steps},
 	});
 	g_state.reset();

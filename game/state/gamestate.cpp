@@ -188,6 +188,34 @@ void GameState::initState()
 		}
 	}
 
+	// Civilian trips are City::dispatchAmbientTraffic's. Drop the hand-written recurring patterns
+	// that used to send them -- cars and bikes from every organisation, which every older save
+	// carries, one of them naming a type that does not exist (VEHICLETYPE_AIRRANS).
+	const auto &ambientTypes = City::ambientTrafficTypes();
+	auto isAmbientPattern = [&](const Organisation::RecurringMission &m)
+	{
+		for (const auto &t : m.pattern.allowedTypes)
+		{
+			if (t.id != "VEHICLETYPE_AIRRANS" &&
+			    std::find(ambientTypes.begin(), ambientTypes.end(), t.id) == ambientTypes.end())
+			{
+				return false;
+			}
+		}
+		return !m.pattern.allowedTypes.empty();
+	};
+	for (auto &o : organisations)
+	{
+		if (!o.second)
+		{
+			continue;
+		}
+		for (auto &cityMissions : o.second->recurring_missions)
+		{
+			cityMissions.second.remove_if(isAmbientPattern);
+		}
+	}
+
 	for (auto &c : this->cities)
 	{
 		auto &city = c.second;
@@ -1391,6 +1419,13 @@ void GameState::update(unsigned int ticks)
 		}
 
 		cleanUpDeathNote();
+
+		// UFO2P counts its traffic down in the human city only (FUN_0006d384).
+		if (current_city.id == "CITYMAP_HUMAN" &&
+		    GameTime::intervalsCrossed(gameTime.getTicks(), ticks, City::AMBIENT_TRAFFIC_TICKS))
+		{
+			current_city->dispatchAmbientTraffic(*this);
+		}
 
 		const uint64_t secondsCrossed =
 		    GameTime::intervalsCrossed(gameTime.getTicks(), ticks, TICKS_PER_SECOND);
