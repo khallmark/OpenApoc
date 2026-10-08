@@ -2,13 +2,17 @@
 
 Tracking: [OPE-25](https://linear.app/littleblackhat/issue/OPE-25/keep-civilian-traffic-replenishing-without-thinning-the-city).
 
-Speed 5 advanced five minutes at once but dispatched only one of the ten crossed traffic
-intervals. A new game reproduced sparse early traffic through that actual UI path. Human-city
-coarse updates now advance between every 30-second boundary, allowing trips to move and finish
-before the next admission. The first game hour in the preserved-startup turbo observations averaged
-4.833 road vehicles in the earlier control and 30.333 in the `8837a45` strictly eligible hour.
-That improvement establishes early population, not healthy movement throughout a day. The later
-reviewed head `685032b9` reproduces another sustained queue, recorded below.
+The material correction is `8f700860`. An actual new game through MainMenu and DifficultyMenu
+now reaches the first 12:20 alert with **34 mapped vehicles**, versus **8** in the earlier app.
+Speed 5 had dispatched only one of ten crossed traffic intervals; coarse human-city updates
+now advance between every 30-second boundary, allowing movement and cleanup between batches.
+
+Captured later queues exposed recovery defects as well. The correction completes all original
+first targets in the twenty-car and twenty-seven-car saved endpoints. Recovery permits connected
+straight departures through nonterminal junctions, rejects immediately returning branches, and
+repairs persisted leading current-tile excursions without bypassing the real next crossing or
+changing Land/TakeOff entrance movement. Earlier dense populations with ten-hour or twenty-three-hour
+stationary queues are retained below as failures, not accepted as traffic health.
 
 The earlier dispatcher borrowed an idle vehicle of the selected type from an organisation's park.
 It therefore could not send a trip when that inventory was missing or busy. The original
@@ -235,8 +239,9 @@ with no road mission stopped counters at or above 12000 ticks. Final traffic is 
 vehicles plus 1–5 flyers. Their maximum sampled mission stopped counters are 24330–32629 ticks,
 about **2.82–3.78 game minutes**. Three runs sample one bike at the same position five minutes
 apart while it has westward velocity, no wait and no blocker: this endpoint alias is retained
-as stationarity, not turned into a claim of continuous immobility. These are candidate screening
-receipts; the central material-head observations remain a separate dataset.
+as stationarity, not turned into a claim of continuous immobility. These are unchecked candidate
+screening receipts: three have zero unavailable turbo frames and five continue through two.
+They are separate from uninterrupted gameplay Speed 5 and from the central material-head dataset.
 
 The regression embeds all twenty observed queue members, complete routes, targets and poses,
 plus the later reciprocal pair. It requires physical movement and completed original targets.
@@ -246,6 +251,67 @@ scoped control clears the first twenty but fails the later pair. The correction 
 protects subsequent crossing admission and future route excursions, checks terminal/corner
 rejection, and exercises actual TakeOff entrance movement and Land membership.
 The central integration build and full CTest run pass **70/70** tests (39.40 seconds).
+
+## Central material-head observations (`8f700860`)
+
+The frozen central census binary has SHA-256
+`0c07cf24fec04afe8a673449693bad808a7f7c593c24c485408c9f2f795ec610`.
+It resumes the preserved UI startup without reseeding or replacing missions. The strict turbo
+observer stops correctly at elapsed 216000 ticks (25 minutes), clock 6436800, when `canTurbo()`
+becomes false. Its five checkpoints average 30.2 road / 32.6 mapped vehicles and contain 50 dispatch
+batches. It is a partial eligible observation, **not a complete eligible hour**. The first twelve
+frames of each separate unchecked long run average 29.750 road / 32.583 mapped vehicles, versus
+4.833 / 6.833 in the earlier cadence control; that hour remains explicitly diagnostic.
+
+| Measure | Central six-hour diagnostic | Central full-day diagnostic |
+| --- | ---: | ---: |
+| Exact clock advance | 3110400 | 12441600 |
+| Dispatch batches | 720 | 2880 |
+| Unavailable turbo frames, explicitly unchecked | 2 | 2 |
+| Mean road population after startup exclusion | 31.296 | 30.679 |
+| Mean all-map population after startup exclusion | 33.873 | 32.756 |
+| Road/flyer vehicles at end | 32/3 | 32/3 |
+| Long mission waits at end | 0 | 0 |
+| Position-stationary cars at end | 0 | 0 |
+| Maximum sampled mission stopped counter | 6556 | 32629 |
+
+The day has ten checkpoints with a recovered long mission wait; its peak is **3.78 game minutes**.
+The two dense inputs each advance exactly six hours at six-tick movement steps. All 147 and 157
+initial road vehicles change position, neither input has a checkpoint with a mission wait at or
+above 12000 ticks, and both end without long position or mission waits. Their road/all-map means
+are 30.961/33.012 (bench) and 30.588/32.863 (old2); sampled mission wait peaks are 439 and 253 ticks.
+
+The actual new-game UI independently uses the rebuilt app with SHA-256
+`6f48ef40d7a8ed4541ef74c4fb8cc55361a8b83ccf93b20a63c72fc76fa47e78`.
+It starts at 12:00 with 330 parked vehicles, reaches clock 6393601 (12:20) with 34 mapped vehicles,
+and pauses after alert acknowledgement at 6393604 with the same 34. Its owned QA snapshot and
+ready-to-play save remain available. This rendered result is separate from the preserved-startup
+census and its eligibility limits.
+
+Head-specific checkpoints and provenance are in
+[civilian-traffic-recovery-observations.csv](civilian-traffic-recovery-observations.csv) and
+[civilian-traffic-recovery-summary.json](civilian-traffic-recovery-summary.json). Historical datasets
+remain unchanged. The independent full-day physical observer is recorded separately because its
+extra timers have a different observer source and binary from the standard census.
+
+The independent physical observer links the frozen central libraries and adds only local
+observation timers. It advances a fresh full day with six-tick updates, exactly 12441600 ticks,
+and samples physical position after every update. Its cumulative maximum no-displacement
+episode is **888 ticks (6.17 game seconds)**. No episode reaches 12000 ticks, no intent-loss
+event conceals a stationary episode, and there are no long mission-wait checkpoints or final
+blockers. Route replacements and mission stopped-counter resets cannot reset this physical
+timer. It records movement, living map exit, retirement and death separately as episode ends;
+`peak_with_intent` means any driving intent during the episode, not current intent alone.
+
+The fine day averages **27.048 road / 29.172 mapped vehicles**, with ranges 9–36 road and 11–37
+mapped, and ends with 33 roads plus one flyer. Its sampled mission wait peak is 415 ticks.
+Observer binary SHA-256 is
+`86b58cdf170cb23ba87d7891c53e5bac9fb18d977b763d2cde46c3c20080a0d6`;
+source SHA-256 is `85c1a8fc1e08a84005e9baee93bda1b1fcd1ad21fd75ee14ee276385513b1ad6`.
+The final save SHA-256 is
+`1ce5dde9ff43feaaac4484a4f994006af2ae98018d9a812a676c12606e8f0108`.
+Saving leaves the observed clock and RNG unchanged. This is one source-verified, small-step
+day observation, not evidence about other difficulties or longer campaigns.
 
 ## Original-game evidence
 
