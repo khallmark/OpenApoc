@@ -108,10 +108,6 @@ bool test_stopped_opposite_lanes_progress(GameState &state, unsigned step, bool 
 	           "northbound car treats the stopped southbound car's stale facing as a crossing");
 	TEST_CHECK(!cars.police->missions.front().roadBlocker(*cars.police, north, south, 2),
 	           "southbound car treats the stopped northbound car's stale facing as a crossing");
-	// Neither occupied T-junction permits the straight-road U-turn recovery.
-	TEST_CHECK(!cars.taxi->missions.front().roadUTurn(*cars.taxi, south, 0) &&
-	               !cars.police->missions.front().roadUTurn(*cars.police, north, 2),
-	           "fixture unexpectedly permits a U-turn from an occupied T-junction");
 	const bool previousTurbo = state.skipTurboCalculations;
 	state.skipTurboCalculations = turbo;
 	// Coarse movement reaches the penultimate goal, then the target, then its completion

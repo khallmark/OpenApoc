@@ -66,6 +66,13 @@ It then runs `FUN_000395E4`, kinds 1 and 2, at `0x10f12`.
    round. Its heading goes ±2 and its trajectory becomes the same-side U-turn (8→0, 0xd→5, 2→10,
    7→0xf). It also sets path index `+0xce = 0x31`. The clock gains the whole setting a frame, so
    61 counts is 122 vanilla ticks, 488 OpenApoc ticks. Any movement resets the count.
+   The ISO non-4 listing at VA `0x324b9` / file `0x94b5d` rejects road-record byte 1 equal to 2
+   (terminal), then tests the trajectory ID. The bytes `80 78 01 02 0f 84 d6 00 00 00` are the compare and conditional
+   jump. It does **not** reject junction records (byte 1 equal to 1): a straight
+   trajectory through a T junction or crossroads is eligible. `traffic_11.stdout.log` retains
+   that predicate; `traffic_15.stdout.log` retains the U-turn point lists, which cross to the
+   opposite lane within the current tile. Road topology and sprite facing alone do not
+   reconstruct this trajectory state.
 8. **No road to the destination.** A road vehicle whose route request fails is deactivated:
    `FUN_00034860` calls `FUN_00058280` at `0x34af2` when `FUN_0004dd14` fails at `0x34a4b`.
 
@@ -149,8 +156,10 @@ SHA-256 `99f8787d5f1cb532e2620af2130bffb2558a869f9d4540d7fcf1b7487833d00f`.
   - a car is held up only by a road vehicle on, or entering, its next tile that leaves it the same
     way, or, on a junction tile, one whose way across crosses its own (`DAT_000e6a30`, transcribed);
   - while held up it keeps its route and tries again every `QUEUE_WAIT_TICKS`;
-  - after `ROAD_UTURN_TICKS` (488) on a straight it drives back to the last junction, where the
-    route is planned again;
+  - after `ROAD_UTURN_TICKS` (488) it attempts to drive back to the last junction, where the
+    route is planned again. Connected opposite directions on a nonterminal tile permit this
+    recovery through a junction. The earlier degree-two guard was more restrictive than the
+    original straight-trajectory predicate; a captured twenty-car queue exposes that difference;
   - a road vehicle's goal is `ROAD_LANE_OFFSET` (4.5/32 tile) right of the tile centre.
 
   A queue wait keeps a known outgoing route heading for conflict checks. Reverting to the
@@ -159,6 +168,15 @@ SHA-256 `99f8787d5f1cb532e2620af2130bffb2558a869f9d4540d7fcf1b7487833d00f`.
   reciprocal next tiles with explicitly inferred straight continuations; both complete after
   the correction. Entering cars retain the entry/exit conflict check. This is an OpenApoc
   departure approximation, not a reconstruction of the original point-by-point trajectories.
+
+  Recovery branches must not immediately return through the junction they just left. A
+  rejected candidate created a reciprocal T-junction/corner pair that waited more than 23
+  game hours. The branch filter prevents that loop, and ordinary road movement repairs a
+  persisted leading current-tile excursion before its obsolete admission check. Adjacent
+  normal-route duplicates are normalized; Land and TakeOff preserve their entrance goals.
+  The saved twenty-car and twenty-seven-car queues both complete their captured first targets
+  after the correction. See the head-specific observations and retained negative candidates
+  in [the traffic evidence](../../solutions/2026-10-07-civilian-traffic-replenishment.md).
 
   Other vehicle kinds do not hold road cars up, as the EXE's road scans see only kind 0.
 - **ATVs** keep the kind-2 rules: occupancy, `planAroundVehicles` (`FUN_0003f704`), and the 12-count

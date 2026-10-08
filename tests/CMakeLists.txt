@@ -105,6 +105,9 @@ add_openapoc_test(test_ambient_traffic_migration ARGS
 add_openapoc_test(test_road_uturn_cache ARGS
 		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
 		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
+add_openapoc_test(test_road_uturn_recovery ARGS
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
 add_openapoc_test(test_road_junction_deadlock ARGS
 		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
 		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)

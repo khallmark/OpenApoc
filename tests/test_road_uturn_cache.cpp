@@ -136,8 +136,7 @@ bool test_selected_route_survives_cache_rollover(GameState &state)
 	           "later candidate did not clear the original cached route: {0} entries remain",
 	           city->routeCache.size());
 	TEST_CHECK(!city->routeCache.count(fillerKey), "the route cache never rolled over");
-	std::vector<Vec3<int>> expected{fixture.from->position, fixture.junction,
-	                                fixture.exits.front()};
+	std::vector<Vec3<int>> expected{fixture.from->position, fixture.junction};
 	expected.insert(expected.end(), fixture.shortestRoute.begin(), fixture.shortestRoute.end());
 	const std::vector<Vec3<int>> actual(mission.currentPlannedPath.begin(),
 	                                    mission.currentPlannedPath.end());

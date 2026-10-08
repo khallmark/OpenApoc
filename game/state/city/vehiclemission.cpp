@@ -2965,6 +2965,28 @@ void VehicleMission::setFollowPath(GameState &state, Vehicle &v)
 bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> &destPos,
                                       float &destFacing [[maybe_unused]], int &turboTiles)
 {
+	if (v.type->type == VehicleType::Type::Road && type != MissionType::Land &&
+	    type != MissionType::TakeOff)
+	{
+		// Old recovery routes repeat their first branch node. Treat it as one road step so
+		// the following heading remains visible and movement retains its lane. Land/TakeOff
+		// deliberately repeat the entrance location to supply their physical entry/exit goal.
+		currentPlannedPath.erase(std::unique(currentPlannedPath.begin(), currentPlannedPath.end()),
+		                         currentPlannedPath.end());
+		if (v.tileObject)
+		{
+			const auto at = v.tileObject->getOwningTile()->position;
+			// Recovery routes saved before the branch guard can start A -> B -> A. The later
+			// shortcut would skip B, but its admission check can already be blocked forever.
+			// Skip only returns to the tile we still own, before checking the real next step.
+			while (currentPlannedPath.size() >= 3 && currentPlannedPath.front() == at &&
+			       *std::next(currentPlannedPath.begin(), 2) == at)
+			{
+				currentPlannedPath.erase(currentPlannedPath.begin(),
+				                         std::next(currentPlannedPath.begin(), 2));
+			}
+		}
+	}
 	if (blockedWaitTicks > 0 && v.tileObject && !(boxedIn && nextStepIsFree(v)))
 	{
 		// Waiting on other vehicles: hold position, in lane, until the wait runs out.
@@ -3496,9 +3518,12 @@ bool VehicleMission::roadUTurn(Vehicle &v, Tile *from, int heading)
 	{
 		return false;
 	}
-	// Only on a straight: FUN_00032428 turns a car round on trajectories 2, 7, 8 and 0xd only.
+	// FUN_00032428 excludes terminal road records, then accepts straight trajectories 2, 7, 8
+	// and 0xd even across a junction. OpenApoc has no original trajectory field: use its
+	// planned heading and an opposite road connection, rather than requiring only two exits.
 	const int back = (heading + 2) % 4;
-	if (!(*c)[heading] || !(*c)[back] || (*c)[(heading + 1) % 4] || (*c)[(heading + 3) % 4])
+	if (from->presentScenery->type->road_type == SceneryTileType::RoadType::Terminal ||
+	    !(*c)[heading] || !(*c)[back])
 	{
 		return false;
 	}
@@ -3577,6 +3602,14 @@ bool VehicleMission::roadUTurn(Vehicle &v, Tile *from, int heading)
 					continue;
 				}
 				const auto &route = v.city->findShortestPath(p, target, road);
+				const auto away = std::find_if(route.begin(), route.end(),
+				                               [p](const Vec3<int> &node) { return node != p; });
+				// Taking a branch and immediately returning to this junction is no detour: it
+				// can force a U-turn on its first bend and hold opposing traffic indefinitely.
+				if (away != route.end() && *away == last)
+				{
+					break;
+				}
 				if ((p == target || (!route.empty() && route.back() == target)) &&
 				    (!foundBest || route.size() < best.size()))
 				{
@@ -3589,7 +3622,10 @@ bool VehicleMission::roadUTurn(Vehicle &v, Tile *from, int heading)
 		}
 		if (foundBest)
 		{
-			path.push_back(bestFirst);
+			if (best.empty() || best.front() != bestFirst)
+			{
+				path.push_back(bestFirst);
+			}
 			path.insert(path.end(), best.begin(), best.end());
 		}
 	}

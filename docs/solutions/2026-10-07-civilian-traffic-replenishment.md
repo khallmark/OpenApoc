@@ -6,7 +6,9 @@ Speed 5 advanced five minutes at once but dispatched only one of the ten crossed
 intervals. A new game reproduced sparse early traffic through that actual UI path. Human-city
 coarse updates now advance between every 30-second boundary, allowing trips to move and finish
 before the next admission. The first game hour in the preserved-startup turbo observations averaged
-4.833 road vehicles in the earlier control and 30.333 in the final strictly eligible hour.
+4.833 road vehicles in the earlier control and 30.333 in the `8837a45` strictly eligible hour.
+That improvement establishes early population, not healthy movement throughout a day. The later
+reviewed head `685032b9` reproduces another sustained queue, recorded below.
 
 The earlier dispatcher borrowed an idle vehicle of the selected type from an organisation's park.
 It therefore could not send a trip when that inventory was missing or busy. The original
@@ -99,7 +101,7 @@ Own turbo checkpoints and receipt hashes are in
 [civilian-traffic-turbo-observations.csv](civilian-traffic-turbo-observations.csv) and
 [civilian-traffic-turbo-summary.json](civilian-traffic-turbo-summary.json).
 
-## Final code observations
+## Earlier junction correction (`8837a45`)
 
 The junction departure correction keeps the known outgoing heading when a car waits, consistently
 with the existing leaving-tile branch. Unknown routes retain the facing fallback, and entering
@@ -146,9 +148,104 @@ episodes at 23 of 255 post-startup checkpoints, up to three cars; its sampled mi
 counters stayed below 1369 ticks. Their cause is not established. Own receipt hashes and
 aggregates are in [civilian-traffic-final-stress-summary.json](civilian-traffic-final-stress-summary.json).
 
-The final full CTest run passed **68/68**. The two new cache and junction tests have retained
+That head's full CTest run passed **68/68**. The two new cache and junction tests have retained
 red controls, and the final outgoing C++ scope passes clang-format 18. Secret scans and
 ignored-binary hygiene cover the complete outgoing commit range and deliberately included files.
+
+## Reviewed-head negative observation (`685032b9`)
+
+The next head preserves authored recurring missions during old-save migration and uses the
+following route node when shortcut or turbo movement classifies a junction exit. It passes
+69/69 tests and automated PR review, but a new full-day observation still fails movement.
+The day advances exactly 12441600 ticks and records zero unavailable turbo frames. It ends
+with 36 road vehicles and two flyers, yet nine current missions have waited at least 12000 ticks;
+the maximum is 5470956 ticks, **10.55 game hours**. Twenty-four road vehicles are endpoint-stationary.
+Its road mean of 34.756 is therefore not evidence that the traffic is healthy.
+
+The saved endpoint reproduces all 289 original census/event rows. Its SHA-256 is
+`4046ee8b78ab32a9e51fff9149f497b86d4c026864b8d37d3ff8a1db44fccc88`.
+Twenty cars occupy the two T junctions `{82,39,2}` and `{84,39,2}` and the intervening straight
+tile `{83,39,2}`. A blocker cycle runs from vehicle 1693 to 1653 to 1709 to 136 and back to 1693.
+Several other cars repeatedly replace their route and reset the mission stopped counter without
+changing position. Resuming the captured queue for an hour with six-tick movement leaves
+**0/20** cars two tiles from their starting positions and **0/20** completing their original
+location targets. That physical-progress check catches failure concealed by route-counter resets.
+
+The road recovery guard rejects every tile with a side connection. The original listing does
+not impose that condition: at VA `0x324b9`, `FUN_00032428` rejects terminal road records (byte 1
+equals 2), then accepts straight trajectory IDs 2, 7, 8 and 13. A straight trajectory through
+a T junction or crossroads remains eligible. Sprite facing is also not an authoritative
+trajectory indicator in OpenApoc's coarse movement, where the observed blocked cars can retain
+their previous approach facing. A private candidate using the nonterminal, opposite-connection
+guard gets all twenty cars to their original targets; its broader observations must establish
+the candidate's acceptance separately.
+
+The head-specific five-run checkpoint data, source and receipt hashes, hourly populations and
+negative blockers are retained in
+[civilian-traffic-reviewed-observations.csv](civilian-traffic-reviewed-observations.csv) and
+[civilian-traffic-reviewed-summary.json](civilian-traffic-reviewed-summary.json). The rendered
+`685032b9` app has 36 mapped vehicles at the same 12:20 alert clock as the earlier eight-vehicle
+control. Its improved early density does not override the captured later failure.
+
+## Rejected recovery candidates
+
+The nonterminal/opposite-connection guard with adjacent-node cleanup recovers the captured
+twenty-car queue. A draft that cleaned up every road path also appeared healthy after a day,
+but it removed the deliberately repeated TakeOff entrance goal. That result is rejected:
+altering building departure can change the observed traffic without fixing ordinary movement.
+
+Preserving Land and TakeOff paths exposed another failure in the same fresh-game day.
+Police vehicle 135 waited at `{64,46,2}` with path `{64,46,2} -> {64,47,2} -> {64,46,2}`;
+civilian vehicle 813 waited at `{64,47,2}` and planned north, then west. The former tile is
+a T junction with east/south/west connections, the latter a north/west corner. The maximum
+mission wait was 12072477 ticks, **23.29 game hours**, and 25 cars were endpoint-stationary.
+Neither car's blocked heading has an opposite connection for another recovery turn.
+
+The recovery builder excludes the direct return direction when selecting a branch, but its
+cached shortest route can immediately return through the junction it just left. Forcing that
+branch creates the corner reversal above. A viable correction must reject an immediately
+returning branch, preserve the original target and entrance movement, and demonstrate physical
+progress from both captured failures. A clean population endpoint or reset stopped counter is
+insufficient acceptance evidence.
+
+## Recovery correction
+
+Road recovery now permits a connected straight departure through a nonterminal junction,
+using the planned heading and opposite connections as OpenApoc's approximation of the original
+trajectory field. The selected branch node is appended once. A cached branch route that
+immediately returns through the retreat junction is rejected instead of forcing that reversal.
+
+Ordinary road movement also normalizes old adjacent duplicate nodes and removes only a leading
+`A -> B -> A` excursion when `A` is the vehicle's actual owning tile. The existing shortcut
+already intended to skip that excursion, but the obsolete `B` admission could block before
+the shortcut ran. Moving that normalization ahead of admission repairs the persisted queue.
+The actual next road step still receives its lane and crossing checks. Future excursions are
+retained; Land and TakeOff keep their deliberately repeated entrance goals.
+
+The frozen private candidate has the same production algorithms as the tracked source; its
+only functional instrumentation adds completion logging. Both full saved-state queues resume
+without reseeding or replacing their missions. The earlier queue has **20/20** cars move at
+least two tiles and reach their captured first targets; the second has **27/27**. Counts are
+unique captured vehicle/target pairs, confirmed with `target == owning tile` and
+`pickedNearest == false`, rather than raw repeated completion lines. Ambient retirement is
+counted only after the original target completes.
+
+Eight separate fresh full-day candidate processes each advance exactly 12441600 ticks and end
+with no road mission stopped counters at or above 12000 ticks. Final traffic is 29–32 road
+vehicles plus 1–5 flyers. Their maximum sampled mission stopped counters are 24330–32629 ticks,
+about **2.82–3.78 game minutes**. Three runs sample one bike at the same position five minutes
+apart while it has westward velocity, no wait and no blocker: this endpoint alias is retained
+as stationarity, not turned into a claim of continuous immobility. These are candidate screening
+receipts; the central material-head observations remain a separate dataset.
+
+The regression embeds all twenty observed queue members, complete routes, targets and poses,
+plus the later reciprocal pair. It requires physical movement and completed original targets.
+Only after confirmed arrival does the twenty-car fixture use the real Land callback to free a
+shared entrance. The frozen `685032b9` control fails all 22 observed targets; the intermediate
+scoped control clears the first twenty but fails the later pair. The correction passes both,
+protects subsequent crossing admission and future route excursions, checks terminal/corner
+rejection, and exercises actual TakeOff entrance movement and Land membership.
+The central integration build and full CTest run pass **70/70** tests (39.40 seconds).
 
 ## Original-game evidence
 
