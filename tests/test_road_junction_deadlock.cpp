@@ -188,11 +188,10 @@ bool test_skipped_left_turn_keeps_its_exit(GameState &state, bool shortcut)
 	TEST_REQUIRE(!cars.taxi->missions.empty() && !cars.police->missions.empty(),
 	             "left-turn conflict missions were not created");
 	auto &mission = cars.taxi->missions.front();
-	// Natural goto paths can repeat their current tile. The shortcut check can therefore be
-	// the first check of an adjacent junction even with ordinary, small movement updates.
-	const std::deque<Vec3<int>> route =
-	    shortcut ? std::deque<Vec3<int>>{approach, approach, southJunction, west, target}
-	             : std::deque<Vec3<int>>{start, approach, southJunction, west, target};
+	// Keep the preceding route node while the shortcut requester already owns approach.
+	// Popping start leaves approach as the next node, so the shortcut makes the first
+	// junction check. Repeating approach would be normalized into ordinary admission.
+	const std::deque<Vec3<int>> route{start, approach, southJunction, west, target};
 	mission.currentPlannedPath = route;
 	cars.police->missions.front().currentPlannedPath = {southJunction, approach, start};
 	for (const auto &v : {cars.taxi, cars.police})
