@@ -145,13 +145,20 @@ SHA-256 `99f8787d5f1cb532e2620af2130bffb2558a869f9d4540d7fcf1b7487833d00f`.
 ## OpenApoc
 
 - **Road vehicles** (`VehicleMission::advanceAlongPath`, `roadBlocker`, `roadUTurn`) follow events
-  3-7 of the road rules:
+  3, 4, 6 and 7 approximately through tile goals:
   - a car is held up only by a road vehicle on, or entering, its next tile that leaves it the same
     way, or, on a junction tile, one whose way across crosses its own (`DAT_000e6a30`, transcribed);
   - while held up it keeps its route and tries again every `QUEUE_WAIT_TICKS`;
   - after `ROAD_UTURN_TICKS` (488) on a straight it drives back to the last junction, where the
     route is planned again;
   - a road vehicle's goal is `ROAD_LANE_OFFSET` (4.5/32 tile) right of the tile centre.
+
+  A queue wait keeps a known outgoing route heading for conflict checks. Reverting to the
+  sprite's old approach facing held two cars on adjacent T junctions for more than 22 game
+  hours in a coarse-update diagnostic. The real-map regression uses their observed poses and
+  reciprocal next tiles with explicitly inferred straight continuations; both complete after
+  the correction. Entering cars retain the entry/exit conflict check. This is an OpenApoc
+  departure approximation, not a reconstruction of the original point-by-point trajectories.
 
   Other vehicle kinds do not hold road cars up, as the EXE's road scans see only kind 0.
 - **ATVs** keep the kind-2 rules: occupancy, `planAroundVehicles` (`FUN_0003f704`), and the 12-count
@@ -168,6 +175,10 @@ queue finishes. Vehicles in older saves and permanently purchased fleets retain 
 false marker. Traffic does not satisfy organisation fleet purchase quotas. An intact road
 entrance or landing pad is required; a pending generated trip releases its slot if its source
 access is destroyed.
+An empty generated vehicle outside a building also releases its slot if the active trip's
+destination loses its last usable entrance. Player ownership, cargo and passengers protect it.
+Coarse human-city updates advance between every ambient boundary; Speed 5 previously used
+the ten-interval count as a boolean and dispatched only once per five-minute frame.
 
 Deviations:
 
@@ -181,6 +192,9 @@ Deviations:
   trips only between buildings with landing pads. A road car with no route is removed (event 8).
 - **The cap counts this city's map and pending generated trips**, not 80 slots across both cities.
 - **Taxis on demand** (`FUN_0007a730`) are not implemented; OpenApoc agents travel by other means.
+- **Crossing motion and entrant priority.** OpenApoc holds at tile goals rather than reproducing
+  the original speed-2 creep within a crossing trajectory. The original speed/progress/slot
+  arbitration between simultaneous entrants (`FUN_00031f1c`) is not reconstructed.
 
 ### Measured: head-on passing for ATVs, and how road cars fared before
 

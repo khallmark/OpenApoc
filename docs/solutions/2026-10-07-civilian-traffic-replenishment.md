@@ -2,7 +2,13 @@
 
 Tracking: [OPE-25](https://linear.app/littleblackhat/issue/OPE-25/keep-civilian-traffic-replenishing-without-thinning-the-city).
 
-The dispatcher borrowed an idle vehicle of the selected type from an organisation's park.
+Speed 5 advanced five minutes at once but dispatched only one of the ten crossed traffic
+intervals. A new game reproduced sparse early traffic through that actual UI path. Human-city
+coarse updates now advance between every 30-second boundary, allowing trips to move and finish
+before the next admission. The first game hour in the preserved-startup turbo observations averaged
+4.833 road vehicles in the earlier control and 30.333 in the final strictly eligible hour.
+
+The earlier dispatcher borrowed an idle vehicle of the selected type from an organisation's park.
 It therefore could not send a trip when that inventory was missing or busy. The original
 dispatcher allocates a new slot. OpenApoc now creates a temporary vehicle for the trip,
 preserves its outward and return journeys, and retires it after the mission queue finishes.
@@ -13,8 +19,9 @@ This supplies traffic independently of purchased fleets without accumulating par
 The preserved dense saves did not show permanent gridlock in the source baseline. Every
 initial road vehicle moved during six-hour runs. A normal new game, entered through the
 actual MainMenu and DifficultyMenu, immediately stocked 330 parked vehicles, including five
-player vehicles. It sustained traffic in the source baseline too. Complete traffic disappearance
-was **not** reproduced in that fresh UI game.
+player vehicles. It sustained traffic in the source baseline at Speed 4 and six-tick updates.
+Those observations did **not** exercise Speed 5; they initially missed the coarse-update defect.
+Complete disappearance was not reproduced, but sparse new-game traffic was reproduced at Speed 5.
 
 The unstocked regression fixture, which deliberately stops before `fillOrgStartingProperty`,
 did reproduce the dispatch dependency: the baseline sent zero trips without purchased NPC
@@ -26,6 +33,122 @@ The Desktop checkout's existing application was an August build with embedded re
 recent traffic batch logging. The newer reboot build did contain those symbols. No observed
 process established which executable the user had launched, so the old application is a
 possible launch mismatch, not a confirmed cause of the reported failure.
+
+## Speed 5 reproduction and correction
+
+`updateTurbo()` calls `update(43200)`, crossing ten 4320-tick traffic boundaries. The dispatcher
+call tested the interval count as a boolean. Even the fresh-allocation draft still sent just
+one batch per five-minute frame. The correction subdivides human-city coarse updates at the
+traffic boundaries and runs the existing state update for each slice. It preserves vehicle
+progress, cleanup, the admission cap and each draw's clock, rather than submitting ten batches
+at the frame endpoint. Ordinary small updates, alien-city updates and battle updates keep
+their existing paths. `updateAfterTurbo()` still runs once per outer turbo frame.
+
+The same saved UI startup and RNG were resumed with actual `updateTurbo()` calls, including
+their normal post-turbo movement. The before executable uses the pre-review traffic code at
+`0ea2a77b`; the after executable includes the cadence, destination-loss and route-cache fixes.
+Every frame advanced exactly 43200 ticks, and both six-hour runs advanced exactly 3110400 ticks.
+
+| Measure | Before cadence correction | After cadence correction |
+| --- | ---: | ---: |
+| Dispatch opportunities over six hours | 72 | 720 |
+| Mean road population in first hour, 12 frame checkpoints | 4.833 | 30.083 |
+| Mean all-map population in first hour | 6.833 | 32.333 |
+| Road vehicles after five game minutes | 6 | 23 |
+| Road vehicles after twenty game minutes | 4 | 30 |
+| Mean road population over six hours after startup exclusion | 25.239 | 33.028 |
+
+Separate full-day turbo runs advanced exactly 12441600 ticks and logged 288 versus 2880
+dispatch opportunities. Their post-startup road means were 26.077 and 35.111, respectively.
+Traffic from organisation missions is separate from ambient admission, so total mapped
+vehicles can exceed the ambient limit. These are individual process observations, subject to
+the pointer-ordering uncertainty described below.
+
+These runs are an **intermediate candidate**, not proof of healthy flow. The day diagnostic
+exposed Autotaxi `VEHICLE_1047` and Police Car `VEHICLE_136` blocking each other between adjacent
+T junctions at `{87,39,2}` and `{87,38,2}`. Their mission stopped counters reached 11622356 and
+11644024 ticks, corroborating waits longer than 22 game hours. The original blocker record is
+retained in the aggregate JSON. The straight-only U-turn breaker cannot run on either tile.
+The stopped-car branch used the old sprite approach facing rather than its known outgoing
+route direction; beginning to wait therefore changed conflict classification and could prevent
+both cars from ever starting again.
+
+The rendered UI confirms the early effect: fresh difficulty-1, seed-1 games reached the first
+alien alert at the same clock, 6393601 (12:20). The old app had **8** vehicles on the map; the
+rebuilt app had **32**. Both started with 330 parked vehicles. The alert was acknowledged with
+the real `BUTTON_QUIT`, then the clock was paused and each owned QA process exited. A prematurely
+copied app was rejected because its hash matched the old app; it is excluded from these results.
+The accepted after-app SHA-256 is
+`1012e5c0cd41d2a3f97ef97449bf5702fa2d3b5dcde8a8a1757f427f6dd329e1`.
+
+Turbo observations sample only at outer frame endpoints. Their arrival counters can miss trips
+completed within a frame. A `stationary_12000` record in this mode means no net displacement
+between five-minute snapshots; it cannot establish continuous immobility. The fine-step
+stationary measurements below must not be generalized to turbo. Coarse sub-stepping also makes
+timed invasions, organisation missions and periodic fuel hooks occur between slices, closer to
+their ordinary-speed chronology, rather than deferring them all to the five-minute endpoint.
+
+The intermediate observer directly called `updateTurbo()` even when `canTurbo()` was false;
+the six-hour candidate logged one such error. Its long diagnostics are therefore not an
+uninterrupted eligible UI run. The committed observer now checks eligibility in `turbo` mode,
+stops with the exact clock when turbo becomes unavailable, and reserves the explicit
+`turbo-unchecked` mode for such diagnostics. It reports unavailable-frame counts and the actual
+mission stopped counters, so high occupancy cannot conceal a longstanding blocker.
+
+Own turbo checkpoints and receipt hashes are in
+[civilian-traffic-turbo-observations.csv](civilian-traffic-turbo-observations.csv) and
+[civilian-traffic-turbo-summary.json](civilian-traffic-turbo-summary.json).
+
+## Final code observations
+
+The junction departure correction keeps the known outgoing heading when a car waits, consistently
+with the existing leaving-tile branch. Unknown routes retain the facing fallback, and entering
+cars retain their full entry/exit conflict classification. The exact observed positions, facings
+and reciprocal next tiles reproduce the stopped pair in a real-map test; its unrecorded onward
+straight continuations are explicitly an inferred minimal fixture. The old code keeps both cars
+stationary. The correction reaches both target tiles and completes both missions at six-tick and
+4320-tick movement steps, while retaining same-exit queues and crossing-entrant blocking.
+
+A separate final first-hour simulation checked `canTurbo()` before every frame. It advanced
+exactly 518400 ticks, logged 120 dispatch batches and no unavailable frames, and averaged
+**30.333 road vehicles / 33.167 all-map vehicles** across its twelve checkpoints. The earlier
+pre-review first-hour control averaged 4.833 / 6.833. The final rendered UI at the first alert's
+same 12:20 clock contained **34** mapped vehicles, compared with **8** before correction.
+Its QA process was paused after acknowledgement, captured and closed.
+
+Final long coarse diagnostics retained the same saved input and RNG. Their results are separate
+from the intermediate candidate above:
+
+| Measure | Final six-hour run | Final full-day run |
+| --- | ---: | ---: |
+| Exact clock advance | 3110400 | 12441600 |
+| Logged dispatch opportunities | 720 | 2880 |
+| Mean road population after startup exclusion | 32.761 | 30.080 |
+| Mean all-map population after startup exclusion | 34.394 | 31.742 |
+| Road/flyer vehicles at end | 32/0 | 32/2 |
+| Frames with turbo unavailable, explicitly unchecked | 0 | 2 |
+| Maximum sampled mission stopped counter | 31913 | 359706 |
+| Checkpoints with a mission stopped counter >=12000 | 14 | 37 |
+| Long mission waits at end | 0 | 0 |
+
+The full day has no final blocker records. Queues still occur: its maximum sampled stopped
+counter is 41.63 game minutes, and those waits recovered before the final checkpoint. The
+six-hour endpoint has one position-stationary diagnostic but a maximum current-mission stopped
+counter of only one tick. Different counters must not be collapsed into a claim that all waits
+are absent. Both long runs use `turbo-unchecked`; the two unavailable frames in the day keep
+that run distinct from an uninterrupted gameplay Speed 5 observation.
+
+Both dense saves also advanced another exact 3110400 ticks using six-tick updates. All 147 and
+157 initial road vehicles changed position. The final bench road mean was 30.400, with 3241
+observed target arrivals, no long stationary checkpoints and no final blockers. Old2's road
+mean was 30.906, with 3043 arrivals and no final blockers. Old2 still had recovered stationary
+episodes at 23 of 255 post-startup checkpoints, up to three cars; its sampled mission stopped
+counters stayed below 1369 ticks. Their cause is not established. Own receipt hashes and
+aggregates are in [civilian-traffic-final-stress-summary.json](civilian-traffic-final-stress-summary.json).
+
+The final full CTest run passed **68/68**. The two new cache and junction tests have retained
+red controls, and the final outgoing C++ scope passes clang-format 18. Secret scans and
+ignored-binary hygiene cover the complete outgoing commit range and deliberately included files.
 
 ## Original-game evidence
 
@@ -61,7 +184,8 @@ saved RNG words are `7251685877758789622` and `4494004282789118709`.
 runs full `GameState::update` in six-tick steps. It does not reseed, call `startGame`, change
 missions or delete vehicles. The baseline executable was built from
 `bce89743db239be164e07d86fb071320baed7d97`, the parked-fleet dispatcher with the latest road
-rules. Candidate runs use this change. Each run verifies its observed clock delta, rather than
+rules. The fine-step candidate runs below use the continuous-return implementation before the
+review-driven cadence, destination-loss and cache fixes. Each run verifies its observed clock delta, rather than
 treating requested simulation duration as proof that the clock advanced.
 
 One game hour is 518,400 ticks. Six hours is **3,110,400 ticks**, not 864,000 ticks; the latter
@@ -87,7 +211,7 @@ target building. The return leg can launch in the same update as landing, so som
 arrivals are not observed. Dead exits are separate from confirmed arrival retirements. Retained
 vehicle handles prevent ordinary removal from being misreported as a successful arrival.
 
-## Six-hour fresh-game comparison
+## Earlier six-hour fine-step comparison
 
 Both runs advanced from clock 6,220,800 to 9,331,200, exactly six hours, with the same input,
 RNG and update step. There are 255 post-warmup checkpoints.
@@ -118,7 +242,7 @@ despite more dispatch starts. Restoring the return journey with the inherited te
 stop raised it to 25.54 but left cars hidden while consuming reserved slots. Continuing the
 return as soon as the exit is free produced the accepted result above.
 
-## Full-day observation
+## Earlier full-day fine-step observation
 
 The paired full-day run advanced from clock 6,220,800 to 18,662,400, a verified duration of
 12,441,600 ticks. It includes 1,032 post-warmup checkpoints, including the final partial interval.
@@ -158,12 +282,28 @@ vehicles from the earlier run. Their traces diverged despite using the same froz
 input and RNG; a specific cause for that earlier recovered wait was not established. The
 earlier result is retained, rather than replacing it with the cleaner repetition.
 
-The final full CTest run passed **65/65**. The expanded traffic test checks head-on passing,
+The pre-review full CTest run passed **65/65**. The expanded traffic test checks head-on passing,
 the right-hand lane, queuing and U-turns, six hours of unstocked replenishment, completed-trip
 retirement, bounded pending traffic, clean building references, independent permanent fleet
 purchases, destroyed-pad rejection and cleanup, and a packed marker save roundtrip with the
 false default for older records. Player ownership, cargo and passengers have retirement
-guards in production code; focused runtime assertions for those three guards were not added.
+guards in production code. The follow-up lifecycle regression now exercises actual takeoff and
+movement, then destroys every usable destination pad through `Scenery::die`. It checks silent
+retirement and slot release, and protects player vehicles, cargo, passengers and permanent
+fleets. A low road entrance is removed in a separate controlled case because the engine preserves
+bottom scenery even when `die` is called. Destruction of a future return destination does not
+retire a vehicle still travelling toward its accessible outward destination.
+
+The follow-up turbo regression observes ten dispatches at distinct clocks across an hour
+boundary and twelve real `updateTurbo()` frames, checking cap, movement and visible population.
+The U-turn regression fills the real route cache to 100000 entries, forces a later candidate
+search to clear it, and verifies that the already-selected shortest route survives. The fix keeps
+an owned copy of that route rather than a pointer into cache storage.
+
+The integrated review fixes passed all **67/67** targets. A further six-hour fine-step run
+advanced exactly 3110400 ticks, averaged 28.600 road and 31.031 all-map vehicles after startup,
+and had no long stationary road vehicles at any of its 255 post-startup checkpoints. This run
+precedes the adjacent-junction correction and does not erase the negative turbo diagnostic.
 
 A separate rendered new game ran for 120 wall seconds at the ordinary simulation multiplier.
 Its clock advanced 52,488 ticks (6.075 game minutes), its final census contained 30 vehicles
@@ -173,7 +313,7 @@ rendering each frame.
 
 ## Reproducing and reviewing
 
-Own aggregate observations are committed in [civilian-traffic-observations.csv](civilian-traffic-observations.csv)
+Earlier fine-step aggregate observations are committed in [civilian-traffic-observations.csv](civilian-traffic-observations.csv)
 and [civilian-traffic-summary.json](civilian-traffic-summary.json). Original EXEs, ISO images,
 Ghidra databases and saved game assets remain excluded from Git. Full local receipts are
 under `/tmp/openapoc-traffic-observed/`.
@@ -183,8 +323,15 @@ Build with `ENABLE_TESTS=ON`, then run the census with an existing compatible sa
 ```sh
 build/bin/traffic_census SAVE 3110400 6 --Framework.Data=DATA --Framework.CD=CD_ISO --Config.Read=0
 build/bin/traffic_census SAVE 12441600 6 --Framework.Data=DATA --Framework.CD=CD_ISO --Config.Read=0
+build/bin/traffic_census SAVE 3110400 43200 turbo --Framework.Data=DATA --Framework.CD=CD_ISO --Config.Read=0 --Logger.FileLevel=3
+build/bin/traffic_census SAVE 12441600 43200 turbo --Framework.Data=DATA --Framework.CD=CD_ISO --Config.Read=0 --Logger.FileLevel=3
 ctest --test-dir build --output-on-failure
 ```
+
+`turbo` requires a save on a five-minute boundary and stops if gameplay makes turbo unavailable.
+Use the explicitly diagnostic `turbo-unchecked` mode to reproduce the uninterrupted coarse
+receipt; it counts and reports every unavailable frame. Such a run must not be presented as
+an uninterrupted UI Speed 5 observation.
 
 This PR includes the unpublished road-lane/civilian-mix prerequisite `bce89743` and the
 replenishment fix, based on `khallmark/develop-reboot`. It does not claim parity for on-demand
