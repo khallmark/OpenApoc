@@ -242,7 +242,10 @@ class FakeDriver:
         self.h = FakeHarness(data)
         self.strategy = strategy
         self.alerted_buildings = list(alerted)
+        self.base_threats = set()
+        self.stranded_since = {}
         self.said, self.calls = [], []
+        self.last_battle = {}
         self.stage = stage or Status("CityView", 1280, 720, "")
         self.checks, self.battle_policy = {}, {}
 
@@ -255,11 +258,12 @@ class FakeDriver:
     def note_alert(self, st):
         pass
 
-    def click_id(self, *a, **k):
+    def click_id(self, control, *a, **k):
+        self.calls.append(control)
         return True
 
-    def select_assignment_rows(self, st):
-        self.calls.append("select_assignment_rows")
+    def select_armed_squad(self, st, want=6):
+        self.calls.append("select_armed_squad")
         return 3
 
     def dismiss_modal(self, st):
@@ -352,27 +356,20 @@ def test_min_squad_gates_incident_dispatch():
     data = base_data(agents={"armed": "5", "soldiers": "5", "soldiers_fit": "5"})
 
     def dispatched(strategy):
-        # Dispatch leaves the alert for the city and raids from there, after the role refit;
-        # declining also leaves it, but never raids.
-        with TemporaryDirectory() as tmp, patch.object(oa_victory.time, "sleep"), \
-                patch.object(oa_victory, "raid_infiltrated_building",
-                             return_value="raided") as raid:
+        with TemporaryDirectory() as tmp, patch.object(oa_victory.time, "sleep"):
             v = make_victory(tmp, strategy, data, stage=alert)
             v.start = lambda: None
             v.game = MagicMock()
             v.alive = lambda: True
-            v.city_turn = lambda: None
-
-            def click_id(control, *a, **k):
-                if control == "BUTTON_QUIT":
-                    v.d.stage = Status("CityView", 1280, 720, "")
-                return True
-            v.d.click_id = click_id
             v.run(0.00002)
-            return raid.called
+            return "BUTTON_EXTERMINATE" in v.d.calls and "select_armed_squad" in v.d.calls
 
     assert not dispatched({}), "5 fit < default min_squad 6: decline"
     assert dispatched({"min_squad": 3}), "5 fit >= min_squad 3: dispatch"
+    # The same small squad answers an incident beside one of our bases: a crew spreading from
+    # there can walk into the base, and a base defence is the worst event a campaign has.
+    alert = Status("AlertScreen", 1280, 720, "", "crew=5_threatens_base=1")
+    assert dispatched({}), "an incident that threatens a base is answered below min_squad"
 
 
 # ---------------------------------------------------------------------------
@@ -566,6 +563,52 @@ def test_reward_is_monotone_and_victory_dominates():
     slow = oa_learn.reward(summary(exit="victory", campaign_ended="victory",
                                    metrics={"max_day": 300}))["reward"]
     assert fast > slow, "winning sooner ranks higher"
+
+
+def test_victory_counts_each_base_defence_once():
+    outcomes = iter(["timeout", "timeout", "resolved", "lost"])
+    with TemporaryDirectory() as tmp:
+        v = make_victory(tmp)
+        v.alive = lambda: False
+
+        def fake_battle(d, budget_s=0):
+            d.last_battle = {"mission_type": "base_defense"}
+            return next(outcomes)
+        with patch.object(oa_victory, "win_battle", fake_battle):
+            for _ in range(3):        # one defence that outlasts its budget twice, then is won
+                v.fight("BattleView")
+            assert v.progress["base_defences"] == 1, v.progress
+            assert v.progress.get("bases_lost", 0) == 0, v.progress
+            v.fight("BattleView")     # a second defence, lost
+        assert v.progress["base_defences"] == 2 and v.progress["bases_lost"] == 1, v.progress
+
+
+def test_base_defences_are_very_bad():
+    w = oa_learn.REWARD_WEIGHTS
+    base = oa_learn.reward(summary())["reward"]
+    one = oa_learn.reward(summary(progress={"base_defences": 1}))
+    assert one["breakdown"]["base_defences"] == w["per_base_defence"], one
+    assert one["reward"] == base + w["per_base_defence"], one
+    # Worse than anything one mission can earn: a defence costs more than a won raid, a won
+    # battle and a recovery together -- and more than a month of survival.
+    gained = w["per_battle_won"] + w["per_recovery"] + w["per_infil_raid"]
+    assert -w["per_base_defence"] > gained
+    assert -w["per_base_defence"] > 30 * w["survival_per_day"]
+    lost = oa_learn.reward(summary(progress={"base_defences": 1, "bases_lost": 1}))
+    assert lost["reward"] == base + w["per_base_defence"] + w["per_base_lost"], lost
+
+
+def test_dying_early_is_no_escape_from_base_defences():
+    # A heavy defence penalty must not make an early loss the best way to avoid one: a run
+    # beaten on day 5 before the aliens ever found the base has to score below a run that
+    # survived three weeks and fought off one base defence.
+    early_loss = oa_learn.reward(summary(exit="defeat", campaign_ended="defeat",
+                                         metrics={"max_day": 5}))
+    survived = oa_learn.reward(summary(metrics={"max_day": 21}, progress={"base_defences": 1}))
+    assert early_loss["reward"] < survived["reward"], (early_loss, survived)
+    # Even two defences over two months beat losing in the first week.
+    survived2 = oa_learn.reward(summary(metrics={"max_day": 60}, progress={"base_defences": 2}))
+    assert early_loss["reward"] < survived2["reward"], (early_loss, survived2)
 
 
 # ---------------------------------------------------------------------------

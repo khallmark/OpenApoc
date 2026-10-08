@@ -1,5 +1,5 @@
-#include "framework/framework.h"
 #include "game/state/gamestateintrospect.h"
+#include "framework/framework.h"
 #include "framework/harness.h"
 #include "game/state/battle/battle.h"
 #include "game/state/battle/battleunit.h"
@@ -128,12 +128,12 @@ UString describeLoadoutAgents(GameState &state)
 		out +=
 		    (out.empty() ? "" : "|") +
 		    format("{0}:base={1}:home={2}:vehicle={3}:speed={4}:strength={5}:accuracy={6}:kit={7}",
-		           a.first, building && building->base ? building->base.id : UString("-"),
-		           agent->homeBuilding && agent->homeBuilding->base ? agent->homeBuilding->base.id
-		                                                            : UString("-"),
-		           agent->currentVehicle ? agent->currentVehicle.id : UString("-"),
-		           agent->current_stats.speed, agent->modified_stats.strength,
-		           agent->modified_stats.accuracy, kit.empty() ? UString("-") : kit);
+			       a.first, building && building->base ? building->base.id : UString("-"),
+			       agent->homeBuilding && agent->homeBuilding->base ? agent->homeBuilding->base.id
+			                                                        : UString("-"),
+			       agent->currentVehicle ? agent->currentVehicle.id : UString("-"),
+			       agent->current_stats.speed, agent->modified_stats.strength,
+			       agent->modified_stats.accuracy, kit.empty() ? UString("-") : kit);
 		n++;
 	}
 	UString selectedVehicle = "-";
@@ -279,21 +279,23 @@ UString describeFunds(GameState &state)
 		return "balance=? income=? (no player organisation)";
 	}
 	// The actual game-over condition, and it is a one-way latch: weeklyPlayerUpdate sets
-	// fundingTerminated the first week that lifetime totalScore drops below -2400 (or the
-	// government turns Hostile), zeroes income, and nothing anywhere resets it
-	// (gamestate.cpp:1668-1680). So this is a countdown, not a dip to recover from -- a driver
-	// that only watches its bank balance sees nothing wrong until the money has already stopped
-	// for good. margin is how much lifetime score is left before that happens.
+	// fundingTerminated when the score of the weeks *before* the one being assessed is below
+	// -2400 (or the government turns Hostile), zeroes income, and nothing anywhere resets it.
+	// So this is a countdown, not a dip to recover from. margin_to_cutoff is what the next Monday
+	// tests -- every finished week, already fixed; margin_after_next also counts this week's
+	// running score, which the Monday after next tests.
 	const int total = state.totalScore.getTotal();
+	const int week = state.weekScore.getTotal();
+	const auto &score = state.totalScore;
 	return format("balance={0} income={1} score_total={2} score_week={3} funding_terminated={4} "
-	              "margin_to_cutoff={5} tactical={6} research={7} incidents={8} ufos_downed={9} "
-	              "craft_lost={10} incursions={11} city_damage={12}",
-	              player->balance, player->income, total, state.weekScore.getTotal(),
-	              state.fundingTerminated ? 1 : 0, total - (-2400),
-	              state.totalScore.tacticalMissions, state.totalScore.researchCompleted,
-	              state.totalScore.alienIncidents, state.totalScore.craftShotDownUFO,
-	              state.totalScore.craftShotDownXCom, state.totalScore.incursions,
-	              state.totalScore.cityDamage);
+	              "margin_to_cutoff={5} margin_after_next={6} tactical={7} research={8} "
+	              "incidents={9} ufos_downed={10} craft_lost={11} incursions={12} "
+	              "city_damage={13} alien_buildings={14}",
+	              player->balance, player->income, total, week, state.fundingTerminated ? 1 : 0,
+	              (total - week) - (-2400), total - (-2400), score.tacticalMissions,
+	              score.researchCompleted, score.alienIncidents, score.craftShotDownUFO,
+	              score.craftShotDownXCom, score.incursions, score.cityDamage,
+	              score.alienBuildingsDestroyed);
 }
 
 UString describeBases(GameState &state)
@@ -1130,12 +1132,21 @@ UString introspectGameState(GameState &state, const UString &query)
 			// Picking the first crewed craft regardless of type selected a Stormdog -- a road
 			// vehicle -- and every recovery was refused, which stalls the entire research chain
 			// since UFO recovery is what unlocks it.
-			size_t crew = 0;
+			size_t crew = 0, fighters = 0;
 			for (const auto &a : veh->currentAgents)
 			{
 				if (a && a->type && a->type->role == AgentType::Role::Soldier)
 				{
 					crew++;
+					// Soldiers aboard who carry a weapon: the only ones a raid will send in.
+					for (const auto &e : a->equipment)
+					{
+						if (e && e->type && e->type->type == AEquipmentType::Type::Weapon)
+						{
+							fighters++;
+							break;
+						}
+					}
 				}
 			}
 			// hasDimensionShifter is the sole gate on crossing into the alien city
@@ -1179,12 +1190,17 @@ UString introspectGameState(GameState &state, const UString &query)
 			}
 			out += (out.empty() ? "" : "|") +
 			       format("{0}:{1}:flying={2},armed={3},crew={4},shifter={5},pax={6},city={7},"
-			              "transit={8},home={9},id={10},portal={11},row={12}",
+			              "transit={8},home={9},id={10},portal={11},row={12},fighters={13},"
+			              "at={14},idle={15}",
 			              idx, safeName, flying ? 1 : 0, armed ? 1 : 0, crew,
 			              veh->hasDimensionShifter() ? 1 : 0, pax, veh->city.id,
 			              veh->betweenDimensions ? 1 : 0,
 			              veh->currentBuilding && veh->currentBuilding == veh->homeBuilding ? 1 : 0,
-			              v.first, portal ? 1 : 0, row);
+			              v.first, portal ? 1 : 0, row, fighters,
+			              // Where it is parked, and whether it has orders: a crewed craft parked
+			              // at someone else's building with none is a squad nobody is using.
+			              veh->currentBuilding ? veh->currentBuilding.id : UString("-"),
+			              veh->missions.empty() ? 1 : 0);
 			idx++;
 		}
 		return format("craft={0} interceptors={1} detail={2}", idx, usable,

@@ -195,6 +195,24 @@ def test_known_enemy_modifiers_and_terrain_affect_rankings():
     assert policy.weapon_rank(cat["FAST"], cat["FAST_CLIP"], "heavy", "ufo_recovery")[1] == 0
 
 
+def test_no_incendiary_ammunition_even_for_the_heavy():
+    # The heavy ranks by structural damage, which incendiary wins -- and it sets the building on fire.
+    cat = catalog()
+    del cat["AEQUIPMENTTYPE_DEVASTATOR_CANNON"]  # outranks both missiles; not what is under test
+    cat["LAUNCHER"] = item("LAUNCHER", "Weapon", weight=9, ammo=["IN_MISSILE", "AP_MISSILE"])
+    cat["IN_MISSILE"] = item("IN_MISSILE", "Ammo", capacity=1, damage=90, range=50, accuracy=60,
+                             fire_ticks=60, explosive=1, damage_type="DAMAGETYPE_INCENDIARY",
+                             modifiers={"TERRAIN": 200})
+    cat["AP_MISSILE"] = item("AP_MISSILE", "Ammo", capacity=1, damage=80, range=50, accuracy=60,
+                             fire_ticks=60, explosive=1, damage_type="DAMAGETYPE_EXPLOSIVE",
+                             modifiers={"TERRAIN": 100})
+    for mission in ("ufo_recovery", "alien_building", "base_defence"):
+        for plan in policy.plan_loadouts(cat, roster(), mission):
+            assert plan.ammo != "IN_MISSILE", (mission, plan.role, plan.weapon, plan.ammo)
+    heavy = next(p for p in policy.plan_loadouts(cat, roster(), "ufo_recovery") if p.role == "heavy")
+    assert heavy.weapon == "LAUNCHER" and heavy.ammo == "AP_MISSILE", (heavy.weapon, heavy.ammo)
+
+
 def test_order_quantities_round_up_clips_account_for_pending_and_reserve():
     cat = catalog()
     for e in cat.values():

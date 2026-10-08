@@ -117,7 +117,8 @@ def test_watch_narration_and_speed_cap():
         os.environ["OA_WATCH"] = "1"
         d.say("choose a target\nthen send the squad")
         assert output.getvalue() == "choose a target then send the squad\n"
-        assert oa_play.target_fps() == 60
+        assert oa_play.sim_speed() == 1.0  # watching runs at the original game's pace
+        assert oa_play.sim_args() == ["--Framework.TargetFPS=0", "--Framework.SimSpeed=1"]
         os.environ["OA_CITY_SPEED"] = "2"
         with patch.object(d.h, "key") as key:
             oa_play.set_speed(d, 5)

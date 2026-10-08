@@ -17,6 +17,10 @@
 #include "game/state/city/city.h"
 #include "game/state/city/vehicle.h"
 #include "game/state/gamestate.h"
+#include "game/state/rules/aequipmenttype.h"
+#include "game/state/rules/agenttype.h"
+#include "game/state/rules/city/vehicletype.h"
+#include "game/state/shared/aequipment.h"
 #include "game/state/shared/agent.h"
 #include "game/state/stateobject.h"
 #include "game/ui/base/vequipscreen.h"
@@ -678,6 +682,109 @@ std::list<StateRef<Agent>> AgentAssignment::getSelectedAgents() const
 	}
 
 	return agents;
+}
+
+namespace
+{
+// The same test `gs agents` uses for "armed": carrying any weapon.
+bool carriesWeapon(const Agent &agent)
+{
+	for (const auto &e : agent.equipment)
+	{
+		if (e && e->type && e->type->type == AEquipmentType::Type::Weapon)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+} // namespace
+
+UString AgentAssignment::harnessRows() const
+{
+	// Read the resolved assignment rows, rather than guessing that the first craft can carry
+	// troops. Nested passenger lists change later rows' positions, and a large fleet needs scroll.
+	// Each row also says whether its soldiers can fight: a craft dispatched from an alert takes
+	// everyone aboard into the battle (CityView's CommenceInvestigation), armed or not.
+	const size_t selected = getSelectedAgents().size();
+	UString boarding, soldiers;
+	int group = 0;
+	// Use the same fleet index as gs interceptors to join resolved UI rows to craft identity.
+	std::map<sp<Vehicle>, int> craftIndices;
+	int craftIndex = 0;
+	for (const auto &entry : state->vehicles)
+	{
+		if (entry.second && entry.second->owner == state->getPlayer())
+		{
+			craftIndices.emplace(entry.second, craftIndex++);
+		}
+	}
+	const auto viewport = findControl(AGENT_SELECT_BOX);
+	std::function<void(sp<Control>)> collect = [&](sp<Control> control)
+	{
+		if (!control || !control->isVisible())
+		{
+			return;
+		}
+		if (control->Name == VEHICLE_LIST_NAME || control->Name == AGENT_LIST_NAME)
+		{
+			const int currentGroup = group++;
+			for (const auto &row : control->Controls)
+			{
+				if (!row->isVisible())
+				{
+					continue;
+				}
+				const auto pos = row->getLocationInUi() + Vec2<int>{52, 12};
+				const auto top = viewport->getLocationInUi();
+				const bool visible = pos.y >= top.y && pos.y < top.y + viewport->Size.y;
+				if (control->Name == VEHICLE_LIST_NAME)
+				{
+					const auto v = row->getData<Vehicle>();
+					if (v)
+					{
+						int aboard = 0, unarmed = 0;
+						for (const auto &a : v->currentAgents)
+						{
+							if (a->type->role == AgentType::Role::Soldier)
+							{
+								aboard++;
+								unarmed += carriesWeapon(*a) ? 0 : 1;
+							}
+						}
+						boarding += (boarding.empty() ? "" : ";") +
+						            format("{0},{1},{2},{3},{4},{5},{6},{7},{8}", pos.x, pos.y,
+						                   v->hasDimensionShifter() ? 1 : 0, v->getMaxPassengers(),
+						                   visible ? 1 : 0,
+						                   v->type->type == VehicleType::Type::Flying ? 1 : 0,
+						                   craftIndices.at(v), aboard, unarmed);
+					}
+				}
+				else
+				{
+					const auto a = row->getData<Agent>();
+					if (a && a->type->role == AgentType::Role::Soldier)
+					{
+						soldiers +=
+						    (soldiers.empty() ? "" : ";") +
+						    format("{0},{1},{2},{3},{4},{5},{6}", pos.x, pos.y,
+							       a->currentVehicle ? 1 : 0, visible ? 1 : 0, currentGroup,
+							       a->currentVehicle ? craftIndices.at(a->currentVehicle.getSp())
+							                         : -1,
+							       carriesWeapon(*a) ? 1 : 0);
+					}
+				}
+			}
+		}
+		for (const auto &child : control->Controls)
+		{
+			collect(child);
+		}
+	};
+	collect(std::const_pointer_cast<Control>(shared_from_this()));
+	return format("selected_agents={0} boarding={1} soldier_rows={2}", (int)selected,
+	              boarding.empty() ? UString("-") : boarding,
+	              soldiers.empty() ? UString("-") : soldiers);
 }
 
 /**

@@ -201,6 +201,245 @@ def test_harness_regressions():
     check("garrison" in inspect.getsource(oa_play.crew_transport),
           "crew_transport must reserve a garrison rather than taking the first six")
 
+    # A stalled battle sends the squad to the first spotted hostile's tile, on whatever floor.
+    check(oa_play.first_foe_tile("67,52,2:sx=432:sy=228:kind=A;10,8,0:sx=1") == (67, 52, 2),
+          "first_foe_tile reads the first hostile's x,y,z")
+    check(oa_play.first_foe_tile("-") is None and oa_play.first_foe_tile(None) is None,
+          "no spotted hostile, no target")
+
+    class SquadHarness:
+        def __init__(self):
+            self.queries = []
+
+        def gs(self, q):
+            self.queries.append(q)
+            if q == "battle_positions":
+                return {"foe_at": "67,52,2:sx=432:sy=228"}
+            return {"ordered": "24", "refused": "0"}
+
+    class SquadDriver:
+        def __init__(self):
+            self.h = SquadHarness()
+            self.said = []
+
+        def say(self, msg):
+            self.said.append(msg)
+
+    _sq = SquadDriver()
+    check(oa_play.send_squad_to_foe(_sq) and "squad_to 67 52 2" in _sq.h.queries,
+          f"the squad is ordered to the hostile's own tile and floor, got {_sq.h.queries}")
+
+    # The search starts at the map centre, covers every cell before repeating, then moves floor.
+    _wp = [oa_play.search_waypoint((100, 100, 4), _s) for _s in range(34)]
+    check(_wp[0] == (50, 50, 1), f"the search starts at the map centre, got {_wp[0]}")
+    check(len({w[:2] for w in _wp[1:17]}) == 16, "one pass visits all 16 grid cells")
+    check(all(w[2] == 1 for w in _wp[:17]) and all(w[2] == 2 for w in _wp[17:34]),
+          "a whole pass stays on one floor, then the next pass moves up")
+    check(max(abs(w[0] - 50) + abs(w[1] - 50) for w in _wp[1:5]) <
+          min(abs(w[0] - 50) + abs(w[1] - 50) for w in _wp[13:17]),
+          "inner cells come before the corners")
+    check(all(0 <= c < 100 for _s in range(64) for c in oa_play.search_waypoint((100, 100, 2), _s)[:2])
+          and all(oa_play.search_waypoint((100, 100, 2), _s)[2] < 2 for _s in range(64)),
+          "waypoints stay on the map")
+    check(oa_play.squad_tiles("27,58,1:sx=-1;8,43,1:sx=432") == [(27, 58, 1), (8, 43, 1)]
+          and oa_play.squad_tiles("-") == [], "squad_tiles reads mine_at")
+
+    # Stage details arrive with spaces turned into underscores.
+    _detail = "building=BUILDING_WAREHOUSE_ONE_crew=2_selected_agents=3_boarding=0_soldier_rows=5"
+    check(oa_play.detail_int(_detail, "selected_agents") == 3,
+          f"selected_agents must parse when more fields follow it, got "
+          f"{oa_play.detail_int(_detail, 'selected_agents')}")
+    check(oa_play.detail_int(_detail, "crew") == 2 and oa_play.detail_int(_detail, "boarding") == 0,
+          "other fields parse the same way")
+    check(oa_play.detail_int(_detail, "agents") is None,
+          "a field name must not match inside another (agents vs selected_agents)")
+    check(oa_play.detail_int(None, "crew") is None, "no detail, no value")
+
+    # The gate-craft selection right-clicks through click_xy; it must reach the wire as such.
+    _sent = []
+    _h = oa_play.Harness(port=1)
+    _h.ok = lambda line: _sent.append(line) or "OK"
+    _h.click_xy(10, 20)
+    _h.click_xy(30, 40, button="right")
+    check(_sent == ["click 10 20", "click 30 40 right"], f"click_xy sends {_sent}")
+
+    # select_armed_squad never puts an unarmed soldier into a fight.
+    class SquadScreen:
+        """A fake alert/building screen: rows as the harness reports them, clicks select."""
+
+        def __init__(self, stage, boarding, soldiers):
+            self.stage, self.boarding, self.soldiers = stage, boarding, soldiers
+            self.clicked = []
+
+        def detail(self):
+            boarding = ";".join(",".join(map(str, r)) for r in self.boarding) or "-"
+            soldiers = ";".join(",".join(map(str, r)) for r in self.soldiers) or "-"
+            return (f"alert_building=X crew=2 owner=Y selected_agents="
+                    f"{sum(1 for r in self.soldiers if r[:2] in self.clicked)} "
+                    f"boarding={boarding} soldier_rows={soldiers}").replace(" ", "_")
+
+    class SquadHarness:
+        def __init__(self, screen):
+            self.screen = screen
+
+        def click_xy(self, x, y, button="left"):
+            self.screen.clicked.append((x, y))
+
+    class SquadPicker(oa_play.Driver):
+        def __init__(self, screen):
+            self.screen = screen
+            self.h = SquadHarness(screen)
+
+        def status(self):
+            return oa_play.Status(stage=self.screen.stage, w=800, h=600, raw="",
+                                  detail=self.screen.detail())
+
+    # boarding: x,y,shifter,pax,visible,flying,fleet,aboard,unarmed
+    # soldier_rows: x,y,in_craft,visible,group,fleet,armed
+    _boarding = [(500, 100, 0, 6, 1, 1, 0, 2, 1),   # craft 0: one of two aboard unarmed
+                 (500, 200, 0, 6, 1, 1, 1, 3, 0)]   # craft 1: all three armed
+    _soldiers = [(100, 100, 0, 1, 0, -1, 1), (100, 126, 0, 1, 0, -1, 0),   # on foot
+                 (100, 152, 0, 1, 0, -1, 1),
+                 (520, 110, 1, 1, 1, 0, 1), (520, 136, 1, 1, 1, 0, 0),    # aboard craft 0
+                 (520, 210, 1, 1, 2, 1, 1), (520, 236, 1, 1, 2, 1, 1),    # aboard craft 1
+                 (520, 262, 1, 1, 2, 1, 1)]
+    unarmed_at = {r[:2] for r in _soldiers if r[6] == 0}
+
+    _alert = SquadScreen("AlertScreen", _boarding, _soldiers)
+    _n = SquadPicker(_alert).select_armed_squad(SquadPicker(_alert).status())
+    check(_alert.clicked[0] == (500, 200) and _n == 3,
+          f"an alert sends the fully armed craft with its crew, got {_alert.clicked} ({_n})")
+    check((500, 100) not in _alert.clicked and not unarmed_at & set(_alert.clicked),
+          f"never the craft carrying an unarmed soldier, nor an unarmed soldier: {_alert.clicked}")
+
+    _mixed = SquadScreen("AlertScreen", _boarding[:1], [r for r in _soldiers if r[5] != 1])
+    _n = SquadPicker(_mixed).select_armed_squad(SquadPicker(_mixed).status())
+    check(_n == 2 and set(_mixed.clicked) == {(100, 100), (100, 152)},
+          f"with no fully armed craft, armed soldiers go on foot: {_mixed.clicked} ({_n})")
+
+    _bld = SquadScreen("BuildingScreen", _boarding, _soldiers)
+    _n = SquadPicker(_bld).select_armed_squad(SquadPicker(_bld).status())
+    check(_n == 6 and not unarmed_at & set(_bld.clicked),
+          f"a building raid takes the armed soldiers only: {_bld.clicked} ({_n})")
+
+    _none = SquadScreen("AlertScreen", [], [(100, 100, 0, 1, 0, -1, 0)])
+    check(SquadPicker(_none).select_armed_squad(SquadPicker(_none).status()) == 0
+          and not _none.clicked, "nobody armed: nobody selected")
+
+    # --- Aliens beside a base are swept first --------------------------------------------------
+    # A crew next to a base can move in and expose it to the UFOs that attack bases, so its alert
+    # jumps the queue and is never the one aged out of it.
+    class AlertDriver(oa_play.Driver):
+        def __init__(self):
+            self.alerted_buildings, self.base_threats, self.events = [], set(), []
+            self.verbose = False
+
+    def alert(name, threat):
+        return oa_play.Status("AlertScreen", 1280, 720, "",
+                              f"alert_building={name}_crew=3_owner=ORG_X_threatens_base={threat}"
+                              f"_selected_agents=0")
+
+    _q = AlertDriver()
+    for i in range(5):
+        _q.note_alert(alert(f"Far_{i}", 0))
+    _q.note_alert(alert("Next_Door", 1))
+    check(_q.alerted_buildings[0] == "Next_Door" and "Next_Door" in _q.base_threats,
+          f"a base threat goes to the head of the sweep queue: {_q.alerted_buildings}")
+    for i in range(5, 12):
+        _q.note_alert(alert(f"Far_{i}", 0))
+    check("Next_Door" in _q.alerted_buildings and len(_q.alerted_buildings) == 6,
+          f"the queue stays short but never drops a base threat: {_q.alerted_buildings}")
+    _q.note_alert(alert("Far_11", 1))
+    check(_q.alerted_buildings[0] == "Far_11",
+          f"an address already queued moves up when it turns out to threaten a base: "
+          f"{_q.alerted_buildings}")
+
+    # --- No raid against odds the squad cannot win --------------------------------------------
+    # Two soldiers sent against fifteen aliens were wiped out and the base defences followed.
+    class RaidHarness:
+        def __init__(self, crews, armed):
+            self.crews, self.armed, self.asked = crews, armed, []
+
+        def gs(self, q):
+            self.asked.append(q)
+            if q == "agents":
+                return {"armed": str(self.armed)}
+            if q.startswith("centre_on_building "):
+                name = q.split(" ", 1)[1]
+                return {"centred": "1", "crew": str(self.crews.get(name, 0)), "building": name,
+                        "at": "10,10"}
+            return {}
+
+    class RaidDriver(AlertDriver):
+        def __init__(self, crews, armed, queue):
+            super().__init__()
+            self.h = RaidHarness(crews, armed)
+            self.alerted_buildings = list(queue)
+
+        def status(self):
+            return oa_play.Status("CityView", 1280, 720, "")
+
+    _r = RaidDriver({"Big": 15}, 2, ["Big"])
+    check(oa_play.raid_infiltrated_building(_r) == "outmatched",
+          "fifteen aliens against two armed soldiers is not raided")
+    check(not any(q == "centre_on_message" for q in _r.h.asked),
+          f"…and the message log is not used to raid it anyway: {_r.h.asked}")
+    check(_r.alerted_buildings == ["Big"], "…but the address stays queued for when the squad grows")
+
+    # --- Idle squads parked across town are sent home ------------------------------------------
+    # Three base defences were lost to one alien each because every soldier sat in a craft parked
+    # at an investigated building with no orders, and the base held only unarmed staff.
+    class FleetHarness:
+        def __init__(self, crafts):
+            self.crafts = crafts
+
+        def gs(self, q):
+            if q == "interceptors":
+                return {"detail": "|".join(
+                    f"{i}:Craft_{i}:" + ",".join(f"{k}={v}" for k, v in c.items())
+                    for i, c in enumerate(self.crafts))}
+            return {}
+
+    class FleetDriver(AlertDriver):
+        def __init__(self, crafts):
+            super().__init__()
+            self.h = FleetHarness(crafts)
+            self.stranded_since, self.sent_home = {}, []
+
+        def status(self):
+            return oa_play.Status("CityView", 1280, 720, "")
+
+        def click_id(self, control, st=None):
+            if control == "BUTTON_GOTO_BASE":
+                self.sent_home.append(self._selected)
+            return True
+
+    def craft(cid, **kw):
+        return {"flying": 1, "armed": 0, "crew": 4, "home": 0, "id": cid, "at": "BUILDING_X",
+                "idle": 1, **kw}
+
+    _fleet = FleetDriver([craft("STRANDED"), craft("HOME", home=1, at="BUILDING_BASE"),
+                          craft("BUSY", idle=0), craft("EMPTY", crew=0)])
+    _clock = [1000.0]
+    _real_time, _real_select, _real_sleep = oa_play.time.time, oa_play.select_craft, oa_play.time.sleep
+    oa_play.time.time = lambda: _clock[0]
+    oa_play.time.sleep = lambda s: None
+    oa_play.select_craft = lambda d, cid: (setattr(d, "_selected", cid) or True)
+    try:
+        check(oa_play.recall_stranded_squads(_fleet) == 0 and not _fleet.sent_home,
+              "a squad that has only just parked is left alone")
+        _clock[0] += oa_play.STRANDED_AFTER_S + 1
+        check(oa_play.recall_stranded_squads(_fleet) == 1 and _fleet.sent_home == ["STRANDED"],
+              f"only the idle crewed craft parked away from home is recalled: {_fleet.sent_home}")
+        _moved = FleetDriver([craft("STRANDED")])
+        oa_play.recall_stranded_squads(_moved)
+        _moved.h.crafts[0]["at"] = "BUILDING_Y"
+        _clock[0] += oa_play.STRANDED_AFTER_S + 1
+        check(oa_play.recall_stranded_squads(_moved) == 0,
+              "a craft that has moved on to another building starts its clock again")
+    finally:
+        oa_play.time.time, oa_play.select_craft, oa_play.time.sleep = _real_time, _real_select, _real_sleep
+
     assert not FAILED, "FAILED:\n" + "\n".join(FAILED)
 
 

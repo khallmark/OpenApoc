@@ -95,7 +95,13 @@ REWARD_WEIGHTS = {
     "milestone_shifter": 100.0,   # dimension shifter started
     "milestone_crossed": 300.0,   # a craft crossed into the alien dimension
     "per_alien_building": 150.0,  # each alien building raided and won
-    "defeat": -100.0,             # campaign lost or bankrupt, on top of the survival it forfeited
+    # Losing must stay worse than any number of base defences a run could rack up first;
+    # otherwise the cheapest way to avoid defences is to die before the aliens find the base.
+    "defeat": -1000.0,            # campaign lost or bankrupt, on top of the survival it forfeited
+    # Base defences are VERY bad: casualties, wrecked facilities, and the last base lost is the
+    # campaign. One costs more than a month of survival, so genomes that invite them lose.
+    "per_base_defence": -400.0,
+    "per_base_lost": -800.0,
 }
 VICTORY_DAY_CAP = 400
 SURVIVAL_DAY_CAP = 365
@@ -158,6 +164,12 @@ def reward(final: Optional[dict]) -> dict:
         b["alien_buildings"] = w["per_alien_building"] * taken
     if lost:
         b["defeat"] = w["defeat"]
+    defences = int(p.get("base_defences", 0) or 0)
+    if defences:
+        b["base_defences"] = w["per_base_defence"] * defences
+    bases_lost = int(p.get("bases_lost", 0) or 0)
+    if bases_lost:
+        b["bases_lost"] = w["per_base_lost"] * bases_lost
     return {"valid": True, "reward": round(sum(b.values()), 3),
             "breakdown": {k: round(v, 3) for k, v in b.items()}, "why": ""}
 

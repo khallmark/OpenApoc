@@ -1517,6 +1517,58 @@ void BattleView::registerBattleViewIntrospection()
 			                  onScreen ? (int)screen.x : -1, onScreen ? (int)screen.y : -1, tx, ty,
 			                  tz);
 		    }
+		    // The battle map's size in tiles, so a search can cover the whole map rather than the
+		    // part of it that happens to be on screen.
+		    if (gameState && gameState->current_battle && q == "battle_map")
+		    {
+			    const auto &battle = *gameState->current_battle;
+			    if (!battle.map)
+			    {
+				    return UString("size=-");
+			    }
+			    return format("size={0},{1},{2}", battle.map->size.x, battle.map->size.y,
+				              battle.map->size.z);
+		    }
+		    // Send every able soldier to a TILE, as selecting the squad and clicking that tile on
+		    // its own floor does. The engine routes them through lifts and stairs; a driver that
+		    // can only click the floor in view never got a squad on floor 0 up to the aliens on
+		    // floor 2, and a base defence sat "won" but unfinished until the time budget ran out.
+		    if (gameState && gameState->current_battle && q.substr(0, 9) == "squad_to ")
+		    {
+			    int tx = 0, ty = 0, tz = 0;
+			    if (sscanf(q.c_str(), "squad_to %d %d %d", &tx, &ty, &tz) != 3)
+			    {
+				    return UString("ERR squad_to needs x y z");
+			    }
+			    auto &battle = *gameState->current_battle;
+			    const Vec3<int> target{tx, ty, tz};
+			    if (!battle.map || !battle.map->tileIsValid(target))
+			    {
+				    return UString("ERR squad_to tile is off the map");
+			    }
+			    const auto player = gameState->getPlayer();
+			    int ordered = 0, refused = 0;
+			    for (const auto &u : battle.units)
+			    {
+				    const auto &unit = u.second;
+				    if (!unit || unit->owner != player || !unit->tileObject ||
+					    !unit->isConscious() || unit->retreated || !unit->canMove())
+				    {
+					    continue;
+				    }
+				    if (unit->setMission(*gameState,
+					                     BattleUnitMission::gotoLocation(*unit, target)))
+				    {
+					    ordered++;
+				    }
+				    else
+				    {
+					    refused++;
+				    }
+			    }
+			    return format("ordered={0} refused={1} tile={2},{3},{4}", ordered, refused, tx, ty,
+				              tz);
+		    }
 		    if (gameState && gameState->current_battle && q == "base_facilities")
 		    {
 			    const auto base = Battle::getCurrentDefendedBase(*gameState);

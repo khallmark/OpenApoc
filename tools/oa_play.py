@@ -277,8 +277,10 @@ class Harness:
                 out.append((int(parts[0]), int(parts[1]), parts[2] == "1"))
         return out
 
-    def click_xy(self, x: int, y: int) -> None:
-        self.ok(f"click {x} {y}")
+    def click_xy(self, x: int, y: int, button: str = "left") -> None:
+        # select_craft and the gate-craft crossing right-click; without the parameter that path
+        # raised TypeError at the first attempt to leave for the alien dimension.
+        self.ok(f"click {x} {y}" if button == "left" else f"click {x} {y} {button}")
 
     def control(self, cid: str, op: str = "click", value: str | None = None) -> str:
         """Drive a named widget directly, with no pixel arithmetic at all.
@@ -374,11 +376,37 @@ def watching() -> bool:
     return os.environ.get("OA_WATCH") == "1"
 
 
-def target_fps() -> int:
-    """Frame cap for the launched game. OA_TARGET_FPS wins; OA_WATCH=1 means 60; else 1000."""
+# The original game's simulation pace, in engine steps a second: UFO2P/TACP run one frame per BIOS
+# timer tick (18.2065 a second) and an engine step is a quarter of one (framework.cpp).
+NATIVE_SIM_STEPS_PER_SECOND = 4 * 1193182 / 65536
+
+
+def sim_args() -> list[str]:
+    """How fast the launched game simulates, as engine options.
+
+    OA_TARGET_FPS, if set, is an explicit step rate. Otherwise OA_SIM_SPEED is a multiple of the
+    original game's pace; watching means the original pace, and an automated run defaults to
+    1000 steps a second (about 13.7x), which is what it has always run at.
+    """
     if os.environ.get("OA_TARGET_FPS"):
-        return int(os.environ["OA_TARGET_FPS"])
-    return 60 if watching() else 1000
+        return [f"--Framework.TargetFPS={int(os.environ['OA_TARGET_FPS'])}"]
+    return ["--Framework.TargetFPS=0", f"--Framework.SimSpeed={sim_speed():g}"]
+
+
+def sim_speed() -> float:
+    """Simulation speed as a multiple of the original game's pace (see sim_args)."""
+    if os.environ.get("OA_SIM_SPEED"):
+        return float(os.environ["OA_SIM_SPEED"])
+    return 1.0 if watching() else round(1000 / NATIVE_SIM_STEPS_PER_SECOND, 2)
+
+
+def render_fps() -> int:
+    """Frames drawn per second. OA_RENDER_FPS wins; watching means the display's own rate (0);
+    otherwise 30. Sixteen windows at 30 fps kept WindowServer at 80% on a laptop panel and left
+    every game waiting on it at a tenth of a core, so a grid can ask for fewer."""
+    if os.environ.get("OA_RENDER_FPS"):
+        return int(os.environ["OA_RENDER_FPS"])
+    return 0 if watching() else 30
 
 
 def audio_enabled() -> bool:
@@ -669,11 +697,11 @@ class GameProcess:
             # Frame limiting is honoured again now that the loop resynchronises after a hitch,
             # and ticks advance per frame -- so an automated run asks for the headroom outright
             # rather than relying on the limiter being broken.
-            f"--Framework.TargetFPS={target_fps()}",
+            *sim_args(),
             # Draw at most 30 frames a second unless a human is watching. Each present waits on
             # the window server's vsync, and at 120 fps that wait capped the simulation at ~120
             # steps/s; at 30 the same game ran 7x more steps for a third of the CPU per step.
-            f"--Framework.RenderFPS={0 if watching() else 30}",
+            f"--Framework.RenderFPS={render_fps()}",
         ] + ([] if audio_enabled() else ["--Framework.AudioBackends=null"]) + screen_args() \
             + PAUSE_NOTIFICATION_FLAGS + self.extra
         # Append, never truncate: a runner that restarts after a crash used to reopen this with "w"
@@ -788,6 +816,13 @@ class Driver:
         # knowledge of where infiltration is -- there is no list to consult, the same as for a
         # player, who watches the UFOs and goes where the game says they landed.
         self.alerted_buildings: list[str] = []
+        # Of those, the ones whose aliens could spread into one of our bases (the alert's
+        # threatens_base): swept before anything else and never aged out of the queue.
+        self.base_threats: set[str] = set()
+        # craft id -> (building it is parked at, when it was first seen idle there)
+        self.stranded_since: dict[str, tuple[str, float]] = {}
+        # (building id, when) of a transport sent to land a raid squad; see send_raid_squad().
+        self.raid_en_route: tuple[str, float] | None = None
         # Stats from the most recent win_battle(), which stamps them on every return path.
         self.last_battle: dict = {}
         self.act_counts: dict[str, int] = {}
@@ -940,49 +975,51 @@ class Driver:
             st = self.status()
         return st
 
-    def select_assignment_rows(self, st: Status) -> int:
-        """Select a squad and a craft in an alert/building screen's assignment list.
+    def select_armed_squad(self, st: Status, want: int = 6) -> int:
+        """Select soldiers who can fight in an alert or building screen; returns how many.
 
-        BUTTON_EXTERMINATE and BUTTON_RAID both refuse outright when getSelectedAgents() is empty
-        (alertscreen.cpp:73), so this is what actually launches a mission. The list is a
-        runtime-populated MultilistBox nested inside the AGENT_ASSIGNMENT graphic -- agents in the
-        left column, craft in the right -- so rows are addressed by measured offsets from that
-        rect rather than by control id. Offsets verified against a captured AlertScreen: first row
-        centre is 63px down, rows are 26px apart, agent names sit ~103px in and craft names
-        ~383px in. Clicking the icon gutter at the far left does not select.
+        BUTTON_EXTERMINATE refuses outright with nobody selected, and with the wrong people
+        selected it sends them to die. The two screens differ in who actually goes:
+
+        * AlertScreen sends each selected craft, and the investigation then takes EVERY soldier
+          aboard the craft at the building, selected or not (CityView's CommenceInvestigation).
+          So a craft is sent only if nobody aboard is unarmed; otherwise armed soldiers go on
+          foot.
+        * BuildingScreen starts the battle with exactly the selected soldiers, so selecting the
+          armed ones is enough.
+
+        This used to click the first six rows and the first craft by pixel offset, whoever they
+        were. Rows now come from the screen's own harness detail, which says where each is drawn
+        and whether its soldier carries a weapon.
         """
-        box = self.controls(st).get("AGENT_ASSIGNMENT")
-        if box is None or box.w <= 0:
-            return 0
-        ROW_H, FIRST_ROW = 26, 63
-        AGENT_DX, VEHICLE_DX = 103, 383
+        soldiers = [r for r in assignment_rows(st, "soldier_rows") if len(r) >= 7 and r[3] == 1]
+        armed = [r for r in soldiers if r[6] == 1]
 
-        def confirmed() -> int:
-            """How many agents the screen says are selected, or -1 where it does not report."""
-            detail = self.status().detail or ""
-            if "selected_agents=" not in detail:
-                return -1
-            try:
-                return int(detail.split("selected_agents=", 1)[1].split("_")[0].split()[0])
-            except (ValueError, IndexError):
-                return -1
+        def selected() -> int:
+            return detail_int(self.status().detail, "selected_agents") or 0
 
-        # Stop as soon as a squad is selected rather than firing every click blind. On screens
-        # that report the count -- BuildingScreen does -- this turns seven speculative clicks into
-        # however few actually land, which is both faster and stops the driver looking like it is
-        # fumbling around the assignment widget for something to drag.
-        picked = 0
-        for dx, rows in ((AGENT_DX, 6), (VEHICLE_DX, 1)):
-            for r in range(rows):
-                y = box.y + FIRST_ROW + r * ROW_H
-                if y >= box.y + box.h - 8:
+        def click_rows(rows) -> int:
+            count = selected()
+            for x, y, *_ in rows:
+                if count >= want:
                     break
-                self.h.click_xy(box.x + dx, y)
-                picked += 1
-                time.sleep(0.12)
-                if dx == AGENT_DX and confirmed() >= 4:
-                    break
-        return picked
+                self.h.click_xy(x, y)
+                time.sleep(0.1)
+                count = selected()
+            return count
+
+        if st.stage == "AlertScreen":
+            craft = [r for r in assignment_rows(st, "boarding")
+                     if len(r) >= 9 and r[4] == 1 and r[5] == 1 and r[7] > 0 and r[8] == 0]
+            if craft:
+                best = max(craft, key=lambda r: r[7])
+                self.h.click_xy(best[0], best[1])
+                time.sleep(0.15)
+                count = click_rows([r for r in armed if r[2] == 1 and r[5] == best[6]])
+                if count:
+                    return count
+            return click_rows([r for r in armed if r[2] == 0])
+        return click_rows(armed)
 
     def note_alert(self, st: Status) -> None:
         """Remember a building an alert has just named.
@@ -999,24 +1036,41 @@ class Driver:
             if sep in name:
                 name = name.split(sep)[0]
         name = name.rstrip("_")
-        if name and name not in ("none", "-") and name not in self.alerted_buildings:
+        if not name or name in ("none", "-"):
+            return
+        # Aliens beside one of our bases go first, ahead of every older report: a crew there can
+        # move into the base (Building::alienMovement) and expose it, and an exposed base is the
+        # one a subversion UFO comes to attack.
+        threat = detail_int(detail, "threatens_base") == 1
+        if threat:
+            self.base_threats.add(name)
+            if name in self.alerted_buildings:
+                self.alerted_buildings.remove(name)
+            self.alerted_buildings.insert(0, name)
+            self.say(f"  [alert] aliens reported in {name} BESIDE A BASE; sweeping it first")
+        elif name not in self.alerted_buildings:
             self.alerted_buildings.append(name)
-            # Keep the queue short. An address noted many alerts ago has almost certainly been
-            # cleared or its crew has moved on, and a queue that only grows holds the campaign at
-            # walking pace for ever.
-            del self.alerted_buildings[:-6]
             self.say(f"  [alert] aliens reported in {name}; noted for a sweep")
+        else:
+            return
+        # Keep the queue short. An address noted many alerts ago has almost certainly been
+        # cleared or its crew has moved on, and a queue that only grows holds the campaign at
+        # walking pace for ever. Threats to a base are never the ones dropped.
+        while len(self.alerted_buildings) > 6:
+            stale = next((n for n in self.alerted_buildings if n not in self.base_threats), None)
+            if stale is None:
+                break
+            self.alerted_buildings.remove(stale)
 
     def respond_to_event(self, st: Status) -> bool:
         """Engage with an interrupting screen. Returns True if we acted on it."""
         if st.stage == "AlertScreen":
-            # Remember the incident, then refit in the city before dispatching (12.2).
+            # Remember the incident, then answer it from this screen through RESPONSES below:
+            # armed soldiers only (select_armed_squad), or acknowledge if none is free. Quitting
+            # to raid from the target's BuildingScreen instead could not work -- that screen lists
+            # only soldiers already at the building -- and ended every incident in "No Agents
+            # Selected".
             self.note_alert(st)
-            if not self.click_id("BUTTON_QUIT", st):
-                self.escape_key(st.stage)
-            if self.status().stage == "CityView":
-                raid_infiltrated_building(self)
-            return True
         if st.stage == "MessageBox":
             # A MessageBox is not always an acknowledgement. YesNoCancel boxes -- RecruitScreen's
             # "Confirm Orders" among them (recruitscreen.cpp:482-484) -- carry no BUTTON_OK and do
@@ -1104,7 +1158,12 @@ class Driver:
                 self.say(f"  [event] {st.stage}: refused {ACT_ATTEMPT_LIMIT}x, backing off for "
                          f"{ACT_COOLDOWN_S:.0f}s")
         elif policy.get("select"):
-            selected = self.select_assignment_rows(st)
+            selected = self.select_armed_squad(st)
+            if not selected:
+                # Nobody who can fight is free: acknowledge rather than send unarmed soldiers or
+                # press EXTERMINATE into a "No Agents Selected" box.
+                kinds = ("ack",)
+                self.say(f"  [event] {st.stage}: no armed squad free; acknowledging")
 
         for kind in kinds:
             cid = policy.get(kind)
@@ -1638,6 +1697,83 @@ def current_project(d: Driver) -> str:
     return text
 
 
+def soldiers_at_building(d: Driver, building_id: str) -> int:
+    """Soldiers the building's own screen would list: inside it or aboard a craft parked there."""
+    try:
+        reply = d.h.gs(f"soldiers_at_building {building_id}")
+    except (HarnessError, OSError):
+        return -1
+    return int(reply.get("soldiers", "-1") or -1)
+
+
+def send_raid_squad(d: Driver, building_id: str, where: str) -> str:
+    """Fly a crewed transport to a building; the raid itself runs once the squad has landed.
+
+    A building's screen lists only the soldiers already at that building
+    (AgentAssignment::updateLocation), and EXTERMINATE there starts the battle with exactly
+    those. The alert screen is different -- it lists every soldier and sends them -- which is why
+    dispatching from it worked while raids opened from the city met an empty list: about 3,200
+    "No Agents Selected" refusals across sixteen campaigns, every raid of the run.
+    """
+    pending = d.raid_en_route
+    if pending and pending[0] == building_id and time.time() - pending[1] < 240.0:
+        return "en-route"
+    # The squad-size gate (min_squad) is applied to fit soldiers before an incident is taken
+    # on; the garrison policy then decides how many board, so take the best-crewed transport.
+    city = d.h.gs("alien_buildings").get("current_city", "CITYMAP_HUMAN")
+    # Only armed soldiers are sent in once it lands (select_armed_squad), so carry the most of
+    # them. An older binary without fighters= falls back to the crew count.
+    def fighters(f: dict) -> int:
+        return int(f.get("fighters", f.get("crew", "0")) or 0)
+    fleet = [(idx, f) for idx, f in craft_flags(d)
+             if f.get("flying") == "1" and fighters(f) > 0
+             and f.get("transit", "0") == "0" and f.get("portal", "0") == "0"
+             and f.get("city", city) == city]
+    if not fleet:
+        return "no-armed-transport"
+    idx, flags = max(fleet, key=lambda c: fighters(c[1]))
+    if not select_craft(d, flags.get("id", str(idx))):
+        return "transport-not-selectable"
+    info = d.h.gs(f"centre_on_building {building_id}")
+    try:
+        bx, by = (int(v) for v in info.get("at", "").split(",")[:2])
+    except ValueError:
+        return "bad-coords"
+    # [Shift]+[Alt]+right-click a building orders the selected craft there
+    # (CityView::handleClickedBuilding); a plain right-click would open its screen instead.
+    d.h.send("keydown Left Shift")
+    d.h.send("keydown Left Alt")
+    try:
+        d.h.click_xy(bx, by, button="right")
+    finally:
+        d.h.send("keyup Left Alt")
+        d.h.send("keyup Left Shift")
+    d.raid_en_route = (building_id, time.time())
+    d.say(f"  [raid] flying {fighters(flags)} armed soldier(s) to {where} to clear it")
+    return "en-route"
+
+
+def detail_int(detail: str | None, field: str) -> int | None:
+    """An integer field of a stage's harness detail, or None.
+
+    The harness sends the detail with every space turned into "_" (harness.cpp), so a field
+    runs straight into the next one: "crew=2_selected_agents=3_boarding=0". Splitting on
+    whitespace there returned "3_boarding=0", which never parsed -- so once BuildingScreen grew
+    fields after selected_agents, every raid read "unknown", skipped its selection check, and
+    pressed EXTERMINATE with nobody selected: about 3,200 "No Agents Selected" refusals across
+    sixteen campaigns.
+    """
+    # Field names are lower-case snake_case and values are numbers or upper-case ids, so a field
+    # starts at the beginning, after whitespace, or after an "_" that does not follow a lower-case
+    # letter -- which keeps "agents" from matching inside "selected_agents".
+    m = re.search(rf"(?:^|(?<=\s)|(?<=[^a-z]_)){re.escape(field)}=(-?\d+)", detail or "")
+    return int(m.group(1)) if m else None
+
+
+# A raid is not started against more than this many aliens per armed soldier available.
+RAID_MAX_ODDS = 3
+
+
 def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
                               policy: dict | None = None) -> str:
     """Clear aliens out of a human building. Returns the battle outcome, or why it could not run.
@@ -1667,14 +1803,30 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
     # driver remembers those alerts (Driver.alerted_buildings, filled from AlertScreen's own
     # report) and revisits them, which is the same information a human would be working from.
     target = None
-    while d.alerted_buildings:
-        name = d.alerted_buildings[0]
+    outmatched = False
+    # Do not feed a squad to a crew it cannot beat. Two soldiers sent against fifteen aliens were
+    # wiped out, the replacements were unarmed, and the next alert -- beside the base -- went
+    # unanswered: four base defences followed. Losing the raid leaves the aliens where they were
+    # (battle.cpp puts the survivors back in the building), so a hopeless raid buys nothing.
+    armed = int(d.h.gs("agents").get("armed", "0") or 0)
+    for name in list(d.alerted_buildings):
         probe = d.h.gs(f"centre_on_building {name}")
-        if probe.get("centred") == "1" and int(probe.get("crew", "0") or 0) > 0:
-            target, info = name, probe
-            break
-        # Either it is gone or the aliens have moved on; stop tracking it.
-        d.alerted_buildings.pop(0)
+        crew = int(probe.get("crew", "0") or 0) if probe.get("centred") == "1" else 0
+        if crew <= 0:
+            # Either it is gone or the aliens have moved on; stop tracking it.
+            d.alerted_buildings.remove(name)
+            d.base_threats.discard(name)
+            continue
+        if crew > max(1, armed) * RAID_MAX_ODDS:
+            d.say(f"  [raid] {name}: {crew} aliens against {armed} armed - too many; skipping for "
+                  f"now")
+            outmatched = True
+            continue
+        target, info = name, probe
+        break
+    if not target and outmatched:
+        # The message log would only point back at one of the crews just judged too strong.
+        return "outmatched"
     if not target:
         # Nothing pending from an alert we happened to be present for. Fall back to the player's
         # own message log, which is the same record the city view shows and lets you click to
@@ -1702,6 +1854,10 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
     source = "alert" if target else "message-log"
     d.say(f"  [raid] clearing {where}"
           + (f" ({crew_here} aliens)" if crew_here else ""))
+    building_id = info.get("building")
+    if building_id and soldiers_at_building(d, building_id) == 0:
+        return send_raid_squad(d, building_id, where)
+    d.raid_en_route = None
 
     # A raid that never opens BuildingScreen is the worst failure this driver has, because from
     # outside it is indistinguishable from a quiet map: attempt 1 of the 301 arena run recorded
@@ -1747,19 +1903,10 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
             return_to_city(d)
             return f"no-building-screen ({landed_on}, via {source}, retry failed)"
 
-    # Select, then CHECK. select_assignment_rows counts the clicks it issued, not the agents it
-    # actually selected, so it reported success even when every click missed -- which is how every
-    # raid "succeeded" straight into a "No Agents Selected" box. BuildingScreen now reports the
-    # real count, so try the measured offsets and, if nothing took, sweep the row for the column
-    # that does. Those offsets were measured on AlertScreen and this is a different screen.
+    # Select, then CHECK: BuildingScreen reports how many agents are really selected.
     def selected_count() -> int:
-        detail = d.status().detail or ""
-        if "selected_agents=" not in detail:
-            return -1
-        try:
-            return int(detail.split("selected_agents=", 1)[1].split()[0].rstrip("_"))
-        except (ValueError, IndexError):
-            return -1
+        value = detail_int(d.status().detail, "selected_agents")
+        return -1 if value is None else value
 
     # Do not search a building that has no aliens in it. BuildingScreen reports the crew it can
     # see, and searching an empty building costs the owner -5-difficulty relation every time
@@ -1777,33 +1924,13 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
             return_to_city(d)
             return "already-clear"
 
-    # AGENT_LIST is the addressable agent list. Read from the live screen rather than guessed at:
-    # AGENT_SELECT_BOX holds a single Control per base ("Base_1"), and the agents sit in an
-    # AGENT_LIST inside it -- which is why both the AlertScreen pixel offsets and the nested
-    # item-addressing on AGENT_SELECT_BOX selected nobody here.
-    # Use the proven path FIRST. select_assignment_rows drives the same AgentAssignment component
-    # that AlertScreen uses, and there it has dispatched 239 squads with zero refusals -- it works.
-    # The mistake was adding another sweep in front of it: clicking a row TOGGLES its selection
-    # (agentassignment.cpp:92-138), so a second pass over the same rows deselected everything the
-    # first had just selected, and the raid reported no-agents-selectable while the mechanism was
-    # working perfectly.
-    d.select_assignment_rows(d.status())
+    # Only soldiers who can fight, picked by the rows the screen resolves (select_armed_squad).
+    # The old pixel-offset clicks and the row sweep behind them took whoever was listed, armed
+    # or not, and a building raid starts its battle with exactly the selected soldiers.
+    d.select_armed_squad(d.status(), want=MAX_SQUAD)
     time.sleep(0.3)
     if selected_count() > 0:
-        d.say(f"  [raid] {selected_count()} agent(s) selected")
-    if selected_count() == 0:
-        box = d.controls(d.status()).get("AGENT_ASSIGNMENT")
-        if box and box.w > 0:
-            for dx in (60, 80, 130, 160, 200, 240):
-                for r in range(6):
-                    y = box.y + 63 + r * 26
-                    if y >= box.y + box.h - 8:
-                        break
-                    d.h.click_xy(box.x + dx, y)
-                    time.sleep(0.08)
-                if selected_count() > 0:
-                    d.say(f"  [raid] agent rows select at x+{dx}, not the AlertScreen offset")
-                    break
+        d.say(f"  [raid] {selected_count()} armed soldier(s) selected")
     if selected_count() == 0:
         # Say what the state was, rather than leaving the cause a guess. A building raid needs a
         # craft free to carry the squad, so the likely reason is transport rather than the click
@@ -1813,8 +1940,9 @@ def raid_infiltrated_building(d: Driver, budget_s: float = 900.0,
             ag = d.h.gs("agents")
             free = sum(1 for _, _, flags in parse_craft_flags(ic.get("detail", ""))
                        if flags.get("flying") == "1" and flags.get("crew") == "0")
-            d.say(f"  [raid] nobody selectable: {ag.get('soldiers_fit')} fit soldier(s), "
-                  f"{ic.get('craft')} craft, {free} of them empty and flying")
+            d.say(f"  [raid] no armed soldier here to send: {ag.get('soldiers_fit')} fit, "
+                  f"{ag.get('armed')} armed, {ic.get('craft')} craft, {free} of them empty "
+                  f"and flying")
         except (HarnessError, OSError):
             pass
         return_to_city(d)
@@ -2029,22 +2157,11 @@ def craft_flags(d: Driver) -> list[tuple[int, dict[str, str]]]:
             parse_craft_flags(d.h.gs("interceptors").get("detail", ""))]
 
 
-def select_gate_craft(d: Driver, city: str, require_crew: bool = True) -> bool:
-    """Select a gate-capable transport with soldiers in this city, through its UI list."""
-    minimum = driver_strategy(d)["cross_min_crew"] if city == "CITYMAP_HUMAN" else 1
-    candidates = [(idx, f) for idx, f in craft_flags(d)
-                  if f.get("shifter") == "1" and f.get("flying") == "1"
-                  and (not require_crew or int(f.get("crew", "0")) >= minimum)
-                  and f.get("city", city) == city
-                  and f.get("transit", "0") == "0"]
-    if not candidates:
-        d.say(f"  [portal] no crewed gate-capable craft ready in {city}")
-        return False
+def select_craft(d: Driver, craft_id: str) -> bool:
+    """Select one owned craft through CityView's vehicle tab list, scrolling it into view."""
     if not d.click_id("BUTTON_TAB_2", d.status()):
         return False
     time.sleep(0.35)
-    idx, flags = candidates[0]
-    craft_id = flags.get("id", str(idx))
     # The city's craft icons listen to MouseDown, not ListBoxChangeSelected. Use their resolved
     # positions and scroll the list when necessary; CONTROL set would select only the widget.
     def position():
@@ -2075,6 +2192,23 @@ def select_gate_craft(d: Driver, city: str, require_crew: bool = True) -> bool:
     time.sleep(0.15)
     d.h.click_xy(*at[:2])
     time.sleep(0.3)
+    return True
+
+
+def select_gate_craft(d: Driver, city: str, require_crew: bool = True) -> bool:
+    """Select a gate-capable transport with soldiers in this city, through its UI list."""
+    minimum = driver_strategy(d)["cross_min_crew"] if city == "CITYMAP_HUMAN" else 1
+    candidates = [(idx, f) for idx, f in craft_flags(d)
+                  if f.get("shifter") == "1" and f.get("flying") == "1"
+                  and (not require_crew or int(f.get("crew", "0")) >= minimum)
+                  and f.get("city", city) == city
+                  and f.get("transit", "0") == "0"]
+    if not candidates:
+        d.say(f"  [portal] no crewed gate-capable craft ready in {city}")
+        return False
+    idx, flags = candidates[0]
+    if not select_craft(d, flags.get("id", str(idx))):
+        return False
     selected = d.h.gs("selected")
     return (selected.get("selected") == "1" and
             (not require_crew or int(selected.get("with_soldier", "0") or 0) > 0))
@@ -3206,6 +3340,90 @@ def battle_gs(d: Driver, query: str) -> dict:
         return {}
 
 
+def first_foe_tile(foe_at: str | None) -> tuple[int, int, int] | None:
+    """The tile of the first hostile in a battle_positions foe_at field ("x,y,z:k=v...;...")."""
+    if not foe_at or foe_at == "-":
+        return None
+    try:
+        x, y, z = (int(v) for v in foe_at.split(";")[0].split(":")[0].split(","))
+    except ValueError:
+        return None
+    return x, y, z
+
+
+def send_squad_to_foe(d: Driver) -> bool:
+    """Order the whole squad to the first spotted hostile's tile through the engine's pathfinder.
+
+    The click driver can only order moves on the floor in view, so a squad on floor 0 never
+    reached aliens holed up on floor 2: observed in a base defence, 24 soldiers against 8 aliens,
+    the mission sitting "won but unfinished" with no progress until the time budget ran out.
+    squad_to is the same order as selecting everyone and clicking that tile on its own floor; the
+    engine routes them through the lifts. Only hostiles the player has spotted are targets.
+    """
+    target = first_foe_tile(battle_gs(d, "battle_positions").get("foe_at"))
+    if not target:
+        return False
+    reply = battle_gs(d, "squad_to {} {} {}".format(*target))
+    d.say(f"  [battle] stalled; squad to the hostile at {target}: "
+          f"ordered={reply.get('ordered', '?')} refused={reply.get('refused', '?')}")
+    return int(reply.get("ordered", "0") or 0) > 0
+
+
+# The 4x4 search grid, innermost cells first: a crashed UFO, a building's core and most
+# objectives sit toward the middle of a battle map, not in its corners.
+_SEARCH_CELLS = sorted(((gx, gy) for gx in range(4) for gy in range(4)),
+                       key=lambda c: ((c[0] - 1.5) ** 2 + (c[1] - 1.5) ** 2, (c[0] * 7 + c[1] * 3) % 16))
+
+
+def search_waypoint(size: tuple[int, int, int], step: int) -> tuple[int, int, int]:
+    """Waypoint `step` of a search over the whole battle map, in tiles.
+
+    Each pass over a floor is the map centre, then the centres of a 4x4 grid from the middle
+    outward. The next pass moves floor: ground first, then the floors above, then below.
+    """
+    sx, sy, sz = size
+    per_floor = 1 + len(_SEARCH_CELLS)
+    floors = [z for z in (1, 2, 3, 0, 4, 5) if z < sz] or [0]
+    z = floors[(step // per_floor) % len(floors)]
+    k = step % per_floor
+    if k == 0:
+        return sx // 2, sy // 2, z
+    gx, gy = _SEARCH_CELLS[k - 1]
+    return int((gx + 0.5) * sx / 4), int((gy + 0.5) * sy / 4), z
+
+
+def squad_tiles(mine_at: str | None) -> list[tuple[int, int, int]]:
+    """The squad's tiles from a battle_positions mine_at field ("x,y,z:k=v...;...")."""
+    tiles = []
+    for entry in (mine_at or "").split(";"):
+        try:
+            tiles.append(tuple(int(v) for v in entry.split(":")[0].split(",")))
+        except ValueError:
+            continue
+    return [t for t in tiles if len(t) == 3]
+
+
+def send_squad_searching(d: Driver, step: int) -> tuple[int, int, int] | None:
+    """No hostile spotted for a long while: walk the whole squad to search waypoint `step`.
+
+    The screen sweep only reaches what is on screen and on the floor in view. A UFO recovery sat
+    for 360 rounds at 5 soldiers against 6 aliens nobody had seen -- five of them inside the
+    crashed UFO at the middle of the map. One squad_to the map centre walked the squad in and
+    killed three within 16 seconds. Returns the waypoint, or None if no order went out.
+    """
+    try:
+        size = tuple(int(v) for v in battle_gs(d, "battle_map").get("size", "").split(","))
+    except ValueError:
+        return None
+    if len(size) != 3:
+        return None
+    target = search_waypoint(size, step)
+    reply = battle_gs(d, "squad_to {} {} {}".format(*target))
+    d.say(f"  [battle] nothing spotted; squad searching toward {target}: "
+          f"ordered={reply.get('ordered', '?')}")
+    return target if int(reply.get("ordered", "0") or 0) > 0 else None
+
+
 def on_screen(d: Driver, which: str) -> list:
     """screen_craft that tolerates the battle ending underneath it.
 
@@ -3281,6 +3499,12 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
     last_foes = None
     stalls = 0
     rounds = 0
+    # Rounds during which the click orders stand down, so a squad sent across floors by
+    # send_squad_to_foe() is not immediately re-ordered to the floor in view.
+    hold_clicks_until = 0
+    search_step = 0
+    search_target = None
+    search_round = 0
     # Remembered from the last in-battle sample: the debriefing stage has no battle to query,
     # current_battle having already been torn down by then.
     last_player_won = False
@@ -3441,7 +3665,9 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
                 if found:
                     foes = found
 
-        if foes:
+        if rounds < hold_clicks_until:
+            pass
+        elif foes:
             # Shoot first, and shoot at the unit itself. Holding Shift puts BattleView into
             # FireAny (battleview.cpp:2098-2100) and a click then resolves to orderFire on the
             # unit under the cursor rather than a move (battleview.cpp:4140-4151). Without this
@@ -3498,6 +3724,25 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
             stalls = 0
             d.say(f"  [battle] foes_alive={foes_alive} mine_alive={mine_alive}")
         last_foes = foes_alive
+        if stalls and stalls % 6 == 0:
+            if send_squad_to_foe(d):
+                hold_clicks_until = rounds + 5
+            # A base defence holds its entries rather than hunting through its own corridors --
+            # until nothing has been seen for a long while. A defence cannot be left, and two
+            # hidden aliens kept twenty soldiers there for 45 minutes of battle budget.
+            elif (stalls >= 24 and mission_type != "base_defense") or stalls >= 60:
+                # Walk to a waypoint and get there before choosing the next: re-targeting every
+                # few rounds only zigzagged the squad and searched nothing.
+                squad = squad_tiles(battle_gs(d, "battle_positions").get("mine_at"))
+                arrived = search_target is not None and any(
+                    t[2] == search_target[2] and abs(t[0] - search_target[0]) <= 3
+                    and abs(t[1] - search_target[1]) <= 3 for t in squad)
+                if search_target is None or arrived or rounds - search_round > 40:
+                    if search_target is not None:
+                        search_step += 1
+                    search_target = send_squad_searching(d, search_step)
+                    search_round = rounds
+                hold_clicks_until = rounds + 7
         if stalls and stalls % 12 == 0:
             d.say(f"  [battle] no progress for a while: {b}")
             # Record why it is stuck rather than just that it is. Screen coordinates cannot
@@ -3588,18 +3833,23 @@ def _fight_battle(d: Driver, budget_s: float = 1800.0, policy: dict | None = Non
             d.say(f"  [battle] stalemate at {stalls} rounds ({alive_now} vs {foes_now}); "
                   f"still searching")
 
-        outnumbered = foes_n >= alive * 3
-        collapsing = alive <= max(1, started_with // 3)
-        # No retreating. Two reasons, and the second is the engine's rather than a preference.
-        # Withdrawing hands the aliens straight back: survivors of a building mission go back into
-        # that building (battle.cpp:2900-2910) and survivors of a UFO recovery seed a NEARBY
-        # building instead (battle.cpp:2955-2963), which is how a retreat spreads infiltration to
-        # a neighbourhood that had none. The driver was withdrawing from roughly half its missions
-        # and then losing its funding to the infiltration it had just scattered. A mission fought
-        # to the end and lost is cheaper than one abandoned.
-        if started_with and alive and collapsing and outnumbered and stalls % 20 == 0:
-            d.say(f"  [battle] outnumbered {foes_n} to {alive} and staying: leaving would put "
-                  f"these aliens back on the map")
+        # Clearly outnumbered: leave rather than be wiped out. A lost mission and an abandoned one
+        # end the same way for the aliens -- on any mission the player does not win, the
+        # survivors of a building raid go back into that building and those of a UFO recovery
+        # go to a nearby one (Battle::exitBattle, battle.cpp), wiped out or not -- so staying buys
+        # nothing but dead soldiers. That is how two soldiers kept fighting fifteen aliens to the
+        # last man, the replacements were unarmed, the next alert beside the base went
+        # unanswered, and four base defences followed. "Clearly" is three to one with a loss
+        # already taken, or five to one outright. Never from a base defence: that concedes the
+        # base.
+        ratio = foes_n / max(1, alive)
+        clearly_outnumbered = alive and (ratio >= 5 or (ratio >= 3 and alive < started_with))
+        if may_leave and started_with and clearly_outnumbered:
+            d.say(f"  [battle] outnumbered {foes_n} to {alive}; withdrawing the survivors")
+            if leave_battle(d):
+                d.last_battle.update(withdrew=True)
+                return "returned"
+            d.say("  [battle] could not leave; fighting on")
 
     d.say("[battle] budget exhausted without a decision")
     return "timeout"
@@ -4734,6 +4984,47 @@ def clear_attack_orders(d: Driver) -> int:
                 time.sleep(0.2)
     if recalled:
         d.say(f"  [recall] {recalled} craft sent home to clear stale attack orders")
+    return recalled
+
+
+# A crewed craft parked, with no orders, at a building that is not its home for this long is a
+# squad nobody is using.
+STRANDED_AFTER_S = 90.0
+
+
+def recall_stranded_squads(d: Driver) -> int:
+    """Send home crewed craft that have sat idle at someone else's building.
+
+    A squad dispatched to an alert waits at the building for "Commence investigation", and the
+    engine only asks if the building is still detected when the squad arrives
+    (CityView::handleGameEvent, CommenceInvestigation). If detection has lapsed there is no prompt,
+    and the raid that would follow is gated on the armed count -- so the squad sat there. Three base
+    defences in one batch were lost to a single alien because every soldier was parked across
+    town and the base held only unarmed staff.
+    """
+    now = time.time()
+    seen, recalled = set(), 0
+    for _, f in craft_flags(d):
+        cid, at = f.get("id", ""), f.get("at", "-")
+        if (not cid or int(f.get("crew", "0") or 0) == 0 or f.get("home") == "1"
+                or at in ("", "-") or f.get("idle") != "1"):
+            continue
+        seen.add(cid)
+        since = d.stranded_since.get(cid)
+        if not since or since[0] != at:
+            d.stranded_since[cid] = (at, now)
+            continue
+        if now - since[1] < STRANDED_AFTER_S:
+            continue
+        if select_craft(d, cid) and d.click_id("BUTTON_GOTO_BASE", d.status()):
+            d.say(f"  [recall] {cid} sat idle at {at} with {f.get('crew')} aboard for "
+                  f"{now - since[1]:.0f}s; sending the squad home")
+            recalled += 1
+            seen.discard(cid)
+        time.sleep(0.2)
+    for cid in list(d.stranded_since):
+        if cid not in seen:
+            del d.stranded_since[cid]
     return recalled
 
 

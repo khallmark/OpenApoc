@@ -174,9 +174,13 @@ def plan_loadouts(catalog: dict[str, dict], roster: list[dict], mission: str,
             if not gun["ammo"]:
                 payloads = [gun]
             for payload in payloads:
-                # Melee/stunners, brainsucker pods and smoke guns are not primary firearms.
+                # Melee/stunners, brainsucker pods and smoke guns are not primary firearms. Nor is
+                # incendiary ammunition: the heavy role ranks by structural damage, so it chose
+                # incendiary launcher missiles and every raid set the building it was clearing on
+                # fire -- a building that belongs to someone, usually the government.
                 if payload["damage"] <= 0 or payload["range"] <= 4 or any(
-                        mark in payload["damage_type"] for mark in ("STUN", "BRAINSUCKER", "SMOKE")):
+                        mark in payload["damage_type"]
+                        for mark in ("STUN", "BRAINSUCKER", "SMOKE", "INCENDIARY")):
                     continue
                 weapons.append((weapon_rank(gun, payload, role, mission, enemies), gun, payload))
         if weapons:

@@ -48,11 +48,13 @@ from oa_play import (
     goto_portal,
     raid_alien_building,
     raid_infiltrated_building,
+    recall_stranded_squads,
     manufacture,
     gate_craft_project,
     craft_flags,
     buy_vehicles,
     arm_squad,
+    detail_int,
     unarmed_at_base,
     hire_engineers,
     hire_scientists,
@@ -142,6 +144,8 @@ class Victory:
         self.checkpoint = self.out / "victory.save"
         self.progress_path = self.out / "progress.json"
         self.progress = self._load()
+        # A base defence still being fought after its battle budget ran out (see fight()).
+        self.defence_open = False
         self.game: GameProcess | None = None
         self.d: Driver | None = None
         self.restarts = 0
@@ -393,6 +397,17 @@ class Victory:
             outcome = f"lost connection: {exc}"
         if outcome == "resolved":
             self.progress["wins"] += 1
+        # Base defences are the worst event a campaign has: casualties, wrecked facilities, and
+        # the campaign ends with the last base. Count each one once -- a defence that outlasts
+        # the battle budget re-enters here -- so the learner can be steered away from them.
+        if self.d.last_battle.get("mission_type") == "base_defense":
+            if not self.defence_open:
+                self.progress["base_defences"] = self.progress.get("base_defences", 0) + 1
+                self.say(f"BASE DEFENCE #{self.progress['base_defences']}")
+            self.defence_open = outcome == "timeout"
+            if outcome not in ("resolved", "timeout"):
+                self.progress["bases_lost"] = self.progress.get("bases_lost", 0) + 1
+                self.say(f"BASE LOST ({outcome})")
         self.say(f"=== mission #{n} outcome: {outcome} (wins {self.progress['wins']}) ===")
         self.flush()
         if self.alive():
@@ -536,11 +551,13 @@ class Victory:
         return False
 
     def city_turn(self) -> None:
-        # Watch the actual game-over condition. fundingTerminated latches for good the first week
-        # lifetime score drops below -2400, so this is a countdown that has to be tracked, not a
-        # number to notice afterwards.
+        # Watch the actual game-over condition. fundingTerminated latches for good on the Monday
+        # the score of the weeks before it is below -2400, so this is a countdown that has to be
+        # tracked, not a number to notice afterwards. The next Monday tests the finished weeks
+        # (margin_to_cutoff); the one after also counts this week's running score.
         money = self.d.h.gs("funds")
-        margin = int(money.get("margin_to_cutoff", "99999") or 99999)
+        margin = min(int(money.get("margin_to_cutoff", "99999") or 99999),
+                     int(money.get("margin_after_next", "99999") or 99999))
         if money.get("funding_terminated") == "1":
             if not self.progress.get("funding_lost"):
                 self.progress["funding_lost"] = True
@@ -612,13 +629,17 @@ class Victory:
         # No cooldown while buildings are known to be waiting. The cooldown exists to stop the
         # driver trekking to the city screen for nothing; when there is a confirmed address it is
         # just delay, and delay is what loses the infiltration race.
+        # Soldiers parked across town defend nothing; bring idle squads home first.
+        recall_stranded_squads(self.d)
         armed_now = int(self.d.h.gs("agents").get("armed", "0") or 0)
         due = INFIL_COOLDOWN_S if not self.d.alerted_buildings else 0.0
-        if armed_now >= self.strategy["infil_min_armed"] and \
-                time.time() - self.last_infil_raid >= due:
+        # A crew beside a base is swept with whoever is armed; raid_infiltrated_building still
+        # refuses odds the squad cannot win.
+        needed = 1 if self.d.base_threats else self.strategy["infil_min_armed"]
+        if armed_now >= needed and time.time() - self.last_infil_raid >= due:
             self.last_infil_raid = time.time()
             outcome = raid_infiltrated_building(self.d)
-            if outcome != "nothing-reported":
+            if outcome not in ("nothing-reported", "outmatched"):
                 self.say(f"infiltration raid: {outcome}")
                 self.progress["infil_raids"] = self.progress.get("infil_raids", 0) + 1
                 self.flush()
@@ -1199,21 +1220,48 @@ class Victory:
 
                     fit_now = int(self.d.h.gs("agents").get("soldiers_fit", "0") or 0)
                     min_squad = self.strategy["min_squad"]
-                    if fit_now < min_squad:
+                    # Aliens next to one of our bases lead to base defences: a crew spreading
+                    # from here can move in and expose the base to subversion UFOs. Answer those
+                    # with whatever armed squad there is; min_squad guards ordinary incidents only.
+                    threat = detail_int(st.detail, "threatens_base") == 1
+                    if threat:
+                        self.say(f"incident beside one of our bases ({detail}); answering it "
+                                 f"whatever the squad size")
+                    if fit_now < min_squad and not threat:
                         self.say(f"only {fit_now} fit soldiers < min_squad {min_squad}; not "
                                  f"dispatching a token force")
                         if not self.d.click_id("BUTTON_QUIT", st):
                             self.d.h.key("Escape")
                         time.sleep(0.6)
                         continue
-                    # The remembered incident can be dispatched from BuildingScreen after
-                    # the ordinary UI refit. AlertScreen itself cannot buy or issue equipment.
-                    if not self.d.click_id("BUTTON_QUIT", st):
-                        self.d.escape_key(st.stage)
+                    # Dispatch from the alert itself, armed soldiers only. This screen sends
+                    # the squad and the engine takes it from there: the trip, then "Commence
+                    # investigation" on arrival. Moving dispatch to the target's BuildingScreen
+                    # (to refit first) could not work -- that screen lists only soldiers already
+                    # AT the building -- and every incident ended in "No Agents Selected".
+                    # Refitting is continuous anyway (city_turn's arm_squad).
+                    sent = self.d.select_armed_squad(st)
+                    if sent and self.d.click_id("BUTTON_EXTERMINATE", st):
+                        self.say(f"incident: {sent} armed soldier(s) dispatched from the alert")
+                    else:
+                        self.say("incident: no armed squad free; acknowledging the alert")
+                        if not self.d.click_id("BUTTON_QUIT", st):
+                            self.d.escape_key(st.stage)
+                        if threat:
+                            # Acknowledging is not an answer when the crew can walk into the
+                            # base: that is exactly how a run went from a lost raid and eleven
+                            # unarmed recruits to four base defences. Arm whoever is home now and
+                            # go -- the alert put this building at the head of the sweep queue.
+                            time.sleep(0.5)
+                            self.say("base threat unanswered: arming the squad and sweeping now")
+                            arm_squad(self.d, agents=self.armoury_size())
+                            outcome = raid_infiltrated_building(self.d)
+                            self.say(f"infiltration raid (base threat): {outcome}")
+                            if outcome not in ("nothing-reported", "outmatched"):
+                                self.progress["infil_raids"] = \
+                                    self.progress.get("infil_raids", 0) + 1
+                                self.flush()
                     time.sleep(0.5)
-                    if self.d.status().stage == "CityView":
-                        outcome = raid_infiltrated_building(self.d)
-                        self.say(f"incident after role refit: {outcome}")
                     continue
                 if st.stage == "CityView":
                     self.stuck_since = 0.0

@@ -81,6 +81,10 @@ class AgentAssignment : public Form
 	std::list<StateRef<Agent>> getSelectedAgents() const;
 	// Get selected vehicles with preservation of order.
 	std::list<StateRef<Vehicle>> getSelectedVehicles() const;
+	// For the harness: "selected_agents=N boarding=... soldier_rows=...", where each row is drawn.
+	// boarding rows: x,y,shifter,max passengers,visible,flying,fleet index,soldiers aboard,unarmed
+	// soldiers aboard. soldier_rows: x,y,in craft,visible,list group,fleet index or -1,armed.
+	UString harnessRows() const;
 
 	void eventOccured(Event *e) override;
 	void update() override;

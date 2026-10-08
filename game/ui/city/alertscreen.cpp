@@ -1,5 +1,4 @@
 #include "game/ui/city/alertscreen.h"
-#include <algorithm>
 #include "forms/form.h"
 #include "forms/graphic.h"
 #include "forms/label.h"
@@ -9,7 +8,9 @@
 #include "framework/framework.h"
 #include "framework/keycodes.h"
 #include "game/state/city/agentmission.h"
+#include "game/state/city/base.h"
 #include "game/state/city/building.h"
+#include "game/state/city/city.h"
 #include "game/state/city/vehicle.h"
 #include "game/state/city/vehiclemission.h"
 #include "game/state/gameevent.h"
@@ -20,6 +21,7 @@
 #include "game/ui/general/aequipscreen.h"
 #include "game/ui/general/messagebox.h"
 #include "library/strings_format.h"
+#include <algorithm>
 
 namespace OpenApoc
 {
@@ -55,8 +57,35 @@ UString AlertScreen::harnessDetail() const
 	// Building has no id member; its name is what identifies it here.
 	UString name = building->name;
 	std::replace(name.begin(), name.end(), ' ', '_');
-	return format("alert_building={0} crew={1} owner={2}", name.empty() ? UString("-") : name,
-	              crew, owner);
+	// Whether aliens leaving this building could move into one of our bases. Crews spread to
+	// one of the nearest intact buildings (Building::alienMovement), and a crew arriving in a base
+	// can expose it -- and an exposed base is what a subversion UFO attacks (findings/
+	// base-defence.md). A player sees that coming from where the alert is on the map.
+	bool threatensBase = false;
+	if (building->city)
+	{
+		std::vector<StateRef<Building>> refs;
+		std::vector<Rect<int>> bounds;
+		std::vector<bool> intact;
+		for (const auto &b : building->city->buildings)
+		{
+			refs.push_back(b);
+			bounds.push_back(b->bounds);
+			intact.push_back(b->isAlive());
+		}
+		for (int i :
+		     Building::rankNearbyIntact(bounds, intact, Building::boundsCenter(building->bounds)))
+		{
+			const auto &near = refs[static_cast<size_t>(i)];
+			threatensBase = threatensBase || (near->base && near->owner == state->getPlayer());
+		}
+	}
+	// The assignment rows, so a driver can send only soldiers who can fight: a craft sent from
+	// here takes everyone aboard into the battle.
+	return format("alert_building={0} crew={1} owner={2} threatens_base={3} {4}",
+	              name.empty() ? UString("-") : name, crew, owner, threatensBase ? 1 : 0,
+	              agentAssignment ? agentAssignment->harnessRows()
+	                              : UString("selected_agents=0 boarding=- soldier_rows=-"));
 }
 
 void AlertScreen::begin()
