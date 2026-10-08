@@ -1,0 +1,2272 @@
+{
+  "classification": {
+    "all_map": "Road + ATV + Flying living on-map vehicles in current city.",
+    "civilian": "Excludes player, alien and ORG_MEGAPOL owners.",
+    "events": "Endpoint-visible transitions; coarse mode can miss sub-frame journeys or vehicles. Event counters are not complete dispatch throughput.",
+    "initial_ground": "Road/ATV cohort present on the map at the initial checkpoint, retaining handles to distinguish movement, parking and observed death.",
+    "max_road_stopped_ticks": "Largest current mission roadStoppedTicks among on-map ground vehicles at a checkpoint.",
+    "parked": "Living current-city vehicles with currentBuilding, including player vehicles.",
+    "police": "All ORG_MEGAPOL on-map vehicles, including generated traffic.",
+    "road_stopped_12000": "Count of on-map ground vehicles with current mission roadStoppedTicks >=12000.",
+    "stationary_12000": "Mission-bearing ground vehicle with no net displacement during consecutive observations accumulating 12000 ticks. In coarse mode this cannot prove continuous immobility inside a frame; fine mode observes each six-tick step."
+  },
+  "generated_utc": "2026-10-08T06:31:59.798374+00:00",
+  "hourly_population_table": {
+    "columns": [
+      "run_id",
+      "elapsed_hour_index",
+      "sample_count",
+      "road_mean",
+      "road_min",
+      "road_max",
+      "all_map_mean",
+      "civilian_mean",
+      "flying_mean",
+      "ground_velocity_moving_mean",
+      "max_sampled_mission_stopped_ticks",
+      "mission_stopped_12000_checkpoints",
+      "position_stationary_checkpoints"
+    ],
+    "rows": [
+      [
+        "reviewed-speed5-eligible-hour",
+        0,
+        12,
+        29.416666666666668,
+        23,
+        32,
+        32.833333333333336,
+        28.083333333333332,
+        3.4166666666666665,
+        26.916666666666668,
+        13827,
+        1,
+        0
+      ],
+      [
+        "reviewed-speed5-sixhours",
+        0,
+        12,
+        30.166666666666668,
+        22,
+        35,
+        33.333333333333336,
+        29.25,
+        3.1666666666666665,
+        28.083333333333332,
+        5701,
+        0,
+        0
+      ],
+      [
+        "reviewed-speed5-sixhours",
+        1,
+        12,
+        33.5,
+        29,
+        35,
+        34.75,
+        31,
+        1.25,
+        22.666666666666668,
+        31431,
+        2,
+        6
+      ],
+      [
+        "reviewed-speed5-sixhours",
+        2,
+        12,
+        33.583333333333336,
+        31,
+        35,
+        34.666666666666664,
+        27.083333333333332,
+        1.0833333333333333,
+        19.5,
+        35192,
+        4,
+        7
+      ],
+      [
+        "reviewed-speed5-sixhours",
+        3,
+        12,
+        33.75,
+        31,
+        35,
+        34.75,
+        30.25,
+        1,
+        22.25,
+        30984,
+        2,
+        8
+      ],
+      [
+        "reviewed-speed5-sixhours",
+        4,
+        12,
+        32.166666666666664,
+        30,
+        34,
+        33.75,
+        28.666666666666668,
+        1.5833333333333333,
+        26.083333333333332,
+        7108,
+        0,
+        2
+      ],
+      [
+        "reviewed-speed5-sixhours",
+        5,
+        12,
+        30,
+        27,
+        34,
+        33.166666666666664,
+        28.25,
+        3.1666666666666665,
+        25.75,
+        2039,
+        0,
+        1
+      ],
+      [
+        "reviewed-speed5-day",
+        0,
+        12,
+        29.416666666666668,
+        23,
+        32,
+        32.833333333333336,
+        28.083333333333332,
+        3.4166666666666665,
+        26.916666666666668,
+        13827,
+        1,
+        0
+      ],
+      [
+        "reviewed-speed5-day",
+        1,
+        12,
+        33,
+        29,
+        35,
+        34.5,
+        30.916666666666668,
+        1.5,
+        24.5,
+        8690,
+        0,
+        3
+      ],
+      [
+        "reviewed-speed5-day",
+        2,
+        12,
+        32.5,
+        29,
+        34,
+        34.083333333333336,
+        27.833333333333332,
+        1.5833333333333333,
+        25.916666666666668,
+        8649,
+        0,
+        4
+      ],
+      [
+        "reviewed-speed5-day",
+        3,
+        12,
+        31.166666666666668,
+        27,
+        33,
+        33.5,
+        28.666666666666668,
+        2.3333333333333335,
+        27.583333333333332,
+        2662,
+        0,
+        2
+      ],
+      [
+        "reviewed-speed5-day",
+        4,
+        12,
+        33.083333333333336,
+        30,
+        35,
+        34.5,
+        26.166666666666668,
+        1.4166666666666667,
+        19,
+        315117,
+        7,
+        7
+      ],
+      [
+        "reviewed-speed5-day",
+        5,
+        12,
+        34.5,
+        34,
+        35,
+        35.333333333333336,
+        27.416666666666668,
+        0.8333333333333334,
+        14.666666666666666,
+        670298,
+        11,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        6,
+        12,
+        34,
+        31,
+        35,
+        34.75,
+        27.166666666666668,
+        0.75,
+        13.166666666666666,
+        412568,
+        11,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        7,
+        12,
+        33.75,
+        31,
+        35,
+        34.833333333333336,
+        25.416666666666668,
+        1.0833333333333333,
+        10.5,
+        948643,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        8,
+        12,
+        34.666666666666664,
+        34,
+        35,
+        35.333333333333336,
+        24.916666666666668,
+        0.6666666666666666,
+        6.5,
+        1485015,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        9,
+        12,
+        35,
+        35,
+        35,
+        35.333333333333336,
+        24.333333333333332,
+        0.3333333333333333,
+        8.583333333333334,
+        2020928,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        10,
+        12,
+        35,
+        35,
+        35,
+        35.25,
+        24.25,
+        0.25,
+        9,
+        2556745,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        11,
+        12,
+        35,
+        35,
+        35,
+        35.25,
+        24.25,
+        0.25,
+        7.833333333333333,
+        3091914,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        12,
+        12,
+        36.083333333333336,
+        36,
+        37,
+        36.166666666666664,
+        22.333333333333332,
+        0.08333333333333333,
+        5.916666666666667,
+        3629311,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        13,
+        12,
+        36,
+        36,
+        36,
+        36.25,
+        22.25,
+        0.25,
+        5.916666666666667,
+        4015617,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        14,
+        12,
+        36,
+        36,
+        36,
+        36.333333333333336,
+        22.333333333333332,
+        0.3333333333333333,
+        8.166666666666666,
+        646962,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        15,
+        12,
+        36,
+        36,
+        36,
+        36.333333333333336,
+        22.333333333333332,
+        0.3333333333333333,
+        7,
+        1182999,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        16,
+        12,
+        36,
+        36,
+        36,
+        36.25,
+        22.25,
+        0.25,
+        7.166666666666667,
+        1719732,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        17,
+        12,
+        36,
+        36,
+        36,
+        36.583333333333336,
+        22.583333333333332,
+        0.5833333333333334,
+        7,
+        2253213,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        18,
+        12,
+        36,
+        36,
+        36,
+        36.583333333333336,
+        22.583333333333332,
+        0.5833333333333334,
+        7.083333333333333,
+        2788254,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        19,
+        12,
+        36,
+        36,
+        36,
+        36.333333333333336,
+        22.333333333333332,
+        0.3333333333333333,
+        6.333333333333333,
+        3326425,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        20,
+        12,
+        36,
+        36,
+        36,
+        36.833333333333336,
+        22.833333333333332,
+        0.8333333333333334,
+        7.833333333333333,
+        3864420,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        21,
+        12,
+        36,
+        36,
+        36,
+        36.083333333333336,
+        22.083333333333332,
+        0.08333333333333333,
+        6.5,
+        4396141,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        22,
+        12,
+        36,
+        36,
+        36,
+        36.583333333333336,
+        22.583333333333332,
+        0.5833333333333334,
+        6.166666666666667,
+        4935207,
+        12,
+        12
+      ],
+      [
+        "reviewed-speed5-day",
+        23,
+        12,
+        36,
+        36,
+        36,
+        36.333333333333336,
+        22.333333333333332,
+        0.3333333333333333,
+        6.5,
+        5470956,
+        12,
+        12
+      ],
+      [
+        "reviewed-bench-sixhours",
+        0,
+        43,
+        33.55813953488372,
+        27,
+        102,
+        35.58139534883721,
+        26.976744186046513,
+        2.0232558139534884,
+        33.093023255813954,
+        145,
+        0,
+        0
+      ],
+      [
+        "reviewed-bench-sixhours",
+        1,
+        43,
+        30,
+        25,
+        34,
+        32.395348837209305,
+        23.41860465116279,
+        2.395348837209302,
+        29.697674418604652,
+        205,
+        0,
+        0
+      ],
+      [
+        "reviewed-bench-sixhours",
+        2,
+        43,
+        29.976744186046513,
+        23,
+        34,
+        32.02325581395349,
+        22.325581395348838,
+        2.046511627906977,
+        29.813953488372093,
+        181,
+        0,
+        0
+      ],
+      [
+        "reviewed-bench-sixhours",
+        3,
+        43,
+        30.813953488372093,
+        25,
+        35,
+        32.883720930232556,
+        23.627906976744185,
+        2.0697674418604652,
+        30.488372093023255,
+        235,
+        0,
+        0
+      ],
+      [
+        "reviewed-bench-sixhours",
+        4,
+        44,
+        31.045454545454547,
+        25,
+        35,
+        33.34090909090909,
+        24.545454545454547,
+        2.2954545454545454,
+        30.704545454545453,
+        163,
+        0,
+        0
+      ],
+      [
+        "reviewed-bench-sixhours",
+        5,
+        44,
+        30.75,
+        26,
+        34,
+        32.97727272727273,
+        24.181818181818183,
+        2.227272727272727,
+        30.545454545454547,
+        115,
+        0,
+        0
+      ],
+      [
+        "reviewed-old2-sixhours",
+        0,
+        43,
+        34.41860465116279,
+        27,
+        107,
+        36.41860465116279,
+        27.813953488372093,
+        2,
+        33.883720930232556,
+        127,
+        0,
+        0
+      ],
+      [
+        "reviewed-old2-sixhours",
+        1,
+        43,
+        31.046511627906977,
+        24,
+        36,
+        33.06976744186046,
+        23.697674418604652,
+        2.0232558139534884,
+        30.837209302325583,
+        175,
+        0,
+        0
+      ],
+      [
+        "reviewed-old2-sixhours",
+        2,
+        43,
+        29.58139534883721,
+        21,
+        36,
+        32,
+        22.767441860465116,
+        2.4186046511627906,
+        29.372093023255815,
+        103,
+        0,
+        0
+      ],
+      [
+        "reviewed-old2-sixhours",
+        3,
+        43,
+        30.046511627906977,
+        24,
+        34,
+        32.25581395348837,
+        23.27906976744186,
+        2.2093023255813953,
+        29.88372093023256,
+        151,
+        0,
+        0
+      ],
+      [
+        "reviewed-old2-sixhours",
+        4,
+        44,
+        31.15909090909091,
+        24,
+        36,
+        33.18181818181818,
+        24.181818181818183,
+        2.022727272727273,
+        30.795454545454547,
+        385,
+        0,
+        0
+      ],
+      [
+        "reviewed-old2-sixhours",
+        5,
+        44,
+        32.61363636363637,
+        29,
+        36,
+        34.11363636363637,
+        19.045454545454547,
+        1.5,
+        22,
+        96439,
+        8,
+        8
+      ]
+    ]
+  },
+  "input_fixtures": {
+    "bench": {
+      "initial_clock": 243907637,
+      "initial_flying": 1,
+      "initial_road": 147,
+      "save_sha256": "c6e4ee9f869a00560fbfb20f15c5762161ec4b97259023fa191d3f0abca82f25",
+      "saved_rng": [
+        6272015428809853994,
+        14980957758162900039
+      ]
+    },
+    "fresh": {
+      "initial_clock": 6220800,
+      "initial_flying": 0,
+      "initial_road": 0,
+      "save_sha256": "f00714bbc9e304458c61dbdc78e04b20fc504fbf540f3e9d545cd0d3fb7d20f1",
+      "saved_rng": [
+        7251685877758789622,
+        4494004282789118709
+      ]
+    },
+    "old2": {
+      "initial_clock": 318314193,
+      "initial_flying": 4,
+      "initial_road": 157,
+      "save_sha256": "2d0dbc585290c7cf444e25e27c0281c178028dee8248a37decf046a037a3ec3b",
+      "saved_rng": [
+        17203234966449033952,
+        10547877745788046462
+      ]
+    }
+  },
+  "limitations": [
+    "Individual run observations are not independent replicated estimates or statistical significance tests.",
+    "Identical saved input and RNG state need not produce identical prefixes; separate traces are retained.",
+    "Unchecked turbo runs continue through any canTurbo=false frames and report the count. Strict eligible-hour checks every frame. Neither mode supplies rendered UI evidence by itself.",
+    "Position stationarity and current-mission stopped counters measure different behavior; preserve both. High density alone does not demonstrate healthy flow.",
+    "Mission stopped counters are sampled at census checkpoints; the maximum is a sampled maximum, not a continuous-time upper bound.",
+    "Results apply to source commit and frozen binary above. Historical datasets remain unchanged; no blanket parity claim is made for other material heads or custom saves."
+  ],
+  "method": {
+    "coarse": "Actual updateTurbo at 43200 ticks/frame; position observed and census emitted at each frame endpoint.",
+    "dispatch": "Traffic batch at messages in FileLevel 3 log, independent of sampled map entries.",
+    "fine": "Actual update(6); position observed every six ticks; census emitted every 12000 ticks plus final endpoint.",
+    "first_hour_filter": "0 < elapsed <= 518400",
+    "maximum_parallel_simulations": 2,
+    "means": "Equal-weight population checkpoints; fine-step runs include an irregular final checkpoint.",
+    "post_warmup_filter": "elapsed > 60000, including final endpoint",
+    "resume": "Load saved GameState and initState; no startGame, reseeding, mission resets or observer vehicle deletion.",
+    "stats_array_order": [
+      "mean",
+      "minimum",
+      "maximum"
+    ],
+    "ticks_per_hour": 518400,
+    "ticks_per_second": 144
+  },
+  "negative_outcome_summary": {
+    "reviewed_old2": {
+      "assessment": "Three final waiting vehicles remain; all 157 initially on-map ground vehicles changed position during the run.",
+      "final_max_mission_stopped_ticks": 96439,
+      "final_mission_stopped_12000_cars": 3,
+      "final_position_stationary_cars": 3
+    },
+    "reviewed_speed5_day": {
+      "assessment": "Mission counters corroborate multi-hour queues around tiles {82..84,39,2}; density alone is not acceptance of traffic flow.",
+      "final_blocker_diagnostic_count": 24,
+      "final_max_mission_stopped_ticks": 5470956,
+      "final_mission_stopped_12000_cars": 9,
+      "final_position_stationary_cars": 24
+    }
+  },
+  "observations_csv": {
+    "columns": [
+      "run_id",
+      "fixture",
+      "duration_ticks",
+      "mode",
+      "step_ticks",
+      "receipt_line",
+      "elapsed",
+      "clock",
+      "road",
+      "atv",
+      "flying",
+      "all_map",
+      "civilian",
+      "police",
+      "parked",
+      "ground_velocity_moving",
+      "ground_moved_last_step",
+      "ground_mission_bearing",
+      "stationary_12000",
+      "max_road_stopped_ticks",
+      "road_stopped_12000",
+      "context_player_fleet",
+      "context_nonplayer_onmap",
+      "context_aliens_onmap",
+      "context_crashed_aliens_onmap",
+      "context_crashed_onmap",
+      "events_entries",
+      "events_road_entries",
+      "events_flyer_entries",
+      "events_civilian_entries",
+      "events_police_entries",
+      "events_building_entries",
+      "events_confirmed_target_arrivals",
+      "events_dead_exits",
+      "events_other_exits",
+      "events_newly_seen",
+      "events_ground_tile_changes",
+      "events_ground_reversals",
+      "events_ground_distance",
+      "events_successful_retirements",
+      "initial_ground_on_map_now",
+      "initial_ground_ever_changed_position",
+      "initial_ground_dead",
+      "initial_ground_in_building",
+      "initial_ground_elsewhere"
+    ],
+    "line_endings": "LF",
+    "path": "docs/solutions/civilian-traffic-reviewed-observations.csv",
+    "rows": 897,
+    "sha256": "5c32c21d373ccc8a5a0b08f50e37e4b2b419a6ceb623ab2074c9bc6b710bf5af"
+  },
+  "provenance": {
+    "binary_sha256": "138586c754e96f3ad42688c7bcbcfc3b3108fe765c33a6519d80d552329f4a92",
+    "material_code_commit": "685032b9daa682749efe885eae4aab8ec09c998f",
+    "material_commit_attribution": "Provided by integrator after central build; no git inspection performed by observation agent.",
+    "observer_source_sha256": "74e55afeab7339196edea8625d68077e8a50f668f744c72e3373f41fcc555c0b",
+    "receipt_paths": "Relative to private /tmp/openapoc-traffic-observed; saves, data, and binaries are not embedded in this aggregate.",
+    "runtime_binary_relative_path": "reviewed-runtime/traffic_census",
+    "runtime_manifest_sha256": "0e17659eeadb4fa0f8712c744a0b3a288d84c4ad900d22fc71e8cc5685a97496",
+    "source_sha256": {
+      "game/state/city/city.cpp": "4f29f5fa7d18eb72cef5151a0e93f2a22b9c6c7de628303fbc29085b4e2a1c98",
+      "game/state/city/city.h": "9cb8286f31856a33b29a5a9dc2c07aaf735c54c0ed56f8d23d83bc3f0e3692d9",
+      "game/state/city/vehicle.cpp": "a171ccae81fc896ba91239ce7728050549dcaf7bdb91205539953c2577620e60",
+      "game/state/city/vehicle.h": "8676fb4e13b6f04c244b28f59ecf9e3ea9d7078f0cfed0af94d651b94c178402",
+      "game/state/city/vehiclemission.cpp": "1170183ffdc8ef55b5b9be546412f27ffa1e95cee8f0c67bca92926bc76c5904",
+      "game/state/city/vehiclemission.h": "04fd931e2e4b33e6308616a9bde24a3260a98dc8a50e699b9c4ddb7f7f552b8c",
+      "game/state/gamestate.cpp": "81287e7b076af2f584d074f44f7fe343d14c089e584ed8bacee765b41a96444e",
+      "game/state/gamestate.h": "64e5d4fa2d35ef3445dd309fb8939a47c50fb9bb3126bcb343a6ec9fc65a02f0",
+      "game/state/shared/organisation.cpp": "d29537751ef6307f190afe764eb9071db610ac58a6e0c173bf909b1b4217df29",
+      "game/state/shared/organisation.h": "1edeb9e080f5d8f94b4abe932e4308d1c245b80ea6e3d147a6a6026a7978e7e5",
+      "tests/traffic_census.cpp": "74e55afeab7339196edea8625d68077e8a50f668f744c72e3373f41fcc555c0b"
+    },
+    "source_snapshot_relative_path": "reviewed-runtime/source"
+  },
+  "rendered_ui_observation": {
+    "final_paused": {
+      "clock_ticks": 6393604,
+      "crashed": 0,
+      "dead": 0,
+      "label": "final_paused",
+      "on_map": 36,
+      "stage": "CityView",
+      "time": "12:20",
+      "total_vehicles": 364
+    },
+    "final_paused_clock_delta": 172804,
+    "first_alert": {
+      "clock_ticks": 6393601,
+      "crashed": 0,
+      "dead": 0,
+      "label": "speed5",
+      "on_map": 36,
+      "stage": "AlertScreen",
+      "time": "12:20",
+      "total_vehicles": 364
+    },
+    "first_alert_clock_delta": 172801,
+    "harness_port_at_observation": 52139,
+    "historical_pre_review_reference": {
+      "binary_sha256": "ffa5876a1aacaf5acfc60cc9d208a80b8f465579aefc53b84930c3b21863f48c",
+      "comparison": "Historical pre-review alert had 8 on-map vehicles; current reviewed app has 36. Earlier 8 to 34 UI observation belongs to older code.",
+      "first_alert": {
+        "clock_ticks": 6393601,
+        "crashed": 0,
+        "dead": 0,
+        "label": "speed5",
+        "on_map": 8,
+        "stage": "AlertScreen",
+        "time": "12:20",
+        "total_vehicles": 336
+      },
+      "receipt_path": "pre-speed5-ui-ack/observations.jsonl",
+      "receipt_sha256": "a81d76da9a0d64cf9a666c55a45b58efb7a12667c6501c19cad47d644db141da"
+    },
+    "initial": {
+      "clock_ticks": 6220800,
+      "crashed": 0,
+      "dead": 0,
+      "label": "fresh_paused",
+      "on_map": 0,
+      "stage": "CityView",
+      "time": "12:00",
+      "total_vehicles": 330
+    },
+    "limitation": "Rendered observation reaches first alert at 12:20; it is not an uninterrupted six-hour/day UI validation.",
+    "material_code_commit": "685032b9daa682749efe885eae4aab8ec09c998f",
+    "pid_at_observation": 74043,
+    "receipts": {
+      "alert-6393601.png": {
+        "path": "playable-reviewed/alert-6393601.png",
+        "sha256": "183acf92273584734dd58a1c92d8e98227c71f833e14cb28dfe23c789665a889"
+      },
+      "fresh-after.png": {
+        "path": "playable-reviewed/fresh-after.png",
+        "sha256": "903137c933ebb60ed263304a2cbe6fb9bbdea79cf3d23b87afbaf13ec0014d6f"
+      },
+      "fresh-start.png": {
+        "path": "playable-reviewed/fresh-start.png",
+        "sha256": "853bcac4272f4232b92cf9f4f15b7a6605bf522e29c3de62f843c4f9d46221fc"
+      },
+      "game.log": {
+        "path": "playable-reviewed/game.log",
+        "sha256": "7d59888ea005df726950dbd67975f72ea3c5064c9d696c73f07a2ab8c0cabb96"
+      },
+      "observations.jsonl": {
+        "path": "playable-reviewed/observations.jsonl",
+        "sha256": "41b5db15e8125f3fa6bb23229bae4cbf660356165fc73662b1038a4d8f3b50d8"
+      },
+      "ready-to-play.save": {
+        "path": "playable-reviewed/ready-to-play.save",
+        "sha256": "0ba8adee9579deb67288df7a153daf17ad586c120ce0348642216bcc711e95e5"
+      },
+      "startup.save": {
+        "path": "playable-reviewed/startup.save",
+        "sha256": "f00714bbc9e304458c61dbdc78e04b20fc504fbf540f3e9d545cd0d3fb7d20f1"
+      }
+    },
+    "snapshot_binary_sha256": "43a4634335d97bfa86e358c3b3d506a8d822fb9a675fa4c0f078ae678c40d448",
+    "source_attribution": "Integrator confirmed rebuilt app embeds this material head.",
+    "state": "Integrator left its QA process open and paused; this data agent did not interact with it."
+  },
+  "runs": [
+    {
+      "actual_clock_delta": 518400,
+      "census_samples": 13,
+      "diagnostics": {
+        "final_blockers": [],
+        "game_errors": []
+      },
+      "dispatch": {
+        "batches": 120,
+        "first": {
+          "line": 1876,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 33,
+          "sent": 4,
+          "time": "12:00",
+          "wanted": 4
+        },
+        "last": {
+          "line": 20329,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 3,
+          "sent": 3,
+          "time": "12:00",
+          "wanted": 6
+        },
+        "no_source": 0,
+        "nowhere": 0,
+        "sent": 359,
+        "wanted": 473
+      },
+      "exact_clock_validation": true,
+      "exit_code": 0,
+      "final": {
+        "all_map": 33,
+        "atv": 0,
+        "civilian": 29,
+        "flying": 1,
+        "ground_mission_bearing": 32,
+        "ground_moved_last_step": 8,
+        "ground_velocity_moving": 27,
+        "max_road_stopped_ticks": 1,
+        "parked": 329,
+        "police": 4,
+        "road": 32,
+        "road_stopped_12000": 0,
+        "stationary_12000": 0
+      },
+      "final_clock": 6739200,
+      "first_hour": {
+        "first_elapsed": 43200,
+        "last_elapsed": 518400,
+        "max_mission_stopped_12000_cars": 1,
+        "max_position_stationary_cars": 0,
+        "max_sampled_mission_stopped_ticks": 13827,
+        "mission_stopped_12000_checkpoints": 1,
+        "population_and_moving_stats": {
+          "all_map": [
+            32.833333333333336,
+            26,
+            35
+          ],
+          "atv": [
+            0,
+            0,
+            0
+          ],
+          "civilian": [
+            28.083333333333332,
+            21,
+            32
+          ],
+          "flying": [
+            3.4166666666666665,
+            1,
+            6
+          ],
+          "ground_velocity_moving": [
+            26.916666666666668,
+            21,
+            31
+          ],
+          "parked": [
+            328.6666666666667,
+            328,
+            329
+          ],
+          "police": [
+            4.75,
+            3,
+            8
+          ],
+          "road": [
+            29.416666666666668,
+            23,
+            32
+          ]
+        },
+        "position_stationary_checkpoints": 0,
+        "sample_count": 12
+      },
+      "fixture": "fresh",
+      "full_run_stops": {
+        "max_position_stationary_cars": 0,
+        "max_sampled_mission_stopped_ticks": 13827,
+        "mission_stopped_12000_checkpoints": 1,
+        "position_stationary_checkpoints": 0
+      },
+      "initial": {
+        "all_map": 0,
+        "atv": 0,
+        "civilian": 0,
+        "flying": 0,
+        "parked": 330,
+        "police": 0,
+        "road": 0
+      },
+      "initial_clock": 6220800,
+      "initial_ground_final": {
+        "dead": 0,
+        "elsewhere": 0,
+        "ever_changed_position": 0,
+        "in_building": 0,
+        "on_map_now": 0
+      },
+      "inventory_totals": {
+        "final": {
+          "crashed_alive": 0,
+          "observed_dead": 116,
+          "onmap": 33,
+          "parked": 329,
+          "successful_retirements": 147
+        },
+        "initial": {
+          "crashed_alive": 0,
+          "observed_dead": 0,
+          "onmap": 0,
+          "parked": 330,
+          "successful_retirements": 0
+        }
+      },
+      "mode": "turbo",
+      "negative_observations": [
+        "At least one checkpoint contains a current-mission road wait of 12000 ticks or longer."
+      ],
+      "observed_events_final": {
+        "building_entries": 153,
+        "civilian_entries": 251,
+        "confirmed_target_arrivals": 148,
+        "dead_exits": 100,
+        "entries": 286,
+        "flyer_entries": 40,
+        "ground_distance": 2950.9477250874043,
+        "ground_reversals": 0,
+        "ground_tile_changes": 106,
+        "newly_seen": 295,
+        "other_exits": 0,
+        "police_entries": 35,
+        "road_entries": 246,
+        "successful_retirements": 147
+      },
+      "post_warmup": {
+        "first_elapsed": 86400,
+        "last_elapsed": 518400,
+        "max_mission_stopped_12000_cars": 1,
+        "max_position_stationary_cars": 0,
+        "max_sampled_mission_stopped_ticks": 13827,
+        "mission_stopped_12000_checkpoints": 1,
+        "population_and_moving_stats": {
+          "all_map": [
+            33.45454545454545,
+            30,
+            35
+          ],
+          "atv": [
+            0,
+            0,
+            0
+          ],
+          "civilian": [
+            28.727272727272727,
+            26,
+            32
+          ],
+          "flying": [
+            3.4545454545454546,
+            1,
+            6
+          ],
+          "ground_velocity_moving": [
+            27.454545454545453,
+            24,
+            31
+          ],
+          "parked": [
+            328.72727272727275,
+            328,
+            329
+          ],
+          "police": [
+            4.7272727272727275,
+            3,
+            8
+          ],
+          "road": [
+            30,
+            28,
+            32
+          ]
+        },
+        "position_stationary_checkpoints": 0,
+        "sample_count": 11
+      },
+      "receipts": {
+        "census.txt": {
+          "path": "reviewed-speed5-eligible-hour/census.txt",
+          "sha256": "d0b5b770aa3e1e6d799691dbc3318ab1e08cbf51e8cb70153fa35d313a82cfd2"
+        },
+        "game.log": {
+          "path": "reviewed-speed5-eligible-hour/game.log",
+          "sha256": "29d3787a82dc0472f7636ca19ed099a919ffd783950f3f2392dec1cb02a17558"
+        },
+        "log.txt": {
+          "path": "reviewed-speed5-eligible-hour/log.txt",
+          "sha256": "cfdeb39c56f7f346207c27b917dcd03c400c38209ce8eaf263fcc5830732a35a"
+        },
+        "metadata.json": {
+          "path": "reviewed-speed5-eligible-hour/metadata.json",
+          "sha256": "8e51e6ad6bcf050a2ee7523d511df3032a78adb2703201cd05d8d03638f3556d"
+        }
+      },
+      "requested_ticks": 518400,
+      "run_id": "reviewed-speed5-eligible-hour",
+      "step_ticks": 43200,
+      "turbo_eligibility": {
+        "unavailable_frames": 0,
+        "unchecked": false
+      },
+      "wall_seconds": 0.128262542
+    },
+    {
+      "actual_clock_delta": 3110400,
+      "census_samples": 73,
+      "diagnostics": {
+        "final_blockers": [],
+        "game_errors": []
+      },
+      "dispatch": {
+        "batches": 720,
+        "first": {
+          "line": 1876,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 33,
+          "sent": 4,
+          "time": "12:00",
+          "wanted": 4
+        },
+        "last": {
+          "line": 77632,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 5,
+          "sent": 4,
+          "time": "17:00",
+          "wanted": 4
+        },
+        "no_source": 0,
+        "nowhere": 0,
+        "sent": 1385,
+        "wanted": 4283
+      },
+      "exact_clock_validation": true,
+      "exit_code": 0,
+      "final": {
+        "all_map": 34,
+        "atv": 0,
+        "civilian": 30,
+        "flying": 6,
+        "ground_mission_bearing": 28,
+        "ground_moved_last_step": 14,
+        "ground_velocity_moving": 20,
+        "max_road_stopped_ticks": 439,
+        "parked": 332,
+        "police": 4,
+        "road": 28,
+        "road_stopped_12000": 0,
+        "stationary_12000": 0
+      },
+      "final_clock": 9331200,
+      "first_hour": {
+        "first_elapsed": 43200,
+        "last_elapsed": 518400,
+        "max_mission_stopped_12000_cars": 0,
+        "max_position_stationary_cars": 0,
+        "max_sampled_mission_stopped_ticks": 5701,
+        "mission_stopped_12000_checkpoints": 0,
+        "population_and_moving_stats": {
+          "all_map": [
+            33.333333333333336,
+            28,
+            36
+          ],
+          "atv": [
+            0,
+            0,
+            0
+          ],
+          "civilian": [
+            29.25,
+            24,
+            34
+          ],
+          "flying": [
+            3.1666666666666665,
+            1,
+            8
+          ],
+          "ground_velocity_moving": [
+            28.083333333333332,
+            21,
+            32
+          ],
+          "parked": [
+            329.0833333333333,
+            328,
+            331
+          ],
+          "police": [
+            4.083333333333333,
+            1,
+            7
+          ],
+          "road": [
+            30.166666666666668,
+            22,
+            35
+          ]
+        },
+        "position_stationary_checkpoints": 0,
+        "sample_count": 12
+      },
+      "fixture": "fresh",
+      "full_run_stops": {
+        "max_position_stationary_cars": 5,
+        "max_sampled_mission_stopped_ticks": 35192,
+        "mission_stopped_12000_checkpoints": 8,
+        "position_stationary_checkpoints": 24
+      },
+      "initial": {
+        "all_map": 0,
+        "atv": 0,
+        "civilian": 0,
+        "flying": 0,
+        "parked": 330,
+        "police": 0,
+        "road": 0
+      },
+      "initial_clock": 6220800,
+      "initial_ground_final": {
+        "dead": 0,
+        "elsewhere": 0,
+        "ever_changed_position": 0,
+        "in_building": 0,
+        "on_map_now": 0
+      },
+      "inventory_totals": {
+        "final": {
+          "crashed_alive": 0,
+          "observed_dead": 441,
+          "onmap": 34,
+          "parked": 332,
+          "successful_retirements": 650
+        },
+        "initial": {
+          "crashed_alive": 0,
+          "observed_dead": 0,
+          "onmap": 0,
+          "parked": 330,
+          "successful_retirements": 0
+        }
+      },
+      "mode": "turbo-unchecked",
+      "negative_observations": [
+        "At least one checkpoint contains a current-mission road wait of 12000 ticks or longer.",
+        "At least one checkpoint contains a position-stationary ground vehicle; interpret using this run's observation step."
+      ],
+      "observed_events_final": {
+        "building_entries": 688,
+        "civilian_entries": 958,
+        "confirmed_target_arrivals": 666,
+        "dead_exits": 356,
+        "entries": 1078,
+        "flyer_entries": 134,
+        "ground_distance": 18325.86408981681,
+        "ground_reversals": 42,
+        "ground_tile_changes": 1291,
+        "newly_seen": 1127,
+        "other_exits": 0,
+        "police_entries": 120,
+        "road_entries": 944,
+        "successful_retirements": 650
+      },
+      "post_warmup": {
+        "first_elapsed": 86400,
+        "last_elapsed": 3110400,
+        "max_mission_stopped_12000_cars": 1,
+        "max_position_stationary_cars": 5,
+        "max_sampled_mission_stopped_ticks": 35192,
+        "mission_stopped_12000_checkpoints": 8,
+        "population_and_moving_stats": {
+          "all_map": [
+            34.15492957746479,
+            30,
+            36
+          ],
+          "atv": [
+            0,
+            0,
+            0
+          ],
+          "civilian": [
+            29.154929577464788,
+            24,
+            34
+          ],
+          "flying": [
+            1.8169014084507042,
+            0,
+            8
+          ],
+          "ground_velocity_moving": [
+            24.098591549295776,
+            16,
+            32
+          ],
+          "parked": [
+            329.3943661971831,
+            327,
+            334
+          ],
+          "police": [
+            5,
+            1,
+            10
+          ],
+          "road": [
+            32.33802816901409,
+            26,
+            35
+          ]
+        },
+        "position_stationary_checkpoints": 24,
+        "sample_count": 71
+      },
+      "receipts": {
+        "census.txt": {
+          "path": "reviewed-speed5-sixhours/census.txt",
+          "sha256": "fed79f85880bb491d62a0ab5ae0611a7dfd566296156bc1d8541b3cf73e360b0"
+        },
+        "game.log": {
+          "path": "reviewed-speed5-sixhours/game.log",
+          "sha256": "14fc9cbf3c8f2b1da5bba2690ba9d007775f2ac6ccca2ad1625feb140dee4df3"
+        },
+        "log.txt": {
+          "path": "reviewed-speed5-sixhours/log.txt",
+          "sha256": "af02c2eaf3a210df83560c636f5530d94d151dd4d05d26393d8b331fbb28b131"
+        },
+        "metadata.json": {
+          "path": "reviewed-speed5-sixhours/metadata.json",
+          "sha256": "f870f11b1d09f9dfbad3fd40d1315205c83a1e73d0b315d1f93af004e15be7d8"
+        }
+      },
+      "requested_ticks": 3110400,
+      "run_id": "reviewed-speed5-sixhours",
+      "step_ticks": 43200,
+      "turbo_eligibility": {
+        "unavailable_frames": 0,
+        "unchecked": true
+      },
+      "wall_seconds": 0.547015
+    },
+    {
+      "actual_clock_delta": 12441600,
+      "census_samples": 289,
+      "diagnostics": {
+        "final_blockers": [
+          {
+            "line": 1277,
+            "text": "BLOCKER id=VEHICLE_135 name=Police Car 1 stationary=5270400 roadStoppedTicks=1 mission=GotoLocation {64,89,1} missions=2 path=83 wait=8 reroutes=1 from={83,39,2} next={84,39,2} connections=2 goal={83.5,39.359375,2} velocity={0,0,0} facing=4.712389 position={83.5,39.359375,2} initial_position={96.5,66.5,1.5} blocker=VEHICLE_1741"
+          },
+          {
+            "line": 1278,
+            "text": "BLOCKER id=VEHICLE_136 name=Police Car 2 stationary=9201600 roadStoppedTicks=1 mission=GotoLocation {53,44,1} missions=2 path=45 wait=8 reroutes=1 from={83,39,2} next={84,39,2} connections=2 goal={83.5,39.359375,2} velocity={0,0,0} facing=4.852098 position={83.5,39.359375,2} initial_position={77.5,57.5,2.5} blocker=VEHICLE_1741"
+          },
+          {
+            "line": 1279,
+            "text": "BLOCKER id=VEHICLE_139 name=Police Car 3 stationary=43200 roadStoppedTicks=0 mission=GotoLocation {53,44,1} missions=2 path=48 wait=0 reroutes=1 from={85,39,2} next={86,39,2} connections=2 goal={86.5,39.640625,2} velocity={3.8506038,1.0829823,0} facing=1.8449638 position={85.5,39.359375,2} initial_position={103.5,43.5,1.5} blocker=VEHICLE_1696"
+          },
+          {
+            "line": 1280,
+            "text": "BLOCKER id=VEHICLE_1528 name=Blazer Turbo Bike 279 stationary=86400 roadStoppedTicks=0 mission=GotoLocation {53,44,1} missions=2 path=43 wait=0 reroutes=1 from={86,39,2} next={85,39,2} connections=2 goal={85.5,39.359375,2} velocity={-6.738557,-1.8952191,0} facing=4.9865565 position={86.5,39.640625,2} initial_position={67.96445,42.55299,2} blocker=none"
+          },
+          {
+            "line": 1281,
+            "text": "BLOCKER id=VEHICLE_1550 name=Civilian Car 490 stationary=5270400 roadStoppedTicks=146 mission=GotoLocation {49,108,1} missions=2 path=109 wait=8 reroutes=1 from={83,39,2} next={84,39,2} connections=2 goal={83.5,39.359375,2} velocity={0,0,0} facing=4.852098 position={83.5,39.359375,2} initial_position={82.640625,64.94097,2} blocker=VEHICLE_1741"
+          },
+          {
+            "line": 1282,
+            "text": "BLOCKER id=VEHICLE_1584 name=Autotrans 80 stationary=9158400 roadStoppedTicks=1 mission=GotoLocation {28,30,1} missions=2 path=86 wait=8 reroutes=1 from={83,39,2} next={84,39,2} connections=2 goal={83.5,39.359375,2} velocity={0,0,0} facing=4.852098 position={83.5,39.359375,2} initial_position={28.490328,32.516144,2} blocker=VEHICLE_1741"
+          },
+          {
+            "line": 1283,
+            "text": "BLOCKER id=VEHICLE_1597 name=Autotaxi 208 stationary=9158400 roadStoppedTicks=1 mission=GotoLocation {62,43,1} missions=2 path=37 wait=8 reroutes=1 from={83,39,2} next={84,39,2} connections=2 goal={83.5,39.359375,2} velocity={0,0,0} facing=4.852098 position={83.5,39.359375,2} initial_position={73.5,42.640625,2} blocker=VEHICLE_1741"
+          },
+          {
+            "line": 1284,
+            "text": "BLOCKER id=VEHICLE_1630 name=Autotaxi 219 stationary=9201600 roadStoppedTicks=1 mission=GotoLocation {58,78,1} missions=2 path=70 wait=8 reroutes=1 from={83,39,2} next={82,39,2} connections=2 goal={83.5,39.359375,2} velocity={0,0,0} facing=4.852098 position={83.5,39.359375,2} initial_position={76.640625,50.444443,2} blocker=VEHICLE_1709"
+          },
+          {
+            "line": 1285,
+            "text": "BLOCKER id=VEHICLE_1653 name=Blazer Turbo Bike 297 stationary=5270400 roadStoppedTicks=1 mission=GotoLocation {46,88,2} missions=3 path=104 wait=8 reroutes=1 from={83,39,2} next={82,39,2} connections=2 goal={83.5,39.359375,2} velocity={0,0,0} facing=4.852098 position={83.5,39.359375,2} initial_position={87.640625,41.475693,2} blocker=VEHICLE_1709"
+          },
+          {
+            "line": 1286,
+            "text": "BLOCKER id=VEHICLE_1665 name=Autotaxi 222 stationary=5270400 roadStoppedTicks=203 mission=GotoLocation {84,89,1} missions=2 path=61 wait=8 reroutes=1 from={83,39,2} next={82,39,2} connections=2 goal={83.5,39.359375,2} velocity={0,0,0} facing=4.852098 position={83.5,39.359375,2} initial_position={82.359375,68.15625,2} blocker=VEHICLE_1709"
+          },
+          {
+            "line": 1287,
+            "text": "BLOCKER id=VEHICLE_1685 name=Civilian Car 532 stationary=9201600 roadStoppedTicks=1 mission=GotoLocation {72,39,1} missions=2 path=19 wait=8 reroutes=1 from={83,39,2} next={82,39,2} connections=2 goal={83.5,39.359375,2} velocity={0,0,0} facing=4.9865565 position={83.5,39.359375,2} initial_position={81.5,42.640625,2} blocker=VEHICLE_1709"
+          },
+          {
+            "line": 1288,
+            "text": "BLOCKER id=VEHICLE_1693 name=Blazer Turbo Bike 305 stationary=5270400 roadStoppedTicks=5469070 mission=GotoLocation {84,89,1} missions=3 path=61 wait=8 reroutes=1 from={84,39,2} next={83,39,2} connections=3 goal={84.5,39.5,2} velocity={0,0,0} facing=0 position={84.5,39.5,2} initial_position={87.359375,34.229168,2} blocker=VEHICLE_1630"
+          },
+          {
+            "line": 1289,
+            "text": "BLOCKER id=VEHICLE_1709 name=Civilian Car 539 stationary=5270400 roadStoppedTicks=5457329 mission=GotoLocation {103,43,1} missions=3 path=29 wait=8 reroutes=1 from={82,39,2} next={83,39,2} connections=3 goal={82.640625,39.5,2} velocity={0,0,0} facing=0 position={82.640625,39.5,2} initial_position={82.5,47.640625,2} blocker=VEHICLE_1895"
+          },
+          {
+            "line": 1290,
+            "text": "BLOCKER id=VEHICLE_1715 name=Civilian Car 541 stationary=5270400 roadStoppedTicks=5470956 mission=GotoLocation {88,95,1} missions=3 path=72 wait=8 reroutes=1 from={84,39,2} next={83,39,2} connections=3 goal={84.5,39.359375,2} velocity={0,0,0} facing=4.712389 position={84.5,39.359375,2} initial_position={85.5,39.359375,2} blocker=VEHICLE_1630"
+          },
+          {
+            "line": 1291,
+            "text": "BLOCKER id=VEHICLE_1733 name=Blazer Turbo Bike 309 stationary=5270400 roadStoppedTicks=5456270 mission=GotoLocation {64,89,1} missions=3 path=80 wait=8 reroutes=1 from={84,39,2} next={83,39,2} connections=3 goal={84.5,39.359375,2} velocity={0,0,0} facing=4.712389 position={84.5,39.359375,2} initial_position={86.5,39.359375,2} blocker=VEHICLE_1630"
+          },
+          {
+            "line": 1292,
+            "text": "BLOCKER id=VEHICLE_1735 name=Civilian Car 549 stationary=86400 roadStoppedTicks=93823 mission=GotoLocation {45,97,1} missions=3 path=107 wait=8 reroutes=1 from={87,39,2} next={86,39,2} connections=3 goal={87.5,39.5,2} velocity={0,0,0} facing=0 position={87.5,39.5,2} initial_position={101.045135,40.359375,2} blocker=VEHICLE_1528"
+          },
+          {
+            "line": 1293,
+            "text": "BLOCKER id=VEHICLE_1741 name=Autotrans 92 stationary=5270400 roadStoppedTicks=5461963 mission=GotoLocation {68,98,1} missions=3 path=77 wait=8 reroutes=1 from={84,39,2} next={83,39,2} connections=3 goal={84.5,39.359375,2} velocity={0,0,0} facing=4.712389 position={84.5,39.359375,2} initial_position={88.5,38.359375,2} blocker=VEHICLE_1630"
+          },
+          {
+            "line": 1294,
+            "text": "BLOCKER id=VEHICLE_1756 name=Civilian Car 551 stationary=5270400 roadStoppedTicks=5464606 mission=GotoLocation {51,73,2} missions=2 path=79 wait=8 reroutes=1 from={84,39,2} next={83,39,2} connections=3 goal={84.5,39.359375,2} velocity={0,0,0} facing=4.712389 position={84.5,39.359375,2} initial_position={81.5,42.640625,2} blocker=VEHICLE_1630"
+          },
+          {
+            "line": 1295,
+            "text": "BLOCKER id=VEHICLE_1782 name=Blazer Turbo Bike 321 stationary=5270400 roadStoppedTicks=5462159 mission=GotoLocation {45,97,1} missions=3 path=105 wait=8 reroutes=1 from={84,39,2} next={83,39,2} connections=3 goal={84.5,39.359375,2} velocity={0,0,0} facing=4.712389 position={84.5,39.359375,2} initial_position={94.5,31.01,2} blocker=VEHICLE_1630"
+          },
+          {
+            "line": 1296,
+            "text": "BLOCKER id=VEHICLE_1841 name=Civilian Car 569 stationary=5270400 roadStoppedTicks=1 mission=GotoLocation {57,89,1} missions=3 path=86 wait=8 reroutes=1 from={83,39,2} next={82,39,2} connections=2 goal={83.5,39.359375,2} velocity={0,0,0} facing=4.712389 position={83.5,39.359375,2} initial_position={88.6042,45.38868,2} blocker=VEHICLE_1709"
+          },
+          {
+            "line": 1297,
+            "text": "BLOCKER id=VEHICLE_1853 name=Civilian Car 571 stationary=5270400 roadStoppedTicks=1 mission=GotoLocation {88,104,2} missions=3 path=74 wait=8 reroutes=1 from={83,39,2} next={82,39,2} connections=2 goal={83.5,39.359375,2} velocity={0,0,0} facing=4.712389 position={83.5,39.359375,2} initial_position={87.5,38.359375,2} blocker=VEHICLE_1709"
+          },
+          {
+            "line": 1298,
+            "text": "BLOCKER id=VEHICLE_1895 name=Blazer Turbo Bike 342 stationary=5270400 roadStoppedTicks=1 mission=GotoLocation {30,42,1} missions=3 path=70 wait=8 reroutes=1 from={83,39,2} next={84,39,2} connections=2 goal={83.5,39.359375,2} velocity={0,0,0} facing=4.712389 position={83.5,39.359375,2} initial_position={87.640625,40.5,2} blocker=VEHICLE_1741"
+          },
+          {
+            "line": 1299,
+            "text": "BLOCKER id=VEHICLE_1900 name=Autotrans 100 stationary=5270400 roadStoppedTicks=1 mission=GotoLocation {55,96,2} missions=3 path=93 wait=8 reroutes=1 from={83,39,2} next={82,39,2} connections=2 goal={83.5,39.359375,2} velocity={0,0,0} facing=4.712389 position={83.5,39.359375,2} initial_position={87.5,38.359375,2} blocker=VEHICLE_1709"
+          },
+          {
+            "line": 1300,
+            "text": "BLOCKER id=VEHICLE_1957 name=Police Car 4 stationary=86400 roadStoppedTicks=101580 mission=GotoLocation {53,44,1} missions=2 path=44 wait=8 reroutes=1 from={87,39,2} next={86,39,2} connections=3 goal={87.5,39.5,2} velocity={0,0,0} facing=0 position={87.5,39.5,2} initial_position={94.5,31.5,2.5} blocker=VEHICLE_1528"
+          }
+        ],
+        "game_errors": []
+      },
+      "dispatch": {
+        "batches": 2880,
+        "first": {
+          "line": 1876,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 33,
+          "sent": 4,
+          "time": "12:00",
+          "wanted": 4
+        },
+        "last": {
+          "line": 134850,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": -3,
+          "sent": 0,
+          "time": "11:00",
+          "wanted": 5
+        },
+        "no_source": 0,
+        "nowhere": 4,
+        "sent": 1445,
+        "wanted": 16241
+      },
+      "exact_clock_validation": true,
+      "exit_code": 0,
+      "final": {
+        "all_map": 38,
+        "atv": 0,
+        "civilian": 24,
+        "flying": 2,
+        "ground_mission_bearing": 36,
+        "ground_moved_last_step": 12,
+        "ground_velocity_moving": 8,
+        "max_road_stopped_ticks": 5470956,
+        "parked": 359,
+        "police": 14,
+        "road": 36,
+        "road_stopped_12000": 9,
+        "stationary_12000": 24
+      },
+      "final_clock": 18662400,
+      "first_hour": {
+        "first_elapsed": 43200,
+        "last_elapsed": 518400,
+        "max_mission_stopped_12000_cars": 1,
+        "max_position_stationary_cars": 0,
+        "max_sampled_mission_stopped_ticks": 13827,
+        "mission_stopped_12000_checkpoints": 1,
+        "population_and_moving_stats": {
+          "all_map": [
+            32.833333333333336,
+            26,
+            35
+          ],
+          "atv": [
+            0,
+            0,
+            0
+          ],
+          "civilian": [
+            28.083333333333332,
+            21,
+            32
+          ],
+          "flying": [
+            3.4166666666666665,
+            1,
+            6
+          ],
+          "ground_velocity_moving": [
+            26.916666666666668,
+            21,
+            31
+          ],
+          "parked": [
+            328.6666666666667,
+            328,
+            329
+          ],
+          "police": [
+            4.75,
+            3,
+            8
+          ],
+          "road": [
+            29.416666666666668,
+            23,
+            32
+          ]
+        },
+        "position_stationary_checkpoints": 0,
+        "sample_count": 12
+      },
+      "fixture": "fresh",
+      "full_run_stops": {
+        "max_position_stationary_cars": 28,
+        "max_sampled_mission_stopped_ticks": 5470956,
+        "mission_stopped_12000_checkpoints": 234,
+        "position_stationary_checkpoints": 244
+      },
+      "initial": {
+        "all_map": 0,
+        "atv": 0,
+        "civilian": 0,
+        "flying": 0,
+        "parked": 330,
+        "police": 0,
+        "road": 0
+      },
+      "initial_clock": 6220800,
+      "initial_ground_final": {
+        "dead": 0,
+        "elsewhere": 0,
+        "ever_changed_position": 0,
+        "in_building": 0,
+        "on_map_now": 0
+      },
+      "inventory_totals": {
+        "final": {
+          "crashed_alive": 0,
+          "observed_dead": 735,
+          "onmap": 38,
+          "parked": 359,
+          "successful_retirements": 656
+        },
+        "initial": {
+          "crashed_alive": 0,
+          "observed_dead": 0,
+          "onmap": 0,
+          "parked": 330,
+          "successful_retirements": 0
+        }
+      },
+      "mode": "turbo-unchecked",
+      "negative_observations": [
+        "At least one checkpoint contains a current-mission road wait of 12000 ticks or longer.",
+        "At least one checkpoint contains a position-stationary ground vehicle; interpret using this run's observation step.",
+        "Final endpoint reports position-stationary blocker diagnostics; preserve diagnostic text and current-mission stopped counters together."
+      ],
+      "observed_events_final": {
+        "building_entries": 725,
+        "civilian_entries": 1068,
+        "confirmed_target_arrivals": 709,
+        "dead_exits": 439,
+        "entries": 1202,
+        "flyer_entries": 225,
+        "ground_distance": 24755.11318816594,
+        "ground_reversals": 790,
+        "ground_tile_changes": 4004,
+        "newly_seen": 1458,
+        "other_exits": 0,
+        "police_entries": 134,
+        "road_entries": 977,
+        "successful_retirements": 656
+      },
+      "post_warmup": {
+        "first_elapsed": 86400,
+        "last_elapsed": 12441600,
+        "max_mission_stopped_12000_cars": 9,
+        "max_position_stationary_cars": 28,
+        "max_sampled_mission_stopped_ticks": 5470956,
+        "mission_stopped_12000_checkpoints": 234,
+        "population_and_moving_stats": {
+          "all_map": [
+            35.54006968641115,
+            30,
+            38
+          ],
+          "atv": [
+            0,
+            0,
+            0
+          ],
+          "civilian": [
+            24.522648083623693,
+            22,
+            34
+          ],
+          "flying": [
+            0.7839721254355401,
+            0,
+            6
+          ],
+          "ground_velocity_moving": [
+            11.456445993031359,
+            2,
+            31
+          ],
+          "parked": [
+            343.7247386759582,
+            327,
+            361
+          ],
+          "police": [
+            11.017421602787456,
+            2,
+            14
+          ],
+          "road": [
+            34.75609756097561,
+            27,
+            37
+          ]
+        },
+        "position_stationary_checkpoints": 244,
+        "sample_count": 287
+      },
+      "receipts": {
+        "census.txt": {
+          "path": "reviewed-speed5-day/census.txt",
+          "sha256": "c65b9be765db905f2108077a3f6707456aa74053db108d9fda93f45726a6967e"
+        },
+        "game.log": {
+          "path": "reviewed-speed5-day/game.log",
+          "sha256": "3aa984e06acb064b268df6a7908e32c843b69ceeaf384c5307ab29dad62a20a4"
+        },
+        "log.txt": {
+          "path": "reviewed-speed5-day/log.txt",
+          "sha256": "8f09a6f2ff31a8066b9a1574ee3eb2ff850cb9512ab345a347533ae7285da7b9"
+        },
+        "metadata.json": {
+          "path": "reviewed-speed5-day/metadata.json",
+          "sha256": "e74b6369d5d30ffb15da4b2bcc750b31c4fa846951bdeb249ded1d779f616cbe"
+        }
+      },
+      "requested_ticks": 12441600,
+      "run_id": "reviewed-speed5-day",
+      "step_ticks": 43200,
+      "turbo_eligibility": {
+        "unavailable_frames": 0,
+        "unchecked": true
+      },
+      "wall_seconds": 1.312147041
+    },
+    {
+      "actual_clock_delta": 3110400,
+      "census_samples": 261,
+      "diagnostics": {
+        "final_blockers": [],
+        "game_errors": []
+      },
+      "dispatch": {
+        "batches": 720,
+        "first": {
+          "line": 2518,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": -101,
+          "sent": 0,
+          "time": "14:00",
+          "wanted": 7
+        },
+        "last": {
+          "line": 134425,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 1,
+          "sent": 1,
+          "time": "20:00",
+          "wanted": 6
+        },
+        "no_source": 0,
+        "nowhere": 0,
+        "sent": 2173,
+        "wanted": 5626
+      },
+      "exact_clock_validation": true,
+      "exit_code": 0,
+      "final": {
+        "all_map": 35,
+        "atv": 0,
+        "civilian": 28,
+        "flying": 2,
+        "ground_mission_bearing": 33,
+        "ground_moved_last_step": 33,
+        "ground_velocity_moving": 33,
+        "max_road_stopped_ticks": 0,
+        "parked": 621,
+        "police": 7,
+        "road": 33,
+        "road_stopped_12000": 0,
+        "stationary_12000": 0
+      },
+      "final_clock": 247018037,
+      "first_hour": {
+        "first_elapsed": 12000,
+        "last_elapsed": 516000,
+        "max_mission_stopped_12000_cars": 0,
+        "max_position_stationary_cars": 0,
+        "max_sampled_mission_stopped_ticks": 145,
+        "mission_stopped_12000_checkpoints": 0,
+        "population_and_moving_stats": {
+          "all_map": [
+            35.58139534883721,
+            29,
+            105
+          ],
+          "atv": [
+            0,
+            0,
+            0
+          ],
+          "civilian": [
+            26.976744186046513,
+            19,
+            92
+          ],
+          "flying": [
+            2.0232558139534884,
+            0,
+            4
+          ],
+          "ground_velocity_moving": [
+            33.093023255813954,
+            27,
+            94
+          ],
+          "parked": [
+            620.2558139534884,
+            530,
+            628
+          ],
+          "police": [
+            8.604651162790697,
+            5,
+            14
+          ],
+          "road": [
+            33.55813953488372,
+            27,
+            102
+          ]
+        },
+        "position_stationary_checkpoints": 0,
+        "sample_count": 43
+      },
+      "fixture": "bench",
+      "full_run_stops": {
+        "max_position_stationary_cars": 0,
+        "max_sampled_mission_stopped_ticks": 235,
+        "mission_stopped_12000_checkpoints": 0,
+        "position_stationary_checkpoints": 0
+      },
+      "initial": {
+        "all_map": 148,
+        "atv": 0,
+        "civilian": 133,
+        "flying": 1,
+        "parked": 486,
+        "police": 15,
+        "road": 147
+      },
+      "initial_clock": 243907637,
+      "initial_ground_final": {
+        "dead": 2,
+        "elsewhere": 0,
+        "ever_changed_position": 147,
+        "in_building": 140,
+        "on_map_now": 5
+      },
+      "inventory_totals": {
+        "final": {
+          "crashed_alive": 0,
+          "observed_dead": 134,
+          "onmap": 35,
+          "parked": 621,
+          "successful_retirements": 2102
+        },
+        "initial": {
+          "crashed_alive": 0,
+          "observed_dead": 0,
+          "onmap": 148,
+          "parked": 486,
+          "successful_retirements": 0
+        }
+      },
+      "mode": "update",
+      "negative_observations": [],
+      "observed_events_final": {
+        "building_entries": 3199,
+        "civilian_entries": 2176,
+        "confirmed_target_arrivals": 3199,
+        "dead_exits": 134,
+        "entries": 3220,
+        "flyer_entries": 686,
+        "ground_distance": 372516.3381377305,
+        "ground_reversals": 1614,
+        "ground_tile_changes": 365005,
+        "newly_seen": 2258,
+        "other_exits": 0,
+        "police_entries": 1044,
+        "road_entries": 2534,
+        "successful_retirements": 2102
+      },
+      "post_warmup": {
+        "first_elapsed": 72000,
+        "last_elapsed": 3110400,
+        "max_mission_stopped_12000_cars": 0,
+        "max_position_stationary_cars": 0,
+        "max_sampled_mission_stopped_ticks": 235,
+        "mission_stopped_12000_checkpoints": 0,
+        "population_and_moving_stats": {
+          "all_map": [
+            32.78823529411765,
+            24,
+            37
+          ],
+          "atv": [
+            0,
+            0,
+            0
+          ],
+          "civilian": [
+            23.776470588235295,
+            15,
+            29
+          ],
+          "flying": [
+            2.1921568627450982,
+            0,
+            7
+          ],
+          "ground_velocity_moving": [
+            30.32941176470588,
+            23,
+            35
+          ],
+          "parked": [
+            622.913725490196,
+            615,
+            628
+          ],
+          "police": [
+            9.011764705882353,
+            4,
+            17
+          ],
+          "road": [
+            30.59607843137255,
+            23,
+            35
+          ]
+        },
+        "position_stationary_checkpoints": 0,
+        "sample_count": 255
+      },
+      "receipts": {
+        "census.txt": {
+          "path": "reviewed-bench-sixhours/census.txt",
+          "sha256": "c5d30a12bc9c0a28db6a2462382ebb42776c89586c05cc3b503e65f6f0db62c3"
+        },
+        "game.log": {
+          "path": "reviewed-bench-sixhours/game.log",
+          "sha256": "b3a58977b8f0a1e35d7d96146c44088597361ad3df4fd93bf117a15260a824d6"
+        },
+        "log.txt": {
+          "path": "reviewed-bench-sixhours/log.txt",
+          "sha256": "53055659df11d2f195e30a1c53ec6cc895102445b3339d5a19f9645ef76721e9"
+        },
+        "metadata.json": {
+          "path": "reviewed-bench-sixhours/metadata.json",
+          "sha256": "1c8a3bbabba415f704b0ef1ce0145a25fe9506c9260188f7770ca589afcf49ef"
+        }
+      },
+      "requested_ticks": 3110400,
+      "run_id": "reviewed-bench-sixhours",
+      "step_ticks": 6,
+      "turbo_eligibility": null,
+      "wall_seconds": 69.881288416
+    },
+    {
+      "actual_clock_delta": 3110400,
+      "census_samples": 261,
+      "diagnostics": {
+        "final_blockers": [
+          {
+            "line": 1237,
+            "text": "BLOCKER id=VEHICLE_10206 name=Civilian Car 687 stationary=71838 roadStoppedTicks=71839 mission=GotoLocation {31,86,2} missions=2 path=48 wait=2 reroutes=1 from={49,99,6} next={49,98,5} connections=4 goal={49.5,99.5,6} velocity={0,0,0} facing=1.5707964 position={49.5,99.5,6} initial_position={31.5,86.01,2} blocker=VEHICLE_10228"
+          },
+          {
+            "line": 1238,
+            "text": "BLOCKER id=VEHICLE_10285 name=Civilian Car 714 stationary=71838 roadStoppedTicks=71839 mission=GotoLocation {36,91,2} missions=3 path=28 wait=2 reroutes=1 from={49,99,6} next={49,98,5} connections=4 goal={49.5,99.5,6} velocity={0,0,0} facing=1.5707964 position={49.5,99.5,6} initial_position={68.01,93.5,1} blocker=VEHICLE_10228"
+          },
+          {
+            "line": 1239,
+            "text": "BLOCKER id=VEHICLE_10419 name=Civilian Car 756 stationary=96438 roadStoppedTicks=96439 mission=GotoLocation {98,68,1} missions=2 path=110 wait=2 reroutes=1 from={49,90,2} next={49,91,2} connections=2 goal={49.5,90.640625,2} velocity={0,0,0} facing=1.5707964 position={49.5,90.640625,2} initial_position={98.5,68.01,1} blocker=VEHICLE_2237"
+          }
+        ],
+        "game_errors": []
+      },
+      "dispatch": {
+        "batches": 720,
+        "first": {
+          "line": 2308,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": -123,
+          "sent": 0,
+          "time": "14:00",
+          "wanted": 6
+        },
+        "last": {
+          "line": 124053,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 1,
+          "sent": 1,
+          "time": "20:00",
+          "wanted": 7
+        },
+        "no_source": 0,
+        "nowhere": 0,
+        "sent": 1940,
+        "wanted": 5385
+      },
+      "exact_clock_validation": true,
+      "exit_code": 0,
+      "final": {
+        "all_map": 34,
+        "atv": 0,
+        "civilian": 18,
+        "flying": 1,
+        "ground_mission_bearing": 33,
+        "ground_moved_last_step": 20,
+        "ground_velocity_moving": 20,
+        "max_road_stopped_ticks": 96439,
+        "parked": 647,
+        "police": 16,
+        "road": 33,
+        "road_stopped_12000": 3,
+        "stationary_12000": 3
+      },
+      "final_clock": 321424593,
+      "first_hour": {
+        "first_elapsed": 12000,
+        "last_elapsed": 516000,
+        "max_mission_stopped_12000_cars": 0,
+        "max_position_stationary_cars": 0,
+        "max_sampled_mission_stopped_ticks": 127,
+        "mission_stopped_12000_checkpoints": 0,
+        "population_and_moving_stats": {
+          "all_map": [
+            36.41860465116279,
+            30,
+            107
+          ],
+          "atv": [
+            0,
+            0,
+            0
+          ],
+          "civilian": [
+            27.813953488372093,
+            18,
+            94
+          ],
+          "flying": [
+            2,
+            0,
+            5
+          ],
+          "ground_velocity_moving": [
+            33.883720930232556,
+            27,
+            101
+          ],
+          "parked": [
+            653.4186046511628,
+            557,
+            662
+          ],
+          "police": [
+            8.604651162790697,
+            5,
+            15
+          ],
+          "road": [
+            34.41860465116279,
+            27,
+            107
+          ]
+        },
+        "position_stationary_checkpoints": 0,
+        "sample_count": 43
+      },
+      "fixture": "old2",
+      "full_run_stops": {
+        "max_position_stationary_cars": 4,
+        "max_sampled_mission_stopped_ticks": 96439,
+        "mission_stopped_12000_checkpoints": 8,
+        "position_stationary_checkpoints": 8
+      },
+      "initial": {
+        "all_map": 161,
+        "atv": 0,
+        "civilian": 146,
+        "flying": 4,
+        "parked": 504,
+        "police": 15,
+        "road": 157
+      },
+      "initial_clock": 318314193,
+      "initial_ground_final": {
+        "dead": 1,
+        "elsewhere": 0,
+        "ever_changed_position": 157,
+        "in_building": 142,
+        "on_map_now": 14
+      },
+      "inventory_totals": {
+        "final": {
+          "crashed_alive": 0,
+          "observed_dead": 91,
+          "onmap": 34,
+          "parked": 647,
+          "successful_retirements": 1921
+        },
+        "initial": {
+          "crashed_alive": 0,
+          "observed_dead": 0,
+          "onmap": 161,
+          "parked": 504,
+          "successful_retirements": 0
+        }
+      },
+      "mode": "update",
+      "negative_observations": [
+        "At least one checkpoint contains a current-mission road wait of 12000 ticks or longer.",
+        "At least one checkpoint contains a position-stationary ground vehicle; interpret using this run's observation step.",
+        "Final endpoint reports position-stationary blocker diagnostics; preserve diagnostic text and current-mission stopped counters together."
+      ],
+      "observed_events_final": {
+        "building_entries": 2983,
+        "civilian_entries": 1988,
+        "confirmed_target_arrivals": 2983,
+        "dead_exits": 91,
+        "entries": 2947,
+        "flyer_entries": 619,
+        "ground_distance": 359985.25748353475,
+        "ground_reversals": 6699,
+        "ground_tile_changes": 351849,
+        "newly_seen": 2028,
+        "other_exits": 0,
+        "police_entries": 959,
+        "road_entries": 2328,
+        "successful_retirements": 1921
+      },
+      "post_warmup": {
+        "first_elapsed": 72000,
+        "last_elapsed": 3110400,
+        "max_mission_stopped_12000_cars": 3,
+        "max_position_stationary_cars": 4,
+        "max_sampled_mission_stopped_ticks": 96439,
+        "mission_stopped_12000_checkpoints": 8,
+        "population_and_moving_stats": {
+          "all_map": [
+            33.050980392156866,
+            23,
+            39
+          ],
+          "atv": [
+            0,
+            0,
+            0
+          ],
+          "civilian": [
+            22.96078431372549,
+            14,
+            30
+          ],
+          "flying": [
+            2.0549019607843135,
+            0,
+            7
+          ],
+          "ground_velocity_moving": [
+            28.96078431372549,
+            12,
+            36
+          ],
+          "parked": [
+            656.8392156862745,
+            647,
+            662
+          ],
+          "police": [
+            10.090196078431372,
+            4,
+            19
+          ],
+          "road": [
+            30.99607843137255,
+            21,
+            36
+          ]
+        },
+        "position_stationary_checkpoints": 8,
+        "sample_count": 255
+      },
+      "receipts": {
+        "census.txt": {
+          "path": "reviewed-old2-sixhours/census.txt",
+          "sha256": "bb1fe6d6b7776e2d836a341329b9fbbc633e06619a818a4805f217423aad08d8"
+        },
+        "game.log": {
+          "path": "reviewed-old2-sixhours/game.log",
+          "sha256": "c9cd3b8e3c342bad80eaa56be23285d736ac73d57862556075f8cc30d5b0e5b9"
+        },
+        "log.txt": {
+          "path": "reviewed-old2-sixhours/log.txt",
+          "sha256": "2e80d319b253559cee428147e498f1a82fc623d87e62c9fb1a4754b6fd7ae923"
+        },
+        "metadata.json": {
+          "path": "reviewed-old2-sixhours/metadata.json",
+          "sha256": "5f814d8d6820a08ab1babfe6d0cecbf1e7d974925d8ab4c4fae565b415cc9512"
+        }
+      },
+      "requested_ticks": 3110400,
+      "run_id": "reviewed-old2-sixhours",
+      "step_ticks": 6,
+      "turbo_eligibility": null,
+      "wall_seconds": 68.538145791
+    }
+  ],
+  "schema_version": 1,
+  "separate_run_prefix_checks": [
+    {
+      "compared_points": 73,
+      "differing_points": 72,
+      "first_difference": {
+        "changed_metrics_sixhours_day": {
+          "all_map": [
+            28,
+            26
+          ],
+          "civilian": [
+            24,
+            21
+          ],
+          "flying": [
+            6,
+            3
+          ],
+          "ground_mission_bearing": [
+            22,
+            23
+          ],
+          "max_road_stopped_ticks": [
+            1,
+            2210
+          ],
+          "parked": [
+            329,
+            328
+          ],
+          "police": [
+            4,
+            5
+          ],
+          "road": [
+            22,
+            23
+          ]
+        },
+        "elapsed": 43200
+      }
+    }
+  ],
+  "status": "Replayed material code improves first-hour density; confirmed multi-hour queues remain in its day run. These observations do not establish completely fixed traffic."
+}

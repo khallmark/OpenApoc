@@ -136,6 +136,18 @@ class City : public StateObject<City>, public std::enable_shared_from_this<City>
 	                         bool playSound, bool expired);
 
 	void update(GameState &state, unsigned int ticks);
+	// Civilian traffic, as UFO2P's FUN_00034860 makes it: a batch of trips every
+	// AMBIENT_TRAFFIC_TICKS, sized by the hour and capped by the vehicles already about, each a
+	// fresh vehicle drawn from the original's mix and sent between buildings, independently of
+	// organisation vehicle parks. Returns how many trips it created.
+	int dispatchAmbientTraffic(GameState &state);
+	// Building access is cached by location; the road entrance or pads may since have been
+	// destroyed.
+	bool hasVehicleAccess(const Building &building, const VehicleType &type) const;
+	// FUN_0006d384 reloads the city traffic countdown with 0x438 speed units (vanilla ticks).
+	static constexpr unsigned int AMBIENT_TRAFFIC_TICKS = 0x438 * 4;
+	// The vehicle types of the original's traffic, the eight FUN_00034860 draws from.
+	static const std::vector<UString> &ambientTrafficTypes();
 	void hourlyLoop(GameState &state);
 	void dailyLoop(GameState &state);
 	void weeklyLoop(GameState &state);

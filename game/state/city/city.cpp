@@ -6,12 +6,15 @@
 #include "game/state/city/building.h"
 #include "game/state/city/scenery.h"
 #include "game/state/city/vehicle.h"
+#include "game/state/city/vehiclemission.h"
 #include "game/state/gamestate.h"
 #include "game/state/rules/city/citycommonimagelist.h"
 #include "game/state/rules/city/scenerytiletype.h"
+#include "game/state/rules/city/vehicletype.h"
 #include "game/state/rules/city/vequipmenttype.h"
 #include "game/state/rules/doodadtype.h"
 #include "game/state/shared/doodad.h"
+#include "game/state/shared/organisation.h"
 #include "game/state/shared/projectile.h"
 #include "game/state/tilemap/collision.h"
 #include "game/state/tilemap/tilemap.h"
@@ -572,6 +575,179 @@ void City::generatePortals(GameState &state)
 			}
 		}
 	}
+}
+
+const std::vector<UString> &City::ambientTrafficTypes()
+{
+	static const std::vector<UString> types = {
+	    "VEHICLETYPE_CIVILIAN_CAR",     "VEHICLETYPE_CONSTRUCTION_VEHICLE",
+	    "VEHICLETYPE_AUTOTAXI",         "VEHICLETYPE_AIRTAXI",
+	    "VEHICLETYPE_AIRTRANS",         "VEHICLETYPE_AUTOTRANS",
+	    "VEHICLETYPE_RESCUE_TRANSPORT", "VEHICLETYPE_BLAZER_TURBO_BIKE"};
+	return types;
+}
+
+bool City::hasVehicleAccess(const Building &building, const VehicleType &type) const
+{
+	if (!map)
+	{
+		return false;
+	}
+	if (type.type == VehicleType::Type::Road)
+	{
+		if (!map->tileIsValid(building.carEntranceLocation))
+		{
+			return false;
+		}
+		const auto &scenery = map->getTile(building.carEntranceLocation)->presentScenery;
+		return scenery && !scenery->destroyed &&
+		       scenery->type->road_type == SceneryTileType::RoadType::Terminal;
+	}
+	for (const auto &pad : building.landingPadLocations)
+	{
+		if (!map->tileIsValid(pad) || !map->tileIsValid(pad + Vec3<int>{0, 0, 1}) ||
+		    !map->tileIsValid(pad - Vec3<int>{0, 0, 1}))
+		{
+			continue;
+		}
+		const auto &scenery = map->getTile(pad)->presentScenery;
+		if (scenery && !scenery->destroyed && scenery->type->isLandingPad)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+int City::dispatchAmbientTraffic(GameState &state)
+{
+	// UFO2P FUN_00034860, run by FUN_0006d384 in the human city when its countdown runs out.
+	// Trips per batch: B/2 + rand(0..B), B by the hour from the table at VA 0x2FB40 (indexed by
+	// the word at 0xD4D68, taken here to be the hour): rush hours at 9, 13 and 18-19.
+	static const int perHour[24] = {4,  2, 2, 2, 2, 2,  4,  8, 12, 8, 6, 4,
+	                                10, 8, 6, 4, 4, 12, 12, 8, 4,  4, 4, 4};
+	const int b = perHour[(state.gameTime.getHours() + 23) % 24];
+	const int wanted = b / 2 + randBoundsInclusive(state.rng, 0, b);
+
+	// FUN_00034b14: of the EXE's 80 vehicle slots, keep 45 free less one per X-COM vehicle (25 once
+	// X-COM has 20), so at most 35 others are about -- 55 less X-COM's, from 20 X-COM vehicles.
+	// Counted here over this city's map; the EXE's 80 slots cover both cities.
+	const auto player = state.getPlayer();
+	const auto aliens = state.getAliens();
+	int playerVehicles = 0, othersAbout = 0;
+	bool aliensAbout = false;
+	for (const auto &entry : state.vehicles)
+	{
+		const auto &veh = entry.second;
+		if (!veh || veh->isDead())
+		{
+			continue;
+		}
+		if (veh->owner == player)
+		{
+			playerVehicles++;
+		}
+		else if (veh->city.id == id && (veh->tileObject || veh->ambientTraffic))
+		{
+			// Reserve room for traffic waiting to leave a building too. Otherwise a blocked exit
+			// can accumulate another batch at every dispatch even though the map is already full.
+			othersAbout++;
+			aliensAbout = aliensAbout || (veh->tileObject && veh->owner == aliens);
+		}
+	}
+	const int room = (playerVehicles < 20 ? 35 : 55 - playerVehicles) - othersAbout;
+	const int batch = std::max(0, std::min(wanted, room));
+
+	// The draw: a roll of 0..16 (FUN_0005d1d8(16) at 0x348ff) mapped to a vehicle type.
+	static const int rollToType[17] = {0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 3, 4, 5, 6, 7, 7, 7};
+	const auto &types = ambientTrafficTypes();
+	const GroundVehicleTileHelper roadHelper{*map, VehicleType::Type::Road};
+	int sent = 0, noSource = 0, nowhereToGo = 0;
+	for (int i = 0; i < batch; i++)
+	{
+		const auto &typeId = types[rollToType[randBoundsInclusive(state.rng, 0, 16)]];
+		const StateRef<VehicleType> trafficType{&state, typeId};
+		if (!trafficType)
+		{
+			noSource++;
+			continue;
+		}
+		const bool road = trafficType->type == VehicleType::Type::Road;
+		auto canUse = [&](const StateRef<Building> &bld)
+		{ return hasVehicleAccess(*bld, *trafficType); };
+		// FUN_00034860 allocates a fresh vehicle, not one bought by the building's owner.
+		// Depending on that owner's parked inventory left a fresh or depleted city with no traffic.
+		// While aliens are about, only an owner allied to them sends any (FUN_00091de4).
+		std::vector<StateRef<Building>> sources;
+		for (const auto &b : buildings)
+		{
+			if (!b || !b->owner || b->owner == player || b->owner == aliens ||
+			    (aliensAbout && b->owner->getRelationTo(aliens) <= 74) || !canUse(b))
+			{
+				continue;
+			}
+			sources.push_back(b);
+		}
+		if (sources.empty())
+		{
+			noSource++;
+			continue;
+		}
+		const auto source =
+		    sources[randBoundsExclusive(state.rng, 0, static_cast<int>(sources.size()))];
+		// To another building, somewhere it can get to: a road car sent where no road goes is
+		// taken off the map when its route comes up empty.
+		StateRef<Building> dest;
+		for (int tries = 0; tries < 8 && !dest; tries++)
+		{
+			const auto &candidate =
+			    buildings[randBoundsExclusive(state.rng, 0, static_cast<int>(buildings.size()))];
+			if (!candidate || candidate == source || !candidate->owner ||
+			    candidate->owner == player || candidate->owner == aliens || !canUse(candidate))
+			{
+				continue;
+			}
+			if (road)
+			{
+				const auto &route = findShortestPath(source->carEntranceLocation,
+				                                     candidate->carEntranceLocation, roadHelper);
+				if (route.empty() || route.back() != candidate->carEntranceLocation)
+				{
+					continue;
+				}
+			}
+			dest = candidate;
+		}
+		if (!dest)
+		{
+			nowhereToGo++;
+			continue;
+		}
+		auto veh = placeVehicle(state, trafficType, source->owner, source);
+		if (!veh)
+		{
+			noSource++;
+			continue;
+		}
+		veh->ambientTraffic = true;
+		veh->homeBuilding = source;
+		veh->setMission(state, VehicleMission::gotoBuilding(state, *veh, dest, false));
+		// Keep the existing return journey: replacing it with one-way retirement reduced visible
+		// civilian traffic by a third in the six-hour comparison from the same new-game save.
+		if (dest->owner != veh->owner)
+		{
+			// An artificial stop inside the destination consumes a reserved traffic slot while
+			// hiding the car from the map. Continue the return leg as soon as the exit is free.
+			veh->addMission(state, VehicleMission::gotoBuilding(state, *veh, source), true);
+		}
+		LogInfo("Traffic: {0} {1} from {2} to {3}", veh->owner.id, veh->type.id, source.id,
+		        dest.id);
+		sent++;
+	}
+	LogInfo("Traffic batch at {0}:00: {1} wanted, room for {2}, sent {3} ({4} with no source, "
+	        "{5} with nowhere to go)",
+	        state.gameTime.getHours(), wanted, room, sent, noSource, nowhereToGo);
+	return sent;
 }
 
 void City::updateInfiltration(GameState &state)

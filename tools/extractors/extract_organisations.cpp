@@ -262,35 +262,15 @@ void InitialGameStateExtractor::extractOrganisations(GameState &state) const
 			// Second shortcut
 			uint64_t s = (uint64_t)TICKS_PER_SECOND;
 			// Relation sets
-			std::set<Organisation::Relation> Allied = {Organisation::Relation::Allied};
-			std::set<Organisation::Relation> NeutralPlus = {Organisation::Relation::Allied,
-			                                                Organisation::Relation::Friendly,
-			                                                Organisation::Relation::Neutral};
 			std::set<Organisation::Relation> UnfriendlyMinus = {Organisation::Relation::Unfriendly,
 			                                                    Organisation::Relation::Hostile};
 
 			auto &missions = o->recurring_missions[{&state, "CITYMAP_HUMAN"}];
-			// Agents
-			/*missions.emplace_back(m, 7 * m, 13 * m, 1, 1, std::set<StateRef<VehicleType>>{{}},
-			                         Organisation::MissionPattern::Target::Other);*/
+			// Civilian traffic is not a per-organisation pattern: City::dispatchAmbientTraffic
+			// sends it, from UFO2P's own mix (FUN_00034860). Only Transtellar's space liners and
+			// Megapol's police patrols are scheduled here.
 			switch (vdata.vehiclePark)
 			{
-				// Government
-				case 0:
-					missions.emplace_back(
-					    0, 3 * m, 7 * m, 1, 1,
-					    std::set<StateRef<VehicleType>>{{&state, "VEHICLETYPE_RESCUE_TRANSPORT"}},
-					    Organisation::MissionPattern::Target::OwnedOrOther);
-					missions.emplace_back(0, 3 * m, 7 * m, 1, 1,
-					                      std::set<StateRef<VehicleType>>{
-					                          {&state, "VEHICLETYPE_CONSTRUCTION_VEHICLE"}},
-					                      Organisation::MissionPattern::Target::OwnedOrOther);
-					missions.emplace_back(
-					    0, 2 * m, 4 * m, 1, 1,
-					    std::set<StateRef<VehicleType>>{{&state, "VEHICLETYPE_CIVILIAN_CAR"},
-					                                    {&state, "VEHICLETYPE_BLAZER_TURBO_BIKE"}},
-					    Organisation::MissionPattern::Target::OwnedOrOther);
-					break;
 				// Transtellar
 				case 3:
 					missions.emplace_back(
@@ -301,43 +281,6 @@ void InitialGameStateExtractor::extractOrganisations(GameState &state) const
 					    22 * s, 2 * m, 6 * m, 1, 1,
 					    std::set<StateRef<VehicleType>>{{&state, "VEHICLETYPE_SPACE_LINER"}},
 					    Organisation::MissionPattern::Target::ArriveFromSpace);
-					missions.emplace_back(
-					    0, 5 * m, 11 * m, 1, 1,
-					    std::set<StateRef<VehicleType>>{{&state, "VEHICLETYPE_AUTOTRANS"}},
-					    Organisation::MissionPattern::Target::Other, NeutralPlus);
-					missions.emplace_back(
-					    0, 5 * m, 11 * m, 1, 3,
-					    std::set<StateRef<VehicleType>>{{&state, "VEHICLETYPE_AIRRANS"}},
-					    Organisation::MissionPattern::Target::Other, NeutralPlus);
-					break;
-				// Most orgs
-				case 2:
-				case 4:
-				case 5:
-				case 6:
-				case 10:
-				case 20:
-					missions.emplace_back(
-					    0, 15 * m, 25 * m, 1, 1,
-					    std::set<StateRef<VehicleType>>{{&state, "VEHICLETYPE_CIVILIAN_CAR"},
-					                                    {&state, "VEHICLETYPE_BLAZER_TURBO_BIKE"}},
-					    Organisation::MissionPattern::Target::OwnedOrOther, Allied);
-					break;
-				// Sirius
-				case 30:
-					missions.emplace_back(
-					    0, 7 * m, 13 * m, 1, 1,
-					    std::set<StateRef<VehicleType>>{{&state, "VEHICLETYPE_CIVILIAN_CAR"},
-					                                    {&state, "VEHICLETYPE_BLAZER_TURBO_BIKE"}},
-					    Organisation::MissionPattern::Target::OwnedOrOther);
-					break;
-				// Crime
-				case 60:
-					missions.emplace_back(
-					    5 * m, 11 * m, 19 * m, 1, 1,
-					    std::set<StateRef<VehicleType>>{{&state, "VEHICLETYPE_CIVILIAN_CAR"},
-					                                    {&state, "VEHICLETYPE_BLAZER_TURBO_BIKE"}},
-					    Organisation::MissionPattern::Target::OwnedOrOther);
 					break;
 				// Police
 				case 55:

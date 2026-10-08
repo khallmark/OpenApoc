@@ -1,0 +1,326 @@
+{
+  "limitations": [
+    "These are individual runs; RNG/state input is preserved but runtime prefixes are not guaranteed deterministic.",
+    "Sampled current-mission roadStoppedTicks and continuous position stationarity measure different behavior. old2 stationary episodes recovered; their cause is not established by these aggregate counters.",
+    "Fine-step event counters can still miss transitions that occur wholly inside one six-tick update."
+  ],
+  "method": "Six-tick update mode; state and vehicle displacement observed every six ticks; census printed every 12000 ticks. Unlike coarse turbo data, stationary_12000 here observes lack of displacement through every six-tick step.",
+  "runs": [
+    {
+      "actual_clock_delta": 3110400,
+      "census_samples": 261,
+      "clock_valid": true,
+      "final": {
+        "all_map": 35,
+        "atv": 0,
+        "civilian": 25,
+        "clock": 247018037,
+        "elapsed": 3110400,
+        "flying": 5,
+        "ground_mission_bearing": 30,
+        "ground_moved_last_step": 29,
+        "ground_velocity_moving": 29,
+        "max_road_stopped_ticks": 31,
+        "parked": 620,
+        "police": 10,
+        "road": 30,
+        "road_stopped_12000": 0,
+        "stationary_12000": 0
+      },
+      "final_blocker_lines": [],
+      "final_clock": 247018037,
+      "final_events": {
+        "building_entries": 3241,
+        "civilian_entries": 2215,
+        "confirmed_target_arrivals": 3241,
+        "dead_exits": 135,
+        "entries": 3263,
+        "flyer_entries": 743,
+        "ground_distance": 370744.640174706,
+        "ground_reversals": 1613,
+        "ground_tile_changes": 363224,
+        "newly_seen": 2294,
+        "other_exits": 0,
+        "police_entries": 1048,
+        "road_entries": 2520,
+        "successful_retirements": 2138
+      },
+      "final_initial_ground": {
+        "dead": 2,
+        "elsewhere": 0,
+        "ever_changed_position": 147,
+        "in_building": 138,
+        "on_map_now": 7
+      },
+      "initial": {
+        "all_map": 148,
+        "atv": 0,
+        "civilian": 133,
+        "clock": 243907637,
+        "elapsed": 0,
+        "flying": 1,
+        "ground_mission_bearing": 147,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "max_road_stopped_ticks": 0,
+        "parked": 486,
+        "police": 15,
+        "road": 147,
+        "road_stopped_12000": 0,
+        "stationary_12000": 0
+      },
+      "initial_clock": 243907637,
+      "max_sampled_roadStoppedTicks": 379,
+      "max_stationary_cars": 0,
+      "metadata": {
+        "argv": [
+          "/tmp/openapoc-traffic-observed/final-junction-bench-sixhours/traffic_census",
+          "/Users/khallmark/.worktrees/OpenApoc/khallmark-develop-reboot/build-funding/traffic-gridlock/bench.save",
+          "3110400",
+          "6",
+          "update",
+          "--Framework.Data=/Users/khallmark/.worktrees/OpenApoc/khallmark-traffic-observed-gridlock/data",
+          "--Framework.CD=/Users/khallmark/.worktrees/OpenApoc/khallmark-traffic-observed-gridlock/data/cd.iso",
+          "--Config.Read=0",
+          "--Config.Save=0",
+          "--Logger.dialogLevel=0",
+          "--Logger.FileLevel=3"
+        ],
+        "binary_sha256": "06831461fd95c7c693ae0d8d7594231566dfd68d64c332b22725a73bd22a11bc",
+        "cwd": "/tmp/openapoc-traffic-observed/final-junction-bench-sixhours",
+        "finished_utc": "2026-10-08T05:52:04.428545+00:00",
+        "mode": "update",
+        "receipt_sha256": {
+          "census.txt": "580aab3c418d003f797e4bcd9c36972ba6878f9b2634108b0e6fc10933c3b84e",
+          "game.log": "b3a58977b8f0a1e35d7d96146c44088597361ad3df4fd93bf117a15260a824d6",
+          "log.txt": "cb6928881a806bde7ada2c5a0482abfb39a0a2253a3e69e05279bdd72ca0c38d"
+        },
+        "requested_ticks": 3110400,
+        "returncode": 0,
+        "save_sha256": "c6e4ee9f869a00560fbfb20f15c5762161ec4b97259023fa191d3f0abca82f25",
+        "source_sha256": {
+          "game/state/city/city.cpp": "4f29f5fa7d18eb72cef5151a0e93f2a22b9c6c7de628303fbc29085b4e2a1c98",
+          "game/state/city/vehicle.cpp": "a171ccae81fc896ba91239ce7728050549dcaf7bdb91205539953c2577620e60",
+          "game/state/city/vehiclemission.cpp": "cecb8897c7233d858d820f4397f84a12386d9a36d186c23f6585b820f238a29c",
+          "game/state/gamestate.cpp": "fecf82edf973009e55c37b2b2c469addcfd6eef3a4f6b6af8ff51a665420bcde",
+          "tests/traffic_census.cpp": "74e55afeab7339196edea8625d68077e8a50f668f744c72e3373f41fcc555c0b"
+        },
+        "started_utc": "2026-10-08T05:50:51.965569+00:00",
+        "step_ticks": 6
+      },
+      "mode": "update",
+      "post_warmup": {
+        "all_map": {
+          "maximum": 38,
+          "mean": 32.831372549019605,
+          "minimum": 24
+        },
+        "civilian": {
+          "maximum": 30,
+          "mean": 23.67843137254902,
+          "minimum": 15
+        },
+        "flying": {
+          "maximum": 7,
+          "mean": 2.4313725490196076,
+          "minimum": 0
+        },
+        "ground_velocity_moving": {
+          "maximum": 36,
+          "mean": 30.133333333333333,
+          "minimum": 23
+        },
+        "parked": {
+          "maximum": 627,
+          "mean": 622.3921568627451,
+          "minimum": 615
+        },
+        "police": {
+          "maximum": 15,
+          "mean": 9.152941176470588,
+          "minimum": 4
+        },
+        "road": {
+          "maximum": 36,
+          "mean": 30.4,
+          "minimum": 23
+        },
+        "stationary_12000": {
+          "maximum": 0,
+          "mean": 0,
+          "minimum": 0
+        }
+      },
+      "post_warmup_samples": 255,
+      "receipt_sha256": {
+        "census.txt": "580aab3c418d003f797e4bcd9c36972ba6878f9b2634108b0e6fc10933c3b84e",
+        "game.log": "b3a58977b8f0a1e35d7d96146c44088597361ad3df4fd93bf117a15260a824d6",
+        "log.txt": "cb6928881a806bde7ada2c5a0482abfb39a0a2253a3e69e05279bdd72ca0c38d",
+        "metadata.json": "88befc04d3d8a5022e1ed4dcba52977d8df113aff0cb0fdcca6b8de743b32b98"
+      },
+      "requested_ticks": 3110400,
+      "road_stopped_12000_checkpoints": 0,
+      "run_id": "final-junction-bench-sixhours",
+      "stationary_checkpoints": 0,
+      "step_ticks": 6
+    },
+    {
+      "actual_clock_delta": 3110400,
+      "census_samples": 261,
+      "clock_valid": true,
+      "final": {
+        "all_map": 34,
+        "atv": 0,
+        "civilian": 21,
+        "clock": 321424593,
+        "elapsed": 3110400,
+        "flying": 4,
+        "ground_mission_bearing": 30,
+        "ground_moved_last_step": 28,
+        "ground_velocity_moving": 28,
+        "max_road_stopped_ticks": 19,
+        "parked": 653,
+        "police": 13,
+        "road": 30,
+        "road_stopped_12000": 0,
+        "stationary_12000": 0
+      },
+      "final_blocker_lines": [],
+      "final_clock": 321424593,
+      "final_events": {
+        "building_entries": 3043,
+        "civilian_entries": 2026,
+        "confirmed_target_arrivals": 3043,
+        "dead_exits": 93,
+        "entries": 3009,
+        "flyer_entries": 626,
+        "ground_distance": 364089.1636356809,
+        "ground_reversals": 5041,
+        "ground_tile_changes": 356035,
+        "newly_seen": 2072,
+        "other_exits": 0,
+        "police_entries": 983,
+        "road_entries": 2383,
+        "successful_retirements": 1957
+      },
+      "final_initial_ground": {
+        "dead": 4,
+        "elsewhere": 0,
+        "ever_changed_position": 157,
+        "in_building": 144,
+        "on_map_now": 9
+      },
+      "initial": {
+        "all_map": 161,
+        "atv": 0,
+        "civilian": 146,
+        "clock": 318314193,
+        "elapsed": 0,
+        "flying": 4,
+        "ground_mission_bearing": 157,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "max_road_stopped_ticks": 0,
+        "parked": 504,
+        "police": 15,
+        "road": 157,
+        "road_stopped_12000": 0,
+        "stationary_12000": 0
+      },
+      "initial_clock": 318314193,
+      "max_sampled_roadStoppedTicks": 1369,
+      "max_stationary_cars": 3,
+      "metadata": {
+        "argv": [
+          "/tmp/openapoc-traffic-observed/final-junction-old2-sixhours/traffic_census",
+          "/Users/khallmark/.worktrees/OpenApoc/khallmark-develop-reboot/build-funding/learning-show-old2/runs/g000-r0015/victory.save",
+          "3110400",
+          "6",
+          "update",
+          "--Framework.Data=/Users/khallmark/.worktrees/OpenApoc/khallmark-traffic-observed-gridlock/data",
+          "--Framework.CD=/Users/khallmark/.worktrees/OpenApoc/khallmark-traffic-observed-gridlock/data/cd.iso",
+          "--Config.Read=0",
+          "--Config.Save=0",
+          "--Logger.dialogLevel=0",
+          "--Logger.FileLevel=3"
+        ],
+        "binary_sha256": "06831461fd95c7c693ae0d8d7594231566dfd68d64c332b22725a73bd22a11bc",
+        "cwd": "/tmp/openapoc-traffic-observed/final-junction-old2-sixhours",
+        "finished_utc": "2026-10-08T05:52:03.443180+00:00",
+        "mode": "update",
+        "receipt_sha256": {
+          "census.txt": "73d361b5ce5b9c6237c879d2b50f9f4cc7fde19bd65fe514e88556f4f5627950",
+          "game.log": "c9cd3b8e3c342bad80eaa56be23285d736ac73d57862556075f8cc30d5b0e5b9",
+          "log.txt": "690b3cb21a7b80cfdfe6bcfede5afe285a312cd0b8f499a7ba296926070eff97"
+        },
+        "requested_ticks": 3110400,
+        "returncode": 0,
+        "save_sha256": "2d0dbc585290c7cf444e25e27c0281c178028dee8248a37decf046a037a3ec3b",
+        "source_sha256": {
+          "game/state/city/city.cpp": "4f29f5fa7d18eb72cef5151a0e93f2a22b9c6c7de628303fbc29085b4e2a1c98",
+          "game/state/city/vehicle.cpp": "a171ccae81fc896ba91239ce7728050549dcaf7bdb91205539953c2577620e60",
+          "game/state/city/vehiclemission.cpp": "cecb8897c7233d858d820f4397f84a12386d9a36d186c23f6585b820f238a29c",
+          "game/state/gamestate.cpp": "fecf82edf973009e55c37b2b2c469addcfd6eef3a4f6b6af8ff51a665420bcde",
+          "tests/traffic_census.cpp": "74e55afeab7339196edea8625d68077e8a50f668f744c72e3373f41fcc555c0b"
+        },
+        "started_utc": "2026-10-08T05:50:51.965782+00:00",
+        "step_ticks": 6
+      },
+      "mode": "update",
+      "post_warmup": {
+        "all_map": {
+          "maximum": 39,
+          "mean": 33.003921568627455,
+          "minimum": 23
+        },
+        "civilian": {
+          "maximum": 30,
+          "mean": 23.219607843137254,
+          "minimum": 15
+        },
+        "flying": {
+          "maximum": 7,
+          "mean": 2.0980392156862746,
+          "minimum": 0
+        },
+        "ground_velocity_moving": {
+          "maximum": 36,
+          "mean": 29.44313725490196,
+          "minimum": 18
+        },
+        "parked": {
+          "maximum": 662,
+          "mean": 657.0980392156863,
+          "minimum": 648
+        },
+        "police": {
+          "maximum": 18,
+          "mean": 9.784313725490197,
+          "minimum": 4
+        },
+        "road": {
+          "maximum": 36,
+          "mean": 30.905882352941177,
+          "minimum": 21
+        },
+        "stationary_12000": {
+          "maximum": 3,
+          "mean": 0.1843137254901961,
+          "minimum": 0
+        }
+      },
+      "post_warmup_samples": 255,
+      "receipt_sha256": {
+        "census.txt": "73d361b5ce5b9c6237c879d2b50f9f4cc7fde19bd65fe514e88556f4f5627950",
+        "game.log": "c9cd3b8e3c342bad80eaa56be23285d736ac73d57862556075f8cc30d5b0e5b9",
+        "log.txt": "690b3cb21a7b80cfdfe6bcfede5afe285a312cd0b8f499a7ba296926070eff97",
+        "metadata.json": "bd4dc941a9e41af8f1bbda99c212bc8b6cd33ab1f082156ea8316cb15d026146"
+      },
+      "requested_ticks": 3110400,
+      "road_stopped_12000_checkpoints": 0,
+      "run_id": "final-junction-old2-sixhours",
+      "stationary_checkpoints": 23,
+      "step_ticks": 6
+    }
+  ]
+}

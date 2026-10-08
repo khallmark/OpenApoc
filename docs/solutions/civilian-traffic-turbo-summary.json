@@ -1,0 +1,4233 @@
+{
+  "classification": {
+    "all_map": "road + atv + flying; total across these vehicle types, not civilian-only.",
+    "atv": "On-map, living vehicles whose VehicleType is ATV.",
+    "civilian": "On-map vehicles excluding player owner, alien owner, and ORG_MEGAPOL.",
+    "event_counters": "Counters of transitions visible between endpoint samples. Entries, building arrivals, deaths and retirements can omit complete trips or vehicles that appear and disappear within a frame.",
+    "flying": "On-map, living vehicles whose VehicleType is Flying.",
+    "max_road_stopped_ticks": "Maximum current mission roadStoppedTicks among on-map ground vehicles at the checkpoint; absent in intermediate observer, so its CSV cells are blank.",
+    "parked": "Living vehicles in the current city with currentBuilding set, including player vehicles.",
+    "police": "All on-map vehicles owned by ORG_MEGAPOL, including generated ambient vehicles.",
+    "road": "On-map, living vehicles whose VehicleType is Road.",
+    "road_stopped_12000": "Number of on-map ground vehicles whose current mission roadStoppedTicks is at least 12000 at a checkpoint; counts waiting independently of endpoint displacement.",
+    "stationary_12000": "Active mission-bearing ground vehicles with no net observed position displacement across one or more five-minute frames; threshold is 12000 ticks but sampling is 43200 ticks."
+  },
+  "comparisons": [
+    {
+      "baseline_run": "pre-speed5-coarse-logged",
+      "candidate_run": "post-speed5-coarse-logged",
+      "duration_ticks": 3110400,
+      "metric_deltas": {
+        "all_map": {
+          "after_mean": 32.333333333333336,
+          "before_mean": 6.833333333333333,
+          "difference": 25.500000000000004,
+          "percent_change": 373.17073170731715
+        },
+        "civilian": {
+          "after_mean": 27.583333333333332,
+          "before_mean": 5.25,
+          "difference": 22.333333333333332,
+          "percent_change": 425.39682539682536
+        },
+        "ground_velocity_moving": {
+          "after_mean": 26.416666666666668,
+          "before_mean": 4.833333333333333,
+          "difference": 21.583333333333336,
+          "percent_change": 446.5517241379311
+        },
+        "road": {
+          "after_mean": 30.083333333333332,
+          "before_mean": 4.833333333333333,
+          "difference": 25.25,
+          "percent_change": 522.4137931034483
+        }
+      },
+      "window": "first_hour"
+    },
+    {
+      "baseline_run": "pre-speed5-coarse-logged",
+      "candidate_run": "post-speed5-coarse-logged",
+      "duration_ticks": 3110400,
+      "metric_deltas": {
+        "all_map": {
+          "after_mean": 34.28169014084507,
+          "before_mean": 28.04225352112676,
+          "difference": 6.239436619718312,
+          "percent_change": 22.250125565042698
+        },
+        "civilian": {
+          "after_mean": 28.732394366197184,
+          "before_mean": 23.549295774647888,
+          "difference": 5.183098591549296,
+          "percent_change": 22.009569377990434
+        },
+        "ground_velocity_moving": {
+          "after_mean": 21.253521126760564,
+          "before_mean": 14.704225352112676,
+          "difference": 6.549295774647888,
+          "percent_change": 44.54022988505747
+        },
+        "road": {
+          "after_mean": 33.028169014084504,
+          "before_mean": 25.239436619718308,
+          "difference": 7.788732394366196,
+          "percent_change": 30.859375
+        }
+      },
+      "window": "post_warmup"
+    },
+    {
+      "baseline_run": "pre-speed5-day",
+      "candidate_run": "post-speed5-day",
+      "duration_ticks": 12441600,
+      "metric_deltas": {
+        "all_map": {
+          "after_mean": 31.916666666666668,
+          "before_mean": 7.083333333333333,
+          "difference": 24.833333333333336,
+          "percent_change": 350.5882352941177
+        },
+        "civilian": {
+          "after_mean": 28.083333333333332,
+          "before_mean": 5.333333333333333,
+          "difference": 22.75,
+          "percent_change": 426.5625
+        },
+        "ground_velocity_moving": {
+          "after_mean": 26.666666666666668,
+          "before_mean": 5,
+          "difference": 21.666666666666668,
+          "percent_change": 433.33333333333337
+        },
+        "road": {
+          "after_mean": 29.166666666666668,
+          "before_mean": 5,
+          "difference": 24.166666666666668,
+          "percent_change": 483.33333333333337
+        }
+      },
+      "window": "first_hour"
+    },
+    {
+      "baseline_run": "pre-speed5-day",
+      "candidate_run": "post-speed5-day",
+      "duration_ticks": 12441600,
+      "metric_deltas": {
+        "all_map": {
+          "after_mean": 35.65505226480836,
+          "before_mean": 28.303135888501743,
+          "difference": 7.351916376306619,
+          "percent_change": 25.975624769173947
+        },
+        "civilian": {
+          "after_mean": 28.425087108013937,
+          "before_mean": 23.766550522648085,
+          "difference": 4.658536585365852,
+          "percent_change": 19.601231490983718
+        },
+        "ground_velocity_moving": {
+          "after_mean": 16.097560975609756,
+          "before_mean": 17.170731707317074,
+          "difference": -1.073170731707318,
+          "percent_change": -6.250000000000005
+        },
+        "road": {
+          "after_mean": 35.11149825783972,
+          "before_mean": 26.076655052264808,
+          "difference": 9.034843205574912,
+          "percent_change": 34.647247461250664
+        }
+      },
+      "window": "post_warmup"
+    },
+    {
+      "baseline_run": "pre-speed5-coarse-logged",
+      "candidate_run": "final-speed5-sixhours",
+      "duration_ticks": 3110400,
+      "metric_deltas": {
+        "all_map": {
+          "after_mean": 33.083333333333336,
+          "before_mean": 6.833333333333333,
+          "difference": 26.250000000000004,
+          "percent_change": 384.14634146341473
+        },
+        "civilian": {
+          "after_mean": 28.5,
+          "before_mean": 5.25,
+          "difference": 23.25,
+          "percent_change": 442.85714285714283
+        },
+        "ground_velocity_moving": {
+          "after_mean": 27.25,
+          "before_mean": 4.833333333333333,
+          "difference": 22.416666666666668,
+          "percent_change": 463.79310344827593
+        },
+        "road": {
+          "after_mean": 30,
+          "before_mean": 4.833333333333333,
+          "difference": 25.166666666666668,
+          "percent_change": 520.6896551724138
+        }
+      },
+      "window": "first_hour"
+    },
+    {
+      "baseline_run": "pre-speed5-coarse-logged",
+      "candidate_run": "final-speed5-sixhours",
+      "duration_ticks": 3110400,
+      "metric_deltas": {
+        "all_map": {
+          "after_mean": 34.394366197183096,
+          "before_mean": 28.04225352112676,
+          "difference": 6.352112676056336,
+          "percent_change": 22.651933701657452
+        },
+        "civilian": {
+          "after_mean": 28.35211267605634,
+          "before_mean": 23.549295774647888,
+          "difference": 4.802816901408452,
+          "percent_change": 20.394736842105267
+        },
+        "ground_velocity_moving": {
+          "after_mean": 20.802816901408452,
+          "before_mean": 14.704225352112676,
+          "difference": 6.098591549295776,
+          "percent_change": 41.47509578544062
+        },
+        "road": {
+          "after_mean": 32.76056338028169,
+          "before_mean": 25.239436619718308,
+          "difference": 7.52112676056338,
+          "percent_change": 29.799107142857146
+        }
+      },
+      "window": "post_warmup"
+    },
+    {
+      "baseline_run": "pre-speed5-day",
+      "candidate_run": "final-speed5-day",
+      "duration_ticks": 12441600,
+      "metric_deltas": {
+        "all_map": {
+          "after_mean": 33.083333333333336,
+          "before_mean": 7.083333333333333,
+          "difference": 26.000000000000004,
+          "percent_change": 367.0588235294118
+        },
+        "civilian": {
+          "after_mean": 28.5,
+          "before_mean": 5.333333333333333,
+          "difference": 23.166666666666668,
+          "percent_change": 434.37500000000006
+        },
+        "ground_velocity_moving": {
+          "after_mean": 27.25,
+          "before_mean": 5,
+          "difference": 22.25,
+          "percent_change": 445.0
+        },
+        "road": {
+          "after_mean": 30,
+          "before_mean": 5,
+          "difference": 25,
+          "percent_change": 500.0
+        }
+      },
+      "window": "first_hour"
+    },
+    {
+      "baseline_run": "pre-speed5-day",
+      "candidate_run": "final-speed5-day",
+      "duration_ticks": 12441600,
+      "metric_deltas": {
+        "all_map": {
+          "after_mean": 31.742160278745644,
+          "before_mean": 28.303135888501743,
+          "difference": 3.439024390243901,
+          "percent_change": 12.150683245106483
+        },
+        "civilian": {
+          "after_mean": 26.749128919860627,
+          "before_mean": 23.766550522648085,
+          "difference": 2.982578397212542,
+          "percent_change": 12.549479548453299
+        },
+        "ground_velocity_moving": {
+          "after_mean": 21.174216027874564,
+          "before_mean": 17.170731707317074,
+          "difference": 4.00348432055749,
+          "percent_change": 23.315746753246746
+        },
+        "road": {
+          "after_mean": 30.0801393728223,
+          "before_mean": 26.076655052264808,
+          "difference": 4.00348432055749,
+          "percent_change": 15.352752538749328
+        }
+      },
+      "window": "post_warmup"
+    },
+    {
+      "baseline_run": "pre-speed5-coarse-logged",
+      "candidate_run": "final-speed5-eligible-hour",
+      "duration_ticks": 518400,
+      "metric_deltas": {
+        "all_map": {
+          "after_mean": 33.166666666666664,
+          "before_mean": 6.833333333333333,
+          "difference": 26.333333333333332,
+          "percent_change": 385.36585365853654
+        },
+        "civilian": {
+          "after_mean": 29.25,
+          "before_mean": 5.25,
+          "difference": 24.0,
+          "percent_change": 457.14285714285717
+        },
+        "ground_velocity_moving": {
+          "after_mean": 26.75,
+          "before_mean": 4.833333333333333,
+          "difference": 21.916666666666668,
+          "percent_change": 453.44827586206907
+        },
+        "road": {
+          "after_mean": 30.333333333333332,
+          "before_mean": 4.833333333333333,
+          "difference": 25.5,
+          "percent_change": 527.5862068965517
+        }
+      },
+      "window": "first_hour"
+    }
+  ],
+  "confirmed_long_wait": {
+    "confirmation_basis": "Final actual roadBlocker diagnostics are reciprocal; mission roadStoppedTicks corroborates a long wait independently of endpoint stationary metric.",
+    "receipt_relative_path": "post-speed5-day/census.txt",
+    "run_id": "post-speed5-day",
+    "vehicles": [
+      {
+        "blocker": "VEHICLE_136",
+        "endpoint_stationary_ticks": 11232000,
+        "from": [
+          87,
+          39,
+          2
+        ],
+        "id": "VEHICLE_1047",
+        "name": "Autotaxi 121",
+        "next": [
+          87,
+          38,
+          2
+        ],
+        "receipt_line": 1277,
+        "roadStoppedTicks": 11622356
+      },
+      {
+        "blocker": "VEHICLE_1047",
+        "endpoint_stationary_ticks": 11232000,
+        "from": [
+          87,
+          38,
+          2
+        ],
+        "id": "VEHICLE_136",
+        "name": "Police Car 2",
+        "next": [
+          87,
+          39,
+          2
+        ],
+        "receipt_line": 1280,
+        "roadStoppedTicks": 11644024
+      }
+    ]
+  },
+  "final_candidate_run_prefix_checks": [
+    {
+      "compared_points": 73,
+      "differing_points": 0,
+      "first_difference": null
+    }
+  ],
+  "generated_utc": "2026-10-08T05:55:52.094913+00:00",
+  "input": {
+    "difficulty": 1,
+    "fresh_ui_setup_seed": 1,
+    "initial_city": "CITYMAP_HUMAN",
+    "initial_clock_ticks": 6220800,
+    "initial_nonplayer_count": 325,
+    "initial_on_map_count": 0,
+    "initial_parked_count": 330,
+    "initial_player_fleet": 5,
+    "resume_semantics": "Loaded preserved startup save and initState; no startGame, reseeding, mission resets or vehicle deletion by observer.",
+    "save_bytes": 1069580,
+    "save_relative_to_receipt_root": "ui-fresh/startup.save",
+    "save_sha256": "f00714bbc9e304458c61dbdc78e04b20fc504fbf540f3e9d545cd0d3fb7d20f1",
+    "saved_rng_state": [
+      7251685877758789622,
+      4494004282789118709
+    ]
+  },
+  "intermediate_dataset_preservation": {
+    "original_columns": [
+      "run_id",
+      "variant",
+      "duration_ticks",
+      "receipt_relative_path",
+      "receipt_line",
+      "elapsed",
+      "clock",
+      "road",
+      "atv",
+      "flying",
+      "all_map",
+      "civilian",
+      "police",
+      "parked",
+      "ground_velocity_moving",
+      "ground_moved_last_step",
+      "ground_mission_bearing",
+      "stationary_12000",
+      "context_player_fleet",
+      "context_nonplayer_onmap",
+      "context_aliens_onmap",
+      "context_crashed_aliens_onmap",
+      "context_crashed_onmap",
+      "events_entries",
+      "events_road_entries",
+      "events_flyer_entries",
+      "events_civilian_entries",
+      "events_police_entries",
+      "events_building_entries",
+      "events_confirmed_target_arrivals",
+      "events_dead_exits",
+      "events_other_exits",
+      "events_newly_seen",
+      "events_ground_tile_changes",
+      "events_ground_reversals",
+      "events_ground_distance",
+      "events_successful_retirements"
+    ],
+    "original_csv_sha256": "82ed1627ef36d2568c8f9cf0b8f7a95839a2af05a05bdda424ab509a908ead6f",
+    "original_rows": 724,
+    "reconstruction": "First 724 rows restricted to original_columns reproduce the original LF CSV bytes; missing new stopped-counter fields are blank, not zero."
+  },
+  "limitations": [
+    "These are individual runs, not independent replicated estimates or a test of statistical significance.",
+    "Identical initial save and RNG state did not produce bit-for-bit identical six-hour/day prefixes; each trace is retained separately.",
+    "Population is sampled after each five-minute updateTurbo frame, not continuously within the frame.",
+    "stationary_12000 is an endpoint displacement measure and cannot establish continuous immobility by itself.",
+    "Endpoint event counters omit sub-frame trips; do not treat them as total dispatch throughput or total completed journeys.",
+    "The intermediate observer invoked updateTurbo directly through canTurbo gameplay eligibility. Its candidate six-hour receipt logs one canTurbo=false error. Those intermediate receipts are not proof of uninterrupted valid UI Speed 5 during hostile activity.",
+    "Increased density does not demonstrate healthy flow. The intermediate post-review day final diagnostics confirm two reciprocal blockers with roadStoppedTicks exceeding 11.6 million ticks; the later final candidate is reported separately.",
+    "The baseline here already contains the earlier ambient spawning/lane fixes; it is pre-review 0ea2a77b, not the earlier bce8974 baseline used in the separate Speed 4 dataset.",
+    "The four pre-review and intermediate receipts precede the adjacent-junction correction. They are retained as individual observations and must not be presented as acceptance of the final candidate.",
+    "Final six-hour and day runs use turbo-unchecked. Six-hour run saw zero unavailable frames; day saw two. The separate final one-hour run strictly checked turbo eligibility and saw zero unavailable frames.",
+    "Final day maximum sampled roadStoppedTicks is 359706 ticks; 37 checkpoints have at least one mission road wait over 12000 ticks. These episodes recovered by the final checkpoint; do not claim all queues or waits were eliminated.",
+    "Final coarse six-hour receipt ends with one endpoint-stationary diagnostic, but its final maximum current-mission stopped counter is 1 tick. Endpoint displacement and road waiting are distinct measures.",
+    "New stopped-counter fields were not collected in intermediate runs. Blank CSV values mean unavailable, not zero."
+  ],
+  "method": {
+    "call": "GameState::updateTurbo() once per observed frame",
+    "dispatch_counts": "Count of Traffic batch at messages in log.txt, independent of map-entry sampling.",
+    "first_hour_filter": "0 < elapsed <= 518400",
+    "frame_minutes": 5,
+    "frame_ticks": 43200,
+    "log_file_level": 3,
+    "means": "Unweighted arithmetic mean over equally spaced population checkpoints in each specified window.",
+    "observer_evolution": "Intermediate mode=turbo invoked updateTurbo without an eligibility check. Final mode=turbo checks canTurbo before every frame; final mode=turbo-unchecked counts unavailable frames and proceeds explicitly.",
+    "post_warmup_filter": "elapsed > 60000, including final checkpoint",
+    "sampling": "Initial checkpoint then one census after each completed five-minute frame.",
+    "ticks_per_second": 144
+  },
+  "observations_csv": {
+    "columns": [
+      "run_id",
+      "variant",
+      "duration_ticks",
+      "receipt_relative_path",
+      "receipt_line",
+      "elapsed",
+      "clock",
+      "road",
+      "atv",
+      "flying",
+      "all_map",
+      "civilian",
+      "police",
+      "parked",
+      "ground_velocity_moving",
+      "ground_moved_last_step",
+      "ground_mission_bearing",
+      "stationary_12000",
+      "context_player_fleet",
+      "context_nonplayer_onmap",
+      "context_aliens_onmap",
+      "context_crashed_aliens_onmap",
+      "context_crashed_onmap",
+      "events_entries",
+      "events_road_entries",
+      "events_flyer_entries",
+      "events_civilian_entries",
+      "events_police_entries",
+      "events_building_entries",
+      "events_confirmed_target_arrivals",
+      "events_dead_exits",
+      "events_other_exits",
+      "events_newly_seen",
+      "events_ground_tile_changes",
+      "events_ground_reversals",
+      "events_ground_distance",
+      "events_successful_retirements",
+      "max_road_stopped_ticks",
+      "road_stopped_12000",
+      "sampling_step_ticks",
+      "observer_mode"
+    ],
+    "data_rows": 1099,
+    "line_endings": "LF",
+    "path_relative_to_repository": "docs/solutions/civilian-traffic-turbo-observations.csv",
+    "sha256": "bc35b4fe3cc12ae97786650cb057a74339a1e01da72f1935094e9f27ef9504f6"
+  },
+  "receipt_root_description": "Local receipt directory /tmp/openapoc-traffic-observed; all artifact paths below are relative to this directory.",
+  "runs": [
+    {
+      "actual_clock_delta_ticks": 3110400,
+      "binary": {
+        "path_relative_to_receipt_root": "traffic_census_speed5-before",
+        "sha256": "f62982649ed03ed93d1abc39850bc73bf374c8bda9e4a01387a5b738d3efeb52"
+      },
+      "census_samples": 73,
+      "diagnostics": {
+        "final_blocker_lines": [
+          {
+            "receipt_line": 413,
+            "text": "BLOCKER id=VEHICLE_135 name=Police Car 1 stationary=129600 roadStoppedTicks=135839 mission=GotoLocation {64,89,1} missions=2 path=51 wait=8 reroutes=1 from={60,46,2} next={61,46,2} connections=3 goal={60.640625,46.5,2} velocity={0,0,0} facing=0 position={60.640625,46.5,2} initial_position={96.5,66.5,1.5} blocker=VEHICLE_520"
+          },
+          {
+            "receipt_line": 414,
+            "text": "BLOCKER id=VEHICLE_136 name=Police Car 2 stationary=86400 roadStoppedTicks=1 mission=GotoLocation {52,54,2} missions=4 path=49 wait=8 reroutes=1 from={61,46,2} next={62,46,2} connections=2 goal={61.5,46.359375,2} velocity={0,0,0} facing=4.712389 position={61.5,46.359375,2} initial_position={77.5,57.5,2.5} blocker=VEHICLE_478"
+          },
+          {
+            "receipt_line": 415,
+            "text": "BLOCKER id=VEHICLE_139 name=Police Car 3 stationary=86400 roadStoppedTicks=108 mission=GotoLocation {103,43,1} missions=2 path=67 wait=8 reroutes=1 from={60,47,2} next={60,48,2} connections=2 goal={60.640625,47.5,2} velocity={0,0,0} facing=0 position={60.640625,47.5,2} initial_position={103.5,43.5,1.5} blocker=VEHICLE_576"
+          },
+          {
+            "receipt_line": 416,
+            "text": "BLOCKER id=VEHICLE_465 name=Blazer Turbo Bike 94 stationary=86400 roadStoppedTicks=135 mission=GotoLocation {112,38,2} missions=2 path=83 wait=8 reroutes=1 from={60,47,2} next={60,48,2} connections=2 goal={60.640625,47.5,2} velocity={0,0,0} facing=0 position={60.640625,47.5,2} initial_position={112.01,38.5,2} blocker=VEHICLE_576"
+          },
+          {
+            "receipt_line": 417,
+            "text": "BLOCKER id=VEHICLE_477 name=Civilian Car 120 stationary=86400 roadStoppedTicks=1 mission=GotoLocation {57,67,2} missions=3 path=27 wait=8 reroutes=1 from={60,47,2} next={60,48,2} connections=2 goal={60.640625,47.5,2} velocity={0,0,0} facing=0 position={60.640625,47.5,2} initial_position={53.5,44.01,1} blocker=VEHICLE_576"
+          },
+          {
+            "receipt_line": 418,
+            "text": "BLOCKER id=VEHICLE_478 name=Civilian Car 121 stationary=43200 roadStoppedTicks=0 mission=GotoLocation {89,30,1} missions=2 path=43 wait=0 reroutes=1 from={62,46,2} next={63,46,2} connections=3 goal={63.5,46.640625,2} velocity={3.9610262,0.5570193,0} facing=1.7105052 position={62.5,46.5,2} initial_position={89.5,30.01,1} blocker=VEHICLE_627"
+          },
+          {
+            "receipt_line": 419,
+            "text": "BLOCKER id=VEHICLE_581 name=Civilian Car 158 stationary=129600 roadStoppedTicks=132355 mission=GotoLocation {51,73,2} missions=2 path=50 wait=8 reroutes=1 from={60,46,2} next={61,46,2} connections=3 goal={60.640625,46.5,2} velocity={0,0,0} facing=0 position={60.640625,46.5,2} initial_position={51.99,73.5,2} blocker=VEHICLE_520"
+          },
+          {
+            "receipt_line": 420,
+            "text": "BLOCKER id=VEHICLE_582 name=Autotaxi 47 stationary=129600 roadStoppedTicks=135500 mission=GotoLocation {68,98,1} missions=2 path=68 wait=8 reroutes=1 from={60,46,2} next={61,46,2} connections=3 goal={60.640625,46.5,2} velocity={0,0,0} facing=0.2741674 position={60.640625,46.5,2} initial_position={68.01,98.5,1} blocker=VEHICLE_520"
+          },
+          {
+            "receipt_line": 421,
+            "text": "BLOCKER id=VEHICLE_584 name=Blazer Turbo Bike 108 stationary=43200 roadStoppedTicks=43206 mission=GotoLocation {98,49,1} missions=3 path=54 wait=3 reroutes=1 from={62,46,2} next={63,46,2} connections=3 goal={62.5,46.5,2} velocity={0,0,0} facing=3.1415925 position={62.5,46.5,2} initial_position={28.5,30.01,1} blocker=VEHICLE_627"
+          },
+          {
+            "receipt_line": 422,
+            "text": "BLOCKER id=VEHICLE_601 name=Civilian Car 163 stationary=43200 roadStoppedTicks=0 mission=GotoLocation {51,73,2} missions=3 path=51 wait=0 reroutes=1 from={60,48,2} next={60,47,2} connections=2 goal={60.640625,47.5,2} velocity={0,-4,0} facing=0 position={60.640625,48.5,2} initial_position={88.5,43.01,2} blocker=VEHICLE_616"
+          },
+          {
+            "receipt_line": 423,
+            "text": "BLOCKER id=VEHICLE_616 name=Autotaxi 49 stationary=43200 roadStoppedTicks=1 mission=GotoLocation {57,67,2} missions=3 path=31 wait=8 reroutes=1 from={60,47,2} next={60,46,2} connections=2 goal={60.359375,47.5,2} velocity={0,0,0} facing=3.281302 position={60.359375,47.5,2} initial_position={78.01,33.5,1} blocker=VEHICLE_135"
+          },
+          {
+            "receipt_line": 424,
+            "text": "BLOCKER id=VEHICLE_628 name=Civilian Car 172 stationary=43200 roadStoppedTicks=44902 mission=GotoLocation {46,88,2} missions=3 path=74 wait=8 reroutes=1 from={60,46,2} next={60,47,2} connections=3 goal={60.5,46.359375,2} velocity={0,0,0} facing=4.712389 position={60.5,46.359375,2} initial_position={73.5,49.01,2} blocker=VEHICLE_465"
+          }
+        ],
+        "game_errors": []
+      },
+      "dispatch": {
+        "clock_count_matches_expected": true,
+        "expected_batches": 72,
+        "first": {
+          "log_line": 1876,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 33,
+          "sent": 4,
+          "time": "12:00",
+          "wanted": 4
+        },
+        "last": {
+          "log_line": 20184,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 2,
+          "sent": 2,
+          "time": "17:00",
+          "wanted": 2
+        },
+        "logged_batches": 72,
+        "no_source_sum": 0,
+        "nowhere_sum": 0,
+        "sent_sum": 310,
+        "wanted_sum": 428
+      },
+      "duration_ticks": 3110400,
+      "exact_clock_validation_passed": true,
+      "final": {
+        "all_map": 35,
+        "atv": 0,
+        "civilian": 28,
+        "clock": 9331200,
+        "elapsed": 3110400,
+        "flying": 2,
+        "ground_mission_bearing": 33,
+        "ground_moved_last_step": 19,
+        "ground_velocity_moving": 16,
+        "parked": 327,
+        "police": 7,
+        "receipt_line": 409,
+        "road": 33,
+        "stationary_12000": 12
+      },
+      "final_clock_ticks": 9331200,
+      "final_observed_event_counters": {
+        "building_entries": 188,
+        "civilian_entries": 402,
+        "confirmed_target_arrivals": 188,
+        "dead_exits": 244,
+        "entries": 467,
+        "flyer_entries": 199,
+        "ground_distance": 5781.811644191854,
+        "ground_reversals": 203,
+        "ground_tile_changes": 1107,
+        "newly_seen": 368,
+        "other_exits": 0,
+        "police_entries": 65,
+        "road_entries": 268,
+        "successful_retirements": 92
+      },
+      "first_hour": {
+        "endpoint_stationary_checkpoints": 0,
+        "first_elapsed_ticks": 43200,
+        "last_elapsed_ticks": 518400,
+        "metrics": {
+          "all_map": {
+            "maximum": 10,
+            "mean": 6.833333333333333,
+            "minimum": 4
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 9,
+            "mean": 5.25,
+            "minimum": 3
+          },
+          "flying": {
+            "maximum": 3,
+            "mean": 2,
+            "minimum": 0
+          },
+          "ground_mission_bearing": {
+            "maximum": 8,
+            "mean": 4.833333333333333,
+            "minimum": 2
+          },
+          "ground_moved_last_step": {
+            "maximum": 3,
+            "mean": 0.6666666666666666,
+            "minimum": 0
+          },
+          "ground_velocity_moving": {
+            "maximum": 8,
+            "mean": 4.833333333333333,
+            "minimum": 2
+          },
+          "parked": {
+            "maximum": 331,
+            "mean": 329.6666666666667,
+            "minimum": 328
+          },
+          "police": {
+            "maximum": 3,
+            "mean": 1.5833333333333333,
+            "minimum": 1
+          },
+          "road": {
+            "maximum": 8,
+            "mean": 4.833333333333333,
+            "minimum": 2
+          },
+          "stationary_12000": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          }
+        },
+        "sample_count": 12
+      },
+      "frame_count": 72,
+      "header": {
+        "city": "CITYMAP_HUMAN",
+        "mode": "turbo",
+        "requested_ticks": 3110400,
+        "rng": "7251685877758789622,4494004282789118709",
+        "save": "ui-fresh/startup.save",
+        "step": 43200
+      },
+      "hourly_windows": [
+        {
+          "all_map_mean": 6.833333333333333,
+          "end_elapsed_inclusive": 518400,
+          "endpoint_stationary_checkpoints": 0,
+          "first_elapsed_ticks": 43200,
+          "ground_velocity_moving_mean": 4.833333333333333,
+          "hour_index": 0,
+          "last_elapsed_ticks": 518400,
+          "road_mean": 4.833333333333333,
+          "road_range": [
+            2,
+            8
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 0
+        },
+        {
+          "all_map_mean": 21.25,
+          "end_elapsed_inclusive": 1036800,
+          "endpoint_stationary_checkpoints": 7,
+          "first_elapsed_ticks": 561600,
+          "ground_velocity_moving_mean": 14.083333333333334,
+          "hour_index": 1,
+          "last_elapsed_ticks": 1036800,
+          "road_mean": 16.916666666666668,
+          "road_range": [
+            9,
+            25
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 518400
+        },
+        {
+          "all_map_mean": 34.416666666666664,
+          "end_elapsed_inclusive": 1555200,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 1080000,
+          "ground_velocity_moving_mean": 18.333333333333332,
+          "hour_index": 2,
+          "last_elapsed_ticks": 1555200,
+          "road_mean": 31.333333333333332,
+          "road_range": [
+            26,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 1036800
+        },
+        {
+          "all_map_mean": 34.583333333333336,
+          "end_elapsed_inclusive": 2073600,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 1598400,
+          "ground_velocity_moving_mean": 18,
+          "hour_index": 3,
+          "last_elapsed_ticks": 2073600,
+          "road_mean": 32.25,
+          "road_range": [
+            29,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 1555200
+        },
+        {
+          "all_map_mean": 34.416666666666664,
+          "end_elapsed_inclusive": 2592000,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 2116800,
+          "ground_velocity_moving_mean": 17.416666666666668,
+          "hour_index": 4,
+          "last_elapsed_ticks": 2592000,
+          "road_mean": 31.833333333333332,
+          "road_range": [
+            30,
+            33
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 2073600
+        },
+        {
+          "all_map_mean": 34.916666666666664,
+          "end_elapsed_inclusive": 3110400,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 2635200,
+          "ground_velocity_moving_mean": 14.833333333333334,
+          "hour_index": 5,
+          "last_elapsed_ticks": 3110400,
+          "road_mean": 32.666666666666664,
+          "road_range": [
+            32,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 2592000
+        }
+      ],
+      "initial": {
+        "all_map": 0,
+        "atv": 0,
+        "civilian": 0,
+        "clock": 6220800,
+        "elapsed": 0,
+        "flying": 0,
+        "ground_mission_bearing": 0,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "parked": 330,
+        "police": 0,
+        "receipt_line": 2,
+        "road": 0,
+        "stationary_12000": 0
+      },
+      "initial_clock_ticks": 6220800,
+      "inventory": {
+        "final": {
+          "groups": 173,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 244,
+            "onmap": 35,
+            "parked": 327,
+            "successful_retirements": 92
+          }
+        },
+        "initial": {
+          "groups": 119,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 0,
+            "onmap": 0,
+            "parked": 330,
+            "successful_retirements": 0
+          }
+        }
+      },
+      "observer": {
+        "sha256": "8eaffdbaff5ae24b6c3e2e441e3c5bfa055bf5fe2e4bddd7905837fbcd417b0d",
+        "source_relative_to_receipt_root": "traffic_census_speed5.cpp"
+      },
+      "post_warmup": {
+        "endpoint_stationary_checkpoints": 55,
+        "first_elapsed_ticks": 86400,
+        "last_elapsed_ticks": 3110400,
+        "metrics": {
+          "all_map": {
+            "maximum": 36,
+            "mean": 28.04225352112676,
+            "minimum": 4
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 31,
+            "mean": 23.549295774647888,
+            "minimum": 3
+          },
+          "flying": {
+            "maximum": 7,
+            "mean": 2.8028169014084505,
+            "minimum": 1
+          },
+          "ground_mission_bearing": {
+            "maximum": 34,
+            "mean": 25.239436619718308,
+            "minimum": 2
+          },
+          "ground_moved_last_step": {
+            "maximum": 29,
+            "mean": 16.183098591549296,
+            "minimum": 0
+          },
+          "ground_velocity_moving": {
+            "maximum": 23,
+            "mean": 14.704225352112676,
+            "minimum": 2
+          },
+          "parked": {
+            "maximum": 332,
+            "mean": 329.6619718309859,
+            "minimum": 327
+          },
+          "police": {
+            "maximum": 8,
+            "mean": 4.492957746478873,
+            "minimum": 1
+          },
+          "road": {
+            "maximum": 34,
+            "mean": 25.239436619718308,
+            "minimum": 2
+          },
+          "stationary_12000": {
+            "maximum": 14,
+            "mean": 5.366197183098592,
+            "minimum": 0
+          }
+        },
+        "sample_count": 71
+      },
+      "receipts": {
+        "census.txt": {
+          "bytes": 96306,
+          "path_relative_to_receipt_root": "pre-speed5-coarse-logged/census.txt",
+          "sha256": "2fdc1640755b8dca7cd792b9a2635f3b3fc8fed6362ef8909f90c1c240f4081f"
+        },
+        "game.log": {
+          "bytes": 433,
+          "path_relative_to_receipt_root": "pre-speed5-coarse-logged/game.log",
+          "sha256": "a95ab61e453e47903f12ff58b3acaaff19d0c1c467be15a1ebc59a86e4f011b8"
+        },
+        "log.txt": {
+          "bytes": 2749883,
+          "path_relative_to_receipt_root": "pre-speed5-coarse-logged/log.txt",
+          "sha256": "b07beab4a7e4d64d82ff7240fe6e6a37d89af77a7c5a26aa4209138ea342b31d"
+        }
+      },
+      "run_id": "pre-speed5-coarse-logged",
+      "simulated_hours": 6,
+      "status": "observed pre-review baseline",
+      "variant": "pre_review",
+      "wall_seconds": 0.357867875
+    },
+    {
+      "actual_clock_delta_ticks": 3110400,
+      "binary": {
+        "path_relative_to_receipt_root": "traffic_census_speed5-post-observed",
+        "sha256": "9b09b21732e4d9c9192f78df92a7bd557ab7d36162f4c0300a34e45d57bd3456"
+      },
+      "census_samples": 73,
+      "diagnostics": {
+        "final_blocker_lines": [],
+        "game_errors": [
+          {
+            "receipt_line": 5,
+            "text": "E void OpenApoc::GameState::updateTurbo() Called when canTurbo() is false"
+          }
+        ]
+      },
+      "dispatch": {
+        "clock_count_matches_expected": true,
+        "expected_batches": 720,
+        "first": {
+          "log_line": 1876,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 33,
+          "sent": 4,
+          "time": "12:00",
+          "wanted": 4
+        },
+        "last": {
+          "log_line": 66293,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 1,
+          "sent": 1,
+          "time": "17:00",
+          "wanted": 6
+        },
+        "logged_batches": 720,
+        "no_source_sum": 0,
+        "nowhere_sum": 0,
+        "sent_sum": 1128,
+        "wanted_sum": 4353
+      },
+      "duration_ticks": 3110400,
+      "exact_clock_validation_passed": true,
+      "final": {
+        "all_map": 35,
+        "atv": 0,
+        "civilian": 26,
+        "clock": 9331200,
+        "elapsed": 3110400,
+        "flying": 0,
+        "ground_mission_bearing": 35,
+        "ground_moved_last_step": 20,
+        "ground_velocity_moving": 23,
+        "parked": 329,
+        "police": 9,
+        "receipt_line": 409,
+        "road": 35,
+        "stationary_12000": 0
+      },
+      "final_clock_ticks": 9331200,
+      "final_observed_event_counters": {
+        "building_entries": 560,
+        "civilian_entries": 777,
+        "confirmed_target_arrivals": 545,
+        "dead_exits": 270,
+        "entries": 865,
+        "flyer_entries": 91,
+        "ground_distance": 16846.373824626207,
+        "ground_reversals": 104,
+        "ground_tile_changes": 1372,
+        "newly_seen": 924,
+        "other_exits": 0,
+        "police_entries": 88,
+        "road_entries": 774,
+        "successful_retirements": 534
+      },
+      "first_hour": {
+        "endpoint_stationary_checkpoints": 0,
+        "first_elapsed_ticks": 43200,
+        "last_elapsed_ticks": 518400,
+        "metrics": {
+          "all_map": {
+            "maximum": 35,
+            "mean": 32.333333333333336,
+            "minimum": 26
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 32,
+            "mean": 27.583333333333332,
+            "minimum": 21
+          },
+          "flying": {
+            "maximum": 4,
+            "mean": 2.25,
+            "minimum": 1
+          },
+          "ground_mission_bearing": {
+            "maximum": 34,
+            "mean": 30.083333333333332,
+            "minimum": 23
+          },
+          "ground_moved_last_step": {
+            "maximum": 16,
+            "mean": 10.666666666666666,
+            "minimum": 0
+          },
+          "ground_velocity_moving": {
+            "maximum": 32,
+            "mean": 26.416666666666668,
+            "minimum": 21
+          },
+          "parked": {
+            "maximum": 331,
+            "mean": 328.6666666666667,
+            "minimum": 327
+          },
+          "police": {
+            "maximum": 6,
+            "mean": 4.75,
+            "minimum": 2
+          },
+          "road": {
+            "maximum": 34,
+            "mean": 30.083333333333332,
+            "minimum": 23
+          },
+          "stationary_12000": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          }
+        },
+        "sample_count": 12
+      },
+      "frame_count": 72,
+      "header": {
+        "city": "CITYMAP_HUMAN",
+        "mode": "turbo",
+        "requested_ticks": 3110400,
+        "rng": "7251685877758789622,4494004282789118709",
+        "save": "ui-fresh/startup.save",
+        "step": 43200
+      },
+      "hourly_windows": [
+        {
+          "all_map_mean": 32.333333333333336,
+          "end_elapsed_inclusive": 518400,
+          "endpoint_stationary_checkpoints": 0,
+          "first_elapsed_ticks": 43200,
+          "ground_velocity_moving_mean": 26.416666666666668,
+          "hour_index": 0,
+          "last_elapsed_ticks": 518400,
+          "road_mean": 30.083333333333332,
+          "road_range": [
+            23,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 0
+        },
+        {
+          "all_map_mean": 34.333333333333336,
+          "end_elapsed_inclusive": 1036800,
+          "endpoint_stationary_checkpoints": 5,
+          "first_elapsed_ticks": 561600,
+          "ground_velocity_moving_mean": 23,
+          "hour_index": 1,
+          "last_elapsed_ticks": 1036800,
+          "road_mean": 32.916666666666664,
+          "road_range": [
+            28,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 518400
+        },
+        {
+          "all_map_mean": 34.916666666666664,
+          "end_elapsed_inclusive": 1555200,
+          "endpoint_stationary_checkpoints": 11,
+          "first_elapsed_ticks": 1080000,
+          "ground_velocity_moving_mean": 13.25,
+          "hour_index": 2,
+          "last_elapsed_ticks": 1555200,
+          "road_mean": 34.333333333333336,
+          "road_range": [
+            32,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 1036800
+        },
+        {
+          "all_map_mean": 34.75,
+          "end_elapsed_inclusive": 2073600,
+          "endpoint_stationary_checkpoints": 10,
+          "first_elapsed_ticks": 1598400,
+          "ground_velocity_moving_mean": 19,
+          "hour_index": 3,
+          "last_elapsed_ticks": 2073600,
+          "road_mean": 33.75,
+          "road_range": [
+            32,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 1555200
+        },
+        {
+          "all_map_mean": 34.666666666666664,
+          "end_elapsed_inclusive": 2592000,
+          "endpoint_stationary_checkpoints": 8,
+          "first_elapsed_ticks": 2116800,
+          "ground_velocity_moving_mean": 21.416666666666668,
+          "hour_index": 4,
+          "last_elapsed_ticks": 2592000,
+          "road_mean": 33.5,
+          "road_range": [
+            29,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 2073600
+        },
+        {
+          "all_map_mean": 34,
+          "end_elapsed_inclusive": 3110400,
+          "endpoint_stationary_checkpoints": 5,
+          "first_elapsed_ticks": 2635200,
+          "ground_velocity_moving_mean": 24.416666666666668,
+          "hour_index": 5,
+          "last_elapsed_ticks": 3110400,
+          "road_mean": 32.75,
+          "road_range": [
+            27,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 2592000
+        }
+      ],
+      "initial": {
+        "all_map": 0,
+        "atv": 0,
+        "civilian": 0,
+        "clock": 6220800,
+        "elapsed": 0,
+        "flying": 0,
+        "ground_mission_bearing": 0,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "parked": 330,
+        "police": 0,
+        "receipt_line": 2,
+        "road": 0,
+        "stationary_12000": 0
+      },
+      "initial_clock_ticks": 6220800,
+      "inventory": {
+        "final": {
+          "groups": 189,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 356,
+            "onmap": 35,
+            "parked": 329,
+            "successful_retirements": 534
+          }
+        },
+        "initial": {
+          "groups": 119,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 0,
+            "onmap": 0,
+            "parked": 330,
+            "successful_retirements": 0
+          }
+        }
+      },
+      "observer": {
+        "sha256": "8eaffdbaff5ae24b6c3e2e441e3c5bfa055bf5fe2e4bddd7905837fbcd417b0d",
+        "source_relative_to_receipt_root": "traffic_census_speed5.cpp"
+      },
+      "post_warmup": {
+        "endpoint_stationary_checkpoints": 39,
+        "first_elapsed_ticks": 86400,
+        "last_elapsed_ticks": 3110400,
+        "metrics": {
+          "all_map": {
+            "maximum": 36,
+            "mean": 34.28169014084507,
+            "minimum": 29
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 32,
+            "mean": 28.732394366197184,
+            "minimum": 23
+          },
+          "flying": {
+            "maximum": 6,
+            "mean": 1.2535211267605635,
+            "minimum": 0
+          },
+          "ground_mission_bearing": {
+            "maximum": 35,
+            "mean": 33.028169014084504,
+            "minimum": 27
+          },
+          "ground_moved_last_step": {
+            "maximum": 32,
+            "mean": 20.04225352112676,
+            "minimum": 8
+          },
+          "ground_velocity_moving": {
+            "maximum": 32,
+            "mean": 21.253521126760564,
+            "minimum": 6
+          },
+          "parked": {
+            "maximum": 331,
+            "mean": 328.9577464788732,
+            "minimum": 327
+          },
+          "police": {
+            "maximum": 9,
+            "mean": 5.549295774647887,
+            "minimum": 2
+          },
+          "road": {
+            "maximum": 35,
+            "mean": 33.028169014084504,
+            "minimum": 27
+          },
+          "stationary_12000": {
+            "maximum": 18,
+            "mean": 2.408450704225352,
+            "minimum": 0
+          }
+        },
+        "sample_count": 71
+      },
+      "receipts": {
+        "census.txt": {
+          "bytes": 94877,
+          "path_relative_to_receipt_root": "post-speed5-coarse-logged/census.txt",
+          "sha256": "f5fd12f7ee07a0e688e0b7a73c1f580355fb78d51301efb8acfb8c402ab5757c"
+        },
+        "game.log": {
+          "bytes": 507,
+          "path_relative_to_receipt_root": "post-speed5-coarse-logged/game.log",
+          "sha256": "3dc2ef4065b59cc2936e296a13513e9cb12ec88b41de5142bb5c680d6c211242"
+        },
+        "log.txt": {
+          "bytes": 8961079,
+          "path_relative_to_receipt_root": "post-speed5-coarse-logged/log.txt",
+          "sha256": "3b6ec96a36c6db12d6074c8b205f5f556acf95e7493581d15dfd1756fc026a40"
+        }
+      },
+      "run_id": "post-speed5-coarse-logged",
+      "simulated_hours": 6,
+      "status": "observed intermediate candidate",
+      "variant": "post_review_intermediate",
+      "wall_seconds": 0.651347042
+    },
+    {
+      "actual_clock_delta_ticks": 12441600,
+      "binary": {
+        "path_relative_to_receipt_root": "traffic_census_speed5-before",
+        "sha256": "f62982649ed03ed93d1abc39850bc73bf374c8bda9e4a01387a5b738d3efeb52"
+      },
+      "census_samples": 289,
+      "diagnostics": {
+        "final_blocker_lines": [
+          {
+            "receipt_line": 1277,
+            "text": "BLOCKER id=VEHICLE_1283 name=Civilian Car 359 stationary=43200 roadStoppedTicks=0 mission=GotoLocation {96,66,1} missions=2 path=39 wait=0 reroutes=1 from={82,50,2} next={82,51,2} connections=2 goal={82.359375,51.5,2} velocity={-1.0829823,3.8506038,0} facing=3.4157603 position={82.640625,50.5,2} initial_position={96.5,66.01,1} blocker=none"
+          },
+          {
+            "receipt_line": 1278,
+            "text": "BLOCKER id=VEHICLE_1355 name=Blazer Turbo Bike 206 stationary=43200 roadStoppedTicks=1 mission=GotoLocation {84,89,1} missions=3 path=45 wait=8 reroutes=1 from={82,54,2} next={82,55,2} connections=2 goal={82.359375,54.5,2} velocity={0,0,0} facing=3.4157603 position={82.359375,54.5,2} initial_position={62.5,43.01,1} blocker=VEHICLE_1374"
+          },
+          {
+            "receipt_line": 1279,
+            "text": "BLOCKER id=VEHICLE_1374 name=Civilian Car 388 stationary=43200 roadStoppedTicks=0 mission=GotoLocation {78,94,1} missions=3 path=52 wait=0 reroutes=1 from={82,55,2} next={82,56,2} connections=2 goal={82.359375,56.5,2} velocity={-1.0829823,3.8506038,0} facing=3.4157603 position={82.640625,55.5,2} initial_position={45.01,26.5,2} blocker=none"
+          },
+          {
+            "receipt_line": 1280,
+            "text": "BLOCKER id=VEHICLE_1398 name=Civilian Car 394 stationary=43200 roadStoppedTicks=1 mission=GotoLocation {71,72,2} missions=2 path=45 wait=8 reroutes=1 from={82,54,2} next={82,55,2} connections=2 goal={82.359375,54.5,2} velocity={0,0,0} facing=3.1415925 position={82.359375,54.5,2} initial_position={71.5,72.01,2} blocker=VEHICLE_1374"
+          },
+          {
+            "receipt_line": 1281,
+            "text": "BLOCKER id=VEHICLE_1412 name=Autotaxi 149 stationary=43200 roadStoppedTicks=147 mission=GotoLocation {72,39,1} missions=3 path=42 wait=8 reroutes=1 from={82,69,2} next={82,68,2} connections=2 goal={82.359375,69.5,2} velocity={0,0,0} facing=3.4157603 position={82.359375,69.5,2} initial_position={88.01,72.5,1} blocker=VEHICLE_1392"
+          },
+          {
+            "receipt_line": 1282,
+            "text": "BLOCKER id=VEHICLE_1444 name=Civilian Car 404 stationary=43200 roadStoppedTicks=44702 mission=GotoLocation {101,34,1} missions=2 path=68 wait=8 reroutes=1 from={82,70,2} next={82,69,2} connections=3 goal={82.640625,70.5,2} velocity={0,0,0} facing=0 position={82.640625,70.5,2} initial_position={78.01,105.5,1} blocker=VEHICLE_1171"
+          }
+        ],
+        "game_errors": []
+      },
+      "dispatch": {
+        "clock_count_matches_expected": true,
+        "expected_batches": 288,
+        "first": {
+          "log_line": 1876,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 33,
+          "sent": 4,
+          "time": "12:00",
+          "wanted": 4
+        },
+        "last": {
+          "log_line": 60143,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 3,
+          "sent": 3,
+          "time": "11:00",
+          "wanted": 6
+        },
+        "logged_batches": 288,
+        "no_source_sum": 0,
+        "nowhere_sum": 0,
+        "sent_sum": 865,
+        "wanted_sum": 1583
+      },
+      "duration_ticks": 12441600,
+      "exact_clock_validation_passed": true,
+      "final": {
+        "all_map": 35,
+        "atv": 0,
+        "civilian": 29,
+        "clock": 18662400,
+        "elapsed": 12441600,
+        "flying": 3,
+        "ground_mission_bearing": 32,
+        "ground_moved_last_step": 25,
+        "ground_velocity_moving": 16,
+        "parked": 362,
+        "police": 6,
+        "receipt_line": 1273,
+        "road": 32,
+        "stationary_12000": 6
+      },
+      "final_clock_ticks": 18662400,
+      "final_observed_event_counters": {
+        "building_entries": 762,
+        "civilian_entries": 1233,
+        "confirmed_target_arrivals": 762,
+        "dead_exits": 717,
+        "entries": 1514,
+        "flyer_entries": 637,
+        "ground_distance": 23779.863438970875,
+        "ground_reversals": 651,
+        "ground_tile_changes": 5746,
+        "newly_seen": 1120,
+        "other_exits": 0,
+        "police_entries": 281,
+        "road_entries": 877,
+        "successful_retirements": 333
+      },
+      "first_hour": {
+        "endpoint_stationary_checkpoints": 0,
+        "first_elapsed_ticks": 43200,
+        "last_elapsed_ticks": 518400,
+        "metrics": {
+          "all_map": {
+            "maximum": 9,
+            "mean": 7.083333333333333,
+            "minimum": 5
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 8,
+            "mean": 5.333333333333333,
+            "minimum": 3
+          },
+          "flying": {
+            "maximum": 4,
+            "mean": 2.0833333333333335,
+            "minimum": 0
+          },
+          "ground_mission_bearing": {
+            "maximum": 7,
+            "mean": 5,
+            "minimum": 2
+          },
+          "ground_moved_last_step": {
+            "maximum": 3,
+            "mean": 0.6666666666666666,
+            "minimum": 0
+          },
+          "ground_velocity_moving": {
+            "maximum": 7,
+            "mean": 5,
+            "minimum": 2
+          },
+          "parked": {
+            "maximum": 331,
+            "mean": 329.75,
+            "minimum": 328
+          },
+          "police": {
+            "maximum": 3,
+            "mean": 1.75,
+            "minimum": 1
+          },
+          "road": {
+            "maximum": 7,
+            "mean": 5,
+            "minimum": 2
+          },
+          "stationary_12000": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          }
+        },
+        "sample_count": 12
+      },
+      "frame_count": 288,
+      "header": {
+        "city": "CITYMAP_HUMAN",
+        "mode": "turbo",
+        "requested_ticks": 12441600,
+        "rng": "7251685877758789622,4494004282789118709",
+        "save": "ui-fresh/startup.save",
+        "step": 43200
+      },
+      "hourly_windows": [
+        {
+          "all_map_mean": 7.083333333333333,
+          "end_elapsed_inclusive": 518400,
+          "endpoint_stationary_checkpoints": 0,
+          "first_elapsed_ticks": 43200,
+          "ground_velocity_moving_mean": 5,
+          "hour_index": 0,
+          "last_elapsed_ticks": 518400,
+          "road_mean": 5,
+          "road_range": [
+            2,
+            7
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 0
+        },
+        {
+          "all_map_mean": 14.75,
+          "end_elapsed_inclusive": 1036800,
+          "endpoint_stationary_checkpoints": 0,
+          "first_elapsed_ticks": 561600,
+          "ground_velocity_moving_mean": 10.416666666666666,
+          "hour_index": 1,
+          "last_elapsed_ticks": 1036800,
+          "road_mean": 10.416666666666666,
+          "road_range": [
+            5,
+            14
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 518400
+        },
+        {
+          "all_map_mean": 16.166666666666668,
+          "end_elapsed_inclusive": 1555200,
+          "endpoint_stationary_checkpoints": 1,
+          "first_elapsed_ticks": 1080000,
+          "ground_velocity_moving_mean": 12.75,
+          "hour_index": 2,
+          "last_elapsed_ticks": 1555200,
+          "road_mean": 13.166666666666666,
+          "road_range": [
+            9,
+            16
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 1036800
+        },
+        {
+          "all_map_mean": 10.25,
+          "end_elapsed_inclusive": 2073600,
+          "endpoint_stationary_checkpoints": 0,
+          "first_elapsed_ticks": 1598400,
+          "ground_velocity_moving_mean": 7.333333333333333,
+          "hour_index": 3,
+          "last_elapsed_ticks": 2073600,
+          "road_mean": 7.5,
+          "road_range": [
+            3,
+            11
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 1555200
+        },
+        {
+          "all_map_mean": 8.333333333333334,
+          "end_elapsed_inclusive": 2592000,
+          "endpoint_stationary_checkpoints": 0,
+          "first_elapsed_ticks": 2116800,
+          "ground_velocity_moving_mean": 5.416666666666667,
+          "hour_index": 4,
+          "last_elapsed_ticks": 2592000,
+          "road_mean": 5.5,
+          "road_range": [
+            2,
+            11
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 2073600
+        },
+        {
+          "all_map_mean": 7.25,
+          "end_elapsed_inclusive": 3110400,
+          "endpoint_stationary_checkpoints": 0,
+          "first_elapsed_ticks": 2635200,
+          "ground_velocity_moving_mean": 4,
+          "hour_index": 5,
+          "last_elapsed_ticks": 3110400,
+          "road_mean": 4,
+          "road_range": [
+            2,
+            6
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 2592000
+        },
+        {
+          "all_map_mean": 25.5,
+          "end_elapsed_inclusive": 3628800,
+          "endpoint_stationary_checkpoints": 4,
+          "first_elapsed_ticks": 3153600,
+          "ground_velocity_moving_mean": 20.333333333333332,
+          "hour_index": 6,
+          "last_elapsed_ticks": 3628800,
+          "road_mean": 22,
+          "road_range": [
+            14,
+            33
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 3110400
+        },
+        {
+          "all_map_mean": 35.083333333333336,
+          "end_elapsed_inclusive": 4147200,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 3672000,
+          "ground_velocity_moving_mean": 22,
+          "hour_index": 7,
+          "last_elapsed_ticks": 4147200,
+          "road_mean": 33.5,
+          "road_range": [
+            32,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 3628800
+        },
+        {
+          "all_map_mean": 35,
+          "end_elapsed_inclusive": 4665600,
+          "endpoint_stationary_checkpoints": 10,
+          "first_elapsed_ticks": 4190400,
+          "ground_velocity_moving_mean": 23,
+          "hour_index": 8,
+          "last_elapsed_ticks": 4665600,
+          "road_mean": 33,
+          "road_range": [
+            32,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 4147200
+        },
+        {
+          "all_map_mean": 34.25,
+          "end_elapsed_inclusive": 5184000,
+          "endpoint_stationary_checkpoints": 8,
+          "first_elapsed_ticks": 4708800,
+          "ground_velocity_moving_mean": 23.916666666666668,
+          "hour_index": 9,
+          "last_elapsed_ticks": 5184000,
+          "road_mean": 31.916666666666668,
+          "road_range": [
+            29,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 4665600
+        },
+        {
+          "all_map_mean": 35.083333333333336,
+          "end_elapsed_inclusive": 5702400,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 5227200,
+          "ground_velocity_moving_mean": 21.333333333333332,
+          "hour_index": 10,
+          "last_elapsed_ticks": 5702400,
+          "road_mean": 33.333333333333336,
+          "road_range": [
+            33,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 5184000
+        },
+        {
+          "all_map_mean": 34.416666666666664,
+          "end_elapsed_inclusive": 6220800,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 5745600,
+          "ground_velocity_moving_mean": 21.833333333333332,
+          "hour_index": 11,
+          "last_elapsed_ticks": 6220800,
+          "road_mean": 32.75,
+          "road_range": [
+            30,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 5702400
+        },
+        {
+          "all_map_mean": 35.416666666666664,
+          "end_elapsed_inclusive": 6739200,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 6264000,
+          "ground_velocity_moving_mean": 19.583333333333332,
+          "hour_index": 12,
+          "last_elapsed_ticks": 6739200,
+          "road_mean": 33.75,
+          "road_range": [
+            33,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 6220800
+        },
+        {
+          "all_map_mean": 35.25,
+          "end_elapsed_inclusive": 7257600,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 6782400,
+          "ground_velocity_moving_mean": 19.083333333333332,
+          "hour_index": 13,
+          "last_elapsed_ticks": 7257600,
+          "road_mean": 33.25,
+          "road_range": [
+            32,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 6739200
+        },
+        {
+          "all_map_mean": 34.583333333333336,
+          "end_elapsed_inclusive": 7776000,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 7300800,
+          "ground_velocity_moving_mean": 18,
+          "hour_index": 14,
+          "last_elapsed_ticks": 7776000,
+          "road_mean": 33,
+          "road_range": [
+            32,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 7257600
+        },
+        {
+          "all_map_mean": 35,
+          "end_elapsed_inclusive": 8294400,
+          "endpoint_stationary_checkpoints": 11,
+          "first_elapsed_ticks": 7819200,
+          "ground_velocity_moving_mean": 19,
+          "hour_index": 15,
+          "last_elapsed_ticks": 8294400,
+          "road_mean": 33.333333333333336,
+          "road_range": [
+            33,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 7776000
+        },
+        {
+          "all_map_mean": 35.333333333333336,
+          "end_elapsed_inclusive": 8812800,
+          "endpoint_stationary_checkpoints": 11,
+          "first_elapsed_ticks": 8337600,
+          "ground_velocity_moving_mean": 19.916666666666668,
+          "hour_index": 16,
+          "last_elapsed_ticks": 8812800,
+          "road_mean": 33.75,
+          "road_range": [
+            33,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 8294400
+        },
+        {
+          "all_map_mean": 33.333333333333336,
+          "end_elapsed_inclusive": 9331200,
+          "endpoint_stationary_checkpoints": 10,
+          "first_elapsed_ticks": 8856000,
+          "ground_velocity_moving_mean": 20,
+          "hour_index": 17,
+          "last_elapsed_ticks": 9331200,
+          "road_mean": 31.416666666666668,
+          "road_range": [
+            28,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 8812800
+        },
+        {
+          "all_map_mean": 30.583333333333332,
+          "end_elapsed_inclusive": 9849600,
+          "endpoint_stationary_checkpoints": 9,
+          "first_elapsed_ticks": 9374400,
+          "ground_velocity_moving_mean": 18.583333333333332,
+          "hour_index": 18,
+          "last_elapsed_ticks": 9849600,
+          "road_mean": 28.666666666666668,
+          "road_range": [
+            27,
+            30
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 9331200
+        },
+        {
+          "all_map_mean": 34.5,
+          "end_elapsed_inclusive": 10368000,
+          "endpoint_stationary_checkpoints": 11,
+          "first_elapsed_ticks": 9892800,
+          "ground_velocity_moving_mean": 18.333333333333332,
+          "hour_index": 19,
+          "last_elapsed_ticks": 10368000,
+          "road_mean": 32.333333333333336,
+          "road_range": [
+            31,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 9849600
+        },
+        {
+          "all_map_mean": 35.083333333333336,
+          "end_elapsed_inclusive": 10886400,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 10411200,
+          "ground_velocity_moving_mean": 20.5,
+          "hour_index": 20,
+          "last_elapsed_ticks": 10886400,
+          "road_mean": 33.333333333333336,
+          "road_range": [
+            32,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 10368000
+        },
+        {
+          "all_map_mean": 35,
+          "end_elapsed_inclusive": 11404800,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 10929600,
+          "ground_velocity_moving_mean": 22.25,
+          "hour_index": 21,
+          "last_elapsed_ticks": 11404800,
+          "road_mean": 32.833333333333336,
+          "road_range": [
+            32,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 10886400
+        },
+        {
+          "all_map_mean": 35.083333333333336,
+          "end_elapsed_inclusive": 11923200,
+          "endpoint_stationary_checkpoints": 10,
+          "first_elapsed_ticks": 11448000,
+          "ground_velocity_moving_mean": 20.333333333333332,
+          "hour_index": 22,
+          "last_elapsed_ticks": 11923200,
+          "road_mean": 33.083333333333336,
+          "road_range": [
+            31,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 11404800
+        },
+        {
+          "all_map_mean": 35.083333333333336,
+          "end_elapsed_inclusive": 12441600,
+          "endpoint_stationary_checkpoints": 11,
+          "first_elapsed_ticks": 11966400,
+          "ground_velocity_moving_mean": 18.25,
+          "hour_index": 23,
+          "last_elapsed_ticks": 12441600,
+          "road_mean": 33.333333333333336,
+          "road_range": [
+            32,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 11923200
+        }
+      ],
+      "initial": {
+        "all_map": 0,
+        "atv": 0,
+        "civilian": 0,
+        "clock": 6220800,
+        "elapsed": 0,
+        "flying": 0,
+        "ground_mission_bearing": 0,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "parked": 330,
+        "police": 0,
+        "receipt_line": 2,
+        "road": 0,
+        "stationary_12000": 0
+      },
+      "initial_clock_ticks": 6220800,
+      "inventory": {
+        "final": {
+          "groups": 204,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 720,
+            "onmap": 35,
+            "parked": 362,
+            "successful_retirements": 333
+          }
+        },
+        "initial": {
+          "groups": 119,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 0,
+            "onmap": 0,
+            "parked": 330,
+            "successful_retirements": 0
+          }
+        }
+      },
+      "observer": {
+        "sha256": "8eaffdbaff5ae24b6c3e2e441e3c5bfa055bf5fe2e4bddd7905837fbcd417b0d",
+        "source_relative_to_receipt_root": "traffic_census_speed5.cpp"
+      },
+      "post_warmup": {
+        "endpoint_stationary_checkpoints": 192,
+        "first_elapsed_ticks": 86400,
+        "last_elapsed_ticks": 12441600,
+        "metrics": {
+          "all_map": {
+            "maximum": 37,
+            "mean": 28.303135888501743,
+            "minimum": 4
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 33,
+            "mean": 23.766550522648085,
+            "minimum": 3
+          },
+          "flying": {
+            "maximum": 8,
+            "mean": 2.226480836236934,
+            "minimum": 0
+          },
+          "ground_mission_bearing": {
+            "maximum": 35,
+            "mean": 26.076655052264808,
+            "minimum": 2
+          },
+          "ground_moved_last_step": {
+            "maximum": 34,
+            "mean": 20.8397212543554,
+            "minimum": 0
+          },
+          "ground_velocity_moving": {
+            "maximum": 28,
+            "mean": 17.170731707317074,
+            "minimum": 2
+          },
+          "parked": {
+            "maximum": 362,
+            "mean": 344.14285714285717,
+            "minimum": 327
+          },
+          "police": {
+            "maximum": 10,
+            "mean": 4.536585365853658,
+            "minimum": 1
+          },
+          "road": {
+            "maximum": 35,
+            "mean": 26.076655052264808,
+            "minimum": 2
+          },
+          "stationary_12000": {
+            "maximum": 10,
+            "mean": 2.202090592334495,
+            "minimum": 0
+          }
+        },
+        "sample_count": 287
+      },
+      "receipts": {
+        "census.txt": {
+          "bytes": 244904,
+          "path_relative_to_receipt_root": "pre-speed5-day/census.txt",
+          "sha256": "bb43e43cdfcbf0f77c7b5baed398c6e7af6d42969db32b068eeb87c4624b0b94"
+        },
+        "game.log": {
+          "bytes": 434,
+          "path_relative_to_receipt_root": "pre-speed5-day/game.log",
+          "sha256": "9e094d042825fe6bbcbbd665143b54df332907a595b8dc6c3049dedae91f8b33"
+        },
+        "log.txt": {
+          "bytes": 8193378,
+          "path_relative_to_receipt_root": "pre-speed5-day/log.txt",
+          "sha256": "d17aa7a61542808a4af8b0e8ab0dc766a9a1715a8214a506e92559c5e920453d"
+        }
+      },
+      "run_id": "pre-speed5-day",
+      "simulated_hours": 24,
+      "status": "observed pre-review baseline",
+      "variant": "pre_review",
+      "wall_seconds": 0.983408708
+    },
+    {
+      "actual_clock_delta_ticks": 12441600,
+      "binary": {
+        "path_relative_to_receipt_root": "traffic_census_speed5-post-observed",
+        "sha256": "9b09b21732e4d9c9192f78df92a7bd557ab7d36162f4c0300a34e45d57bd3456"
+      },
+      "census_samples": 289,
+      "diagnostics": {
+        "final_blocker_lines": [
+          {
+            "receipt_line": 1277,
+            "text": "BLOCKER id=VEHICLE_1047 name=Autotaxi 121 stationary=11232000 roadStoppedTicks=11622356 mission=GotoLocation {45,97,1} missions=3 path=110 wait=8 reroutes=1 from={87,39,2} next={87,38,2} connections=3 goal={87.5,39.640625,2} velocity={0,0,0} facing=1.8449638 position={87.5,39.640625,2} initial_position={86.5,39.359375,2} blocker=VEHICLE_136"
+          },
+          {
+            "receipt_line": 1278,
+            "text": "BLOCKER id=VEHICLE_1070 name=Autotrans 47 stationary=43200 roadStoppedTicks=1 mission=GotoLocation {49,80,2} missions=3 path=101 wait=8 reroutes=1 from={90,38,2} next={89,38,2} connections=2 goal={90.5,38.640625,2} velocity={0,0,0} facing=1.5707964 position={90.5,38.640625,2} initial_position={101.01,34.5,1} blocker=VEHICLE_1044"
+          },
+          {
+            "receipt_line": 1279,
+            "text": "BLOCKER id=VEHICLE_1119 name=Autotaxi 133 stationary=43200 roadStoppedTicks=0 mission=GotoLocation {72,39,1} missions=3 path=32 wait=0 reroutes=1 from={88,38,2} next={89,38,2} connections=2 goal={89.5,38.640625,2} velocity={3.8506038,1.0829823,0} facing=1.8449638 position={88.5,38.359375,2} initial_position={91.5,38.359375,2} blocker=none"
+          },
+          {
+            "receipt_line": 1280,
+            "text": "BLOCKER id=VEHICLE_136 name=Police Car 2 stationary=11232000 roadStoppedTicks=11644024 mission=GotoLocation {64,89,1} missions=2 path=84 wait=8 reroutes=1 from={87,38,2} next={87,39,2} connections=3 goal={87.5,38.359375,2} velocity={0,0,0} facing=4.712389 position={87.5,38.359375,2} initial_position={77.5,57.5,2.5} blocker=VEHICLE_1047"
+          }
+        ],
+        "game_errors": []
+      },
+      "dispatch": {
+        "clock_count_matches_expected": true,
+        "expected_batches": 2880,
+        "first": {
+          "log_line": 1876,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 33,
+          "sent": 4,
+          "time": "12:00",
+          "wanted": 4
+        },
+        "last": {
+          "log_line": 80650,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": -1,
+          "sent": 0,
+          "time": "11:00",
+          "wanted": 7
+        },
+        "logged_batches": 2880,
+        "no_source_sum": 0,
+        "nowhere_sum": 0,
+        "sent_sum": 769,
+        "wanted_sum": 16257
+      },
+      "duration_ticks": 12441600,
+      "exact_clock_validation_passed": true,
+      "final": {
+        "all_map": 36,
+        "atv": 0,
+        "civilian": 28,
+        "clock": 18662400,
+        "elapsed": 12441600,
+        "flying": 0,
+        "ground_mission_bearing": 36,
+        "ground_moved_last_step": 32,
+        "ground_velocity_moving": 23,
+        "parked": 360,
+        "police": 8,
+        "receipt_line": 1273,
+        "road": 36,
+        "stationary_12000": 4
+      },
+      "final_clock_ticks": 18662400,
+      "final_observed_event_counters": {
+        "building_entries": 394,
+        "civilian_entries": 628,
+        "confirmed_target_arrivals": 385,
+        "dead_exits": 259,
+        "entries": 689,
+        "flyer_entries": 160,
+        "ground_distance": 19437.841604948975,
+        "ground_reversals": 3346,
+        "ground_tile_changes": 7092,
+        "newly_seen": 950,
+        "other_exits": 0,
+        "police_entries": 61,
+        "road_entries": 529,
+        "successful_retirements": 330
+      },
+      "first_hour": {
+        "endpoint_stationary_checkpoints": 0,
+        "first_elapsed_ticks": 43200,
+        "last_elapsed_ticks": 518400,
+        "metrics": {
+          "all_map": {
+            "maximum": 35,
+            "mean": 31.916666666666668,
+            "minimum": 26
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 34,
+            "mean": 28.083333333333332,
+            "minimum": 22
+          },
+          "flying": {
+            "maximum": 6,
+            "mean": 2.75,
+            "minimum": 1
+          },
+          "ground_mission_bearing": {
+            "maximum": 33,
+            "mean": 29.166666666666668,
+            "minimum": 22
+          },
+          "ground_moved_last_step": {
+            "maximum": 18,
+            "mean": 9.416666666666666,
+            "minimum": 0
+          },
+          "ground_velocity_moving": {
+            "maximum": 31,
+            "mean": 26.666666666666668,
+            "minimum": 21
+          },
+          "parked": {
+            "maximum": 330,
+            "mean": 328.8333333333333,
+            "minimum": 328
+          },
+          "police": {
+            "maximum": 7,
+            "mean": 3.8333333333333335,
+            "minimum": 1
+          },
+          "road": {
+            "maximum": 33,
+            "mean": 29.166666666666668,
+            "minimum": 22
+          },
+          "stationary_12000": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          }
+        },
+        "sample_count": 12
+      },
+      "frame_count": 288,
+      "header": {
+        "city": "CITYMAP_HUMAN",
+        "mode": "turbo",
+        "requested_ticks": 12441600,
+        "rng": "7251685877758789622,4494004282789118709",
+        "save": "ui-fresh/startup.save",
+        "step": 43200
+      },
+      "hourly_windows": [
+        {
+          "all_map_mean": 31.916666666666668,
+          "end_elapsed_inclusive": 518400,
+          "endpoint_stationary_checkpoints": 0,
+          "first_elapsed_ticks": 43200,
+          "ground_velocity_moving_mean": 26.666666666666668,
+          "hour_index": 0,
+          "last_elapsed_ticks": 518400,
+          "road_mean": 29.166666666666668,
+          "road_range": [
+            22,
+            33
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 0
+        },
+        {
+          "all_map_mean": 33.666666666666664,
+          "end_elapsed_inclusive": 1036800,
+          "endpoint_stationary_checkpoints": 5,
+          "first_elapsed_ticks": 561600,
+          "ground_velocity_moving_mean": 27.333333333333332,
+          "hour_index": 1,
+          "last_elapsed_ticks": 1036800,
+          "road_mean": 31.583333333333332,
+          "road_range": [
+            28,
+            34
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 518400
+        },
+        {
+          "all_map_mean": 34.916666666666664,
+          "end_elapsed_inclusive": 1555200,
+          "endpoint_stationary_checkpoints": 11,
+          "first_elapsed_ticks": 1080000,
+          "ground_velocity_moving_mean": 16.333333333333332,
+          "hour_index": 2,
+          "last_elapsed_ticks": 1555200,
+          "road_mean": 34.333333333333336,
+          "road_range": [
+            33,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 1036800
+        },
+        {
+          "all_map_mean": 35.25,
+          "end_elapsed_inclusive": 2073600,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 1598400,
+          "ground_velocity_moving_mean": 13.166666666666666,
+          "hour_index": 3,
+          "last_elapsed_ticks": 2073600,
+          "road_mean": 34.5,
+          "road_range": [
+            33,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 1555200
+        },
+        {
+          "all_map_mean": 35.416666666666664,
+          "end_elapsed_inclusive": 2592000,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 2116800,
+          "ground_velocity_moving_mean": 12.833333333333334,
+          "hour_index": 4,
+          "last_elapsed_ticks": 2592000,
+          "road_mean": 35,
+          "road_range": [
+            35,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 2073600
+        },
+        {
+          "all_map_mean": 35.25,
+          "end_elapsed_inclusive": 3110400,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 2635200,
+          "ground_velocity_moving_mean": 12.583333333333334,
+          "hour_index": 5,
+          "last_elapsed_ticks": 3110400,
+          "road_mean": 35,
+          "road_range": [
+            35,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 2592000
+        },
+        {
+          "all_map_mean": 35.416666666666664,
+          "end_elapsed_inclusive": 3628800,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 3153600,
+          "ground_velocity_moving_mean": 14.916666666666666,
+          "hour_index": 6,
+          "last_elapsed_ticks": 3628800,
+          "road_mean": 35,
+          "road_range": [
+            35,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 3110400
+        },
+        {
+          "all_map_mean": 35.5,
+          "end_elapsed_inclusive": 4147200,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 3672000,
+          "ground_velocity_moving_mean": 14.583333333333334,
+          "hour_index": 7,
+          "last_elapsed_ticks": 4147200,
+          "road_mean": 35,
+          "road_range": [
+            35,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 3628800
+        },
+        {
+          "all_map_mean": 35.333333333333336,
+          "end_elapsed_inclusive": 4665600,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 4190400,
+          "ground_velocity_moving_mean": 14.416666666666666,
+          "hour_index": 8,
+          "last_elapsed_ticks": 4665600,
+          "road_mean": 35,
+          "road_range": [
+            35,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 4147200
+        },
+        {
+          "all_map_mean": 35.25,
+          "end_elapsed_inclusive": 5184000,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 4708800,
+          "ground_velocity_moving_mean": 14.333333333333334,
+          "hour_index": 9,
+          "last_elapsed_ticks": 5184000,
+          "road_mean": 35,
+          "road_range": [
+            35,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 4665600
+        },
+        {
+          "all_map_mean": 35.75,
+          "end_elapsed_inclusive": 5702400,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 5227200,
+          "ground_velocity_moving_mean": 15.583333333333334,
+          "hour_index": 10,
+          "last_elapsed_ticks": 5702400,
+          "road_mean": 35,
+          "road_range": [
+            35,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 5184000
+        },
+        {
+          "all_map_mean": 35.083333333333336,
+          "end_elapsed_inclusive": 6220800,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 5745600,
+          "ground_velocity_moving_mean": 16.083333333333332,
+          "hour_index": 11,
+          "last_elapsed_ticks": 6220800,
+          "road_mean": 35,
+          "road_range": [
+            35,
+            35
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 5702400
+        },
+        {
+          "all_map_mean": 36.416666666666664,
+          "end_elapsed_inclusive": 6739200,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 6264000,
+          "ground_velocity_moving_mean": 16.916666666666668,
+          "hour_index": 12,
+          "last_elapsed_ticks": 6739200,
+          "road_mean": 36,
+          "road_range": [
+            36,
+            36
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 6220800
+        },
+        {
+          "all_map_mean": 36.5,
+          "end_elapsed_inclusive": 7257600,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 6782400,
+          "ground_velocity_moving_mean": 15.416666666666666,
+          "hour_index": 13,
+          "last_elapsed_ticks": 7257600,
+          "road_mean": 36,
+          "road_range": [
+            36,
+            36
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 6739200
+        },
+        {
+          "all_map_mean": 36.333333333333336,
+          "end_elapsed_inclusive": 7776000,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 7300800,
+          "ground_velocity_moving_mean": 13.416666666666666,
+          "hour_index": 14,
+          "last_elapsed_ticks": 7776000,
+          "road_mean": 36,
+          "road_range": [
+            36,
+            36
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 7257600
+        },
+        {
+          "all_map_mean": 36.416666666666664,
+          "end_elapsed_inclusive": 8294400,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 7819200,
+          "ground_velocity_moving_mean": 13.75,
+          "hour_index": 15,
+          "last_elapsed_ticks": 8294400,
+          "road_mean": 36,
+          "road_range": [
+            36,
+            36
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 7776000
+        },
+        {
+          "all_map_mean": 36.75,
+          "end_elapsed_inclusive": 8812800,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 8337600,
+          "ground_velocity_moving_mean": 18.916666666666668,
+          "hour_index": 16,
+          "last_elapsed_ticks": 8812800,
+          "road_mean": 36,
+          "road_range": [
+            36,
+            36
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 8294400
+        },
+        {
+          "all_map_mean": 36.166666666666664,
+          "end_elapsed_inclusive": 9331200,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 8856000,
+          "ground_velocity_moving_mean": 15.416666666666666,
+          "hour_index": 17,
+          "last_elapsed_ticks": 9331200,
+          "road_mean": 36,
+          "road_range": [
+            36,
+            36
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 8812800
+        },
+        {
+          "all_map_mean": 36.25,
+          "end_elapsed_inclusive": 9849600,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 9374400,
+          "ground_velocity_moving_mean": 17.833333333333332,
+          "hour_index": 18,
+          "last_elapsed_ticks": 9849600,
+          "road_mean": 36,
+          "road_range": [
+            36,
+            36
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 9331200
+        },
+        {
+          "all_map_mean": 36.416666666666664,
+          "end_elapsed_inclusive": 10368000,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 9892800,
+          "ground_velocity_moving_mean": 14.833333333333334,
+          "hour_index": 19,
+          "last_elapsed_ticks": 10368000,
+          "road_mean": 36,
+          "road_range": [
+            36,
+            36
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 9849600
+        },
+        {
+          "all_map_mean": 36.333333333333336,
+          "end_elapsed_inclusive": 10886400,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 10411200,
+          "ground_velocity_moving_mean": 14.583333333333334,
+          "hour_index": 20,
+          "last_elapsed_ticks": 10886400,
+          "road_mean": 36,
+          "road_range": [
+            36,
+            36
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 10368000
+        },
+        {
+          "all_map_mean": 36.166666666666664,
+          "end_elapsed_inclusive": 11404800,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 10929600,
+          "ground_velocity_moving_mean": 14.083333333333334,
+          "hour_index": 21,
+          "last_elapsed_ticks": 11404800,
+          "road_mean": 36,
+          "road_range": [
+            36,
+            36
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 10886400
+        },
+        {
+          "all_map_mean": 36.333333333333336,
+          "end_elapsed_inclusive": 11923200,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 11448000,
+          "ground_velocity_moving_mean": 14.583333333333334,
+          "hour_index": 22,
+          "last_elapsed_ticks": 11923200,
+          "road_mean": 36,
+          "road_range": [
+            36,
+            36
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 11404800
+        },
+        {
+          "all_map_mean": 36.25,
+          "end_elapsed_inclusive": 12441600,
+          "endpoint_stationary_checkpoints": 12,
+          "first_elapsed_ticks": 11966400,
+          "ground_velocity_moving_mean": 18.166666666666668,
+          "hour_index": 23,
+          "last_elapsed_ticks": 12441600,
+          "road_mean": 36,
+          "road_range": [
+            36,
+            36
+          ],
+          "sample_count": 12,
+          "start_elapsed_exclusive": 11923200
+        }
+      ],
+      "initial": {
+        "all_map": 0,
+        "atv": 0,
+        "civilian": 0,
+        "clock": 6220800,
+        "elapsed": 0,
+        "flying": 0,
+        "ground_mission_bearing": 0,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "parked": 330,
+        "police": 0,
+        "receipt_line": 2,
+        "road": 0,
+        "stationary_12000": 0
+      },
+      "initial_clock_ticks": 6220800,
+      "inventory": {
+        "final": {
+          "groups": 186,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 554,
+            "onmap": 36,
+            "parked": 360,
+            "successful_retirements": 330
+          }
+        },
+        "initial": {
+          "groups": 119,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 0,
+            "onmap": 0,
+            "parked": 330,
+            "successful_retirements": 0
+          }
+        }
+      },
+      "observer": {
+        "sha256": "8eaffdbaff5ae24b6c3e2e441e3c5bfa055bf5fe2e4bddd7905837fbcd417b0d",
+        "source_relative_to_receipt_root": "traffic_census_speed5.cpp"
+      },
+      "post_warmup": {
+        "endpoint_stationary_checkpoints": 268,
+        "first_elapsed_ticks": 86400,
+        "last_elapsed_ticks": 12441600,
+        "metrics": {
+          "all_map": {
+            "maximum": 38,
+            "mean": 35.65505226480836,
+            "minimum": 26
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 34,
+            "mean": 28.425087108013937,
+            "minimum": 22
+          },
+          "flying": {
+            "maximum": 6,
+            "mean": 0.5435540069686411,
+            "minimum": 0
+          },
+          "ground_mission_bearing": {
+            "maximum": 36,
+            "mean": 35.11149825783972,
+            "minimum": 23
+          },
+          "ground_moved_last_step": {
+            "maximum": 34,
+            "mean": 26.529616724738677,
+            "minimum": 4
+          },
+          "ground_velocity_moving": {
+            "maximum": 31,
+            "mean": 16.097560975609756,
+            "minimum": 4
+          },
+          "parked": {
+            "maximum": 363,
+            "mean": 344.9059233449477,
+            "minimum": 327
+          },
+          "police": {
+            "maximum": 8,
+            "mean": 7.229965156794425,
+            "minimum": 1
+          },
+          "road": {
+            "maximum": 36,
+            "mean": 35.11149825783972,
+            "minimum": 23
+          },
+          "stationary_12000": {
+            "maximum": 27,
+            "mean": 6.815331010452962,
+            "minimum": 0
+          }
+        },
+        "sample_count": 287
+      },
+      "receipts": {
+        "census.txt": {
+          "bytes": 241923,
+          "path_relative_to_receipt_root": "post-speed5-day/census.txt",
+          "sha256": "8b234f0a14ff38a701157d85c8e13f433af840e5b60a810674fd5f46d3f7f14e"
+        },
+        "game.log": {
+          "bytes": 434,
+          "path_relative_to_receipt_root": "post-speed5-day/game.log",
+          "sha256": "9e094d042825fe6bbcbbd665143b54df332907a595b8dc6c3049dedae91f8b33"
+        },
+        "log.txt": {
+          "bytes": 11068961,
+          "path_relative_to_receipt_root": "post-speed5-day/log.txt",
+          "sha256": "b44f9a3df294178d8fa9e913d0417a3fccf8275446f8b6c4453bd57fefd8a126"
+        }
+      },
+      "run_id": "post-speed5-day",
+      "simulated_hours": 24,
+      "status": "observed intermediate candidate",
+      "variant": "post_review_intermediate",
+      "wall_seconds": 1.317045167
+    },
+    {
+      "actual_clock_delta_ticks": 3110400,
+      "binary": {
+        "path_relative_to_receipt_root": "traffic_census-junction-fixed",
+        "sha256": "06831461fd95c7c693ae0d8d7594231566dfd68d64c332b22725a73bd22a11bc"
+      },
+      "census_samples": 73,
+      "diagnostics": {
+        "final_blocker_lines": [
+          {
+            "receipt_line": 413,
+            "text": "BLOCKER id=VEHICLE_1431 name=Civilian Car 419 stationary=43200 roadStoppedTicks=1 mission=GotoLocation {101,34,1} missions=3 path=60 wait=8 reroutes=1 from={66,46,2} next={67,46,2} connections=2 goal={66.5,46.640625,2} velocity={0,0,0} facing=1.5707964 position={66.5,46.640625,2} initial_position={52.359375,57.30903,2} blocker=none"
+          }
+        ],
+        "game_errors": []
+      },
+      "dispatch": {
+        "clock_count_matches_expected": true,
+        "expected_batches": 720,
+        "first": {
+          "log_line": 1876,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 33,
+          "sent": 4,
+          "time": "12:00",
+          "wanted": 4
+        },
+        "last": {
+          "log_line": 64711,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 1,
+          "sent": 1,
+          "time": "17:00",
+          "wanted": 4
+        },
+        "logged_batches": 720,
+        "no_source_sum": 0,
+        "nowhere_sum": 0,
+        "sent_sum": 1093,
+        "wanted_sum": 4267
+      },
+      "duration_ticks": 3110400,
+      "exact_clock_validation_passed": true,
+      "final": {
+        "all_map": 32,
+        "atv": 0,
+        "civilian": 26,
+        "clock": 9331200,
+        "elapsed": 3110400,
+        "flying": 0,
+        "ground_mission_bearing": 32,
+        "ground_moved_last_step": 15,
+        "ground_velocity_moving": 20,
+        "max_road_stopped_ticks": 1,
+        "parked": 335,
+        "police": 6,
+        "receipt_line": 409,
+        "road": 32,
+        "road_stopped_12000": 0,
+        "stationary_12000": 1
+      },
+      "final_clock_ticks": 9331200,
+      "final_observed_event_counters": {
+        "building_entries": 517,
+        "civilian_entries": 734,
+        "confirmed_target_arrivals": 502,
+        "dead_exits": 281,
+        "entries": 830,
+        "flyer_entries": 117,
+        "ground_distance": 14762.315738677979,
+        "ground_reversals": 87,
+        "ground_tile_changes": 1489,
+        "newly_seen": 893,
+        "other_exits": 0,
+        "police_entries": 96,
+        "road_entries": 713,
+        "successful_retirements": 489
+      },
+      "first_hour": {
+        "endpoint_stationary_checkpoints": 0,
+        "first_elapsed_ticks": 43200,
+        "last_elapsed_ticks": 518400,
+        "metrics": {
+          "all_map": {
+            "maximum": 36,
+            "mean": 33.083333333333336,
+            "minimum": 26
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 32,
+            "mean": 28.5,
+            "minimum": 21
+          },
+          "flying": {
+            "maximum": 6,
+            "mean": 3.0833333333333335,
+            "minimum": 1
+          },
+          "ground_mission_bearing": {
+            "maximum": 35,
+            "mean": 30,
+            "minimum": 23
+          },
+          "ground_moved_last_step": {
+            "maximum": 20,
+            "mean": 10.666666666666666,
+            "minimum": 0
+          },
+          "ground_velocity_moving": {
+            "maximum": 31,
+            "mean": 27.25,
+            "minimum": 21
+          },
+          "max_road_stopped_ticks": {
+            "maximum": 2210,
+            "mean": 719.1666666666666,
+            "minimum": 0
+          },
+          "parked": {
+            "maximum": 330,
+            "mean": 328.3333333333333,
+            "minimum": 327
+          },
+          "police": {
+            "maximum": 7,
+            "mean": 4.583333333333333,
+            "minimum": 2
+          },
+          "road": {
+            "maximum": 35,
+            "mean": 30,
+            "minimum": 23
+          },
+          "road_stopped_12000": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "stationary_12000": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          }
+        },
+        "road_stopped_12000_checkpoints": 0,
+        "sample_count": 12
+      },
+      "frame_count": 72,
+      "header": {
+        "city": "CITYMAP_HUMAN",
+        "mode": "turbo-unchecked",
+        "requested_ticks": 3110400,
+        "rng": "7251685877758789622,4494004282789118709",
+        "save": "ui-fresh/startup.save",
+        "step": 43200
+      },
+      "hourly_windows": [
+        {
+          "all_map_mean": 33.083333333333336,
+          "end_elapsed_inclusive": 518400,
+          "endpoint_stationary_checkpoints": 0,
+          "ground_velocity_moving_mean": 27.25,
+          "hour_index": 0,
+          "max_sampled_road_stopped_ticks": 2210,
+          "road_mean": 30,
+          "road_range": [
+            23,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 0,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 0
+        },
+        {
+          "all_map_mean": 34.333333333333336,
+          "end_elapsed_inclusive": 1036800,
+          "endpoint_stationary_checkpoints": 5,
+          "ground_velocity_moving_mean": 22.25,
+          "hour_index": 1,
+          "max_sampled_road_stopped_ticks": 14914,
+          "road_mean": 31.833333333333332,
+          "road_range": [
+            27,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 1,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 518400
+        },
+        {
+          "all_map_mean": 34.75,
+          "end_elapsed_inclusive": 1555200,
+          "endpoint_stationary_checkpoints": 9,
+          "ground_velocity_moving_mean": 18.583333333333332,
+          "hour_index": 2,
+          "max_sampled_road_stopped_ticks": 26698,
+          "road_mean": 33.916666666666664,
+          "road_range": [
+            31,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 3,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 1036800
+        },
+        {
+          "all_map_mean": 34.666666666666664,
+          "end_elapsed_inclusive": 2073600,
+          "endpoint_stationary_checkpoints": 10,
+          "ground_velocity_moving_mean": 19,
+          "hour_index": 3,
+          "max_sampled_road_stopped_ticks": 18478,
+          "road_mean": 33.75,
+          "road_range": [
+            31,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 3,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 1555200
+        },
+        {
+          "all_map_mean": 34.5,
+          "end_elapsed_inclusive": 2592000,
+          "endpoint_stationary_checkpoints": 9,
+          "ground_velocity_moving_mean": 17.916666666666668,
+          "hour_index": 4,
+          "max_sampled_road_stopped_ticks": 30466,
+          "road_mean": 33.166666666666664,
+          "road_range": [
+            31,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 2,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 2073600
+        },
+        {
+          "all_map_mean": 34.333333333333336,
+          "end_elapsed_inclusive": 3110400,
+          "endpoint_stationary_checkpoints": 9,
+          "ground_velocity_moving_mean": 19.833333333333332,
+          "hour_index": 5,
+          "max_sampled_road_stopped_ticks": 31913,
+          "road_mean": 33.083333333333336,
+          "road_range": [
+            31,
+            36
+          ],
+          "road_stopped_12000_checkpoints": 5,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 2592000
+        }
+      ],
+      "initial": {
+        "all_map": 0,
+        "atv": 0,
+        "civilian": 0,
+        "clock": 6220800,
+        "elapsed": 0,
+        "flying": 0,
+        "ground_mission_bearing": 0,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "max_road_stopped_ticks": 0,
+        "parked": 330,
+        "police": 0,
+        "receipt_line": 2,
+        "road": 0,
+        "road_stopped_12000": 0,
+        "stationary_12000": 0
+      },
+      "initial_clock_ticks": 6220800,
+      "inventory": {
+        "final": {
+          "groups": 196,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 367,
+            "onmap": 32,
+            "parked": 335,
+            "successful_retirements": 489
+          }
+        },
+        "initial": {
+          "groups": 119,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 0,
+            "onmap": 0,
+            "parked": 330,
+            "successful_retirements": 0
+          }
+        }
+      },
+      "observer": {
+        "sha256": "74e55afeab7339196edea8625d68077e8a50f668f744c72e3373f41fcc555c0b",
+        "source_relative_to_receipt_root": "junction-fixed-observer.cpp"
+      },
+      "post_warmup": {
+        "endpoint_stationary_checkpoints": 42,
+        "first_elapsed_ticks": 86400,
+        "last_elapsed_ticks": 3110400,
+        "metrics": {
+          "all_map": {
+            "maximum": 37,
+            "mean": 34.394366197183096,
+            "minimum": 30
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 32,
+            "mean": 28.35211267605634,
+            "minimum": 23
+          },
+          "flying": {
+            "maximum": 7,
+            "mean": 1.6338028169014085,
+            "minimum": 0
+          },
+          "ground_mission_bearing": {
+            "maximum": 36,
+            "mean": 32.76056338028169,
+            "minimum": 27
+          },
+          "ground_moved_last_step": {
+            "maximum": 30,
+            "mean": 21.830985915492956,
+            "minimum": 5
+          },
+          "ground_velocity_moving": {
+            "maximum": 31,
+            "mean": 20.802816901408452,
+            "minimum": 12
+          },
+          "max_road_stopped_ticks": {
+            "maximum": 31913,
+            "mean": 6343.5352112676055,
+            "minimum": 0
+          },
+          "parked": {
+            "maximum": 335,
+            "mean": 330.76056338028167,
+            "minimum": 327
+          },
+          "police": {
+            "maximum": 11,
+            "mean": 6.042253521126761,
+            "minimum": 2
+          },
+          "road": {
+            "maximum": 36,
+            "mean": 32.76056338028169,
+            "minimum": 27
+          },
+          "road_stopped_12000": {
+            "maximum": 2,
+            "mean": 0.2112676056338028,
+            "minimum": 0
+          },
+          "stationary_12000": {
+            "maximum": 6,
+            "mean": 1.2112676056338028,
+            "minimum": 0
+          }
+        },
+        "road_stopped_12000_checkpoints": 14,
+        "sample_count": 71
+      },
+      "receipts": {
+        "census.txt": {
+          "bytes": 99853,
+          "path_relative_to_receipt_root": "final-speed5-sixhours/census.txt",
+          "sha256": "bb61870b59512045f91746b6c32287c974936d55107eda49b129e62743f5d1b9"
+        },
+        "game.log": {
+          "bytes": 443,
+          "path_relative_to_receipt_root": "final-speed5-sixhours/game.log",
+          "sha256": "14fc9cbf3c8f2b1da5bba2690ba9d007775f2ac6ccca2ad1625feb140dee4df3"
+        },
+        "log.txt": {
+          "bytes": 8785861,
+          "path_relative_to_receipt_root": "final-speed5-sixhours/log.txt",
+          "sha256": "57664f0b8bf7bc11ff6eb2d0759b4c6d3e63f55f0cfb2209531f086912e5f4f5"
+        },
+        "run.json": {
+          "bytes": 619,
+          "path_relative_to_receipt_root": "final-speed5-sixhours/run.json",
+          "sha256": "2b22e265994aacea97043b623e179f0c7b7d9c7b0afa31709aa043a17b7e1458"
+        }
+      },
+      "run_id": "final-speed5-sixhours",
+      "sampled_road_waits": {
+        "final_blocker_diagnostic_count": 1,
+        "final_road_stopped_12000_cars": 0,
+        "max_road_stopped_ticks": 31913,
+        "maximum_road_stopped_12000_cars": 2,
+        "road_stopped_12000_checkpoints": 14
+      },
+      "simulated_hours": 6,
+      "status": "observed candidate after adjacent-junction correction",
+      "turbo_eligibility": {
+        "unavailable_frames": 0,
+        "unchecked": true
+      },
+      "variant": "final_candidate",
+      "wall_seconds": 1.296489209
+    },
+    {
+      "actual_clock_delta_ticks": 12441600,
+      "binary": {
+        "path_relative_to_receipt_root": "traffic_census-junction-fixed",
+        "sha256": "06831461fd95c7c693ae0d8d7594231566dfd68d64c332b22725a73bd22a11bc"
+      },
+      "census_samples": 289,
+      "diagnostics": {
+        "final_blocker_lines": [],
+        "game_errors": [
+          {
+            "receipt_line": 5,
+            "text": "E void OpenApoc::GameState::updateTurbo() Called when canTurbo() is false"
+          },
+          {
+            "receipt_line": 6,
+            "text": "E void OpenApoc::GameState::updateTurbo() Called when canTurbo() is false"
+          }
+        ]
+      },
+      "dispatch": {
+        "clock_count_matches_expected": true,
+        "expected_batches": 2880,
+        "first": {
+          "log_line": 1876,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 33,
+          "sent": 4,
+          "time": "12:00",
+          "wanted": 4
+        },
+        "last": {
+          "log_line": 262894,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 0,
+          "sent": 0,
+          "time": "11:00",
+          "wanted": 7
+        },
+        "logged_batches": 2880,
+        "no_source_sum": 0,
+        "nowhere_sum": 0,
+        "sent_sum": 4643,
+        "wanted_sum": 16335
+      },
+      "duration_ticks": 12441600,
+      "exact_clock_validation_passed": true,
+      "final": {
+        "all_map": 34,
+        "atv": 0,
+        "civilian": 28,
+        "clock": 18662400,
+        "elapsed": 12441600,
+        "flying": 2,
+        "ground_mission_bearing": 32,
+        "ground_moved_last_step": 21,
+        "ground_velocity_moving": 22,
+        "max_road_stopped_ticks": 2368,
+        "parked": 349,
+        "police": 6,
+        "receipt_line": 1273,
+        "road": 32,
+        "road_stopped_12000": 0,
+        "stationary_12000": 0
+      },
+      "final_clock_ticks": 18662400,
+      "final_observed_event_counters": {
+        "building_entries": 2349,
+        "civilian_entries": 3249,
+        "confirmed_target_arrivals": 2272,
+        "dead_exits": 1274,
+        "entries": 3657,
+        "flyer_entries": 477,
+        "ground_distance": 60332.821688910015,
+        "ground_reversals": 237,
+        "ground_tile_changes": 4968,
+        "newly_seen": 3871,
+        "other_exits": 0,
+        "police_entries": 408,
+        "road_entries": 3180,
+        "successful_retirements": 2192
+      },
+      "first_hour": {
+        "endpoint_stationary_checkpoints": 0,
+        "first_elapsed_ticks": 43200,
+        "last_elapsed_ticks": 518400,
+        "metrics": {
+          "all_map": {
+            "maximum": 36,
+            "mean": 33.083333333333336,
+            "minimum": 26
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 32,
+            "mean": 28.5,
+            "minimum": 21
+          },
+          "flying": {
+            "maximum": 6,
+            "mean": 3.0833333333333335,
+            "minimum": 1
+          },
+          "ground_mission_bearing": {
+            "maximum": 35,
+            "mean": 30,
+            "minimum": 23
+          },
+          "ground_moved_last_step": {
+            "maximum": 20,
+            "mean": 10.666666666666666,
+            "minimum": 0
+          },
+          "ground_velocity_moving": {
+            "maximum": 31,
+            "mean": 27.25,
+            "minimum": 21
+          },
+          "max_road_stopped_ticks": {
+            "maximum": 2210,
+            "mean": 719.1666666666666,
+            "minimum": 0
+          },
+          "parked": {
+            "maximum": 330,
+            "mean": 328.3333333333333,
+            "minimum": 327
+          },
+          "police": {
+            "maximum": 7,
+            "mean": 4.583333333333333,
+            "minimum": 2
+          },
+          "road": {
+            "maximum": 35,
+            "mean": 30,
+            "minimum": 23
+          },
+          "road_stopped_12000": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "stationary_12000": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          }
+        },
+        "road_stopped_12000_checkpoints": 0,
+        "sample_count": 12
+      },
+      "frame_count": 288,
+      "header": {
+        "city": "CITYMAP_HUMAN",
+        "mode": "turbo-unchecked",
+        "requested_ticks": 12441600,
+        "rng": "7251685877758789622,4494004282789118709",
+        "save": "ui-fresh/startup.save",
+        "step": 43200
+      },
+      "hourly_windows": [
+        {
+          "all_map_mean": 33.083333333333336,
+          "end_elapsed_inclusive": 518400,
+          "endpoint_stationary_checkpoints": 0,
+          "ground_velocity_moving_mean": 27.25,
+          "hour_index": 0,
+          "max_sampled_road_stopped_ticks": 2210,
+          "road_mean": 30,
+          "road_range": [
+            23,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 0,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 0
+        },
+        {
+          "all_map_mean": 34.333333333333336,
+          "end_elapsed_inclusive": 1036800,
+          "endpoint_stationary_checkpoints": 5,
+          "ground_velocity_moving_mean": 22.25,
+          "hour_index": 1,
+          "max_sampled_road_stopped_ticks": 14914,
+          "road_mean": 31.833333333333332,
+          "road_range": [
+            27,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 1,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 518400
+        },
+        {
+          "all_map_mean": 34.75,
+          "end_elapsed_inclusive": 1555200,
+          "endpoint_stationary_checkpoints": 9,
+          "ground_velocity_moving_mean": 18.583333333333332,
+          "hour_index": 2,
+          "max_sampled_road_stopped_ticks": 26698,
+          "road_mean": 33.916666666666664,
+          "road_range": [
+            31,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 3,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 1036800
+        },
+        {
+          "all_map_mean": 34.666666666666664,
+          "end_elapsed_inclusive": 2073600,
+          "endpoint_stationary_checkpoints": 10,
+          "ground_velocity_moving_mean": 19,
+          "hour_index": 3,
+          "max_sampled_road_stopped_ticks": 18478,
+          "road_mean": 33.75,
+          "road_range": [
+            31,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 3,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 1555200
+        },
+        {
+          "all_map_mean": 34.5,
+          "end_elapsed_inclusive": 2592000,
+          "endpoint_stationary_checkpoints": 9,
+          "ground_velocity_moving_mean": 17.916666666666668,
+          "hour_index": 4,
+          "max_sampled_road_stopped_ticks": 30466,
+          "road_mean": 33.166666666666664,
+          "road_range": [
+            31,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 2,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 2073600
+        },
+        {
+          "all_map_mean": 34.333333333333336,
+          "end_elapsed_inclusive": 3110400,
+          "endpoint_stationary_checkpoints": 9,
+          "ground_velocity_moving_mean": 19.833333333333332,
+          "hour_index": 5,
+          "max_sampled_road_stopped_ticks": 31913,
+          "road_mean": 33.083333333333336,
+          "road_range": [
+            31,
+            36
+          ],
+          "road_stopped_12000_checkpoints": 5,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 2592000
+        },
+        {
+          "all_map_mean": 34.416666666666664,
+          "end_elapsed_inclusive": 3628800,
+          "endpoint_stationary_checkpoints": 9,
+          "ground_velocity_moving_mean": 20.5,
+          "hour_index": 6,
+          "max_sampled_road_stopped_ticks": 15182,
+          "road_mean": 32.75,
+          "road_range": [
+            30,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 1,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 3110400
+        },
+        {
+          "all_map_mean": 34.75,
+          "end_elapsed_inclusive": 4147200,
+          "endpoint_stationary_checkpoints": 10,
+          "ground_velocity_moving_mean": 16.083333333333332,
+          "hour_index": 7,
+          "max_sampled_road_stopped_ticks": 359706,
+          "road_mean": 33.583333333333336,
+          "road_range": [
+            32,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 9,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 3628800
+        },
+        {
+          "all_map_mean": 34.916666666666664,
+          "end_elapsed_inclusive": 4665600,
+          "endpoint_stationary_checkpoints": 8,
+          "ground_velocity_moving_mean": 17.333333333333332,
+          "hour_index": 8,
+          "max_sampled_road_stopped_ticks": 117669,
+          "road_mean": 34.166666666666664,
+          "road_range": [
+            33,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 5,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 4147200
+        },
+        {
+          "all_map_mean": 34.583333333333336,
+          "end_elapsed_inclusive": 5184000,
+          "endpoint_stationary_checkpoints": 9,
+          "ground_velocity_moving_mean": 21,
+          "hour_index": 9,
+          "max_sampled_road_stopped_ticks": 19559,
+          "road_mean": 33.416666666666664,
+          "road_range": [
+            30,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 2,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 4665600
+        },
+        {
+          "all_map_mean": 33.416666666666664,
+          "end_elapsed_inclusive": 5702400,
+          "endpoint_stationary_checkpoints": 4,
+          "ground_velocity_moving_mean": 25.666666666666668,
+          "hour_index": 10,
+          "max_sampled_road_stopped_ticks": 9092,
+          "road_mean": 31.666666666666668,
+          "road_range": [
+            28,
+            34
+          ],
+          "road_stopped_12000_checkpoints": 0,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 5184000
+        },
+        {
+          "all_map_mean": 33.416666666666664,
+          "end_elapsed_inclusive": 6220800,
+          "endpoint_stationary_checkpoints": 1,
+          "ground_velocity_moving_mean": 26.25,
+          "hour_index": 11,
+          "max_sampled_road_stopped_ticks": 18682,
+          "road_mean": 31.333333333333332,
+          "road_range": [
+            29,
+            34
+          ],
+          "road_stopped_12000_checkpoints": 2,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 5702400
+        },
+        {
+          "all_map_mean": 34.666666666666664,
+          "end_elapsed_inclusive": 6739200,
+          "endpoint_stationary_checkpoints": 4,
+          "ground_velocity_moving_mean": 26.083333333333332,
+          "hour_index": 12,
+          "max_sampled_road_stopped_ticks": 2705,
+          "road_mean": 33.416666666666664,
+          "road_range": [
+            31,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 0,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 6220800
+        },
+        {
+          "all_map_mean": 34.416666666666664,
+          "end_elapsed_inclusive": 7257600,
+          "endpoint_stationary_checkpoints": 2,
+          "ground_velocity_moving_mean": 26.166666666666668,
+          "hour_index": 13,
+          "max_sampled_road_stopped_ticks": 2867,
+          "road_mean": 32.916666666666664,
+          "road_range": [
+            31,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 0,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 6739200
+        },
+        {
+          "all_map_mean": 21.75,
+          "end_elapsed_inclusive": 7776000,
+          "endpoint_stationary_checkpoints": 0,
+          "ground_velocity_moving_mean": 17.166666666666668,
+          "hour_index": 14,
+          "max_sampled_road_stopped_ticks": 4888,
+          "road_mean": 19.083333333333332,
+          "road_range": [
+            9,
+            32
+          ],
+          "road_stopped_12000_checkpoints": 0,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 7257600
+        },
+        {
+          "all_map_mean": 20.166666666666668,
+          "end_elapsed_inclusive": 8294400,
+          "endpoint_stationary_checkpoints": 0,
+          "ground_velocity_moving_mean": 17.75,
+          "hour_index": 15,
+          "max_sampled_road_stopped_ticks": 2085,
+          "road_mean": 18.416666666666668,
+          "road_range": [
+            15,
+            21
+          ],
+          "road_stopped_12000_checkpoints": 0,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 7776000
+        },
+        {
+          "all_map_mean": 22.166666666666668,
+          "end_elapsed_inclusive": 8812800,
+          "endpoint_stationary_checkpoints": 0,
+          "ground_velocity_moving_mean": 19,
+          "hour_index": 16,
+          "max_sampled_road_stopped_ticks": 569,
+          "road_mean": 20.083333333333332,
+          "road_range": [
+            17,
+            26
+          ],
+          "road_stopped_12000_checkpoints": 0,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 8294400
+        },
+        {
+          "all_map_mean": 23.416666666666668,
+          "end_elapsed_inclusive": 9331200,
+          "endpoint_stationary_checkpoints": 1,
+          "ground_velocity_moving_mean": 20.166666666666668,
+          "hour_index": 17,
+          "max_sampled_road_stopped_ticks": 309,
+          "road_mean": 21.666666666666668,
+          "road_range": [
+            16,
+            28
+          ],
+          "road_stopped_12000_checkpoints": 0,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 8812800
+        },
+        {
+          "all_map_mean": 20.916666666666668,
+          "end_elapsed_inclusive": 9849600,
+          "endpoint_stationary_checkpoints": 0,
+          "ground_velocity_moving_mean": 18.666666666666668,
+          "hour_index": 18,
+          "max_sampled_road_stopped_ticks": 1,
+          "road_mean": 19.083333333333332,
+          "road_range": [
+            13,
+            24
+          ],
+          "road_stopped_12000_checkpoints": 0,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 9331200
+        },
+        {
+          "all_map_mean": 33.833333333333336,
+          "end_elapsed_inclusive": 10368000,
+          "endpoint_stationary_checkpoints": 4,
+          "ground_velocity_moving_mean": 25.5,
+          "hour_index": 19,
+          "max_sampled_road_stopped_ticks": 4852,
+          "road_mean": 32.25,
+          "road_range": [
+            28,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 0,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 9849600
+        },
+        {
+          "all_map_mean": 34.25,
+          "end_elapsed_inclusive": 10886400,
+          "endpoint_stationary_checkpoints": 2,
+          "ground_velocity_moving_mean": 24.416666666666668,
+          "hour_index": 20,
+          "max_sampled_road_stopped_ticks": 17434,
+          "road_mean": 32.25,
+          "road_range": [
+            29,
+            34
+          ],
+          "road_stopped_12000_checkpoints": 1,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 10368000
+        },
+        {
+          "all_map_mean": 34.916666666666664,
+          "end_elapsed_inclusive": 11404800,
+          "endpoint_stationary_checkpoints": 7,
+          "ground_velocity_moving_mean": 20.416666666666668,
+          "hour_index": 21,
+          "max_sampled_road_stopped_ticks": 22310,
+          "road_mean": 33.25,
+          "road_range": [
+            29,
+            36
+          ],
+          "road_stopped_12000_checkpoints": 2,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 10886400
+        },
+        {
+          "all_map_mean": 34.833333333333336,
+          "end_elapsed_inclusive": 11923200,
+          "endpoint_stationary_checkpoints": 7,
+          "ground_velocity_moving_mean": 20.666666666666668,
+          "hour_index": 22,
+          "max_sampled_road_stopped_ticks": 8714,
+          "road_mean": 33.333333333333336,
+          "road_range": [
+            30,
+            35
+          ],
+          "road_stopped_12000_checkpoints": 0,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 11404800
+        },
+        {
+          "all_map_mean": 34.833333333333336,
+          "end_elapsed_inclusive": 12441600,
+          "endpoint_stationary_checkpoints": 8,
+          "ground_velocity_moving_mean": 20.5,
+          "hour_index": 23,
+          "max_sampled_road_stopped_ticks": 22646,
+          "road_mean": 32.916666666666664,
+          "road_range": [
+            30,
+            36
+          ],
+          "road_stopped_12000_checkpoints": 1,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 11923200
+        }
+      ],
+      "initial": {
+        "all_map": 0,
+        "atv": 0,
+        "civilian": 0,
+        "clock": 6220800,
+        "elapsed": 0,
+        "flying": 0,
+        "ground_mission_bearing": 0,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "max_road_stopped_ticks": 0,
+        "parked": 330,
+        "police": 0,
+        "receipt_line": 2,
+        "road": 0,
+        "road_stopped_12000": 0,
+        "stationary_12000": 0
+      },
+      "initial_clock_ticks": 6220800,
+      "inventory": {
+        "final": {
+          "groups": 221,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 1626,
+            "onmap": 34,
+            "parked": 349,
+            "successful_retirements": 2192
+          }
+        },
+        "initial": {
+          "groups": 119,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 0,
+            "onmap": 0,
+            "parked": 330,
+            "successful_retirements": 0
+          }
+        }
+      },
+      "observer": {
+        "sha256": "74e55afeab7339196edea8625d68077e8a50f668f744c72e3373f41fcc555c0b",
+        "source_relative_to_receipt_root": "junction-fixed-observer.cpp"
+      },
+      "post_warmup": {
+        "endpoint_stationary_checkpoints": 118,
+        "first_elapsed_ticks": 86400,
+        "last_elapsed_ticks": 12441600,
+        "metrics": {
+          "all_map": {
+            "maximum": 37,
+            "mean": 31.742160278745644,
+            "minimum": 14
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 32,
+            "mean": 26.749128919860627,
+            "minimum": 11
+          },
+          "flying": {
+            "maximum": 7,
+            "mean": 1.6620209059233448,
+            "minimum": 0
+          },
+          "ground_mission_bearing": {
+            "maximum": 36,
+            "mean": 30.0801393728223,
+            "minimum": 9
+          },
+          "ground_moved_last_step": {
+            "maximum": 34,
+            "mean": 17.961672473867594,
+            "minimum": 0
+          },
+          "ground_velocity_moving": {
+            "maximum": 32,
+            "mean": 21.174216027874564,
+            "minimum": 9
+          },
+          "max_road_stopped_ticks": {
+            "maximum": 359706,
+            "mean": 10103.40418118467,
+            "minimum": 0
+          },
+          "parked": {
+            "maximum": 352,
+            "mean": 340.2926829268293,
+            "minimum": 327
+          },
+          "police": {
+            "maximum": 11,
+            "mean": 4.993031358885017,
+            "minimum": 0
+          },
+          "road": {
+            "maximum": 36,
+            "mean": 30.0801393728223,
+            "minimum": 9
+          },
+          "road_stopped_12000": {
+            "maximum": 4,
+            "mean": 0.22996515679442509,
+            "minimum": 0
+          },
+          "stationary_12000": {
+            "maximum": 16,
+            "mean": 1.1184668989547037,
+            "minimum": 0
+          }
+        },
+        "road_stopped_12000_checkpoints": 37,
+        "sample_count": 287
+      },
+      "receipts": {
+        "census.txt": {
+          "bytes": 260872,
+          "path_relative_to_receipt_root": "final-speed5-day/census.txt",
+          "sha256": "97bb73575907dbc1df3f22d25d44f840bcbb3b12dd67149ca1f472adb381905f"
+        },
+        "game.log": {
+          "bytes": 592,
+          "path_relative_to_receipt_root": "final-speed5-day/game.log",
+          "sha256": "e10e878eb03f41f6fa1d0f76376b95f4102e92f98228c13c9e680b82af9de660"
+        },
+        "log.txt": {
+          "bytes": 35665336,
+          "path_relative_to_receipt_root": "final-speed5-day/log.txt",
+          "sha256": "64944345f84983379bf1fe124c8a3c7f2b70076257aa9b5cab59dd60cb610f23"
+        },
+        "run.json": {
+          "bytes": 620,
+          "path_relative_to_receipt_root": "final-speed5-day/run.json",
+          "sha256": "550c4740b6e220d213183c28e9377e0742cc580a24aaa4a05eb2184453ad703a"
+        }
+      },
+      "run_id": "final-speed5-day",
+      "sampled_road_waits": {
+        "final_blocker_diagnostic_count": 0,
+        "final_road_stopped_12000_cars": 0,
+        "max_road_stopped_ticks": 359706,
+        "maximum_road_stopped_12000_cars": 4,
+        "road_stopped_12000_checkpoints": 37
+      },
+      "simulated_hours": 24,
+      "status": "observed candidate after adjacent-junction correction",
+      "turbo_eligibility": {
+        "unavailable_frames": 2,
+        "unchecked": true
+      },
+      "variant": "final_candidate",
+      "wall_seconds": 3.558665958
+    },
+    {
+      "actual_clock_delta_ticks": 518400,
+      "binary": {
+        "path_relative_to_receipt_root": "traffic_census-junction-fixed",
+        "sha256": "06831461fd95c7c693ae0d8d7594231566dfd68d64c332b22725a73bd22a11bc"
+      },
+      "census_samples": 13,
+      "diagnostics": {
+        "final_blocker_lines": [],
+        "game_errors": []
+      },
+      "dispatch": {
+        "clock_count_matches_expected": true,
+        "expected_batches": 120,
+        "first": {
+          "log_line": 1876,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 33,
+          "sent": 4,
+          "time": "12:00",
+          "wanted": 4
+        },
+        "last": {
+          "log_line": 19658,
+          "no_source": 0,
+          "nowhere": 0,
+          "room": 6,
+          "sent": 3,
+          "time": "12:00",
+          "wanted": 3
+        },
+        "logged_batches": 120,
+        "no_source_sum": 0,
+        "nowhere_sum": 0,
+        "sent_sum": 348,
+        "wanted_sum": 483
+      },
+      "duration_ticks": 518400,
+      "exact_clock_validation_passed": true,
+      "final": {
+        "all_map": 31,
+        "atv": 0,
+        "civilian": 28,
+        "clock": 6739200,
+        "elapsed": 518400,
+        "flying": 0,
+        "ground_mission_bearing": 31,
+        "ground_moved_last_step": 7,
+        "ground_velocity_moving": 28,
+        "max_road_stopped_ticks": 1,
+        "parked": 328,
+        "police": 3,
+        "receipt_line": 169,
+        "road": 31,
+        "road_stopped_12000": 0,
+        "stationary_12000": 0
+      },
+      "final_clock_ticks": 6739200,
+      "final_observed_event_counters": {
+        "building_entries": 157,
+        "civilian_entries": 239,
+        "confirmed_target_arrivals": 149,
+        "dead_exits": 81,
+        "entries": 269,
+        "flyer_entries": 33,
+        "ground_distance": 3425.559513628483,
+        "ground_reversals": 0,
+        "ground_tile_changes": 125,
+        "newly_seen": 271,
+        "other_exits": 0,
+        "police_entries": 30,
+        "road_entries": 236,
+        "successful_retirements": 147
+      },
+      "first_hour": {
+        "endpoint_stationary_checkpoints": 0,
+        "first_elapsed_ticks": 43200,
+        "last_elapsed_ticks": 518400,
+        "metrics": {
+          "all_map": {
+            "maximum": 35,
+            "mean": 33.166666666666664,
+            "minimum": 28
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 34,
+            "mean": 29.25,
+            "minimum": 24
+          },
+          "flying": {
+            "maximum": 6,
+            "mean": 2.8333333333333335,
+            "minimum": 0
+          },
+          "ground_mission_bearing": {
+            "maximum": 33,
+            "mean": 30.333333333333332,
+            "minimum": 22
+          },
+          "ground_moved_last_step": {
+            "maximum": 17,
+            "mean": 10.666666666666666,
+            "minimum": 0
+          },
+          "ground_velocity_moving": {
+            "maximum": 31,
+            "mean": 26.75,
+            "minimum": 21
+          },
+          "max_road_stopped_ticks": {
+            "maximum": 5701,
+            "mean": 980.8333333333334,
+            "minimum": 1
+          },
+          "parked": {
+            "maximum": 330,
+            "mean": 328.9166666666667,
+            "minimum": 328
+          },
+          "police": {
+            "maximum": 7,
+            "mean": 3.9166666666666665,
+            "minimum": 1
+          },
+          "road": {
+            "maximum": 33,
+            "mean": 30.333333333333332,
+            "minimum": 22
+          },
+          "road_stopped_12000": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "stationary_12000": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          }
+        },
+        "road_stopped_12000_checkpoints": 0,
+        "sample_count": 12
+      },
+      "frame_count": 12,
+      "header": {
+        "city": "CITYMAP_HUMAN",
+        "mode": "turbo",
+        "requested_ticks": 518400,
+        "rng": "7251685877758789622,4494004282789118709",
+        "save": "ui-fresh/startup.save",
+        "step": 43200
+      },
+      "hourly_windows": [
+        {
+          "all_map_mean": 33.166666666666664,
+          "end_elapsed_inclusive": 518400,
+          "endpoint_stationary_checkpoints": 0,
+          "ground_velocity_moving_mean": 26.75,
+          "hour_index": 0,
+          "max_sampled_road_stopped_ticks": 5701,
+          "road_mean": 30.333333333333332,
+          "road_range": [
+            22,
+            33
+          ],
+          "road_stopped_12000_checkpoints": 0,
+          "sample_count": 12,
+          "start_elapsed_exclusive": 0
+        }
+      ],
+      "initial": {
+        "all_map": 0,
+        "atv": 0,
+        "civilian": 0,
+        "clock": 6220800,
+        "elapsed": 0,
+        "flying": 0,
+        "ground_mission_bearing": 0,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "max_road_stopped_ticks": 0,
+        "parked": 330,
+        "police": 0,
+        "receipt_line": 2,
+        "road": 0,
+        "road_stopped_12000": 0,
+        "stationary_12000": 0
+      },
+      "initial_clock_ticks": 6220800,
+      "inventory": {
+        "final": {
+          "groups": 162,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 95,
+            "onmap": 31,
+            "parked": 328,
+            "successful_retirements": 147
+          }
+        },
+        "initial": {
+          "groups": 119,
+          "totals": {
+            "crashed_alive": 0,
+            "observed_dead": 0,
+            "onmap": 0,
+            "parked": 330,
+            "successful_retirements": 0
+          }
+        }
+      },
+      "observer": {
+        "sha256": "74e55afeab7339196edea8625d68077e8a50f668f744c72e3373f41fcc555c0b",
+        "source_relative_to_receipt_root": "junction-fixed-observer.cpp"
+      },
+      "post_warmup": {
+        "endpoint_stationary_checkpoints": 0,
+        "first_elapsed_ticks": 86400,
+        "last_elapsed_ticks": 518400,
+        "metrics": {
+          "all_map": {
+            "maximum": 35,
+            "mean": 33.63636363636363,
+            "minimum": 31
+          },
+          "atv": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "civilian": {
+            "maximum": 34,
+            "mean": 29.727272727272727,
+            "minimum": 28
+          },
+          "flying": {
+            "maximum": 6,
+            "mean": 2.5454545454545454,
+            "minimum": 0
+          },
+          "ground_mission_bearing": {
+            "maximum": 33,
+            "mean": 31.09090909090909,
+            "minimum": 28
+          },
+          "ground_moved_last_step": {
+            "maximum": 17,
+            "mean": 11.636363636363637,
+            "minimum": 4
+          },
+          "ground_velocity_moving": {
+            "maximum": 31,
+            "mean": 27.272727272727273,
+            "minimum": 24
+          },
+          "max_road_stopped_ticks": {
+            "maximum": 5701,
+            "mean": 1069.909090909091,
+            "minimum": 1
+          },
+          "parked": {
+            "maximum": 330,
+            "mean": 328.90909090909093,
+            "minimum": 328
+          },
+          "police": {
+            "maximum": 7,
+            "mean": 3.909090909090909,
+            "minimum": 1
+          },
+          "road": {
+            "maximum": 33,
+            "mean": 31.09090909090909,
+            "minimum": 28
+          },
+          "road_stopped_12000": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          },
+          "stationary_12000": {
+            "maximum": 0,
+            "mean": 0,
+            "minimum": 0
+          }
+        },
+        "road_stopped_12000_checkpoints": 0,
+        "sample_count": 11
+      },
+      "receipts": {
+        "census.txt": {
+          "bytes": 51403,
+          "path_relative_to_receipt_root": "final-speed5-eligible-hour/census.txt",
+          "sha256": "06a9dd1cbd94e7791dd5fa755494c6e42aa4af32d3214603603d698bf4e435b7"
+        },
+        "game.log": {
+          "bytes": 432,
+          "path_relative_to_receipt_root": "final-speed5-eligible-hour/game.log",
+          "sha256": "29d3787a82dc0472f7636ca19ed099a919ffd783950f3f2392dec1cb02a17558"
+        },
+        "log.txt": {
+          "bytes": 2666293,
+          "path_relative_to_receipt_root": "final-speed5-eligible-hour/log.txt",
+          "sha256": "c3269a3595f95dd244da3ff260d0dfc24295cee19a6c63847b41a695322b142e"
+        },
+        "run.json": {
+          "bytes": 608,
+          "path_relative_to_receipt_root": "final-speed5-eligible-hour/run.json",
+          "sha256": "59a201935828d151744a74edc0438f714a0b5760a196be84dcb45feca766b6d7"
+        }
+      },
+      "run_id": "final-speed5-eligible-hour",
+      "sampled_road_waits": {
+        "final_blocker_diagnostic_count": 0,
+        "final_road_stopped_12000_cars": 0,
+        "max_road_stopped_ticks": 5701,
+        "maximum_road_stopped_12000_cars": 0,
+        "road_stopped_12000_checkpoints": 0
+      },
+      "simulated_hours": 1,
+      "status": "observed candidate after adjacent-junction correction",
+      "turbo_eligibility": {
+        "unavailable_frames": 0,
+        "unchecked": false
+      },
+      "variant": "final_candidate",
+      "wall_seconds": 0.359438291
+    }
+  ],
+  "schema_version": 2,
+  "separate_run_prefix_checks": [
+    {
+      "compared_points": 73,
+      "differing_points": 66,
+      "first_difference": {
+        "changed_metrics": {
+          "all_map": {
+            "day": 9,
+            "six_hour": 8
+          },
+          "ground_mission_bearing": {
+            "day": 6,
+            "six_hour": 5
+          },
+          "ground_velocity_moving": {
+            "day": 6,
+            "six_hour": 5
+          },
+          "parked": {
+            "day": 329,
+            "six_hour": 330
+          },
+          "police": {
+            "day": 2,
+            "six_hour": 1
+          },
+          "road": {
+            "day": 6,
+            "six_hour": 5
+          }
+        },
+        "elapsed_ticks": 302400
+      },
+      "variant": "pre_review"
+    },
+    {
+      "compared_points": 73,
+      "differing_points": 72,
+      "first_difference": {
+        "changed_metrics": {
+          "all_map": {
+            "day": 28,
+            "six_hour": 26
+          },
+          "civilian": {
+            "day": 24,
+            "six_hour": 21
+          },
+          "flying": {
+            "day": 6,
+            "six_hour": 3
+          },
+          "ground_mission_bearing": {
+            "day": 22,
+            "six_hour": 23
+          },
+          "parked": {
+            "day": 329,
+            "six_hour": 328
+          },
+          "police": {
+            "day": 4,
+            "six_hour": 5
+          },
+          "road": {
+            "day": 22,
+            "six_hour": 23
+          }
+        },
+        "elapsed_ticks": 43200
+      },
+      "variant": "post_review_intermediate"
+    }
+  ],
+  "source_provenance": {
+    "baseline_attribution": "Integrator verified frozen pre-review libraries have traffic source identical to 0ea2a77b; embedded version may say 0e25191d after metadata-only report changes.",
+    "baseline_traffic_commit": "0ea2a77b4025b12f5b6eee51630c6643ac7322ca",
+    "candidate_description": "Uncommitted P1 turbo subdivision and P2 cache/destination review fixes compiled by integrator before these observations; this is not the final traffic candidate.",
+    "candidate_source_manifest_sha256": "eb57d1ced8b1129465c16a785c845ee9832bfa77fa4237491a012d8d183a8312",
+    "candidate_source_snapshot_relative_to_receipt_root": "speed5-observed-source",
+    "candidate_traffic_source_sha256": {
+      "game/state/city/city.cpp": "4f29f5fa7d18eb72cef5151a0e93f2a22b9c6c7de628303fbc29085b4e2a1c98",
+      "game/state/city/city.h": "9cb8286f31856a33b29a5a9dc2c07aaf735c54c0ed56f8d23d83bc3f0e3692d9",
+      "game/state/city/vehicle.cpp": "a171ccae81fc896ba91239ce7728050549dcaf7bdb91205539953c2577620e60",
+      "game/state/city/vehicle.h": "8676fb4e13b6f04c244b28f59ecf9e3ea9d7078f0cfed0af94d651b94c178402",
+      "game/state/city/vehiclemission.cpp": "ef0dd55d4786fb678058afe4293b6ac1f39b143bb8ca8bc3ecd8b33950ef57c3",
+      "game/state/city/vehiclemission.h": "04fd931e2e4b33e6308616a9bde24a3260a98dc8a50e699b9c4ddb7f7f552b8c",
+      "game/state/gamestate.cpp": "fecf82edf973009e55c37b2b2c469addcfd6eef3a4f6b6af8ff51a665420bcde"
+    },
+    "final_candidate": {
+      "binary_sha256": "06831461fd95c7c693ae0d8d7594231566dfd68d64c332b22725a73bd22a11bc",
+      "description": "Adjacent-junction departure classification correction compiled with prior turbo and review fixes; later regression-duration changes did not change production code.",
+      "observer_source_relative_to_receipt_root": "junction-fixed-observer.cpp",
+      "observer_source_sha256": "74e55afeab7339196edea8625d68077e8a50f668f744c72e3373f41fcc555c0b",
+      "source_manifest_sha256": "6623dc433d887a53a79dcf80f8202afc1482e30c21a0e62cb98c95e098d13b79",
+      "source_sha256": {
+        "game/state/city/city.cpp": "4f29f5fa7d18eb72cef5151a0e93f2a22b9c6c7de628303fbc29085b4e2a1c98",
+        "game/state/city/city.h": "9cb8286f31856a33b29a5a9dc2c07aaf735c54c0ed56f8d23d83bc3f0e3692d9",
+        "game/state/city/vehicle.cpp": "a171ccae81fc896ba91239ce7728050549dcaf7bdb91205539953c2577620e60",
+        "game/state/city/vehicle.h": "8676fb4e13b6f04c244b28f59ecf9e3ea9d7078f0cfed0af94d651b94c178402",
+        "game/state/city/vehiclemission.cpp": "cecb8897c7233d858d820f4397f84a12386d9a36d186c23f6585b820f238a29c",
+        "game/state/city/vehiclemission.h": "04fd931e2e4b33e6308616a9bde24a3260a98dc8a50e699b9c4ddb7f7f552b8c",
+        "game/state/gamestate.cpp": "fecf82edf973009e55c37b2b2c469addcfd6eef3a4f6b6af8ff51a665420bcde"
+      },
+      "source_snapshot_relative_to_receipt_root": "speed5-final-source"
+    },
+    "observer_source_attribution": "Integrator confirmed traffic_census_speed5.cpp is the exact source compiled before and after. Source copy is preserved outside the repository.",
+    "observer_source_sha256": "8eaffdbaff5ae24b6c3e2e441e3c5bfa055bf5fe2e4bddd7905837fbcd417b0d"
+  },
+  "status": "Final adjacent-junction candidate observed; intermediate reciprocal wait retained as historical failed observation. Recovered queues and coarse sampling limitations remain."
+}

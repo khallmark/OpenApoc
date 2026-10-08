@@ -188,6 +188,78 @@ void GameState::initState()
 		}
 	}
 
+	// Remove only the human-city ambient signatures emitted by the old base extractor.
+	// Mods may schedule the same vehicle types for other purposes. Scheduled time is mutable
+	// runtime state, so it cannot distinguish the legacy definitions in a saved campaign.
+	using Target = Organisation::MissionPattern::Target;
+	using Relation = Organisation::Relation;
+	const std::set<UString> ordinaryOrgs = {
+	    "ORG_CYBERWEB",        "ORG_ENERGEN",         "ORG_EVONET",        "ORG_EXTROPIANS",
+	    "ORG_GENERAL_METRO",   "ORG_GRAVBALL_LEAGUE", "ORG_LIFETREE",      "ORG_MARSEC",
+	    "ORG_MUTANT_ALLIANCE", "ORG_NANOTECH",        "ORG_NUTRIVEND",     "ORG_SANCTUARY_CLINIC",
+	    "ORG_SENSOVISION",     "ORG_SOLMINE",         "ORG_SUPERDYNAMICS", "ORG_SYNTHEMESH",
+	    "ORG_S_E_L_F_",        "ORG_TECHNOCRATS"};
+	auto isLegacyAmbientPattern =
+	    [&](const UString &orgId, const Organisation::RecurringMission &mission)
+	{
+		const auto &p = mission.pattern;
+		std::set<UString> types;
+		for (const auto &type : p.allowedTypes)
+		{
+			types.insert(type.id);
+		}
+		auto matches = [&](uint64_t minMinutes, uint64_t maxMinutes, unsigned maxAmount,
+		                   const std::set<UString> &allowedTypes, Target target,
+		                   const std::set<Relation> &relations = {})
+		{
+			return mission.maxLiners == 16 &&
+			       p.minIntervalRepeat == minMinutes * TICKS_PER_MINUTE &&
+			       p.maxIntervalRepeat == maxMinutes * TICKS_PER_MINUTE && p.minAmount == 1 &&
+			       p.maxAmount == maxAmount && types == allowedTypes && p.target == target &&
+			       p.relation == relations;
+		};
+		const std::set<UString> carsAndBikes = {"VEHICLETYPE_CIVILIAN_CAR",
+		                                        "VEHICLETYPE_BLAZER_TURBO_BIKE"};
+		if (orgId == "ORG_GOVERNMENT")
+		{
+			return matches(3, 7, 1, {"VEHICLETYPE_RESCUE_TRANSPORT"}, Target::OwnedOrOther) ||
+			       matches(3, 7, 1, {"VEHICLETYPE_CONSTRUCTION_VEHICLE"}, Target::OwnedOrOther) ||
+			       matches(2, 4, 1, carsAndBikes, Target::OwnedOrOther);
+		}
+		if (orgId == "ORG_TRANSTELLAR")
+		{
+			const std::set<Relation> neutralPlus = {Relation::Allied, Relation::Friendly,
+			                                        Relation::Neutral};
+			return matches(5, 11, 1, {"VEHICLETYPE_AUTOTRANS"}, Target::Other, neutralPlus) ||
+			       matches(5, 11, 3, {"VEHICLETYPE_AIRRANS"}, Target::Other, neutralPlus);
+		}
+		if (orgId == "ORG_CULT_OF_SIRIUS")
+		{
+			return matches(7, 13, 1, carsAndBikes, Target::OwnedOrOther);
+		}
+		if (orgId == "ORG_PSYKE" || orgId == "ORG_DIABLO" || orgId == "ORG_OSIRON")
+		{
+			return matches(11, 19, 1, carsAndBikes, Target::OwnedOrOther);
+		}
+		return ordinaryOrgs.count(orgId) &&
+		       matches(15, 25, 1, carsAndBikes, Target::OwnedOrOther, {Relation::Allied});
+	};
+	for (auto &o : organisations)
+	{
+		if (!o.second)
+		{
+			continue;
+		}
+		for (auto &cityMissions : o.second->recurring_missions)
+		{
+			if (cityMissions.first.id == "CITYMAP_HUMAN")
+			{
+				cityMissions.second.remove_if([&](const auto &m)
+				                              { return isLegacyAmbientPattern(o.first, m); });
+			}
+		}
+	}
+
 	for (auto &c : this->cities)
 	{
 		auto &city = c.second;
@@ -1038,10 +1110,10 @@ void GameState::invasion()
 			switch (missionType)
 			{
 				case UFOIncursion::PrimaryMission::Attack:
-					invader->addMission(*this,
-					                    VehicleMission::attackBuilding(*this, *invader, nullptr,
-					                                                    missionCounter),
-					                    true);
+					invader->addMission(
+					    *this,
+					    VehicleMission::attackBuilding(*this, *invader, nullptr, missionCounter),
+					    true);
 					break;
 				case UFOIncursion::PrimaryMission::Infiltration:
 					invader->addMission(
@@ -1163,10 +1235,9 @@ void GameState::invasion()
 			}
 			else
 			{
-				invader->addMission(*this,
-				                    VehicleMission::attackBuilding(*this, *invader, nullptr,
-				                                                    missionCounter),
-				                    true);
+				invader->addMission(
+				    *this, VehicleMission::attackBuilding(*this, *invader, nullptr, missionCounter),
+				    true);
 			}
 		}
 	}
@@ -1343,6 +1414,22 @@ void GameState::update(unsigned int ticks)
 			updateAfterBattle();
 		}
 
+		if (current_city.id == "CITYMAP_HUMAN" && ticks > City::AMBIENT_TRAFFIC_TICKS)
+		{
+			// Speed 5 crosses ten traffic intervals in one update. Advance the city between
+			// batches so completed trips release slots and each draw uses its own clock/hour.
+			// Ordinary city steps and battle updates retain their existing cadence.
+			while (ticks > 0)
+			{
+				const unsigned untilTraffic =
+				    City::AMBIENT_TRAFFIC_TICKS - gameTime.getTicks() % City::AMBIENT_TRAFFIC_TICKS;
+				const unsigned step = std::min(ticks, untilTraffic);
+				update(step);
+				ticks -= step;
+			}
+			return;
+		}
+
 		current_city->update(*this, ticks);
 
 		// What a rescue craft could go for (VehicleMission::canRecoverVehicle's target test),
@@ -1391,6 +1478,13 @@ void GameState::update(unsigned int ticks)
 		}
 
 		cleanUpDeathNote();
+
+		// UFO2P counts its traffic down in the human city only (FUN_0006d384).
+		if (current_city.id == "CITYMAP_HUMAN" &&
+		    GameTime::intervalsCrossed(gameTime.getTicks(), ticks, City::AMBIENT_TRAFFIC_TICKS))
+		{
+			current_city->dispatchAmbientTraffic(*this);
+		}
 
 		const uint64_t secondsCrossed =
 		    GameTime::intervalsCrossed(gameTime.getTicks(), ticks, TICKS_PER_SECOND);
