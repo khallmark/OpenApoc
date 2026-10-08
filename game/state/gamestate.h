@@ -66,10 +66,36 @@ class GameScore
 	int craftShotDownXCom = 0;
 	int incursions = 0;
 	int cityDamage = 0;
+	// UFO2P's eighth category: credited once per alien building destroyed by a won raid
+	// (UFO2P non-4 file 0x1159E4), by the building function's destroyedScore.
+	int alienBuildingsDestroyed = 0;
 
 	int getTotal() const;
 	void reset();
 	//	UString getText();
+};
+
+// One week's funding decision, recorded when the simulation makes it so the report shows what
+// happened rather than re-deriving it from balances the transfer has already changed.
+class FundingAssessment
+{
+  public:
+	enum class Outcome
+	{
+		// No assessment this week: funding was cut in an earlier week (or none has run yet).
+		None,
+		Assessed,
+		CutForHostility,
+		CutForScore,
+	};
+	Outcome outcome = Outcome::None;
+	GameScore week;
+	int previousWeeksScore = 0;
+	int oldIncome = 0;
+	int scoreAdjustment = 0;
+	// Zero or negative: how far half the Government's balance cut F + scoreAdjustment.
+	int capAdjustment = 0;
+	int nextIncome = 0;
 };
 
 class GameState : public std::enable_shared_from_this<GameState>
@@ -283,10 +309,28 @@ class GameState : public std::enable_shared_from_this<GameState>
 
 	// Following members are not serialized
 	bool newGame = false;
+	// The latest weekly funding assessment, for the report screens.
+	FundingAssessment fundingAssessment;
 	bool skipTurboCalculations = false;
 	// Set when Skirmish is launched from the main menu (no CityView underneath). Debrief
 	// must return to MainMenu instead of constructing a CityView on a disposable state.
 	bool skirmishFromMainMenu = false;
+
+	// The vehicles grouped by owner, each with its position in `vehicles` order.
+	// Vehicle::findClosestEnemy decides hostility once per owner and then reads only the hostile
+	// owners' vehicles, rather than every vehicle in the game for every armed craft every tick.
+	// Rebuilt on demand; anything that adds or removes a vehicle calls vehiclesChanged().
+	struct OwnedVehicles
+	{
+		const Organisation *owner = nullptr;
+		std::vector<std::pair<unsigned, sp<Vehicle>>> vehicles;
+	};
+	const std::vector<OwnedVehicles> &getVehiclesByOwner() const;
+	void vehiclesChanged()
+	{
+		vehiclesByOwner.clear();
+		vehiclesByOwnerCount = 0;
+	}
 
 	// Loads all mods set in the options - note this likely requires the mod data directories to
 	// already be added to the filesystem
@@ -294,6 +338,10 @@ class GameState : public std::enable_shared_from_this<GameState>
 	// appends a GameState package from "submodPath", relative to the currently set data directories
 	// Returns true on success, false on failure
 	bool appendGameState(const UString &gamestatePath);
+
+  private:
+	mutable std::vector<OwnedVehicles> vehiclesByOwner;
+	mutable size_t vehiclesByOwnerCount = 0;
 };
 
 }; // namespace OpenApoc

@@ -331,6 +331,13 @@ class Vehicle : public StateObject<Vehicle>,
 	Vec3<float> getMuzzleLocation() const;
 
 	const Vec3<float> &getPosition() const { return this->position; }
+	// Between where the vehicle was when the latest simulation step started and where it is now.
+	Vec3<float> getDrawPosition(float stepFraction) const;
+	// Set by CityView before each step; not saved.
+	Vec3<float> stepStartPosition = {0, 0, 0};
+	bool hasStepStart = false;
+	// No road from here to where it is going: removed at the end of this mission step; not saved.
+	bool stranded = false;
 
 	//'Constitution' is the sum of health and shield
 	int getMaxConstitution() const;
@@ -430,7 +437,6 @@ class Vehicle : public StateObject<Vehicle>,
   private:
 	Vec3<float> manualFirePosition = {0.0f, 0.0f, 0.0f};
 	bool manualFire = false;
-	std::list<sp<VEquipmentType>> getEquipmentTypes() const;
 };
 
 }; // namespace OpenApoc

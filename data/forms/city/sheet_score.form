@@ -55,6 +55,12 @@
         <alignment horizontal="left" vertical="centre"/>
         <font>smalfont</font>
       </label>
+      <label id="ALIEN_BUILDINGS_C" text="Alien Buildings Destroyed">
+        <position x="0" y="164"/>
+        <size width="200" height="15"/>
+        <alignment horizontal="left" vertical="centre"/>
+        <font>smalfont</font>
+      </label>
       <label id="TOTAL_C" text="Total">
         <position x="0" y="196"/>
         <size width="200" height="15"/>
@@ -112,6 +118,12 @@
         <alignment horizontal="right" vertical="centre"/>
         <font>smalfont</font>
       </label>
+      <label id="ALIEN_BUILDINGS_W">
+        <position x="224" y="164"/>
+        <size width="100" height="15"/>
+        <alignment horizontal="right" vertical="centre"/>
+        <font>smalfont</font>
+      </label>
       <label id="TOTAL_W">
         <position x="224" y="196"/>
         <size width="100" height="15"/>
@@ -165,6 +177,12 @@
       </label>
       <label id="DAMAGE_T">
         <position x="334" y="144"/>
+        <size width="100" height="15"/>
+        <alignment horizontal="right" vertical="centre"/>
+        <font>smalfont</font>
+      </label>
+      <label id="ALIEN_BUILDINGS_T">
+        <position x="334" y="164"/>
         <size width="100" height="15"/>
         <alignment horizontal="right" vertical="centre"/>
         <font>smalfont</font>

@@ -6,6 +6,8 @@
 #include "game/state/tilemap/tilemap.h"
 #include "library/strings.h"
 #include "library/vec.h"
+#include <algorithm>
+#include <deque>
 #include <list>
 #include <vector>
 
@@ -89,8 +91,50 @@ class GroundVehicleTileHelper : public CanEnterTileHelper
 	static float getDistanceStatic(Vec3<float> from, Vec3<float> to);
 	static float getDistanceStatic(Vec3<float> from, Vec3<float> toStart, Vec3<float> toEnd);
 
-	// vehicle_data size_x/size_y tiles covered when the origin is `origin`.
-	static std::vector<Vec3<int>> footprintTiles(Vec3<int> origin, Vec2<int> size);
+	// The vehicle_data size_x/size_y tiles covered when the origin is `origin`, row by row.
+	// Computed on the fly: canEnterTile asks for it on every step of every ground route.
+	class Footprint
+	{
+	  public:
+		class iterator
+		{
+		  public:
+			iterator(const Footprint &footprint, int index) : footprint(footprint), index(index) {}
+			Vec3<int> operator*() const { return footprint[index]; }
+			iterator &operator++()
+			{
+				++index;
+				return *this;
+			}
+			bool operator!=(const iterator &other) const { return index != other.index; }
+
+		  private:
+			const Footprint &footprint;
+			int index;
+		};
+
+		Footprint(Vec3<int> origin, Vec2<int> size)
+		    : origin(origin), width(std::max(1, size.x)), height(std::max(1, size.y))
+		{
+		}
+		size_t size() const { return static_cast<size_t>(width * height); }
+		Vec3<int> operator[](size_t index) const
+		{
+			const int i = static_cast<int>(index);
+			return {origin.x + i % width, origin.y + i / width, origin.z};
+		}
+		iterator begin() const { return {*this, 0}; }
+		iterator end() const { return {*this, width * height}; }
+
+	  private:
+		Vec3<int> origin;
+		int width;
+		int height;
+	};
+	static Footprint footprintTiles(Vec3<int> origin, Vec2<int> size)
+	{
+		return Footprint(origin, size);
+	}
 
 	// Convert vector direction into index for tube array
 	int convertDirection(Vec3<int> dir) const;
@@ -194,6 +238,30 @@ class VehicleMission
 	void setFollowPath(GameState &state, Vehicle &v);
 	bool advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> &destPos, float &destFacing,
 	                      int &turboTiles);
+	// A ground vehicle blocked by another vehicle: plan a short walk around it, treating vehicles
+	// as walls (UFO2P FUN_0003f704). Replaces the planned path and returns true, or returns false
+	// when every way out is blocked.
+	bool planAroundVehicles(Vehicle &v, Vec3<int> target);
+	// The vehicle, other than v, that stops v stepping onto the tile.
+	sp<Vehicle> blockingVehicle(const Vehicle &v, Tile *to) const;
+	// What a ground vehicle does about the vehicle blocking its step from a tile.
+	enum class Blocked
+	{
+		Wait,        // for it to move on
+		WalkRound,   // it is not going anywhere: get round it
+		DriveThrough // it is coming the other way: pass it
+	};
+	Blocked respondToBlocker(const Vehicle &v, const Tile *from, const Vehicle &blocker) const;
+	// Whether a ground vehicle could take the next step of its route now.
+	bool nextStepIsFree(Vehicle &v) const;
+	// How long a car waits behind one that is moving on before it tries the step again.
+	static constexpr unsigned int QUEUE_WAIT_TICKS = 8;
+	// UFO2P's 12-count wait (0x3a290) drops by half the speed setting each frame while the clock
+	// gains the whole setting: 24 vanilla ticks at any speed, which is 96 OpenApoc ticks.
+	static constexpr unsigned int BLOCKED_WAIT_TICKS = 96;
+	// Walks round vehicles, without getting past any of them, after which a ground vehicle drives
+	// through.
+	static constexpr unsigned int PASS_THROUGH_AFTER_BLOCKS = 4;
 	bool isTakingOff(Vehicle &v);
 	int getDefaultIterationCount(Vehicle &v);
 	static Vec3<float> getRandomMapEdgeCoordinates(GameState &state, StateRef<City> city);
@@ -318,6 +386,19 @@ class VehicleMission
 
 	bool cancelled = false;
 
-	std::list<Vec3<int>> currentPlannedPath;
+	// Ground vehicle boxed in by other vehicles: ticks left to wait before trying the step again
+	// (UFO2P's 12-count at 0x3a290). Neither re-plans meanwhile, nor moves unless the next tile of
+	// its route comes free.
+	unsigned int blockedWaitTicks = 0;
+	// The wait above is for being boxed in, not for queueing behind a car that is moving on.
+	bool boxedIn = false;
+	// Times blocked by a vehicle (other than queueing) since last getting past one, and the tile
+	// it was last stopped from entering.
+	unsigned int vehicleBlocks = 0;
+	Vec3<int> blockedStep = {-1, -1, -1};
+
+	// A deque, not a list: every mission start copies a whole route into it and every step pops
+	// one tile off the front, and a list allocated and freed a node for each tile.
+	std::deque<Vec3<int>> currentPlannedPath;
 };
 } // namespace OpenApoc

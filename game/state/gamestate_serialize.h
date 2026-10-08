@@ -63,6 +63,7 @@
 #include "game/state/stateobject.h"
 #include "library/strings_format.h"
 #include "library/voxel.h"
+#include <deque>
 
 // Include the generated file last to ensure all types are defined
 #include "game/state/gamestate_serialize_generated.h"
@@ -396,6 +397,24 @@ void serializeIn(const GameState *state, SerializationNode *node, std::list<T> &
 }
 
 template <typename T>
+void serializeIn(const GameState *state, SerializationNode *node, std::deque<T> &deque)
+{
+	if (!node)
+		return;
+	if (node->getAttribute("op") == DELETE_OP_ATTRIBUTE)
+	{
+		deque.clear();
+	}
+	auto entry = node->getNodeOpt("entry");
+	while (entry)
+	{
+		deque.emplace_back();
+		serializeIn(state, entry, deque.back());
+		entry = entry->getNextSiblingOpt("entry");
+	}
+}
+
+template <typename T>
 void serializeIn(const GameState *state, SerializationNode *node, std::vector<T> &vector)
 {
 	if (!node)
@@ -719,6 +738,21 @@ void serializeOut(SerializationNode *node, const std::list<T> &list, const std::
 	}
 
 	for (auto &entry : list)
+	{
+		serializeOut(node->addNode("entry"), entry, defaultRef);
+	}
+}
+
+// Same on-disk form as std::list: a save written with either container loads into the other.
+template <typename T>
+void serializeOut(SerializationNode *node, const std::deque<T> &deque, const std::deque<T> &ref)
+{
+	const T defaultRef{};
+	if (!ref.empty())
+	{
+		node->setAttribute("op", DELETE_OP_ATTRIBUTE);
+	}
+	for (auto &entry : deque)
 	{
 		serializeOut(node->addNode("entry"), entry, defaultRef);
 	}

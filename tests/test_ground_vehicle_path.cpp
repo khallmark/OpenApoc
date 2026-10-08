@@ -29,12 +29,17 @@
 
 #include "framework/configfile.h"
 #include "framework/framework.h"
+#include "game/state/city/building.h"
 #include "game/state/city/city.h"
+#include "game/state/city/scenery.h"
 #include "game/state/city/vehicle.h"
 #include "game/state/city/vehiclemission.h"
 #include "game/state/gamestate.h"
+#include "game/state/rules/city/scenerytiletype.h"
 #include "game/state/rules/city/vehicletype.h"
 #include "game/state/shared/organisation.h"
+#include "game/state/tilemap/tilemap.h"
+#include "game/state/tilemap/tileobject_scenery.h"
 #include "tests/test_helpers.h"
 
 using namespace OpenApoc;
@@ -154,6 +159,99 @@ static bool test_ground_vehicle_order_does_not_crash()
 	return true;
 }
 
+// Routes on a road cut by destroyed tiles. The pathfinder assumed a road segment's connections[0]
+// meets its first tile and connections[1] its last. That holds for an intact city, but not after
+// fighting: in a learner campaign the junction at {46,99,2} lost branches, and the segment map
+// rebuilt when the save loaded folded it into a road {46,99,2}..{46,101,2} whose only connection
+// is at its FAR end, the single-tile segment {46,102,2}. Routing from the junction tile then
+// "entered" that connection straight from {46,99,2} -- a vehicle teleporting three tiles -- and
+// read connections[1] past the vector, which AddressSanitizer caught as a heap-buffer-overflow
+// under VehicleMission::setPathTo.
+// The segment map that produced it came out of a long campaign's damage and road building, so
+// it is rebuilt here directly on the same tiles. Every route must start at its origin and walk.
+static bool test_route_from_road_connected_at_its_far_end()
+{
+	auto &state = *g_state;
+	auto city = state.cities["CITYMAP_HUMAN"];
+	TEST_REQUIRE(city, "no CITYMAP_HUMAN city in gamestate");
+	const std::vector<Vec3<int>> roadTiles = {{46, 99, 2}, {46, 100, 2}, {46, 101, 2}};
+	const Vec3<int> farEnd = {46, 102, 2};
+	for (const auto &t : {roadTiles[0], roadTiles[1], roadTiles[2], farEnd})
+	{
+		auto scenery = city->map->getTile(t)->presentScenery;
+		TEST_REQUIRE(scenery && scenery->type->tile_type == SceneryTileType::TileType::Road,
+		             "expected a road tile at {0} in the extracted city", t);
+	}
+	const int roadID = (int)city->roadSegments.size();
+	const int farID = roadID + 1;
+	RoadSegment road(roadTiles[0], farID);
+	road.tilePosition.push_back(roadTiles[1]);
+	road.tilePosition.push_back(roadTiles[2]);
+	road.finalizeStats();
+	RoadSegment far(farEnd, roadID);
+	far.finalizeStats();
+	city->roadSegments.push_back(road);
+	city->roadSegments.push_back(far);
+	const auto &size = city->map->size;
+	auto index = [&](const Vec3<int> &t) { return t.z * size.x * size.y + t.y * size.x + t.x; };
+	for (const auto &t : roadTiles)
+	{
+		city->tileToRoadSegmentMap[index(t)] = roadID;
+	}
+	city->tileToRoadSegmentMap[index(farEnd)] = farID;
+
+	for (const auto &origin : roadTiles)
+	{
+		const auto path = city->findShortestPathUncached(origin, ROAD_ORIGIN);
+		TEST_REQUIRE(!path.empty() && path.front() == origin, "route from {0} does not start there",
+		             origin);
+		auto prev = path.front();
+		for (const auto &tile : path)
+		{
+			const auto d = tile - prev;
+			TEST_REQUIRE(std::abs(d.x) <= 1 && std::abs(d.y) <= 1 && std::abs(d.z) <= 1,
+			             "route from {0} jumps from {1} to {2}", origin, prev, tile);
+			prev = tile;
+		}
+		// Nothing past the far end leads on, so the route stops at the reachable tile nearest
+		// the destination, which lies north-west: the junction end.
+		TEST_CHECK(path.back() == roadTiles[0], "route from {0} should stop at {1}, got {2}",
+		           origin, roadTiles[0], path.back());
+	}
+	// Leave the city as the other cases expect it.
+	city->fillRoadSegmentMap(state);
+	return true;
+}
+
+// City::update walks only the scenery that is collapsing or falling (City::activeScenery), not all
+// of it. A collapse queued on a building part must still run: count down, then fall.
+static bool test_queued_collapse_still_falls()
+{
+	auto &state = *g_state;
+	auto city = state.cities["CITYMAP_HUMAN"];
+	TEST_REQUIRE(city, "no CITYMAP_HUMAN city in gamestate");
+	sp<Scenery> part;
+	for (const auto &s : city->scenery)
+	{
+		if (s && s->tileObject && s->building && s->isAlive() && s->initialPosition.z >= 4)
+		{
+			part = s;
+			break;
+		}
+	}
+	TEST_REQUIRE(part, "no standing building part above floor 3 to collapse");
+	part->queueCollapse();
+	TEST_REQUIRE(part->inActiveList, "a queued collapse puts the part on the active list");
+	bool fell = false;
+	for (int tick = 0; tick < 200 && !fell; tick++)
+	{
+		city->update(state, 1);
+		fell = part->falling || part->destroyed || !part->tileObject;
+	}
+	TEST_REQUIRE(fell, "a queued collapse never ran (ticks left {0})", part->ticksUntilCollapse);
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	config().addPositionalArgument("common", "Common gamestate to load");
@@ -182,9 +280,12 @@ int main(int argc, char **argv)
 	}
 
 	const int rc = runTestSuite({
+	    // First: the cases below sever the road at ROAD_ORIGIN, this one's destination.
+	    {"route_from_road_connected_at_its_far_end", test_route_from_road_connected_at_its_far_end},
 	    {"ground_vehicle_path_terminates_on_severed_road",
-	     test_ground_vehicle_path_terminates_on_severed_road},
+		 test_ground_vehicle_path_terminates_on_severed_road},
 	    {"ground_vehicle_order_does_not_crash", test_ground_vehicle_order_does_not_crash},
+	    {"queued_collapse_still_falls", test_queued_collapse_still_falls},
 	});
 	g_state.reset();
 	return rc;

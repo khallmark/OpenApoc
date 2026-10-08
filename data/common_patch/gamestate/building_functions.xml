@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- "Alien Buildings Destroyed" score per alien building function. UFO2P.EXE (ISO non-4) table at
+     VA 0x1304D8 / file 0x191B7C, ten int32 indexed by the building's function index (the
+     alien-building name order): 400 400 300 500 300 250 250 350 300 500. -->
+<building_functions>
+  <entry>
+    <key>BUILDINGFUNCTION_INCUBATOR_CHAMBER</key>
+    <value>
+      <destroyedScore>400</destroyedScore>
+    </value>
+  </entry>
+  <entry>
+    <key>BUILDINGFUNCTION_SPAWNING_CHAMBER</key>
+    <value>
+      <destroyedScore>400</destroyedScore>
+    </value>
+  </entry>
+  <entry>
+    <key>BUILDINGFUNCTION_FOOD_CHAMBER</key>
+    <value>
+      <destroyedScore>300</destroyedScore>
+    </value>
+  </entry>
+  <entry>
+    <key>BUILDINGFUNCTION_MEGAPOD_CHAMBER</key>
+    <value>
+      <destroyedScore>500</destroyedScore>
+    </value>
+  </entry>
+  <entry>
+    <key>BUILDINGFUNCTION_SLEEPING_CHAMBER</key>
+    <value>
+      <destroyedScore>300</destroyedScore>
+    </value>
+  </entry>
+  <entry>
+    <key>BUILDINGFUNCTION_ORGANIC_FACTORY</key>
+    <value>
+      <destroyedScore>250</destroyedScore>
+    </value>
+  </entry>
+  <entry>
+    <key>BUILDINGFUNCTION_ALIEN_FARM</key>
+    <value>
+      <destroyedScore>250</destroyedScore>
+    </value>
+  </entry>
+  <entry>
+    <key>BUILDINGFUNCTION_CONTROL_CHAMBER</key>
+    <value>
+      <destroyedScore>350</destroyedScore>
+    </value>
+  </entry>
+  <entry>
+    <key>BUILDINGFUNCTION_MAINTENANCE_FACTORY</key>
+    <value>
+      <destroyedScore>300</destroyedScore>
+    </value>
+  </entry>
+  <entry>
+    <key>BUILDINGFUNCTION_DIMENSION_GATE_GENERATOR</key>
+    <value>
+      <destroyedScore>500</destroyedScore>
+    </value>
+  </entry>
+</building_functions>

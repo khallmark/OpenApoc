@@ -1177,10 +1177,11 @@ void Battle::groupMove(GameState &state, std::list<StateRef<BattleUnit>> &select
 // Read by GS vehicle_census: how often ground routing runs and how hard it works.
 uint64_t cityPathCalls = 0, cityPathIterations = 0, cityPathFailures = 0, cityPathCacheHits = 0;
 
-std::list<Vec3<int>> City::findShortestPath(Vec3<int> origin, Vec3<int> destination,
-                                            const GroundVehicleTileHelper &canEnterTile
-                                            [[maybe_unused]],
-                                            bool approachOnly [[maybe_unused]], bool, bool, bool)
+const std::vector<Vec3<int>> &City::findShortestPath(Vec3<int> origin, Vec3<int> destination,
+                                                     const GroundVehicleTileHelper &canEnterTile
+                                                     [[maybe_unused]],
+                                                     bool approachOnly [[maybe_unused]], bool,
+                                                     bool, bool)
 {
 	cityPathCalls++;
 	const auto pack = [](const Vec3<int> &p)
@@ -1197,7 +1198,35 @@ std::list<Vec3<int>> City::findShortestPath(Vec3<int> origin, Vec3<int> destinat
 	{
 		routeCache.clear();
 	}
-	return routeCache.emplace(key, findShortestPathUncached(origin, destination)).first->second;
+	const auto route = findShortestPathUncached(origin, destination);
+	auto &cached = routeCache[key];
+	cached.assign(route.begin(), route.end());
+	return cached;
+}
+
+int City::connectEnd(const RoadSegment &seg, int otherID) const
+{
+	if (seg.length <= 1)
+	{
+		return 0;
+	}
+	// An ordinary road meets connections[0] at its first tile and connections[1] at its last.
+	if (seg.connections.size() >= 2)
+	{
+		return seg.connections[0] == otherID ? 0 : 1;
+	}
+	// A road cut by destroyed tiles can keep a single connection at either end, so find which
+	// end the other segment actually touches.
+	const auto &other = roadSegments[otherID];
+	for (const auto &end : {other.getFirst(), other.getLast()})
+	{
+		const auto d = end - seg.getFirst();
+		if (std::abs(d.x) <= 1 && std::abs(d.y) <= 1 && std::abs(d.z) <= 1)
+		{
+			return 0;
+		}
+	}
+	return 1;
 }
 
 std::list<Vec3<int>> City::findShortestPathUncached(Vec3<int> origin, Vec3<int> destination)
@@ -1247,15 +1276,25 @@ std::list<Vec3<int>> City::findShortestPathUncached(Vec3<int> origin, Vec3<int> 
 	// If starting in a road segment then try both connections for start nodes
 	if (originSeg.length > 1)
 	{
+		// The connection leaving each end, or -1 where the road just stops: a road cut by
+		// destroyed tiles can have one connection, at either end, or none.
+		int exitAt[2] = {-1, -1};
+		for (int c : originSeg.connections)
+		{
+			exitAt[connectEnd(originSeg, c)] = c;
+		}
 		auto pathToFront = originSeg.findPath(origin, originSeg.getFirst());
 		if (!pathToFront.empty() && pathToFront.back() == originSeg.getFirst())
 		{
 			visitetSegmentsC1[originID] = true;
+		}
+		if (exitAt[0] != -1 && !pathToFront.empty() && pathToFront.back() == originSeg.getFirst())
+		{
 			// Check if segment can be entered
 			// For non-roads check tile number 0
 			// For roads check based on where we came from
-			const auto &nextSeg = roadSegments[originSeg.connections[0]];
-			int intoConnect = nextSeg.length == 1 || nextSeg.connections[0] == originID ? 0 : 1;
+			const auto &nextSeg = roadSegments[exitAt[0]];
+			int intoConnect = connectEnd(nextSeg, originID);
 			// Entrance intact
 			if (nextSeg.getIntactByConnectID(intoConnect))
 			{
@@ -1263,7 +1302,7 @@ std::list<Vec3<int>> City::findShortestPathUncached(Vec3<int> origin, Vec3<int> 
 				auto secondNode = new RoadSegmentNode(
 				    pathToFront.size() - 1,
 				    GroundVehicleTileHelper::getDistanceStatic(intoTile, destination), startNode,
-				    originSeg.connections[0]);
+				    exitAt[0]);
 				nodesToDelete.push_back(secondNode);
 				fringe.emplace_back(secondNode);
 			}
@@ -1272,11 +1311,14 @@ std::list<Vec3<int>> City::findShortestPathUncached(Vec3<int> origin, Vec3<int> 
 		if (!pathToBack.empty() && pathToBack.back() == originSeg.getLast())
 		{
 			visitetSegmentsC2[originID] = true;
+		}
+		if (exitAt[1] != -1 && !pathToBack.empty() && pathToBack.back() == originSeg.getLast())
+		{
 			// Check if segment can be entered
 			// For non-roads check tile number 0
 			// For roads check based on where we came from
-			const auto &nextSeg = roadSegments[originSeg.connections[1]];
-			int intoConnect = nextSeg.length == 1 || nextSeg.connections[0] == originID ? 0 : 1;
+			const auto &nextSeg = roadSegments[exitAt[1]];
+			int intoConnect = connectEnd(nextSeg, originID);
 			// Entrance intact
 			if (nextSeg.getIntactByConnectID(intoConnect))
 			{
@@ -1284,7 +1326,7 @@ std::list<Vec3<int>> City::findShortestPathUncached(Vec3<int> origin, Vec3<int> 
 				auto secondNode = new RoadSegmentNode(
 				    pathToBack.size() - 1,
 				    GroundVehicleTileHelper::getDistanceStatic(intoTile, destination), startNode,
-				    originSeg.connections[1]);
+				    exitAt[1]);
 				nodesToDelete.push_back(secondNode);
 				fringe.emplace_back(secondNode);
 			}
@@ -1324,7 +1366,7 @@ std::list<Vec3<int>> City::findShortestPathUncached(Vec3<int> origin, Vec3<int> 
 		if (thisSeg.length > 1)
 		{
 			// Find out where we came from (assuming we have a proper segment map)
-			fromConnect = thisSeg.connections[0] == nodeToExpand->parentNode->segment ? 0 : 1;
+			fromConnect = connectEnd(thisSeg, nodeToExpand->parentNode->segment);
 		}
 		// If intersection or intact road - mark both exits
 		if (thisSeg.length == 1 || thisSeg.intact)
@@ -1417,7 +1459,7 @@ std::list<Vec3<int>> City::findShortestPathUncached(Vec3<int> origin, Vec3<int> 
 			// For non-roads check tile number 0
 			// For roads check based on where we came from
 			const auto &nextSeg = roadSegments[c];
-			int intoConnect = nextSeg.length == 1 || nextSeg.connections[0] == thisID ? 0 : 1;
+			int intoConnect = connectEnd(nextSeg, thisID);
 			// Entrance not intact
 			if (!nextSeg.getIntactByConnectID(intoConnect))
 			{
@@ -1475,7 +1517,7 @@ std::list<Vec3<int>> City::findShortestPathUncached(Vec3<int> origin, Vec3<int> 
 	// If road then path to road end
 	if (originSeg.length > 1 && !segmentPath.empty())
 	{
-		int toConnect = originSeg.connections[0] == segmentPath.front() ? 0 : 1;
+		int toConnect = connectEnd(originSeg, segmentPath.front());
 		auto pathToExit = originSeg.findPath(origin, originSeg.getByConnectID(toConnect));
 		for (auto &p : pathToExit)
 		{
@@ -1501,7 +1543,7 @@ std::list<Vec3<int>> City::findShortestPathUncached(Vec3<int> origin, Vec3<int> 
 	for (auto &segID : segmentPath)
 	{
 		auto &nextSeg = roadSegments[segID];
-		int intoConnect = nextSeg.length == 1 || nextSeg.connections[0] == thisID ? 0 : 1;
+		int intoConnect = connectEnd(nextSeg, thisID);
 		// If not last and not broken then path through
 		if (segID != lastID && nextSeg.intact)
 		{

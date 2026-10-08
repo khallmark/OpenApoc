@@ -415,8 +415,9 @@ again at -1783, both well short of -2400. Two causes, both self-inflicted:
 `AlertScreen` exposes its building and that building's current crew via `Stage::harnessDetail()`,
 so an alert whose building is already empty can be declined. `gs infiltrated` lists buildings that
 genuinely hold crew, plus the live government relation. Watch `gs funds` for
-`funding_terminated`, `margin_to_cutoff`, and the seven score buckets separately — the bleeding
-category is otherwise pure guesswork.
+`funding_terminated`, `margin_to_cutoff` (what next Monday tests: the finished weeks only),
+`margin_after_next` (adds this week's running score), and the eight score buckets separately — the
+bleeding category is otherwise pure guesswork.
 
 Measured contrast on two runs: answering everything gave `gov_relation -100`, score -1783,
 funding dead. Declining stale alerts gave `gov_relation +98`, score **+296**, funding intact.

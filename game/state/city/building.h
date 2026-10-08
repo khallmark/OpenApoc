@@ -50,6 +50,10 @@ class BuildingFunction : public StateObject<BuildingFunction>
 	int prestige = 0;
 	int infiltrationSpeed = 0;
 	int detectionWeight = 0;
+	// Score credited to X-COM when a raid destroys an alien building of this function: the
+	// "Alien Buildings Destroyed" category. UFO2P reads it from a table indexed by the building's
+	// function (UFO2P non-4 file 0x191B7C, read at file 0x1159D8); data/common_patch carries them.
+	int destroyedScore = 0;
 	StateRef<UfopaediaEntry> ufopaedia_entry;
 };
 

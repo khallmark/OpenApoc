@@ -30,9 +30,12 @@ WeeklyFundingScreen::~WeeklyFundingScreen() = default;
 
 void WeeklyFundingScreen::begin()
 {
-	// Validate that we can recieve funding
-	if (state->fundingTerminated)
+	// The simulation has already made this week's decision (GameState::weeklyPlayerUpdate). Show
+	// that record: re-deriving it here would read balances the transfer has already changed.
+	const auto &assessment = state->fundingAssessment;
+	if (assessment.outcome == FundingAssessment::Outcome::None)
 	{
+		// Funding ended in an earlier week; there is nothing left to assess.
 		fw().stageQueueCommand({StageCmd::Command::POP});
 		return;
 	}
@@ -44,12 +47,9 @@ void WeeklyFundingScreen::begin()
 	menuform->findControlTyped<Label>("TITLE")->setText(tr("WEEKLY FUNDING ASSESSMENT"));
 
 	UString ratingDescription;
+	int currentIncome = assessment.oldIncome;
 
-	const auto player = state->getPlayer();
-	const auto government = state->getGovernment();
-	int currentIncome = state->previousWeekIncome;
-
-	if (government->isRelatedTo(player) == Organisation::Relation::Hostile)
+	if (assessment.outcome == FundingAssessment::Outcome::CutForHostility)
 	{
 		ratingDescription =
 		    tr("The Senate has declared total hostility to X-COM and there will be no further "
@@ -58,7 +58,7 @@ void WeeklyFundingScreen::begin()
 
 		currentIncome = 0;
 	}
-	else if (state->totalScore.getTotal() < -2400)
+	else if (assessment.outcome == FundingAssessment::Outcome::CutForScore)
 	{
 		ratingDescription = tr("The Senate considers the performance of X-COM to be so abysmal "
 		                       "that it will cease funding from now on.");
@@ -67,8 +67,7 @@ void WeeklyFundingScreen::begin()
 	}
 	else
 	{
-		const int rating = state->weekScore.getTotal();
-		const int modifier = state->calculateFundingModifier();
+		const int rating = assessment.week.getTotal();
 
 		int neutralRatingThreshold = 0;
 		if (!state->weekly_rating_rules.empty())
@@ -77,13 +76,8 @@ void WeeklyFundingScreen::begin()
 			neutralRatingThreshold = state->weekly_rating_rules.back().first;
 		}
 
-		const int availableGovFunds = government->balance / 2;
-
-		if (availableGovFunds < currentIncome)
+		if (assessment.capAdjustment < 0)
 		{
-			// Reduce this week's income if government doesn't have enough funds
-			currentIncome = (availableGovFunds < 0) ? 0 : availableGovFunds;
-
 			ratingDescription = tr("Unfortunately the Senate has to limit X-COM funding due to the "
 			                       "poor state of government finances.");
 		}
@@ -104,20 +98,18 @@ void WeeklyFundingScreen::begin()
 			labelNextWeekIncome->Location.y -= 44;
 		}
 
-		// Income adjustment is still based on base player funding, not current one
-		const int adjustment = (modifier == 0) ? 0 : state->previousWeekIncome / modifier;
+		// The whole change, score tier and Government cap together, so the two lines add up.
+		const int adjustment = assessment.nextIncome - assessment.oldIncome;
 
 		labelAdjustment->setText(
 		    format(tr("Funding adjustment> ${0}"), state->formatCurrency(adjustment)));
-		labelNextWeekIncome->setText(format(tr("Income for next week> ${0}"),
-		                                    state->formatCurrency(currentIncome + adjustment)));
+		labelNextWeekIncome->setText(
+		    format(tr("Income for next week> ${0}"), state->formatCurrency(assessment.nextIncome)));
 	}
 
 	labelCurrentIncome->setText(
 	    format(tr("Current income> ${0}"), state->formatCurrency(currentIncome)));
 	labelRatingDescription->setText(ratingDescription);
-
-	state->weekScore.reset();
 }
 
 void WeeklyFundingScreen::pause() {}

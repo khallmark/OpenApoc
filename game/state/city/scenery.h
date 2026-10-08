@@ -89,6 +89,12 @@ class Scenery : public SupportedMapPart, public std::enable_shared_from_this<Sce
 	sp<Doodad> overlayDoodad;
 	StateRef<Building> building;
 	StateRef<City> city;
+	// Whether this is on its city's activeScenery list (see activate()).
+	bool inActiveList = false;
+
+	// Only a collapsing or falling scenery part has anything to do in update(). Put it on its
+	// city's short list of those, so City::update need not walk every part in the city.
+	void activate();
 
 	Scenery() = default;
 	~Scenery() = default;

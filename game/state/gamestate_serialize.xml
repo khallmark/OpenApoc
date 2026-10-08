@@ -520,6 +520,10 @@
     <member>subvert</member>
     <member>attackCrashed</member>
     <member>cancelled</member>
+    <member>blockedWaitTicks</member>
+    <member>boxedIn</member>
+    <member>vehicleBlocks</member>
+    <member>blockedStep</member>
   </object>
   <object>
     <name>AgentMission</name>
@@ -1107,6 +1111,7 @@
     <member>prestige</member>
     <member>infiltrationSpeed</member>
     <member>detectionWeight</member>
+    <member>destroyedScore</member>
     <member>ufopaedia_entry</member>
   </object>
   <object>
@@ -2183,5 +2188,6 @@
     <member>craftShotDownXCom</member>
     <member>incursions</member>
     <member>cityDamage</member>
+    <member>alienBuildingsDestroyed</member>
   </object>
 </openapoc_gamestate>

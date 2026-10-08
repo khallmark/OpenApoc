@@ -289,21 +289,21 @@ bool BattleUnitTileHelper::canEnterTile(Tile *from, Tile *to, bool allowJumping,
 		}
 		// Movement cost into the tiles
 		costInt = to->movementCostIn;
-		costInt = std::max(costInt, toX1->movementCostIn);
-		costInt = std::max(costInt, toY1->movementCostIn);
-		costInt = std::max(costInt, toXY1->movementCostIn);
-		costInt = std::max(costInt, toZ1->movementCostIn);
-		costInt = std::max(costInt, toXZ1->movementCostIn);
-		costInt = std::max(costInt, toYZ1->movementCostIn);
-		costInt = std::max(costInt, toXYZ1->movementCostIn);
+		costInt = std::max<int>(costInt, toX1->movementCostIn);
+		costInt = std::max<int>(costInt, toY1->movementCostIn);
+		costInt = std::max<int>(costInt, toXY1->movementCostIn);
+		costInt = std::max<int>(costInt, toZ1->movementCostIn);
+		costInt = std::max<int>(costInt, toXZ1->movementCostIn);
+		costInt = std::max<int>(costInt, toYZ1->movementCostIn);
+		costInt = std::max<int>(costInt, toXYZ1->movementCostIn);
 		// Movement cost into the walls of the tiles
-		costInt = std::max(costInt, to->movementCostLeft);
-		costInt = std::max(costInt, toX1->movementCostRight);
-		costInt = std::max(costInt, toY1->movementCostLeft);
-		costInt = std::max(costInt, toZ1->movementCostLeft);
-		costInt = std::max(costInt, toZ1->movementCostRight);
-		costInt = std::max(costInt, toXZ1->movementCostRight);
-		costInt = std::max(costInt, toYZ1->movementCostLeft);
+		costInt = std::max<int>(costInt, to->movementCostLeft);
+		costInt = std::max<int>(costInt, toX1->movementCostRight);
+		costInt = std::max<int>(costInt, toY1->movementCostLeft);
+		costInt = std::max<int>(costInt, toZ1->movementCostLeft);
+		costInt = std::max<int>(costInt, toZ1->movementCostRight);
+		costInt = std::max<int>(costInt, toXZ1->movementCostRight);
+		costInt = std::max<int>(costInt, toYZ1->movementCostLeft);
 		// Check for doors
 		doorInTheWay = doorInTheWay || to->closedDoorLeft;
 		doorInTheWay = doorInTheWay || to->closedDoorRight;
@@ -546,14 +546,14 @@ bool BattleUnitTileHelper::canEnterTile(Tile *from, Tile *to, bool allowJumping,
 
 				// STEP 06: [For large units if moving: down-right or up-left / SE or NW]
 				// Find highest movement cost amongst all walls we intersect
-				costInt = std::max(costInt, rightTopZ0->movementCostLeft);
-				costInt = std::max(costInt, rightBottomZ0->movementCostRight);
-				costInt = std::max(costInt, bottomLeftZ0->movementCostRight);
-				costInt = std::max(costInt, bottomRightZ0->movementCostLeft);
-				costInt = std::max(costInt, rightTopZ1->movementCostLeft);
-				costInt = std::max(costInt, rightBottomZ1->movementCostRight);
-				costInt = std::max(costInt, bottomLeftZ1->movementCostRight);
-				costInt = std::max(costInt, bottomRightZ1->movementCostLeft);
+				costInt = std::max<int>(costInt, rightTopZ0->movementCostLeft);
+				costInt = std::max<int>(costInt, rightBottomZ0->movementCostRight);
+				costInt = std::max<int>(costInt, bottomLeftZ0->movementCostRight);
+				costInt = std::max<int>(costInt, bottomRightZ0->movementCostLeft);
+				costInt = std::max<int>(costInt, rightTopZ1->movementCostLeft);
+				costInt = std::max<int>(costInt, rightBottomZ1->movementCostRight);
+				costInt = std::max<int>(costInt, bottomLeftZ1->movementCostRight);
+				costInt = std::max<int>(costInt, bottomRightZ1->movementCostLeft);
 				// Check door state
 				doorInTheWay = doorInTheWay || rightTopZ0->closedDoorLeft;
 				doorInTheWay = doorInTheWay || rightBottomZ0->closedDoorRight;
@@ -669,14 +669,14 @@ bool BattleUnitTileHelper::canEnterTile(Tile *from, Tile *to, bool allowJumping,
 
 				// STEP 06: [For large units if moving: down-left or up-right / NE or SW]
 				// Find highest movement cost amongst all walls we intersect
-				costInt = std::max(costInt, topZ0->movementCostLeft);
-				costInt = std::max(costInt, leftZ0->movementCostRight);
-				costInt = std::max(costInt, bottomRightZ0->movementCostLeft);
-				costInt = std::max(costInt, bottomRightZ0->movementCostRight);
-				costInt = std::max(costInt, topZ1->movementCostLeft);
-				costInt = std::max(costInt, leftZ1->movementCostRight);
-				costInt = std::max(costInt, bottomRightZ1->movementCostLeft);
-				costInt = std::max(costInt, bottomRightZ1->movementCostRight);
+				costInt = std::max<int>(costInt, topZ0->movementCostLeft);
+				costInt = std::max<int>(costInt, leftZ0->movementCostRight);
+				costInt = std::max<int>(costInt, bottomRightZ0->movementCostLeft);
+				costInt = std::max<int>(costInt, bottomRightZ0->movementCostRight);
+				costInt = std::max<int>(costInt, topZ1->movementCostLeft);
+				costInt = std::max<int>(costInt, leftZ1->movementCostRight);
+				costInt = std::max<int>(costInt, bottomRightZ1->movementCostLeft);
+				costInt = std::max<int>(costInt, bottomRightZ1->movementCostRight);
 				// Check door state
 				doorInTheWay = doorInTheWay || topZ0->closedDoorLeft;
 				doorInTheWay = doorInTheWay || leftZ0->closedDoorRight;
@@ -767,10 +767,10 @@ bool BattleUnitTileHelper::canEnterTile(Tile *from, Tile *to, bool allowJumping,
 
 				// STEP 06: [For large units if moving along X]
 				// Find highest movement cost amongst all walls we intersect
-				costInt = std::max(costInt, topZ0->movementCostLeft);
-				costInt = std::max(costInt, bottomz0->movementCostLeft);
-				costInt = std::max(costInt, topZ1->movementCostLeft);
-				costInt = std::max(costInt, bottomZ1->movementCostLeft);
+				costInt = std::max<int>(costInt, topZ0->movementCostLeft);
+				costInt = std::max<int>(costInt, bottomz0->movementCostLeft);
+				costInt = std::max<int>(costInt, topZ1->movementCostLeft);
+				costInt = std::max<int>(costInt, bottomZ1->movementCostLeft);
 				// Check door state
 				doorInTheWay = doorInTheWay || topZ0->closedDoorLeft;
 				doorInTheWay = doorInTheWay || bottomz0->closedDoorLeft;
@@ -807,10 +807,10 @@ bool BattleUnitTileHelper::canEnterTile(Tile *from, Tile *to, bool allowJumping,
 
 				// STEP 06: [For large units if moving along Y]
 				// Find highest movement cost amongst all walls we intersect
-				costInt = std::max(costInt, leftZ0->movementCostRight);
-				costInt = std::max(costInt, rightZ0->movementCostRight);
-				costInt = std::max(costInt, leftZ1->movementCostRight);
-				costInt = std::max(costInt, rightZ1->movementCostRight);
+				costInt = std::max<int>(costInt, leftZ0->movementCostRight);
+				costInt = std::max<int>(costInt, rightZ0->movementCostRight);
+				costInt = std::max<int>(costInt, leftZ1->movementCostRight);
+				costInt = std::max<int>(costInt, rightZ1->movementCostRight);
 				// Check door state
 				doorInTheWay = doorInTheWay || leftZ0->closedDoorRight;
 				doorInTheWay = doorInTheWay || rightZ0->closedDoorRight;
@@ -892,10 +892,10 @@ bool BattleUnitTileHelper::canEnterTile(Tile *from, Tile *to, bool allowJumping,
 
 			// STEP 06: [For small units if moving diagonally]
 			// Find highest movement cost amongst all walls we intersect
-			costInt = std::max(costInt, topRight->movementCostLeft);
-			costInt = std::max(costInt, bottomLeft->movementCostRight);
-			costInt = std::max(costInt, bottomRight->movementCostLeft);
-			costInt = std::max(costInt, bottomRight->movementCostRight);
+			costInt = std::max<int>(costInt, topRight->movementCostLeft);
+			costInt = std::max<int>(costInt, bottomLeft->movementCostRight);
+			costInt = std::max<int>(costInt, bottomRight->movementCostLeft);
+			costInt = std::max<int>(costInt, bottomRight->movementCostRight);
 			// Check door state
 			doorInTheWay = doorInTheWay || topRight->closedDoorLeft;
 			doorInTheWay = doorInTheWay || bottomLeft->closedDoorRight;
@@ -972,7 +972,7 @@ bool BattleUnitTileHelper::canEnterTile(Tile *from, Tile *to, bool allowJumping,
 			// STEP 06: [For small units if moving along X]
 			if (fromPos.x != toPos.x)
 			{
-				costInt = std::max(costInt, bottomRight->movementCostLeft);
+				costInt = std::max<int>(costInt, bottomRight->movementCostLeft);
 				doorInTheWay = doorInTheWay || bottomRight->closedDoorLeft;
 
 				// Do not have to check for units because we already did in STEP 01
@@ -991,7 +991,7 @@ bool BattleUnitTileHelper::canEnterTile(Tile *from, Tile *to, bool allowJumping,
 			// STEP 06: [For small units if moving along Y]
 			else if (fromPos.y != toPos.y)
 			{
-				costInt = std::max(costInt, bottomRight->movementCostRight);
+				costInt = std::max<int>(costInt, bottomRight->movementCostRight);
 				doorInTheWay = doorInTheWay || bottomRight->closedDoorRight;
 
 				// Do not have to check for units because we already did in STEP 01

@@ -54,6 +54,7 @@ add_openapoc_test(test_crash_handler)
 add_openapoc_test(test_alien_behaviour_option)
 add_openapoc_test(test_game_event_pause)
 add_openapoc_test(test_city_damage_score)
+add_openapoc_test(test_weekly_funding)
 add_openapoc_test(test_gametime)
 add_openapoc_test(test_vec)
 add_openapoc_test(test_line)
@@ -90,6 +91,9 @@ add_openapoc_test(test_battle_large_unit ARGS
 add_openapoc_test(test_display_size)
 add_openapoc_test(test_ui_animation)
 add_openapoc_test(test_ground_vehicle_path ARGS
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
+add_openapoc_test(test_ground_vehicle_traffic ARGS
 		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
 		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
 add_openapoc_test(test_psionics ARGS

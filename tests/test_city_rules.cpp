@@ -3039,6 +3039,84 @@ static bool test_alien_building_objectives_present()
 	return true;
 }
 
+// UFO2P starts a base defence from three places only: an infiltration UFO landing on the base, a
+// subversion UFO reaching a base the aliens already know, and a hostile organisation's attack (the
+// kind-5 callers of FUN_000ac08c). Aliens spreading into the base's building (FUN_0006f7f8) only
+// expose it, and aliens detected inside it (FUN_0006f964) raise an ordinary alert. OpenApoc
+// started a defence from both -- and deleted an unmanned base outright.
+static bool test_aliens_reaching_a_base_do_not_start_a_defence()
+{
+	auto &state = *g_state;
+	TEST_REQUIRE(!state.player_bases.empty(), "no player base");
+	const auto baseId = state.player_bases.begin()->first;
+	auto base = state.player_bases.begin()->second;
+	auto baseBuilding = base->building;
+	// An Anthropod moves on 33% + d30 of its rolls (agent_types movementPercent).
+	StateRef<AgentType> alien = {&state, "AGENTTYPE_ANTHROPOD"};
+	TEST_REQUIRE(alien && alien->movementPercent > 0, "no Anthropod agent type that moves");
+
+	// An unmanned base: the case OpenApoc used to delete.
+	const auto savedAgents = baseBuilding->currentAgents;
+	const auto savedVehicles = baseBuilding->currentVehicles;
+	const bool savedKnown = base->knownToAliens;
+	baseBuilding->currentAgents.clear();
+	baseBuilding->currentVehicles.clear();
+	TEST_REQUIRE(!baseBuilding->occupied(), "could not empty the base building");
+
+	std::vector<StateRef<Building>> refs;
+	std::vector<Rect<int>> bounds;
+	std::vector<bool> intact;
+	for (auto &b : baseBuilding->city->buildings)
+	{
+		refs.push_back(b);
+		bounds.push_back(b->bounds);
+		intact.push_back(b->isAlive());
+	}
+	bool movedIn = false;
+	std::vector<StateRef<Building>> touched;
+	for (int attempt = 0; attempt < 400 && !movedIn; attempt++)
+	{
+		for (int i : Building::rankNearbyIntact(bounds, intact,
+		                                        Building::boundsCenter(baseBuilding->bounds)))
+		{
+			auto neighbour = refs[static_cast<size_t>(i)];
+			if (neighbour == baseBuilding)
+			{
+				continue;
+			}
+			touched.push_back(neighbour);
+			neighbour->current_crew[alien] = 10;
+			neighbour->alienMovement(state);
+			if (baseBuilding->current_crew[alien] > 0)
+			{
+				movedIn = true;
+				break;
+			}
+		}
+	}
+	TEST_REQUIRE(movedIn, "no alien ever moved into the base building");
+	TEST_REQUIRE(state.player_bases.find(baseId) != state.player_bases.end() && baseBuilding->base,
+	             "aliens spreading into an unmanned base deleted it");
+
+	baseBuilding->ticksDetectionTimeOut = 0;
+	baseBuilding->detected = false;
+	baseBuilding->detect(state, true);
+	TEST_REQUIRE(baseBuilding->detected, "aliens inside the base building were not detected");
+	TEST_REQUIRE(state.player_bases.find(baseId) != state.player_bases.end() && baseBuilding->base,
+	             "detecting aliens in an unmanned base deleted it");
+
+	for (auto &b : touched)
+	{
+		b->current_crew[alien] = 0;
+	}
+	baseBuilding->current_crew[alien] = 0;
+	baseBuilding->currentAgents = savedAgents;
+	baseBuilding->currentVehicles = savedVehicles;
+	baseBuilding->detected = false;
+	base->knownToAliens = savedKnown;
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	config().addPositionalArgument("common", "Common gamestate to load");
@@ -3123,5 +3201,8 @@ int main(int argc, char **argv)
 	    {"base_destroy_facility_errors", test_base_destroy_facility_errors},
 	    {"alien_building_briefings_extracted", test_alien_building_briefings_extracted},
 	    {"alien_building_objectives_present", test_alien_building_objectives_present},
+	    // Last: it advances the RNG and moves alien crews about.
+	    {"aliens_reaching_a_base_do_not_start_a_defence",
+	     test_aliens_reaching_a_base_do_not_start_a_defence},
 	});
 }

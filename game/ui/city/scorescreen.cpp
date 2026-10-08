@@ -59,39 +59,29 @@ void ScoreScreen::setScoreMode()
 	{
 		formScoreFilled = true;
 
-		formScore->findControlTyped<Label>("TACTICAL_W")
-		    ->setText(format("{0}", state->weekScore.tacticalMissions));
-		formScore->findControlTyped<Label>("RESEARCH_W")
-		    ->setText(format("{0}", state->weekScore.researchCompleted));
-		formScore->findControlTyped<Label>("ALIEN_W")->setText(
-		    format("{0}", state->weekScore.alienIncidents));
-		formScore->findControlTyped<Label>("UFO_SHOTDOWN_W")
-		    ->setText(format("{0}", state->weekScore.craftShotDownUFO));
-		formScore->findControlTyped<Label>("CRAFT_SHOTDOWN_W")
-		    ->setText(format("{0}", state->weekScore.craftShotDownXCom));
-		formScore->findControlTyped<Label>("INCURSIONS_W")
-		    ->setText(format("{0}", state->weekScore.incursions));
-		formScore->findControlTyped<Label>("DAMAGE_W")
-		    ->setText(format("{0}", state->weekScore.cityDamage));
-		formScore->findControlTyped<Label>("TOTAL_W")->setText(
-		    format("{0}", state->weekScore.getTotal()));
-
-		formScore->findControlTyped<Label>("TACTICAL_T")
-		    ->setText(format("{0}", state->totalScore.tacticalMissions));
-		formScore->findControlTyped<Label>("RESEARCH_T")
-		    ->setText(format("{0}", state->totalScore.researchCompleted));
-		formScore->findControlTyped<Label>("ALIEN_T")->setText(
-		    format("{0}", state->totalScore.alienIncidents));
-		formScore->findControlTyped<Label>("UFO_SHOTDOWN_T")
-		    ->setText(format("{0}", state->totalScore.craftShotDownUFO));
-		formScore->findControlTyped<Label>("CRAFT_SHOTDOWN_T")
-		    ->setText(format("{0}", state->totalScore.craftShotDownXCom));
-		formScore->findControlTyped<Label>("INCURSIONS_T")
-		    ->setText(format("{0}", state->totalScore.incursions));
-		formScore->findControlTyped<Label>("DAMAGE_T")
-		    ->setText(format("{0}", state->totalScore.cityDamage));
-		formScore->findControlTyped<Label>("TOTAL_T")->setText(
-		    format("{0}", state->totalScore.getTotal()));
+		// After a weekly assessment the week has already rolled over; show the week that was
+		// assessed, not the empty one that has just begun.
+		const GameScore &week = isWeeklyUpkeep ? state->fundingAssessment.week : state->weekScore;
+		const GameScore &total = state->totalScore;
+		const std::pair<const char *, int GameScore::*> rows[] = {
+		    {"TACTICAL", &GameScore::tacticalMissions},
+		    {"RESEARCH", &GameScore::researchCompleted},
+		    {"ALIEN", &GameScore::alienIncidents},
+		    {"UFO_SHOTDOWN", &GameScore::craftShotDownUFO},
+		    {"CRAFT_SHOTDOWN", &GameScore::craftShotDownXCom},
+		    {"INCURSIONS", &GameScore::incursions},
+		    {"DAMAGE", &GameScore::cityDamage},
+		    {"ALIEN_BUILDINGS", &GameScore::alienBuildingsDestroyed},
+		};
+		for (const auto &[row, field] : rows)
+		{
+			formScore->findControlTyped<Label>(format("{0}_W", row))
+			    ->setText(format("{0}", week.*field));
+			formScore->findControlTyped<Label>(format("{0}_T", row))
+			    ->setText(format("{0}", total.*field));
+		}
+		formScore->findControlTyped<Label>("TOTAL_W")->setText(format("{0}", week.getTotal()));
+		formScore->findControlTyped<Label>("TOTAL_T")->setText(format("{0}", total.getTotal()));
 	}
 
 	title->setText(tr("SCORE"));
@@ -171,7 +161,11 @@ void ScoreScreen::setFinanceMode()
 		{
 			for (auto &f : b.second->facilities)
 			{
-				basesCosts += f->type->weeklyCost;
+				// Facilities under construction pay no upkeep (GameState::weeklyPlayerUpdate).
+				if (f->buildTime == 0)
+				{
+					basesCosts += f->type->weeklyCost;
+				}
 			}
 		}
 		formFinance->findControlTyped<Label>("BASES_TOTAL_W")

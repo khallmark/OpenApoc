@@ -74,12 +74,19 @@ void City::initCity(GameState &state)
 	}
 	this->map.reset(new TileMap(this->size, VELOCITY_SCALE_CITY,
 	                            {VOXEL_X_CITY, VOXEL_Y_CITY, VOXEL_Z_CITY}, layerMap));
+	activeScenery.clear();
 	for (auto &s : this->scenery)
 	{
 		s->city = {&state, id};
+		s->inActiveList = false;
 		if (!s->destroyed)
 		{
 			this->map->addObjectToMap(s);
+		}
+		// A save can be taken mid-collapse.
+		if (s->ticksUntilCollapse > 0 || s->falling)
+		{
+			s->activate();
 		}
 		if (!s->building)
 		{
@@ -294,9 +301,21 @@ void City::update(GameState &state, unsigned int ticks)
 		std::get<0>(p)->die(state, std::get<1>(p), std::get<2>(p));
 	}
 
-	for (auto &s : this->scenery)
+	// Only collapsing or falling scenery changes on its own. Walking all of a city's scenery
+	// every tick to find them was a seventh of the simulation's time.
+	auto active = std::move(activeScenery);
+	activeScenery.clear();
+	for (auto &s : active)
+	{
+		s->inActiveList = false;
+	}
+	for (auto &s : active)
 	{
 		s->update(state, ticks);
+		if (s->tileObject && (s->ticksUntilCollapse > 0 || s->falling))
+		{
+			s->activate();
+		}
 	}
 	for (auto it = this->doodads.begin(); it != this->doodads.end();)
 	{
@@ -939,6 +958,7 @@ sp<Vehicle> City::createVehicle(GameState &state, StateRef<VehicleType> type,
 	// vehicle table has the entry before calling it
 	UString vID = Vehicle::generateObjectID(state);
 	state.vehicles[vID] = v;
+	state.vehiclesChanged();
 
 	return v;
 }

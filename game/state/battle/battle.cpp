@@ -3578,6 +3578,13 @@ void Battle::exitBattle(GameState &state)
 				{
 					u->forceComplete(&state);
 				}
+				// UFO2P credits the building's own value to "Alien Buildings Destroyed", apart
+				// from the tactical score the battle itself earned (UFO2P non-4 file 0x1159E4).
+				if (building->function)
+				{
+					state.weekScore.alienBuildingsDestroyed += building->function->destroyedScore;
+					state.totalScore.alienBuildingsDestroyed += building->function->destroyedScore;
+				}
 				victory = building->victory;
 				building->collapse(state);
 				for (auto v : returningVehicles)

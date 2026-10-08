@@ -37,6 +37,7 @@
 #include "game/state/tilemap/tilemap.h"
 #include "game/state/tilemap/tileobject_vehicle.h"
 #include "library/strings_format.h"
+#include <algorithm>
 #include <ctime>
 #include <random>
 
@@ -1177,19 +1178,26 @@ bool GameState::canTurbo() const
 	{
 		return false;
 	}
-	for (auto &v : this->vehicles)
+	// The city's StateRef is compared by object and hostility decided once per owner: this runs
+	// every frame, and comparing StateRefs compares id strings.
+	const City *thisCity = &*this->current_city;
+	const auto player = this->getPlayer();
+	for (const auto &group : this->getVehiclesByOwner())
 	{
-		if (!v.second->isDead() && v.second->city == this->current_city &&
-		    v.second->tileObject != nullptr)
+		const bool hostileOwner = group.vehicles.front().second->owner->isRelatedTo(player) ==
+		                          Organisation::Relation::Hostile;
+		for (const auto &entry : group.vehicles)
 		{
-			if (v.second->type->aggressiveness > 0 &&
-			    v.second->owner->isRelatedTo(this->getPlayer()) ==
-			        Organisation::Relation::Hostile &&
-			    !v.second->crashed)
+			const auto &v = entry.second;
+			if (v->isDead() || !v->city || &*v->city != thisCity || v->tileObject == nullptr)
+			{
+				continue;
+			}
+			if (hostileOwner && v->type->aggressiveness > 0 && !v->crashed)
 			{
 				return false;
 			}
-			for (auto &m : v.second->missions)
+			for (auto &m : v->missions)
 			{
 				if (m.type == VehicleMission::MissionType::AttackBuilding ||
 				    m.type == VehicleMission::MissionType::AttackVehicle)
@@ -1210,6 +1218,7 @@ void OpenApoc::GameState::cleanUpDeathNote()
 	// Any additional death notes should processed here.
 	if (!vehiclesDeathNote.empty())
 	{
+		vehiclesChanged();
 		for (auto &name : this->vehiclesDeathNote)
 		{
 			vehicles.erase(name);
@@ -1297,6 +1306,28 @@ void OpenApoc::GameState::cleanUpDeathNote()
 	}
 }
 
+const std::vector<GameState::OwnedVehicles> &GameState::getVehiclesByOwner() const
+{
+	if (vehiclesByOwnerCount != vehicles.size())
+	{
+		vehiclesByOwner.clear();
+		unsigned index = 0;
+		for (const auto &[id, vehicle] : vehicles)
+		{
+			const Organisation *owner = vehicle->owner.get();
+			auto group = std::find_if(vehiclesByOwner.begin(), vehiclesByOwner.end(),
+			                          [owner](const OwnedVehicles &g) { return g.owner == owner; });
+			if (group == vehiclesByOwner.end())
+			{
+				group = vehiclesByOwner.insert(group, OwnedVehicles{owner, {}});
+			}
+			group->vehicles.emplace_back(index++, vehicle);
+		}
+		vehiclesByOwnerCount = vehicles.size();
+	}
+	return vehiclesByOwner;
+}
+
 void GameState::update(unsigned int ticks)
 {
 	if (this->current_battle)
@@ -1335,7 +1366,9 @@ void GameState::update(unsigned int ticks)
 		{
 			if (v.second->city == current_city)
 			{
-				auto vehicleMission = v.second->missions;
+				// A reference, not a copy: this runs for every vehicle every tick, and copying the
+				// list copied each mission's whole planned path just to look at the last one.
+				const auto &vehicleMission = v.second->missions;
 				if (!vehicleMission.empty() &&
 				    vehicleMission.back().type == VehicleMission::MissionType::AttackVehicle &&
 				    (vehicleMission.back().targetVehicle == nullptr ||
@@ -1731,38 +1764,76 @@ void GameState::updateEndOfWeek(bool gameStart)
 
 void GameState::weeklyPlayerUpdate()
 {
-	// Player government income
+	// Government funding, as UFO2P.EXE assesses it (non-4 file 0xF6880), after every
+	// organisation, the Government included, has been paid this week (updateOrgFinances).
+	// docs/original-game/findings/weekly-funding.md has the instruction-level evidence.
+	const int weekTotal = weekScore.getTotal();
+	// The cutoff tests the weeks before this one (file 0xF6FBF compares ECX, the previous-weeks
+	// sum, never H + W). A first bad week only cuts the income; the week after it ends funding.
+	const int previousWeeks = totalScore.getTotal() - weekTotal;
+
+	fundingAssessment = {};
+	fundingAssessment.week = weekScore;
+	fundingAssessment.previousWeeksScore = previousWeeks;
+
 	if (!fundingTerminated)
 	{
-		if (government->isRelatedTo(player) == Organisation::Relation::Hostile ||
-		    totalScore.getTotal() < -2400)
+		const int oldIncome = player->income;
+		previousWeekIncome = oldIncome;
+		fundingAssessment.oldIncome = oldIncome;
+
+		// The old income F is paid first, unless the balance already holds two billion
+		// (file 0xF6AA8: CMP EAX,0x77359400; JGE skips the credit, it does not saturate).
+		if (player->balance < 2000000000)
 		{
-			fundingTerminated = true;
+			player->balance += oldIncome;
+		}
+
+		const bool hostile = government->isRelatedTo(player) == Organisation::Relation::Hostile;
+		if (hostile || previousWeeks < -2400)
+		{
+			// File 0xF7090 takes this week's payment back unconditionally; the latch is permanent.
+			player->balance -= oldIncome;
 			player->income = 0;
+			fundingTerminated = true;
+			fundingAssessment.outcome = hostile ? FundingAssessment::Outcome::CutForHostility
+			                                    : FundingAssessment::Outcome::CutForScore;
 		}
 		else
 		{
-			int income = player->income;
-			previousWeekIncome = player->income;
-
-			// Reduce this week's income if government doesn't have enough funds
+			// The score tier adjusts F; then the next income is capped at half the Government's
+			// balance (file 0xF6FD5) and the Government is debited that *next* income (file
+			// 0xF70B7). The cap persists: a Government that recovers does not restore the old
+			// income.
+			const int modifier = calculateFundingModifier();
+			int scoreAdjustment = (modifier == 0) ? 0 : oldIncome / modifier;
+			int capAdjustment = 0;
 			const int availableGovFunds = government->balance / 2;
-			if (availableGovFunds < income)
+			if (availableGovFunds <= 0)
 			{
-				income = (availableGovFunds < 0) ? 0 : availableGovFunds;
+				// File 0xF7025: no funds at all clears the score adjustment and cuts everything.
+				scoreAdjustment = 0;
+				capAdjustment = -oldIncome;
 			}
-
-			// Actual money transfer
-			player->balance += income;
-			government->balance -= income;
-
-			const int fundingModifier = calculateFundingModifier();
-			if (fundingModifier != 0)
+			else if (oldIncome + scoreAdjustment > availableGovFunds)
 			{
-				player->income += player->income / fundingModifier;
+				capAdjustment = availableGovFunds - (oldIncome + scoreAdjustment);
 			}
+			const int nextIncome = std::max(0, oldIncome + scoreAdjustment + capAdjustment);
+			player->income = nextIncome;
+			government->balance -= nextIncome;
+
+			fundingAssessment.outcome = FundingAssessment::Outcome::Assessed;
+			fundingAssessment.scoreAdjustment = scoreAdjustment;
+			fundingAssessment.capAdjustment = capAdjustment;
+			fundingAssessment.nextIncome = nextIncome;
 		}
 	}
+
+	// The week's score rolls over into the running total here, as the original does (file 0xFA234)
+	// at the same Monday midnight -- also after funding has ended, when there is nothing left to
+	// assess.
+	weekScore.reset();
 
 	// Player overheads: salary and base upkeep
 	int totalSalary = 0;
@@ -1783,7 +1854,11 @@ void GameState::weeklyPlayerUpdate()
 	{
 		for (const auto &f : b.second->facilities)
 		{
-			basesCosts += f->type->weeklyCost;
+			// UFO2P non-4 file 0xFB211: a facility still under construction pays no upkeep.
+			if (f->buildTime == 0)
+			{
+				basesCosts += f->type->weeklyCost;
+			}
 		}
 	}
 	player->balance = player->balance - totalSalary - basesCosts;
@@ -2088,7 +2163,7 @@ uint64_t getNextObjectID(GameState &state, const UString &objectPrefix)
 int GameScore::getTotal() const
 {
 	return tacticalMissions + researchCompleted + alienIncidents + craftShotDownUFO +
-	       craftShotDownXCom + incursions + cityDamage;
+	       craftShotDownXCom + incursions + cityDamage + alienBuildingsDestroyed;
 }
 
 void GameScore::reset()
@@ -2100,6 +2175,7 @@ void GameScore::reset()
 	craftShotDownXCom = 0;
 	incursions = 0;
 	cityDamage = 0;
+	alienBuildingsDestroyed = 0;
 }
 
 void GameState::loadMods()

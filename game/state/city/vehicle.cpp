@@ -37,6 +37,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/vector_angle.hpp>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <random>
@@ -47,6 +48,30 @@ namespace OpenApoc
 namespace
 {
 static const float M_2xPI = 2.0f * M_PI;
+// Walks a vehicle's equipment as the VEquipmentType range that VehicleType's stat templates take,
+// so a stat query (getSpeed runs every tick for every flyer) doesn't build a list to do it.
+class EquipmentTypeIterator
+{
+  public:
+	using iterator_category = std::forward_iterator_tag;
+	using value_type = sp<VEquipmentType>;
+	using difference_type = std::ptrdiff_t;
+	using pointer = const sp<VEquipmentType> *;
+	using reference = sp<VEquipmentType>;
+
+	explicit EquipmentTypeIterator(std::list<sp<VEquipment>>::const_iterator it) : it(it) {}
+	sp<VEquipmentType> operator*() const { return (*it)->type.getSp(); }
+	EquipmentTypeIterator &operator++()
+	{
+		++it;
+		return *this;
+	}
+	bool operator==(const EquipmentTypeIterator &other) const { return it == other.it; }
+	bool operator!=(const EquipmentTypeIterator &other) const { return it != other.it; }
+
+  private:
+	std::list<sp<VEquipment>>::const_iterator it;
+};
 float xyToFacing(const Vec2<float> &xy)
 {
 	float a1 = acosf(-xy.y);
@@ -2235,6 +2260,12 @@ void Vehicle::update(GameState &state, unsigned int ticks)
 	{
 		this->missions.front().update(state, *this, ticks);
 	}
+	if (stranded)
+	{
+		LogInfo("{0} has no road to where it is going: removed", name);
+		die(state, true);
+		return;
+	}
 
 	popFinishedMissions(state);
 
@@ -2797,63 +2828,78 @@ sp<TileObjectVehicle> Vehicle::findClosestEnemy(GameState &state, sp<TileObjectV
 	// Find the closest enemy within the firing arc
 	float closestEnemyRange = std::numeric_limits<float>::max();
 	sp<TileObjectVehicle> closestEnemy;
-	for (auto &pair : state.vehicles)
+	// Of equally close enemies the first in `vehicles` order wins, as when this walked that map.
+	unsigned closestEnemyIndex = 0;
+	// Both are the same for every vehicle examined; decide them once rather than once a vehicle.
+	const bool playerOwned = this->owner == state.getPlayer();
+	const City *myCity = this->city ? &*this->city : nullptr;
+	// Hostility depends only on the other vehicle's owner: a city holds hundreds of vehicles, most
+	// parked in buildings, but a few dozen organisations. Decide it once per owner.
+	for (const auto &group : state.getVehiclesByOwner())
 	{
-		auto otherVehicle = pair.second;
-		if (otherVehicle.get() == this)
-		{
-			/* Can't fire at yourself */
-			continue;
-		}
-		if (otherVehicle->crashed || otherVehicle->falling || otherVehicle->sliding)
-		{
-			// Can't auto-fire at crashed vehicles
-			continue;
-		}
-		if (otherVehicle->type->aggressiveness == 0 && this->owner == state.getPlayer())
-		{
-			// No auto-acquiring of non-aggressive vehicles
-			continue;
-		}
-		if (otherVehicle->city != this->city)
-		{
-			/* Can't fire on things a world away */
-			continue;
-		}
-		if (this->owner->isRelatedTo(otherVehicle->owner) != Organisation::Relation::Hostile)
+		if (this->owner->isRelatedTo(group.vehicles.front().second->owner) !=
+		    Organisation::Relation::Hostile)
 		{
 			/* Not hostile, skip */
 			continue;
 		}
-		auto otherVehicleTile = otherVehicle->tileObject;
-		if (!otherVehicleTile)
+		for (const auto &[index, otherVehicle] : group.vehicles)
 		{
-			/* Not in the map, ignore */
-			continue;
-		}
-		// Check firing arc
-		if (type->type != VehicleType::Type::UFO && (arc.x < 8 || arc.y < 8))
-		{
-			auto facing = type->directionToVector(direction);
-			auto vecToTarget = otherVehicleTile->getPosition() - position;
-			float angleXY = glm::angle(glm::normalize(Vec2<float>{facing.x, facing.y}),
-			                           glm::normalize(Vec2<float>{vecToTarget.x, vecToTarget.y}));
-			float vecToTargetXY =
-			    sqrtf(vecToTarget.x * vecToTarget.x + vecToTarget.y * vecToTarget.y);
-			float angleZ = glm::angle(Vec2<float>{1.0f, 0.0f},
-			                          glm::normalize(Vec2<float>{vecToTargetXY, vecToTarget.z}));
-			if (angleXY > (float)arc.x * (float)M_PI / 8.0f ||
-			    angleZ > (float)arc.y * (float)M_PI / 8.0f)
+			if (otherVehicle.get() == this)
 			{
+				/* Can't fire at yourself */
 				continue;
 			}
-		}
-		// Finally add closest
-		float distance = vehicleTile->getDistanceTo(otherVehicleTile);
-		if (distance < closestEnemyRange)
-		{
-			closestEnemyRange = distance;
-			closestEnemy = otherVehicleTile;
+			if (otherVehicle->crashed || otherVehicle->falling || otherVehicle->sliding)
+			{
+				// Can't auto-fire at crashed vehicles
+				continue;
+			}
+			if (otherVehicle->type->aggressiveness == 0 && playerOwned)
+			{
+				// No auto-acquiring of non-aggressive vehicles
+				continue;
+			}
+			// The same city, compared by object rather than by StateRef, which compares id strings.
+			if (!otherVehicle->city || &*otherVehicle->city != myCity)
+			{
+				/* Can't fire on things a world away */
+				continue;
+			}
+			auto otherVehicleTile = otherVehicle->tileObject;
+			if (!otherVehicleTile)
+			{
+				/* Not in the map, ignore */
+				continue;
+			}
+			// Check firing arc
+			if (type->type != VehicleType::Type::UFO && (arc.x < 8 || arc.y < 8))
+			{
+				auto facing = type->directionToVector(direction);
+				auto vecToTarget = otherVehicleTile->getPosition() - position;
+				float angleXY =
+				    glm::angle(glm::normalize(Vec2<float>{facing.x, facing.y}),
+				               glm::normalize(Vec2<float>{vecToTarget.x, vecToTarget.y}));
+				float vecToTargetXY =
+				    sqrtf(vecToTarget.x * vecToTarget.x + vecToTarget.y * vecToTarget.y);
+				float angleZ =
+				    glm::angle(Vec2<float>{1.0f, 0.0f},
+				               glm::normalize(Vec2<float>{vecToTargetXY, vecToTarget.z}));
+				if (angleXY > (float)arc.x * (float)M_PI / 8.0f ||
+				    angleZ > (float)arc.y * (float)M_PI / 8.0f)
+				{
+					continue;
+				}
+			}
+			// Finally add closest
+			float distance = vehicleTile->getDistanceTo(otherVehicleTile);
+			if (distance < closestEnemyRange ||
+			    (distance == closestEnemyRange && closestEnemy && index < closestEnemyIndex))
+			{
+				closestEnemyRange = distance;
+				closestEnemy = otherVehicleTile;
+				closestEnemyIndex = index;
+			}
 		}
 	}
 	return closestEnemy;
@@ -3300,17 +3346,17 @@ Vehicle::addMission(GameState &state, VehicleMission mission, bool toBack)
 	    (missions.front().type == VehicleMission::MissionType::Land ||
 	     missions.front().type == VehicleMission::MissionType::TakeOff))
 	{
-		return missions.emplace(++missions.begin(), mission);
+		return missions.emplace(++missions.begin(), std::move(mission));
 	}
 	else if (!toBack || missions.empty())
 	{
-		missions.emplace_front(mission);
+		missions.emplace_front(std::move(mission));
 		missions.front().start(state, *this);
 		return missions.begin();
 	}
 	else
 	{
-		missions.emplace_back(mission);
+		missions.emplace_back(std::move(mission));
 		return --missions.end();
 	}
 }
@@ -3360,7 +3406,7 @@ bool Vehicle::setMission(GameState &state, VehicleMission mission)
 			break;
 	}
 	clearMissions(state, forceClear);
-	auto it = this->addMission(state, mission, true);
+	auto it = this->addMission(state, std::move(mission), true);
 	if (it != missions.begin() && missions.size() > 0)
 	{
 		// A mission couldn't be cleared and the new mission was inserted behind it
@@ -3460,10 +3506,25 @@ bool Vehicle::getNewGoal(GameState &state, int &turboTiles)
 	return acquired;
 }
 
+Vec3<float> Vehicle::getDrawPosition(float stepFraction) const
+{
+	if (!hasStepStart)
+	{
+		return position;
+	}
+	const auto moved = position - stepStartPosition;
+	// A jump -- a turbo step, a launch, a teleport -- is drawn where it lands, not slid across.
+	if (glm::length(moved) > 2.0f)
+	{
+		return position;
+	}
+	return stepStartPosition + moved * stepFraction;
+}
+
 float Vehicle::getSpeed() const
 {
-	auto et = getEquipmentTypes();
-	return this->type->getSpeed(et.begin(), et.end());
+	return this->type->getSpeed(EquipmentTypeIterator(equipment.begin()),
+	                            EquipmentTypeIterator(equipment.end()));
 }
 float Vehicle::getAngularSpeed() const
 {
@@ -3475,24 +3536,24 @@ float Vehicle::getAngularSpeed() const
 
 int Vehicle::getMaxConstitution() const
 {
-	auto et = getEquipmentTypes();
-	return this->type->getMaxConstitution(et.begin(), et.end());
+	return this->type->getMaxConstitution(EquipmentTypeIterator(equipment.begin()),
+	                                      EquipmentTypeIterator(equipment.end()));
 }
 
 int Vehicle::getConstitution() const { return this->getHealth() + this->getShield(); }
 
 int Vehicle::getMaxHealth() const
 {
-	auto et = getEquipmentTypes();
-	return this->type->getMaxHealth(et.begin(), et.end());
+	return this->type->getMaxHealth(EquipmentTypeIterator(equipment.begin()),
+	                                EquipmentTypeIterator(equipment.end()));
 }
 
 int Vehicle::getHealth() const { return this->health; }
 
 int Vehicle::getMaxShield() const
 {
-	auto et = getEquipmentTypes();
-	return this->type->getMaxShield(et.begin(), et.end());
+	return this->type->getMaxShield(EquipmentTypeIterator(equipment.begin()),
+	                                EquipmentTypeIterator(equipment.end()));
 }
 
 int Vehicle::getShieldRechargeRate() const
@@ -3590,53 +3651,43 @@ bool Vehicle::canDamageBuilding(StateRef<Building> target) const
 
 bool Vehicle::isIdle() const { return this->goalWaypoints.empty(); }
 
-std::list<sp<VEquipmentType>> Vehicle::getEquipmentTypes() const
-{
-	std::list<sp<VEquipmentType>> et;
-	for (auto &eq : equipment)
-	{
-		et.push_back(eq->type);
-	}
-	return et;
-}
-
 int Vehicle::getShield() const { return this->shield; }
 
 int Vehicle::getArmor() const
 {
-	auto et = getEquipmentTypes();
-	return this->type->getArmor(et.begin(), et.end());
+	return this->type->getArmor(EquipmentTypeIterator(equipment.begin()),
+	                            EquipmentTypeIterator(equipment.end()));
 }
 
 int Vehicle::getAccuracy() const
 {
-	auto et = getEquipmentTypes();
-	return this->type->getAccuracy(et.begin(), et.end());
+	return this->type->getAccuracy(EquipmentTypeIterator(equipment.begin()),
+	                               EquipmentTypeIterator(equipment.end()));
 }
 
 // FIXME: Check int/float speed conversions
 int Vehicle::getTopSpeed() const
 {
-	auto et = getEquipmentTypes();
-	return this->type->getTopSpeed(et.begin(), et.end());
+	return this->type->getTopSpeed(EquipmentTypeIterator(equipment.begin()),
+	                               EquipmentTypeIterator(equipment.end()));
 }
 
 int Vehicle::getAcceleration() const
 {
-	auto et = getEquipmentTypes();
-	return this->type->getAcceleration(et.begin(), et.end());
+	return this->type->getAcceleration(EquipmentTypeIterator(equipment.begin()),
+	                                   EquipmentTypeIterator(equipment.end()));
 }
 
 int Vehicle::getWeight() const
 {
-	auto et = getEquipmentTypes();
-	return this->type->getWeight(et.begin(), et.end());
+	return this->type->getWeight(EquipmentTypeIterator(equipment.begin()),
+	                             EquipmentTypeIterator(equipment.end()));
 }
 
 int Vehicle::getMaxFuel() const
 {
-	auto et = getEquipmentTypes();
-	return this->type->getMaxFuel(et.begin(), et.end());
+	return this->type->getMaxFuel(EquipmentTypeIterator(equipment.begin()),
+	                              EquipmentTypeIterator(equipment.end()));
 }
 
 int Vehicle::getFuel() const
@@ -3654,16 +3705,16 @@ int Vehicle::getFuel() const
 
 int Vehicle::getMaxPassengers() const
 {
-	auto et = getEquipmentTypes();
-	return this->type->getMaxPassengers(et.begin(), et.end());
+	return this->type->getMaxPassengers(EquipmentTypeIterator(equipment.begin()),
+	                                    EquipmentTypeIterator(equipment.end()));
 }
 
 int Vehicle::getPassengers() const { return (int)currentAgents.size(); }
 
 int Vehicle::getMaxCargo() const
 {
-	auto et = getEquipmentTypes();
-	return this->type->getMaxCargo(et.begin(), et.end());
+	return this->type->getMaxCargo(EquipmentTypeIterator(equipment.begin()),
+	                               EquipmentTypeIterator(equipment.end()));
 }
 
 int Vehicle::getCargo() const
@@ -3682,8 +3733,8 @@ int Vehicle::getCargo() const
 
 int Vehicle::getMaxBio() const
 {
-	auto et = getEquipmentTypes();
-	return this->type->getMaxBio(et.begin(), et.end());
+	return this->type->getMaxBio(EquipmentTypeIterator(equipment.begin()),
+	                             EquipmentTypeIterator(equipment.end()));
 }
 
 int Vehicle::getBio() const

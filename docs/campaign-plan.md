@@ -1026,28 +1026,43 @@ Selling adds to `currentStock` from the UI layer
 
 ***[V]***
 
-At each Monday roll (`weeklyPlayerUpdate`, [gamestate.cpp:1668](../game/state/gamestate.cpp#L1668)):
+At each Monday roll (`weeklyPlayerUpdate` in
+[gamestate.cpp](../game/state/gamestate.cpp)), as UFO2P.EXE does it (FUN_000941DC; evidence in
+[weekly-funding.md](original-game/findings/weekly-funding.md)):
 
-1. Funding is cut off permanently if the government is Hostile **or** `totalScore < −2400`.
-2. Income is capped at half the government's balance.
-3. `player->balance += income`, then `income += income / fundingModifier`.
-4. Salaries and facility upkeep are deducted.
+1. X-COM is paid the old income F (skipped if the balance already holds 2 000 000 000).
+2. Funding is cut off permanently if the government's relation to X-COM is below −50 (Hostile)
+   **or** the score of the weeks *before* this one is below −2400. A cutoff takes this week's
+   payment back. One bad week therefore cuts the income first; the Monday after it ends funding,
+   however well that intervening week went.
+3. Otherwise the week's score picks a tier that adjusts F (table below). The result is capped at
+   half the government's balance and stored as next week's income, and the government pays that
+   *new* amount. The cap persists: a government that recovers its cash does not restore the old
+   income.
+4. Salaries and the upkeep of finished facilities are deducted. Facilities still under
+   construction cost nothing.
+5. The week's score rolls into the running total.
 
-`calculateFundingModifier` ([gamestate.cpp:1860](../game/state/gamestate.cpp#L1860)) scans
-`weekly_rating_rules` **without breaking**, so the *last* matching entry wins. Given the data order
-in [gamestate.xml:16](../data/common_patch/gamestate.xml#L16), that means:
+`calculateFundingModifier` picks the strongest matching tier, and every tier divides the unchanged
+F. All thresholds are strict ([gamestate.xml:16](../data/common_patch/gamestate.xml#L16)):
 
-| Weekly score | Effective modifier | Income change |
-|---|---|---|
-| > 400 | 20 | **+5 %** |
-| 0 … 400 | 0 | none |
-| < 0 | −15 | **−6.7 %** |
+| Week score W | Income change |
+|---|---|
+| W > 12 800 | +25 % |
+| 6 400 < W ≤ 12 800 | +20 % |
+| 3 200 < W ≤ 6 400 | +12.5 % |
+| 1 600 < W ≤ 3 200 | +8.3 % |
+| 800 < W ≤ 1 600 | +6.25 % |
+| 400 < W ≤ 800 | +5 % |
+| 0 ≤ W ≤ 400 | none |
+| −400 ≤ W < 0 | −6.7 % |
+| −800 ≤ W < −400 | −10 % |
+| −1 600 ≤ W < −800 | −20 % |
+| W < −1 600 | −25 % |
 
-**[D]** The tiering is inert. A 20 000-point week and a 401-point week both yield +5 %. The data
-clearly intends "highest threshold wins" (+25 % above 12 800); a missing `break` collapses it.
-Flagged in [§15](#15-known-gaps-in-openapoc). **Practical effect: clear the +400 bar every week and
-stop optimising score for funding** — score still matters, but through
-[§11.4](#114-score-drives-alien-tech), not through your budget.
+**Practical effect:** a big week compounds into income, so score is worth chasing for the
+budget as well as through [§11.4](#114-score-drives-alien-tech). Destroying an alien building
+scores its own category, 250–500 depending on the building, on top of the battle's tactical score.
 
 ### 11.3 Cash tactics
 
@@ -1166,7 +1181,7 @@ The reconciliations worth knowing before you follow any single guide verbatim.
 | 10 | "Just let the UFOs run through the city" **[AOW]** | Passive play lets the alien fleet accumulate, which raises the incursion tier and **removes Transporters from the rotation** — potentially unwinnable. | **[D]** |
 | 11 | "Raiding boosts organisation guard tech" **[AOW]** | `org->tech_level` is never written outside the skirmish screen. Raiding does not escalate human guards. | **[NI]** |
 | 12 | Endgame is ~6 alien buildings **[LIL, AOW]** | **Ten**, strictly linear, ending at the Dimension Gate Generator. | **[D]** |
-| 13 | "Score at end of week for more funding" **[WONG §2.2.3]** | Funding adjustment is effectively **binary** (+5 % / 0 / −6.7 %) because `calculateFundingModifier` never breaks out of its loop. | **[D]** |
+| 13 | "Score at end of week for more funding" **[WONG §2.2.3]** | True: the strongest matching tier wins, from +25 % above 12 800 down to −25 % below −1 600 (§11.2). An earlier version of this plan called the adjustment binary; that described a loop bug that has since been fixed. | **[V]** |
 | 14 | Build a second Alien Containment early **[LIL]** | One is present in the starting base. Build a second only when capacity actually binds. | **[D]** |
 | 15 | *This guide, v1*: "week 13 is a difficulty spike" | A `master` **data defect** — week 13 is missing from the shipped patch. The EXE has it, and it is an Attack peak (30 %), not a general spike. Week 14 was also wrong. | **[D]** |
 | 16 | *This guide, v1*: "first UFO wave lands 22:00–24:00 on day 0; cadence 1–4 days" | `master` invents the opening delay. The EXE uses one formula throughout: **24–72 h**. Day 0 has no wave. | **[D]** |
@@ -1230,7 +1245,7 @@ Re-checked against **`khallmark/FixShitUp`**. Several items from this document's
 | 5 | **Multi-tile unit pathing/drawing** has no recovered TACP table. | gap matrix |
 | 6 | **Vehicle attack ladder** (100/80/50/10) and `Rules of engagement` remain unbound. | gap matrix |
 | 7 | **Bribe / diplomatic-rift dollar formulas** unbound, so [§11.3](#113-cash-tactics) diplomacy advice is directional only. | gap matrix |
-| 8 | Score still accrues partly in `cityview.cpp`, and `weekScore.reset()` still lives in the weekly funding screen — harmless for UI-driven play, but it means score is a property of the *UI* being open. | `game/ui/tileview/cityview.cpp` |
+| 8 | Score still accrues partly in `cityview.cpp`. (`weekScore.reset()` has moved out of the weekly funding screen into `weeklyPlayerUpdate`, so the week rolls over whether or not the screen is shown.) | `game/ui/tileview/cityview.cpp` |
 
 Items 1–4 are **blocked on reverse-engineering evidence, not on effort.** Inventing the constants
 would reintroduce exactly the made-up numbers `docs/original-game/` exists to eliminate.

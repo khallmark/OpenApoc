@@ -47,10 +47,8 @@ void TileObject::removeFromMap()
 			LogError("Nothing erased?");
 		}
 		int layer = map.getLayer(this->type);
-		this->drawOnTile->drawnObjects[layer].erase(
-		    std::remove(this->drawOnTile->drawnObjects[layer].begin(),
-		                this->drawOnTile->drawnObjects[layer].end(), thisPtr),
-		    this->drawOnTile->drawnObjects[layer].end());
+		auto &drawn = this->drawOnTile->drawnObjects.edit(layer, map.getLayerCount());
+		drawn.erase(std::remove(drawn.begin(), drawn.end(), thisPtr), drawn.end());
 		this->owningTile = nullptr;
 	}
 	for (auto *tile : this->intersectingTiles)
@@ -175,9 +173,9 @@ void TileObject::addToDrawnTiles(Tile *tile)
 {
 	this->drawOnTile = tile;
 	int layer = map.getLayer(this->type);
-	this->drawOnTile->drawnObjects[layer].push_back(shared_from_this());
-	std::sort(this->drawOnTile->drawnObjects[layer].begin(),
-	          this->drawOnTile->drawnObjects[layer].end(), TileObjectZComparer{});
+	auto &drawn = this->drawOnTile->drawnObjects.edit(layer, map.getLayerCount());
+	drawn.push_back(shared_from_this());
+	std::sort(drawn.begin(), drawn.end(), TileObjectZComparer{});
 }
 
 } // namespace OpenApoc

@@ -160,6 +160,27 @@ void Building::updateDetection(GameState &state, unsigned int ticks)
 }
 void Building::updateCargo(GameState &state)
 {
+	// Every step below only acts on cargo or on an agent waiting for a ferry. Most buildings have
+	// neither, and this runs for every building every game second -- a turbo step crosses 300 of
+	// them -- so don't even look up our own id (a search through all buildings) just to find that
+	// out.
+	if (cargo.empty())
+	{
+		bool agentAwaitsPickup = false;
+		for (auto &a : currentAgents)
+		{
+			if (!a->missions.empty() &&
+			    a->missions.front().type == AgentMission::MissionType::AwaitPickup)
+			{
+				agentAwaitsPickup = true;
+				break;
+			}
+		}
+		if (!agentAwaitsPickup)
+		{
+			return;
+		}
+	}
 	StateRef<Building> thisRef = {&state, getId(state, shared_from_this())};
 
 	// Step 01: Consume cargo with destination = this or zero count or hostile destination
@@ -811,25 +832,15 @@ void Building::detect(GameState &state, bool forced)
 	}
 	state.firstDetection = false;
 	ticksDetectionTimeOut = TICKS_DETECTION_TIMEOUT;
-	if (base)
-	{
-		if (!base->building->occupied())
-		{
-			base->die(state, false);
-		}
-		else
-		{
-			fw().pushEvent(
-			    new GameDefenseEvent(GameEventType::DefendTheBase, base, state.getAliens()));
-		}
-	}
-	else
-	{
-		detected = true;
+	// Aliens found inside an X-COM base's building raise the same alert as anywhere else. UFO2P
+	// starts a base defence from exactly three places -- an infiltration UFO landing on the base,
+	// a subversion UFO reaching a base the aliens already know, and a hostile organisation's
+	// attack -- and detection is not one of them: FUN_0006f964 raises an ordinary incident in a
+	// base building, not a base-defence mission. See docs/original-game/findings/base-defence.md.
+	detected = true;
 
-		fw().pushEvent(new GameBuildingEvent(GameEventType::AlienSpotted,
-		                                     {&state, Building::getId(state, shared_from_this())}));
-	}
+	fw().pushEvent(new GameBuildingEvent(GameEventType::AlienSpotted,
+	                                     {&state, Building::getId(state, shared_from_this())}));
 }
 
 void Building::alienGrowth(GameState &state)
@@ -1017,22 +1028,15 @@ void Building::alienMovement(GameState &state)
 	}
 	if (bld->base)
 	{
+		// UFO2P FUN_0006f7f8 @ object-page file 0x5F7F7: aliens moving into a base's building
+		// expose the base, at a moved-count x 5 roll -- and that is all they do. Neither this nor
+		// FUN_0006f738 starts a base defence or deletes an unmanned base; the aliens now known to
+		// be there are found like any others (detect), and the base is attacked only by the
+		// UFO and organisation missions that target exposed bases.
 		if (Base::alienExposureRollSucceeds(randBoundsInclusive(state.rng, 0, 100),
 		                                    totalMoveAmount))
 		{
-			// UFO2P FUN_0006f7f8 @ object-page file 0x5F7F7: successful alien
-			// movement exposes the destination base with moved-count × 5 threshold.
 			bld->base->knownToAliens = true;
-		}
-		// Destroy base if its empty
-		if (!bld->occupied())
-		{
-			bld->base->die(state, false);
-		}
-		else
-		{
-			fw().pushEvent(
-			    new GameDefenseEvent(GameEventType::DefendTheBase, bld->base, state.getAliens()));
 		}
 	}
 }

@@ -20,8 +20,8 @@
 namespace OpenApoc
 {
 
-Tile::Tile(TileMap &map, Vec3<int> position, int layerCount)
-    : map(map), position(position), drawnObjects(layerCount)
+Tile::Tile(TileMap &map, Vec3<int> position, int layerCount [[maybe_unused]])
+    : map(map), position(position)
 {
 }
 
@@ -381,7 +381,7 @@ void Tile::updateBattlescapeParameters()
 			              (o->getType() == TileObject::Type::Feature && !mp->type->gravlift);
 			hasLift = hasLift || mp->type->gravlift;
 			hasExit = hasExit || mp->type->exit;
-			movementCostIn = std::max(movementCostIn, mp->type->movement_cost);
+			movementCostIn = std::max<int>(movementCostIn, mp->type->movement_cost);
 			if (mp->type->sfxIndex != -1)
 			{
 				b.walkSfx = mp->type->walkSounds;
@@ -419,7 +419,7 @@ void Tile::updateBattlescapeParameters()
 		canStand = t->solidGround && t->height >= 0.9625f;
 		if (canStand)
 		{
-			movementCostIn = std::max(movementCostIn, t->movementCostOver);
+			movementCostIn = std::max<int>(movementCostIn, t->movementCostOver);
 		}
 	}
 	if (movementCostIn == -1)
@@ -438,7 +438,7 @@ void Tile::updateBattlescapeParameters()
 			if (!t->canStand)
 			{
 				t->canStand = true;
-				t->movementCostIn = std::max(movementCostOver, t->movementCostIn);
+				t->movementCostIn = std::max<int>(movementCostOver, t->movementCostIn);
 			}
 		}
 	}

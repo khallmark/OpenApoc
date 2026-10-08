@@ -1,10 +1,11 @@
 #pragma once
 
-#include <memory>
 #include "framework/logger.h"
 #include "library/rect.h"
 #include "library/sp.h"
+#include <cstdint>
 #include <list>
+#include <memory>
 #include <set>
 #include <vector>
 
@@ -76,13 +77,80 @@ class Tile
 	TileMap &map;
 	Vec3<int> position;
 
-	std::set<sp<TileObject>> ownedObjects;
-	std::set<sp<TileObject>> intersectingObjects;
+	// A set of tile objects that allocates only once something is in it: most of a city's half
+	// a million tiles hold nothing, and an empty std::set still costs 24 bytes in every tile.
+	class ObjectSet
+	{
+	  public:
+		using Set = std::set<sp<TileObject>>;
+		ObjectSet() = default;
+		ObjectSet(ObjectSet &&) = default;
+		ObjectSet &operator=(ObjectSet &&) = default;
+		// A copy is a snapshot, as std::set's was: code that may destroy objects on a tile
+		// iterates a copy of its set.
+		ObjectSet(const ObjectSet &other)
+		    : set(other.set ? std::make_unique<Set>(*other.set) : nullptr)
+		{
+		}
+		ObjectSet &operator=(const ObjectSet &other)
+		{
+			set = other.set ? std::make_unique<Set>(*other.set) : nullptr;
+			return *this;
+		}
+		Set::const_iterator begin() const { return get().begin(); }
+		Set::const_iterator end() const { return get().end(); }
+		bool empty() const { return !set || set->empty(); }
+		size_t size() const { return set ? set->size() : 0; }
+		Set::const_iterator find(const sp<TileObject> &object) const { return get().find(object); }
+		std::pair<Set::iterator, bool> insert(const sp<TileObject> &object)
+		{
+			if (!set)
+			{
+				set = std::make_unique<Set>();
+			}
+			return set->insert(object);
+		}
+		size_t erase(const sp<TileObject> &object) { return set ? set->erase(object) : 0; }
 
+	  private:
+		const Set &get() const
+		{
+			static const Set none;
+			return set ? *set : none;
+		}
+		std::unique_ptr<Set> set;
+	};
+	ObjectSet ownedObjects;
+	ObjectSet intersectingObjects;
+
+	// Per-layer draw lists, allocated the first time anything is drawn on the tile. A city map
+	// holds about half a million tiles across its two cities and most are empty air; giving each
+	// one its layer vectors up front was a heap allocation per tile for nothing.
+	class DrawLayers
+	{
+	  public:
+		const std::vector<sp<TileObject>> &operator[](size_t layer) const
+		{
+			static const std::vector<sp<TileObject>> none;
+			return layers ? (*layers)[layer] : none;
+		}
+		// For adding or removing: allocates this tile's layers on first use.
+		std::vector<sp<TileObject>> &edit(size_t layer, size_t layerCount)
+		{
+			if (!layers)
+			{
+				layers = std::make_unique<std::vector<std::vector<sp<TileObject>>>>(layerCount);
+			}
+			return (*layers)[layer];
+		}
+
+	  private:
+		std::unique_ptr<std::vector<std::vector<sp<TileObject>>>> layers;
+	};
 	// FIXME: This is effectively a z-sorted list of ownedObjects - can this be merged somehow?
 	// Alexey Andronov (Istrebitel): This is no longer so, because
 	// units are drawn on a tile different to their owner tile.
-	std::vector<std::vector<sp<TileObject>>> drawnObjects;
+	DrawLayers drawnObjects;
 
 	Tile(TileMap &map, Vec3<int> position, int layerCount);
 
@@ -97,14 +165,16 @@ class Tile
 	// Same but for city overlays
 	float overlayHeight = 0.0f;
 	// Movement cost through the tile's ground (or feature)
-	int movementCostIn = 4;
+	// 16-bit: costs run from -1 (empty, during recompute) to 255, and a city holds half a million
+	// tiles, so every byte here is about half a megabyte per game.
+	int16_t movementCostIn = 4;
 	// Movement cost to walk on the level above this, if next level is empty and this height is
 	// 0.975
-	int movementCostOver = 255;
+	int16_t movementCostOver = 255;
 	// Movement cost through the tile's left wall
-	int movementCostLeft = 0;
+	int16_t movementCostLeft = 0;
 	// Movement cost through the tile's right wall
-	int movementCostRight = 0;
+	int16_t movementCostRight = 0;
 	// True = there is currently a closed door to the left of this tile
 	bool closedDoorLeft = false;
 	// True = there is currently a closed door to the right of this tile

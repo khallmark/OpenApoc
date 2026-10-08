@@ -31,6 +31,16 @@ void Scenery::ceaseSupportProvision()
 void Scenery::queueCollapse(unsigned additionalDelay)
 {
 	ticksUntilCollapse = TICKS_MULTIPLIER + additionalDelay;
+	activate();
+}
+
+void Scenery::activate()
+{
+	if (!inActiveList && city)
+	{
+		inActiveList = true;
+		city->activeScenery.push_back(shared_from_this());
+	}
 }
 
 void Scenery::cancelCollapse() { ticksUntilCollapse = 0; }
@@ -1439,6 +1449,7 @@ void Scenery::collapse(GameState &state)
 	{
 		LogInfo("Scenery at {0} type {1} now falling", currentPosition, type.id);
 		falling = true;
+		activate();
 		// state.current_battle->queueVisionRefresh(position);
 		// state.current_battle->queuePathfindingRefresh(position);
 		// Note: Pathfinding refresh relies on tile's battlescape parameters being updated

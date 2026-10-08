@@ -25,6 +25,8 @@
 #include "game/state/tilemap/tileobject_vehicle.h"
 #include "library/strings_format.h"
 #include <algorithm>
+#include <array>
+#include <limits>
 #include <glm/glm.hpp>
 
 namespace OpenApoc
@@ -1345,6 +1347,7 @@ bool VehicleMission::getNextDestination(GameState &state, Vehicle &v, Vec3<float
 
 void VehicleMission::update(GameState &state, Vehicle &v, unsigned int ticks, bool finished)
 {
+	blockedWaitTicks -= std::min(ticks, blockedWaitTicks);
 	finished = finished || isFinishedInternal(state, v);
 	switch (this->type)
 	{
@@ -2644,6 +2647,16 @@ void VehicleMission::start(GameState &state, Vehicle &v)
 							}
 							else
 							{
+								int deposited = 0;
+								for (auto &pair : v.type->crew_deposit)
+								{
+									deposited += pair.second;
+								}
+								LogWarning("Base defence (UFO deposit by {0}): {1}, {2} alien(s), "
+								           "{3} {4}",
+								           v.type->name, targetBuilding->name, deposited,
+								           state.gameTime.getLongDateString(),
+								           state.gameTime.getShortTimeString());
 								fw().pushEvent(new GameDefenseEvent(GameEventType::DefendTheBase,
 								                                    targetBuilding->base, v.owner));
 							}
@@ -2766,31 +2779,34 @@ void VehicleMission::setPathTo(GameState &state, Vehicle &v, Vec3<int> target, i
 		pickedNearest = true;
 	}
 
-	std::list<Vec3<int>> path;
+	// Road routes come straight from the city's route cache, read in place rather than copied.
+	std::list<Vec3<int>> searched;
+	const std::vector<Vec3<int>> *route = nullptr;
 	float distance = 0.0f;
 	auto position = vehicleTile->getOwningTile()->position;
 	switch (v.type->type)
 	{
 		case VehicleType::Type::Road:
-			path = v.city->findShortestPath(position, target,
-			                                GroundVehicleTileHelper{*v.city->map, v});
+			route = &v.city->findShortestPath(position, target,
+			                                  GroundVehicleTileHelper{*v.city->map, v});
 			distance = GroundVehicleTileHelper::getDistanceStatic(position, target);
 			break;
 		case VehicleType::Type::ATV:
-			path = v.city->map->findShortestPath(position, target, maxIterations,
-			                                     GroundVehicleTileHelper{*v.city->map, v});
+			searched = v.city->map->findShortestPath(position, target, maxIterations,
+			                                         GroundVehicleTileHelper{*v.city->map, v});
 			distance = GroundVehicleTileHelper::getDistanceStatic(position, target);
 			break;
 		case VehicleType::Type::Flying:
 		case VehicleType::Type::UFO:
-			path = v.city->map->findShortestPath(position, target, maxIterations,
-			                                     FlyingVehicleTileHelper{*v.city->map, v});
+			searched = v.city->map->findShortestPath(position, target, maxIterations,
+			                                         FlyingVehicleTileHelper{*v.city->map, v});
 			distance = FlyingVehicleTileHelper::getDistanceStatic(position, target);
 			break;
 	}
+	const bool noPath = route ? route->empty() : searched.empty();
 
 	// Did not reach destination
-	if (path.empty() || path.back() != target)
+	if (noPath || (route ? route->back() : searched.back()) != target)
 	{
 		// A ground vehicle restricted to roads dies the instant the road under it is destroyed
 		// (see GroundVehicleMover::update), so a *severed* road network -- the target's segment
@@ -2809,7 +2825,18 @@ void VehicleMission::setPathTo(GameState &state, Vehicle &v, Vec3<int> target, i
 		// branch crashed on give-up regardless of whether a usable partial path existed, and a
 		// far target with a non-empty-but-short path hit neither branch, so reRouteAttempts never
 		// moved and GotoLocation re-planned the same unreachable target forever.
-		const bool stuckInPlace = path.empty() && maxIterations > (int)distance;
+		const bool stuckInPlace = noPath && maxIterations > (int)distance;
+		// A road vehicle whose vehicle-blind route takes it nowhere has no road left to its
+		// destination. UFO2P deactivates its slot (FUN_00058280, from 0x3a016). Left on the map,
+		// it was given the same destination again and again at the end of a severed road, and
+		// every car routed toward that side ended up shuttling round it.
+		if (v.type->type == VehicleType::Type::Road && position != target &&
+		    (noPath || route->back() == position) && v.owner != state.getPlayer())
+		{
+			v.stranded = true;
+			cancelled = true;
+			return;
+		}
 		if (giveUpIfInvalid)
 		{
 			cancelled = true;
@@ -2825,12 +2852,17 @@ void VehicleMission::setPathTo(GameState &state, Vehicle &v, Vec3<int> target, i
 		}
 	}
 
-	// Always start with the current position
-	this->currentPlannedPath.push_back(vehicleTile->getOwningTile()->position);
-	for (auto &p : path)
+	// Always start with the current position. A deque takes the route in a few block
+	// allocations; the list it replaces allocated, then later freed, one node per tile.
+	if (route)
 	{
-		this->currentPlannedPath.push_back(p);
+		this->currentPlannedPath.assign(route->begin(), route->end());
 	}
+	else
+	{
+		this->currentPlannedPath.assign(searched.begin(), searched.end());
+	}
+	this->currentPlannedPath.push_front(vehicleTile->getOwningTile()->position);
 }
 
 void VehicleMission::setFollowPath(GameState &state, Vehicle &v)
@@ -2929,6 +2961,14 @@ void VehicleMission::setFollowPath(GameState &state, Vehicle &v)
 bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> &destPos,
                                       float &destFacing [[maybe_unused]], int &turboTiles)
 {
+	if (blockedWaitTicks > 0 && v.tileObject && !(boxedIn && nextStepIsFree(v)))
+	{
+		// Waiting on other vehicles: hold position until the wait runs out.
+		destPos = v.tileObject->getOwningTile()->getRestingPosition();
+		return true;
+	}
+	blockedWaitTicks = 0;
+	boxedIn = false;
 	if (currentPlannedPath.empty())
 	{
 		v.addMission(state, restartNextMission(state, v));
@@ -2978,15 +3018,76 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 		bool cantGo = std::abs(tFrom->position.x - pos.x) > 1 ||
 		              std::abs(tFrom->position.y - pos.y) > 1 ||
 		              std::abs(tFrom->position.z - pos.z) > 1;
+		bool blockedByVehicle = false;
 		if (v.type->isGround())
 		{
-			cantGo = cantGo || !GroundVehicleTileHelper{tFrom->map, v}.canEnterTile(tFrom, tTo);
+			// The road first, then the vehicles on it: UFO2P answers the two differently.
+			const GroundVehicleTileHelper road{tFrom->map, v.type->type};
+			if (!cantGo && !road.canEnterTile(tFrom, tTo))
+			{
+				cantGo = true;
+			}
+			else if (!cantGo && !GroundVehicleTileHelper{tFrom->map, v}.canEnterTile(tFrom, tTo))
+			{
+				cantGo = true;
+				blockedByVehicle = true;
+			}
 		}
 		else
 		{
 			cantGo = cantGo || !FlyingVehicleTileHelper{tFrom->map, v}.canEnterTile(tFrom, tTo);
 		}
-		if (cantGo)
+		const auto blocker = blockedByVehicle ? blockingVehicle(v, tTo) : nullptr;
+		const auto response = blocker ? respondToBlocker(v, tFrom, *blocker) : Blocked::WalkRound;
+		if (blockedByVehicle &&
+		    (response == Blocked::DriveThrough ||
+		     (response == Blocked::WalkRound && vehicleBlocks >= PASS_THROUGH_AFTER_BLOCKS)))
+		{
+			// Head-on, or past this many walks round vehicles without getting past one: drive
+			// through it, as upstream OpenApoc always does. Not in the EXE, which can livelock.
+			blockedByVehicle = false;
+			cantGo = false;
+			vehicleBlocks = 0;
+		}
+		else if (blockedByVehicle && response == Blocked::WalkRound)
+		{
+			vehicleBlocks++;
+			blockedStep = pos;
+		}
+		else if (!cantGo && pos == blockedStep)
+		{
+			vehicleBlocks = 0; // past where it was stopped
+		}
+		if (blockedByVehicle && response == Blocked::Wait)
+		{
+			// The car ahead is on its way: keep the route and wait a moment, rather than back away
+			// from it and come straight back.
+			currentPlannedPath.push_front(tFrom->position);
+			blockedWaitTicks = QUEUE_WAIT_TICKS;
+			destPos = tFrom->getRestingPosition();
+			return true;
+		}
+		if (blockedByVehicle)
+		{
+			// Re-requesting the route would only return the same vehicle-blind one, every step,
+			// for ever. Walk around the vehicles instead and take the first step of that walk now
+			// (UFO2P FUN_000395E4 0x3a210 -> FUN_0003f704, retried once at 0x3a25e).
+			if (!planAroundVehicles(v, currentPlannedPath.back()))
+			{
+				// Boxed in: stay where we are, wait, then try again (0x3a21e-0x3a290). Unlike the
+				// EXE, keep the route and go as soon as its next tile comes free: a car that sat out
+				// the whole wait let the head-on car that backed away for it come straight back.
+				currentPlannedPath.push_front(tFrom->position);
+				blockedWaitTicks = BLOCKED_WAIT_TICKS;
+				boxedIn = true;
+				destPos = tFrom->getRestingPosition();
+				return true;
+			}
+			currentPlannedPath.pop_front();
+			pos = currentPlannedPath.front();
+			tTo = tFrom->map.getTile(pos);
+		}
+		else if (cantGo)
 		{
 			// Next tile became impassable, pick a new path
 			currentPlannedPath.clear();
@@ -3081,6 +3182,182 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 		}
 	}
 
+	return true;
+}
+
+namespace
+{
+// UFO2P FUN_00038678: the local planner's distance. Per axis |d|; h = 2*max(dx,dy) + min(dx,dy);
+// then the larger of h and 2*dz plus half the smaller.
+int plannerDistance(Vec3<int> a, Vec3<int> b)
+{
+	const int dx = std::abs(a.x - b.x), dy = std::abs(a.y - b.y), dz = std::abs(a.z - b.z);
+	const int h = 2 * std::max(dx, dy) + std::min(dx, dy);
+	return (4 * std::max(h, 2 * dz) + 2 * std::min(h, 2 * dz)) / 4;
+}
+} // namespace
+
+// Whether a ground vehicle blocked by another should wait for it rather than plan a way round.
+bool VehicleMission::nextStepIsFree(Vehicle &v) const
+{
+	if (!v.type->isGround())
+	{
+		return false;
+	}
+	auto from = v.tileObject->getOwningTile();
+	for (const auto &p : currentPlannedPath)
+	{
+		if (p == from->position)
+		{
+			continue;
+		}
+		auto to = from->map.getTile(p);
+		return GroundVehicleTileHelper{from->map, v.type->type}.canEnterTile(from, to) &&
+		       GroundVehicleTileHelper{from->map, v}.canEnterTile(from, to);
+	}
+	return false;
+}
+
+// Measured on a long learner save, planning round every block left 96 of 97 cars oscillating --
+// over a quarter of all their moves undid the one before -- and 71 making no progress at all: a
+// car behind a moving one backed away from it, and both cars of a head-on pair backed off, came
+// back and met again. So: wait behind a car that is moving on; of a head-on pair, the car with the
+// later name waits and the other gives way; plan round anything that is not going anywhere.
+sp<Vehicle> VehicleMission::blockingVehicle(const Vehicle &v, Tile *to) const
+{
+	for (auto &obj : to->intersectingObjects)
+	{
+		if (obj->getType() != TileObject::Type::Vehicle)
+		{
+			continue;
+		}
+		auto blocker = std::static_pointer_cast<TileObjectVehicle>(obj)->getVehicle();
+		if (blocker && blocker.get() != &v && !blocker->crashed)
+		{
+			return blocker;
+		}
+	}
+	return nullptr;
+}
+
+// Two cars meeting head-on pass each other, as on the two-lane road the tiles draw. The EXE has
+// one car per tile and sends one of the pair round the other (FUN_0003f704), which with OpenApoc's
+// traffic -- a long game had 130-150 ground vehicles on one map, against the EXE's 80 across both
+// -- left single-lane stretches gridlocked: cars gave way, came back and gave way again. On a long
+// learner save over 60,000 ticks that was 11-27% of all moves undoing the one before and most cars
+// never arriving; passing, 0.6% and 49 of 68 arrived. A car still waits behind one going its way.
+VehicleMission::Blocked VehicleMission::respondToBlocker(const Vehicle &v [[maybe_unused]],
+                                                         const Tile *from,
+                                                         const Vehicle &blocker) const
+{
+	if (blocker.missions.empty())
+	{
+		return Blocked::WalkRound; // parked or idle: it will not clear the way
+	}
+	const auto &theirs = blocker.missions.front();
+	const auto theirTile = blocker.tileObject->getOwningTile()->position;
+	Vec3<int> theirNext = theirTile;
+	for (const auto &p : theirs.currentPlannedPath)
+	{
+		if (p != theirTile)
+		{
+			theirNext = p;
+			break;
+		}
+	}
+	if (theirNext == from->position)
+	{
+		return Blocked::DriveThrough; // head-on: pass
+	}
+	if (theirs.boxedIn && theirs.blockedWaitTicks > 0)
+	{
+		return Blocked::WalkRound; // it cannot get out of the way
+	}
+	if (theirNext == theirTile)
+	{
+		return Blocked::WalkRound; // nowhere to go
+	}
+	return Blocked::Wait; // moving on: queue behind it
+}
+
+// UFO2P FUN_0003f704 (VA 0x3f704), the ground planner run when a step is blocked by a vehicle.
+// Candidates are greedy walks of up to 8 cardinal steps within 8 tiles of the start: each step
+// takes the first move, in order of preference toward the target, onto a road tile that is free of
+// vehicles and not yet visited by this walk. The walk ending nearest the target wins -- even one
+// farther than the start, which is what lets a queue back out -- with 0x18 off for ending on it,
+// and the whole walk is committed. The EXE seeds its candidates from the 26 rows of a precomputed
+// direction table (DAT_00182a64); one candidate per first move approximates them.
+bool VehicleMission::planAroundVehicles(Vehicle &v, Vec3<int> target)
+{
+	if (!v.tileObject || !v.city)
+	{
+		return false;
+	}
+	constexpr int RADIUS = 8, MAX_STEPS = 8, ON_TARGET_BONUS = 0x18;
+	auto &map = *v.city->map;
+	const GroundVehicleTileHelper helper{map, v};
+	const auto start = v.tileObject->getOwningTile()->position;
+	// Cardinal moves; a road may climb or drop a level on the way.
+	static const std::array<Vec3<int>, 12> moves = {
+	    Vec3<int>{1, 0, 0},  {-1, 0, 0},  {0, 1, 0},  {0, -1, 0},  {1, 0, 1},  {-1, 0, 1},
+	    Vec3<int>{0, 1, 1},  {0, -1, 1},  {1, 0, -1}, {-1, 0, -1}, {0, 1, -1}, {0, -1, -1}};
+	auto preferred = [&](Vec3<int> from)
+	{
+		std::array<Vec3<int>, 12> next;
+		for (size_t i = 0; i < moves.size(); i++)
+		{
+			next[i] = from + moves[i];
+		}
+		std::stable_sort(next.begin(), next.end(), [&](const Vec3<int> &a, const Vec3<int> &b)
+		                 { return plannerDistance(a, target) < plannerDistance(b, target); });
+		return next;
+	};
+	auto canStep = [&](Vec3<int> from, Vec3<int> to, const std::vector<Vec3<int>> &visited)
+	{
+		return std::abs(to.x - start.x) <= RADIUS && std::abs(to.y - start.y) <= RADIUS &&
+		       std::find(visited.begin(), visited.end(), to) == visited.end() &&
+		       map.tileIsValid(to) && helper.canEnterTile(map.getTile(from), map.getTile(to));
+	};
+	std::vector<Vec3<int>> best;
+	int bestScore = std::numeric_limits<int>::max();
+	for (const auto &first : preferred(start))
+	{
+		std::vector<Vec3<int>> walk{start};
+		if (!canStep(start, first, walk))
+		{
+			continue;
+		}
+		walk.push_back(first);
+		while ((int)walk.size() <= MAX_STEPS)
+		{
+			bool stepped = false;
+			for (const auto &next : preferred(walk.back()))
+			{
+				if (canStep(walk.back(), next, walk))
+				{
+					walk.push_back(next);
+					stepped = true;
+					break;
+				}
+			}
+			if (!stepped)
+			{
+				break;
+			}
+		}
+		const int score =
+		    plannerDistance(walk.back(), target) - (walk.back() == target ? ON_TARGET_BONUS : 0);
+		if (score < bestScore)
+		{
+			bestScore = score;
+			best = std::move(walk);
+		}
+	}
+	if (best.empty())
+	{
+		return false;
+	}
+	currentPlannedPath.assign(best.begin(), best.end());
 	return true;
 }
 
@@ -3844,6 +4121,30 @@ bool GroundVehicleTileHelper::canEnterTile(Tile *from, Tile *to, bool, bool &, f
 			footprint.y = std::max(footprint.y, s.second.y);
 		}
 		const auto self = v->shared_from_this();
+		// A vehicle already overlapping the tile we stand on never blocks us; only one purely
+		// ahead does (UFO2P FUN_00041d80, called from the occupancy scan at 0x3a11d). That holds
+		// only from where the vehicle really is -- a route planned from elsewhere has no overlap
+		// to excuse.
+		const bool fromIsHere = v->tileObject && v->tileObject->getOwningTile() == from;
+		auto overlapsUs = [&](const sp<TileObject> &obj)
+		{
+			if (!fromIsHere)
+			{
+				return false;
+			}
+			for (const auto &herePos : footprintTiles(fromPos, footprint))
+			{
+				if (map.tileIsValid(herePos))
+				{
+					const auto &here = map.getTile(herePos)->intersectingObjects;
+					if (here.find(obj) != here.end())
+					{
+						return true;
+					}
+				}
+			}
+			return false;
+		};
 		for (const auto &tilePos : footprintTiles(toPos, footprint))
 		{
 			if (!map.tileIsValid(tilePos))
@@ -3858,7 +4159,7 @@ bool GroundVehicleTileHelper::canEnterTile(Tile *from, Tile *to, bool, bool &, f
 					continue;
 				}
 				auto vehicleTile = std::static_pointer_cast<TileObjectVehicle>(obj);
-				if (vehicleTile->getVehicle() == self)
+				if (vehicleTile->getVehicle() == self || overlapsUs(obj))
 				{
 					continue;
 				}
@@ -3873,22 +4174,6 @@ bool GroundVehicleTileHelper::canEnterTile(Tile *from, Tile *to, bool, bool &, f
 
 	cost = 1.0f;
 	return true;
-}
-
-std::vector<Vec3<int>> GroundVehicleTileHelper::footprintTiles(Vec3<int> origin, Vec2<int> size)
-{
-	std::vector<Vec3<int>> tiles;
-	const int sx = std::max(1, size.x);
-	const int sy = std::max(1, size.y);
-	tiles.reserve(static_cast<size_t>(sx * sy));
-	for (int y = 0; y < sy; y++)
-	{
-		for (int x = 0; x < sx; x++)
-		{
-			tiles.emplace_back(origin.x + x, origin.y + y, origin.z);
-		}
-	}
-	return tiles;
 }
 
 float GroundVehicleTileHelper::getDistance(Vec3<float> from, Vec3<float> to) const
