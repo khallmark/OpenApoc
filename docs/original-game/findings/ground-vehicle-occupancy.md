@@ -2,7 +2,7 @@
 
 Binary `canonical/UFO2P.EXE` (ISO non-4), Ghidra project
 `OpenApoc-og-research/ghidra_projects/OpenApocOG`, image base 0. Ghidra 12.1.4 was run with
-`-noanalysis -readOnly`. Receipts are in `og-research/export/`:
+`-noanalysis -readOnly`. Receipts are in the sibling lab's `export/`:
 
 - `traffic_01..03.stdout.log`: `FUN_000395E4`'s helpers (`0x41d80`, `0x3c694`, `0x3de08`,
   `0x409e0`, `0x4087c`, `0x40e54`, `0x3f704`, `0x58280`, `0x41644`, `0x386f8`, `0x38678`,
@@ -108,6 +108,11 @@ The update covers the 0x50 slots at `0x160FD8`, stride `0x276`, and skips kind 0
 frame. At 0 it reloads the count with `0x438` (1080 vanilla ticks, 4320 OpenApoc ticks) and calls
 `FUN_00034860`, which **spawns fresh vehicles**.
 
+The fresh allocation call is at VA `0x34a07` / canonical file `0x970ab`, targeting
+`FUN_0005d68c` (VA `0x5d68c` / file `0xbfd30`); its bytes are `e8 80 8c 02 00`.
+The dispatcher starts at file `0x96f04`. These offsets are for ISO non-4 `UFO2P.EXE`,
+SHA-256 `99f8787d5f1cb532e2620af2130bffb2558a869f9d4540d7fcf1b7487833d00f`.
+
 - **Batch size.** It requests `B/2 + rand(0..B)` vehicles. B is from the 24-word table at
   `0x2FB40` (`4 2 2 2 2 2 4 8 12 8 6 4 10 8 6 4 4 12 12 8 4 4 4 4`), indexed by the word at
   `0xD4D68`. That index is taken to be the hour, an inference.
@@ -158,15 +163,23 @@ frame. At 0 it reloads the count with `0x438` (1080 vanilla ticks, 4320 OpenApoc
   `VEHICLETYPE_AIRRANS`, a type that does not exist. Megapol's police patrols and Transtellar's
   space liners remain.
 
+Generated trips are marked `ambientTraffic` in saves and retired silently once their mission
+queue finishes. Vehicles in older saves and permanently purchased fleets retain the default
+false marker. Traffic does not satisfy organisation fleet purchase quotas. An intact road
+entrance or landing pad is required; a pending generated trip releases its slot if its source
+access is destroyed.
+
 Deviations:
 
-- **Parked vehicles, not fresh spawns.** OpenApoc's organisations own their vehicles. So a trip
-  takes a parked vehicle of the drawn type from a building whose owner owns it, and sends it home
-  again if it visited another organisation. A type with none parked is skipped, so the observed
-  mix leans away from types few own: only Transtellar owns Autotaxis and Airtaxis.
+- **Return journey and retirement.** A generated trip visiting another organisation returns to
+  its source as soon as the exit is free, preserving OpenApoc's existing return leg. A six-hour
+  comparison from the same real UI new-game save showed that one-way retirement reduced mean
+  civilian map population from 28.12 to 18.83 despite starting more trips. The exports establish
+  fresh allocation and building entry, but do not establish original-game retirement on arrival;
+  the bounded generated-trip lifecycle is OpenApoc's choice.
 - **Reachable destinations only.** Road trips go only where the cached road route reaches, and air
   trips only between buildings with landing pads. A road car with no route is removed (event 8).
-- **The cap counts this city's map**, not 80 slots across both cities.
+- **The cap counts this city's map and pending generated trips**, not 80 slots across both cities.
 - **Taxis on demand** (`FUN_0007a730`) are not implemented; OpenApoc agents travel by other means.
 
 ### Measured: head-on passing for ATVs, and how road cars fared before
@@ -186,10 +199,22 @@ tile pair. Variants measured on the same save, 60,000 ticks at Speed4:
 
 That is why ATVs pass head-on. For road cars, passing is the EXE's own rule.
 
-Regression test: `tests/test_ground_vehicle_traffic.cpp`. It checks four things:
+Regression test: `tests/test_ground_vehicle_traffic.cpp`. It checks:
 
 - a head-on pair passes;
 - a road car keeps right;
 - a car queues behind a stopped one and turns round after `ROAD_UTURN_TICKS`;
 - the dispatcher sends Autotaxis, Airtaxis, Construction Vehicles and Rescue Transports as well
-  as cars and bikes, and no organisation still schedules civilian trips itself.
+  as cars and bikes, and no organisation still schedules civilian trips itself;
+- six hours of replenishment without purchased organisation vehicles, completed-trip retirement,
+  bounded pending population and intact building references;
+- permanent fleet purchases remain independent of generated traffic;
+- destroyed pads reject new flyers and release pending generated trips;
+- the transient marker survives a packed save, with the false default for older records.
+
+The unstocked regression fixture stops before `fillOrgStartingProperty`. A normal new game
+through the UI calls that method and stocks the parks immediately; the fixture is a test of
+inventory independence, not evidence that every real new game starts without organisation cars.
+`tests/traffic_census.cpp` resumes a real save without reseeding or modifying missions, records
+movement and confirmed arrivals, and checks actual clock advancement. See the measured comparison
+in `docs/solutions/2026-10-07-civilian-traffic-replenishment.md`.

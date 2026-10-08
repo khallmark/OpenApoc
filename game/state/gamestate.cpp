@@ -1066,10 +1066,10 @@ void GameState::invasion()
 			switch (missionType)
 			{
 				case UFOIncursion::PrimaryMission::Attack:
-					invader->addMission(*this,
-					                    VehicleMission::attackBuilding(*this, *invader, nullptr,
-					                                                    missionCounter),
-					                    true);
+					invader->addMission(
+					    *this,
+					    VehicleMission::attackBuilding(*this, *invader, nullptr, missionCounter),
+					    true);
 					break;
 				case UFOIncursion::PrimaryMission::Infiltration:
 					invader->addMission(
@@ -1191,10 +1191,9 @@ void GameState::invasion()
 			}
 			else
 			{
-				invader->addMission(*this,
-				                    VehicleMission::attackBuilding(*this, *invader, nullptr,
-				                                                    missionCounter),
-				                    true);
+				invader->addMission(
+				    *this, VehicleMission::attackBuilding(*this, *invader, nullptr, missionCounter),
+				    true);
 			}
 		}
 	}

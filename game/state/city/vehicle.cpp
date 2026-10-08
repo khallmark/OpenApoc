@@ -1019,10 +1019,10 @@ void VehicleMover::updateFalling(GameState &state, unsigned int ticks)
 				plowedThrough = randBoundsExclusive(state.rng, 0, 100) < plowThroughChance;
 				if (plowedThrough)
 				{
-					// The original charges a vehicle clearing obstructing building scenery to X-COM's
-					// "Damage to City" whoever owns the vehicle (UFO2P.EXE FUN_00041644, score call
-					// at VA 0x41B99, responsible org hard-coded to 1). Charged before die() can swap
-					// the tile for its damaged form.
+					// The original charges a vehicle clearing obstructing building scenery to
+					// X-COM's "Damage to City" whoever owns the vehicle (UFO2P.EXE FUN_00041644,
+					// score call at VA 0x41B99, responsible org hard-coded to 1). Charged before
+					// die() can swap the tile for its damaged form.
 					if (tile->presentScenery->building)
 					{
 						Scenery::chargeCityDamage(state, tile->presentScenery->type->value);
@@ -2420,6 +2420,19 @@ void Vehicle::update(GameState &state, unsigned int ticks)
 		}
 	}
 	manualFire = false;
+	if (ambientTraffic && currentBuilding && owner != state.getPlayer() && currentAgents.empty() &&
+	    cargo.empty())
+	{
+		// Land can finish during the mover update. Pop it only after those callbacks return, so
+		// this empty trip cannot be borrowed as a parked fleet vehicle between city updates.
+		popFinishedMissions(state);
+		if (currentBuilding &&
+		    (missions.empty() || (city && !city->hasVehicleAccess(*currentBuilding, *type))))
+		{
+			// Release a completed trip or a departure with a destroyed exit without an explosion.
+			die(state, true);
+		}
+	}
 }
 
 void Vehicle::updateEachSecond(GameState &state)

@@ -26,8 +26,8 @@
 #include "library/strings_format.h"
 #include <algorithm>
 #include <array>
-#include <limits>
 #include <glm/glm.hpp>
+#include <limits>
 
 namespace OpenApoc
 {
@@ -858,8 +858,7 @@ VehicleTargetHelper::adjustTargetToClosestFlying(GameState &state, Vehicle &v, V
 							// The scan walks outward from the midpoint and can step off the
 							// map, so bounds-check before the lookup - same guard the
 							// Sidestep branch below already applies.
-							if (!map.tileIsValid(x, y, z) ||
-							    !footprintFitsOnMap({x, y, z}))
+							if (!map.tileIsValid(x, y, z) || !footprintFitsOnMap({x, y, z}))
 							{
 								continue;
 							}
@@ -3142,8 +3141,9 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 			if (!planAroundVehicles(v, currentPlannedPath.back()))
 			{
 				// Boxed in: stay where we are, wait, then try again (0x3a21e-0x3a290). Unlike the
-				// EXE, keep the route and go as soon as its next tile comes free: a car that sat out
-				// the whole wait let the head-on car that backed away for it come straight back.
+				// EXE, keep the route and go as soon as its next tile comes free: a car that sat
+				// out the whole wait let the head-on car that backed away for it come straight
+				// back.
 				currentPlannedPath.push_front(tFrom->position);
 				blockedWaitTicks = BLOCKED_WAIT_TICKS;
 				boxedIn = true;
@@ -3666,8 +3666,8 @@ bool VehicleMission::planAroundVehicles(Vehicle &v, Vec3<int> target)
 	const auto start = v.tileObject->getOwningTile()->position;
 	// Cardinal moves; a road may climb or drop a level on the way.
 	static const std::array<Vec3<int>, 12> moves = {
-	    Vec3<int>{1, 0, 0},  {-1, 0, 0},  {0, 1, 0},  {0, -1, 0},  {1, 0, 1},  {-1, 0, 1},
-	    Vec3<int>{0, 1, 1},  {0, -1, 1},  {1, 0, -1}, {-1, 0, -1}, {0, 1, -1}, {0, -1, -1}};
+	    Vec3<int>{1, 0, 0}, {-1, 0, 0}, {0, 1, 0},  {0, -1, 0},  {1, 0, 1},  {-1, 0, 1},
+	    Vec3<int>{0, 1, 1}, {0, -1, 1}, {1, 0, -1}, {-1, 0, -1}, {0, 1, -1}, {0, -1, -1}};
 	auto preferred = [&](Vec3<int> from)
 	{
 		std::array<Vec3<int>, 12> next;

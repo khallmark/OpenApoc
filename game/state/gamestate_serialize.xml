@@ -454,6 +454,7 @@
     <member>owner</member>
     <member>name</member>
     <member>attackMode</member>
+    <member>ambientTraffic</member>
     <member>altitude</member>
     <member>missions</member>
     <member>equipment</member>

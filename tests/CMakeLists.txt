@@ -141,6 +141,11 @@ target_link_libraries(${TEST} OpenApoc_Library OpenApoc_Framework
 		OpenApoc_GameState)
 target_compile_definitions(${TEST} PRIVATE -DUNIT_TEST)
 
+# Manual population/traffic census needs a user-supplied city save, so is not a ctest.
+add_executable(traffic_census traffic_census.cpp)
+target_link_libraries(traffic_census OpenApoc_Library OpenApoc_Framework OpenApoc_GameState)
+target_compile_definitions(traffic_census PRIVATE -DUNIT_TEST)
+
 # test_city_dimension_gate requires args (same as test_serialize)
 set(TEST test_city_dimension_gate)
 add_executable(${TEST} ${TEST}.cpp)
