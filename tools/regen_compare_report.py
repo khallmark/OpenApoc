@@ -119,7 +119,10 @@ def todo_counts() -> tuple[int, list[tuple[str, int]], list[tuple[str, int]]]:
             files[rel] += n
             parent = str(path.parent.relative_to(ROOT))
             dirs[parent] += n
-    return total, dirs.most_common(8), files.most_common(15)
+    # Counter preserves first-seen ties, but filesystem enumeration order varies by platform.
+    ranked_dirs = sorted(dirs.items(), key=lambda entry: (-entry[1], entry[0]))
+    ranked_files = sorted(files.items(), key=lambda entry: (-entry[1], entry[0]))
+    return total, ranked_dirs[:8], ranked_files[:15]
 
 
 def todo_html(total: int, dirs: list[tuple[str, int]], files: list[tuple[str, int]]) -> tuple[str, str]:

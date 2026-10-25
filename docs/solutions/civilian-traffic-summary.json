@@ -1,0 +1,928 @@
+{
+  "baseline_commit": "bce89743db239be164e07d86fb071320baed7d97",
+  "classification": {
+    "civilian": "Excludes player, aliens, and ORG_MEGAPOL. Generated Megapol traffic is in police and on_map_all.",
+    "police": "Owner is ORG_MEGAPOL, irrespective of vehicle model."
+  },
+  "fresh_city_runs": [
+    {
+      "all_checkpoint_count": 261,
+      "all_checkpoint_max_long_stationary_cars": 0,
+      "all_checkpoints_with_long_stationary_cars": 0,
+      "checkpoint_count": 255,
+      "checkpoint_first_elapsed": 72000,
+      "checkpoint_last_elapsed": 3110400,
+      "checkpoints_with_long_stationary_cars": 0,
+      "density": {
+        "atv": {
+          "max": 0,
+          "mean": 0.0,
+          "min": 0
+        },
+        "civilian": {
+          "max": 35,
+          "mean": 28.11764705882353,
+          "min": 18
+        },
+        "flying": {
+          "max": 8,
+          "mean": 2.3411764705882354,
+          "min": 0
+        },
+        "on_map_all": {
+          "max": 38,
+          "mean": 31.44705882352941,
+          "min": 22
+        },
+        "police": {
+          "max": 6,
+          "mean": 3.3294117647058825,
+          "min": 1
+        },
+        "road": {
+          "max": 36,
+          "mean": 29.105882352941176,
+          "min": 19
+        }
+      },
+      "final": {
+        "atv": 0,
+        "civilian": 29,
+        "clock": 9331200,
+        "elapsed": 3110400,
+        "flying": 5,
+        "ground_mission_bearing": 27,
+        "ground_moved_last_step": 24,
+        "ground_velocity_moving": 24,
+        "parked": 297,
+        "police": 3,
+        "road": 27,
+        "stationary_12000": 0
+      },
+      "final_elapsed": 3110400,
+      "final_events": {
+        "building_entries": 5875,
+        "civilian_entries": 5413,
+        "confirmed_target_arrivals": 5875,
+        "dead_exits": 94,
+        "entries": 6001,
+        "flyer_entries": 1470,
+        "ground_reversals": 52,
+        "ground_tile_changes": 401126,
+        "newly_seen": 93,
+        "other_exits": 0,
+        "police_entries": 588,
+        "reversals": 52,
+        "road_entries": 4531,
+        "successful_retirements": 0,
+        "tile_changes": 401126
+      },
+      "growth": {
+        "on_map_plus_parked_change": -1,
+        "on_map_plus_parked_final": 329,
+        "on_map_plus_parked_initial": 330,
+        "on_map_plus_parked_peak": 333,
+        "parked_change": -33,
+        "parked_final": 297,
+        "parked_initial": 330,
+        "parked_peak": 330
+      },
+      "initial": {
+        "atv": 0,
+        "civilian": 0,
+        "clock": 6220800,
+        "elapsed": 0,
+        "flying": 0,
+        "ground_mission_bearing": 0,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "parked": 330,
+        "police": 0,
+        "road": 0,
+        "stationary_12000": 0
+      },
+      "initial_clock": 6220800,
+      "label": "baseline_6h",
+      "max_long_stationary_cars_at_checkpoint": 0,
+      "observed_clock_delta": 3110400,
+      "path": "before-ui-sixhours/census.txt",
+      "receipt_sha256": "5b06ad36850ff94f1c4617285842e5c580feec9717d66c24439ff3e51c8d6111",
+      "retirement_metric_note": "Zero is a structural baseline value: the baseline has no ambientTraffic flag and its older collector does not emit successful_retirements.",
+      "rng": [
+        7251685877758789622,
+        4494004282789118709
+      ],
+      "role": "baseline",
+      "save": "startup.save",
+      "source_version": "bce89743db239be164e07d86fb071320baed7d97",
+      "step": 6,
+      "successful_retirements_collected": false,
+      "verified_game_hours": 6.0,
+      "verified_ticks": 3110400,
+      "wall_seconds": 38.564795209,
+      "warmup_excluded_through": 60000
+    },
+    {
+      "all_checkpoint_count": 261,
+      "all_checkpoint_max_long_stationary_cars": 0,
+      "all_checkpoints_with_long_stationary_cars": 0,
+      "checkpoint_count": 255,
+      "checkpoint_first_elapsed": 72000,
+      "checkpoint_last_elapsed": 3110400,
+      "checkpoints_with_long_stationary_cars": 0,
+      "density": {
+        "atv": {
+          "max": 0,
+          "mean": 0.0,
+          "min": 0
+        },
+        "civilian": {
+          "max": 32,
+          "mean": 26.419607843137253,
+          "min": 14
+        },
+        "flying": {
+          "max": 7,
+          "mean": 2.450980392156863,
+          "min": 0
+        },
+        "on_map_all": {
+          "max": 36,
+          "mean": 31.270588235294117,
+          "min": 18
+        },
+        "police": {
+          "max": 9,
+          "mean": 4.850980392156862,
+          "min": 1
+        },
+        "road": {
+          "max": 35,
+          "mean": 28.819607843137256,
+          "min": 16
+        }
+      },
+      "final": {
+        "atv": 0,
+        "civilian": 23,
+        "clock": 9331200,
+        "elapsed": 3110400,
+        "flying": 4,
+        "ground_mission_bearing": 24,
+        "ground_moved_last_step": 21,
+        "ground_velocity_moving": 21,
+        "parked": 331,
+        "police": 5,
+        "road": 24,
+        "stationary_12000": 0
+      },
+      "final_elapsed": 3110400,
+      "final_events": {
+        "building_entries": 3351,
+        "civilian_entries": 2803,
+        "confirmed_target_arrivals": 3351,
+        "dead_exits": 119,
+        "entries": 3498,
+        "flyer_entries": 870,
+        "ground_distance": 337532.5053703077,
+        "ground_reversals": 2050,
+        "ground_tile_changes": 332734,
+        "newly_seen": 2968,
+        "other_exits": 0,
+        "police_entries": 695,
+        "road_entries": 2628,
+        "successful_retirements": 2820
+      },
+      "growth": {
+        "on_map_plus_parked_change": 29,
+        "on_map_plus_parked_final": 359,
+        "on_map_plus_parked_initial": 330,
+        "on_map_plus_parked_peak": 366,
+        "parked_change": 1,
+        "parked_final": 331,
+        "parked_initial": 330,
+        "parked_peak": 333
+      },
+      "initial": {
+        "atv": 0,
+        "civilian": 0,
+        "clock": 6220800,
+        "elapsed": 0,
+        "flying": 0,
+        "ground_mission_bearing": 0,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "parked": 330,
+        "police": 0,
+        "road": 0,
+        "stationary_12000": 0
+      },
+      "initial_clock": 6220800,
+      "label": "candidate_6h",
+      "max_long_stationary_cars_at_checkpoint": 0,
+      "observed_clock_delta": 3110400,
+      "path": "continuous-ui-sixhours/census.txt",
+      "receipt_sha256": "93f9f8ac78812f5516f52153291c9e280ad438f4279ade6d23cf4451cca0f4b9",
+      "retirement_metric_note": "Observed dead ambient vehicles at their captured destination are counted as successful retirements, separately from dead_exits.",
+      "rng": [
+        7251685877758789622,
+        4494004282789118709
+      ],
+      "role": "candidate",
+      "save": "startup.save",
+      "source_version": "continuous outward-and-return ambient trips; no artificial Snooze; working tree before shipping",
+      "step": 6,
+      "successful_retirements_collected": true,
+      "verified_game_hours": 6.0,
+      "verified_ticks": 3110400,
+      "wall_seconds": 98.443770084,
+      "warmup_excluded_through": 60000
+    },
+    {
+      "all_checkpoint_count": 1038,
+      "all_checkpoint_max_long_stationary_cars": 1,
+      "all_checkpoints_with_long_stationary_cars": 28,
+      "checkpoint_count": 1032,
+      "checkpoint_first_elapsed": 72000,
+      "checkpoint_last_elapsed": 12441600,
+      "checkpoints_with_long_stationary_cars": 28,
+      "density": {
+        "atv": {
+          "max": 0,
+          "mean": 0.0,
+          "min": 0
+        },
+        "civilian": {
+          "max": 37,
+          "mean": 25.862403100775193,
+          "min": 6
+        },
+        "flying": {
+          "max": 9,
+          "mean": 2.227713178294574,
+          "min": 0
+        },
+        "on_map_all": {
+          "max": 38,
+          "mean": 27.842054263565892,
+          "min": 8
+        },
+        "police": {
+          "max": 7,
+          "mean": 1.9796511627906976,
+          "min": 0
+        },
+        "road": {
+          "max": 36,
+          "mean": 25.614341085271317,
+          "min": 7
+        }
+      },
+      "final": {
+        "atv": 0,
+        "civilian": 31,
+        "clock": 18662400,
+        "elapsed": 12441600,
+        "flying": 0,
+        "ground_mission_bearing": 33,
+        "ground_moved_last_step": 29,
+        "ground_velocity_moving": 29,
+        "parked": 294,
+        "police": 2,
+        "road": 33,
+        "stationary_12000": 0
+      },
+      "final_elapsed": 12441600,
+      "final_events": {
+        "building_entries": 21103,
+        "civilian_entries": 20068,
+        "confirmed_target_arrivals": 21103,
+        "dead_exits": 390,
+        "entries": 21526,
+        "flyer_entries": 5495,
+        "ground_reversals": 187,
+        "ground_tile_changes": 1442804,
+        "newly_seen": 390,
+        "other_exits": 0,
+        "police_entries": 1458,
+        "reversals": 187,
+        "road_entries": 16031,
+        "successful_retirements": 0,
+        "tile_changes": 1442804
+      },
+      "growth": {
+        "on_map_plus_parked_change": -3,
+        "on_map_plus_parked_final": 327,
+        "on_map_plus_parked_initial": 330,
+        "on_map_plus_parked_peak": 342,
+        "parked_change": -36,
+        "parked_final": 294,
+        "parked_initial": 330,
+        "parked_peak": 331
+      },
+      "initial": {
+        "atv": 0,
+        "civilian": 0,
+        "clock": 6220800,
+        "elapsed": 0,
+        "flying": 0,
+        "ground_mission_bearing": 0,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "parked": 330,
+        "police": 0,
+        "road": 0,
+        "stationary_12000": 0
+      },
+      "initial_clock": 6220800,
+      "label": "baseline_24h",
+      "max_long_stationary_cars_at_checkpoint": 1,
+      "observed_clock_delta": 12441600,
+      "path": "before-ui-day/census.txt",
+      "receipt_sha256": "b4eb75955dac88f0469109a3c05954936e08d11bb50d26e45c3cf72a84ab15de",
+      "retirement_metric_note": "Zero is a structural baseline value: the baseline has no ambientTraffic flag and its older collector does not emit successful_retirements.",
+      "rng": [
+        7251685877758789622,
+        4494004282789118709
+      ],
+      "role": "baseline",
+      "save": "startup.save",
+      "source_version": "bce89743db239be164e07d86fb071320baed7d97",
+      "step": 6,
+      "successful_retirements_collected": false,
+      "verified_game_hours": 24.0,
+      "verified_ticks": 12441600,
+      "wall_seconds": 138.689873417,
+      "warmup_excluded_through": 60000
+    },
+    {
+      "all_checkpoint_count": 1038,
+      "all_checkpoint_max_long_stationary_cars": 0,
+      "all_checkpoints_with_long_stationary_cars": 0,
+      "checkpoint_count": 1032,
+      "checkpoint_first_elapsed": 72000,
+      "checkpoint_last_elapsed": 12441600,
+      "checkpoints_with_long_stationary_cars": 0,
+      "density": {
+        "atv": {
+          "max": 0,
+          "mean": 0.0,
+          "min": 0
+        },
+        "civilian": {
+          "max": 33,
+          "mean": 23.467054263565892,
+          "min": 6
+        },
+        "flying": {
+          "max": 8,
+          "mean": 2.118217054263566,
+          "min": 0
+        },
+        "on_map_all": {
+          "max": 37,
+          "mean": 28.98546511627907,
+          "min": 11
+        },
+        "police": {
+          "max": 12,
+          "mean": 5.5184108527131785,
+          "min": 1
+        },
+        "road": {
+          "max": 35,
+          "mean": 26.867248062015506,
+          "min": 11
+        }
+      },
+      "final": {
+        "atv": 0,
+        "civilian": 30,
+        "clock": 18662400,
+        "elapsed": 12441600,
+        "flying": 1,
+        "ground_mission_bearing": 34,
+        "ground_moved_last_step": 29,
+        "ground_velocity_moving": 29,
+        "parked": 357,
+        "police": 5,
+        "road": 34,
+        "stationary_12000": 0
+      },
+      "final_elapsed": 12441600,
+      "final_events": {
+        "building_entries": 12672,
+        "civilian_entries": 10015,
+        "confirmed_target_arrivals": 12672,
+        "dead_exits": 516,
+        "entries": 13223,
+        "flyer_entries": 3089,
+        "ground_distance": 1252730.9480127539,
+        "ground_reversals": 7411,
+        "ground_tile_changes": 1234846,
+        "newly_seen": 10558,
+        "other_exits": 0,
+        "police_entries": 3208,
+        "road_entries": 10134,
+        "successful_retirements": 9977
+      },
+      "growth": {
+        "on_map_plus_parked_change": 62,
+        "on_map_plus_parked_final": 392,
+        "on_map_plus_parked_initial": 330,
+        "on_map_plus_parked_peak": 395,
+        "parked_change": 27,
+        "parked_final": 357,
+        "parked_initial": 330,
+        "parked_peak": 361
+      },
+      "initial": {
+        "atv": 0,
+        "civilian": 0,
+        "clock": 6220800,
+        "elapsed": 0,
+        "flying": 0,
+        "ground_mission_bearing": 0,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "parked": 330,
+        "police": 0,
+        "road": 0,
+        "stationary_12000": 0
+      },
+      "initial_clock": 6220800,
+      "label": "candidate_24h",
+      "max_long_stationary_cars_at_checkpoint": 0,
+      "observed_clock_delta": 12441600,
+      "path": "continuous-ui-day/census.txt",
+      "receipt_sha256": "39412cac7f80e7438c6d8ea0ee805def3659780d15d1e6726f1ed6ba0e2afcc6",
+      "retirement_metric_note": "Observed dead ambient vehicles at their captured destination are counted as successful retirements, separately from dead_exits.",
+      "rng": [
+        7251685877758789622,
+        4494004282789118709
+      ],
+      "role": "candidate",
+      "save": "startup.save",
+      "source_version": "continuous outward-and-return ambient trips; no artificial Snooze; working tree before shipping",
+      "step": 6,
+      "successful_retirements_collected": true,
+      "verified_game_hours": 24.0,
+      "verified_ticks": 12441600,
+      "wall_seconds": 259.67616275,
+      "warmup_excluded_through": 60000
+    }
+  ],
+  "input": {
+    "city": "CITYMAP_HUMAN",
+    "difficulty": 1,
+    "initial_clock": 6220800,
+    "initial_nonplayer_vehicle_count": 325,
+    "initial_on_map_count": 0,
+    "initial_player_vehicle_count": 5,
+    "initial_vehicle_count": 330,
+    "save_bytes": 1069580,
+    "save_receipt": "ui-fresh/startup.save",
+    "save_sha256": "f00714bbc9e304458c61dbdc78e04b20fc504fbf540f3e9d545cd0d3fb7d20f1",
+    "saved_rng": [
+      7251685877758789622,
+      4494004282789118709
+    ],
+    "seed": 1,
+    "startup_provenance": "Fresh rendered city paused before KEY4; synchronous startup SAVE left the observed clock unchanged. Both duration pairs resume this saved state without reseeding."
+  },
+  "limitations": [
+    "Descriptive comparisons from one fixed fresh-city save and seed, plus separate legacy stress saves; no statistical significance claim.",
+    "Civilian mean is lower in the candidate while police mean is higher; report both buckets and total visible density.",
+    "Dense legacy candidate has 42 of 255 post-warmup checkpoints with long stationary cars, maximum 8; its final stationary count is zero. The corresponding baseline has none. These waits recovered, but this is a limitation distinct from the fresh-city zero-stall candidate.",
+    "Baseline successful_retirements=0 is not an identical measured field: the old collector predates ambientTraffic and has no retirement counter.",
+    "Twenty-four game hours were actually simulated and verified; no claim is made beyond that observed duration.",
+    "Growing present fleet counts include new transient trips and other normal simulation activity. Counts below provide observed growth without attributing every vehicle to ambient dispatch.",
+    "The independent 6h and 24h candidate simulations share saved input/RNG/step but differ in sampled traffic from elapsed 84000 onward. The baseline prefixes match. Fixed input is documented; bit-for-bit trace repeatability is not claimed."
+  ],
+  "method": {
+    "csv": "Fresh-city paired 6h and 24h observations only. Event columns are cumulative. Legacy tile_changes/reversals normalize to ground_tile_changes/ground_reversals.",
+    "density": "Arithmetic mean and range of every CENSUS checkpoint with elapsed > 60000, including each final endpoint. These are sampled counts, not continuous-time averages.",
+    "growth": "On-map + parked vehicles present in the observed city, distinct from lifetime newly_seen.",
+    "hourly_windows": "Hourly summaries can be calculated from the committed checkpoint CSV; the summary keeps full-duration measurements.",
+    "long_stationary": "A mission-bearing, non-crashed ground vehicle with no observed position change for at least 12000 ticks (83.333 game seconds). Counts are checkpoint counts, not unique cars.",
+    "on_map_all": "road + atv + flying",
+    "warmup_excluded_through_ticks": 60000
+  },
+  "observations": {
+    "file": "civilian-traffic-observations.csv",
+    "line_endings": "LF",
+    "row_count": 2598,
+    "sha256": "2f0bfdd0a2f531b8a805ee9b4855996499a3f8aa539f8b0d7da50b646ab035fd"
+  },
+  "paired_comparisons": [
+    {
+      "baseline": "baseline_6h",
+      "candidate": "candidate_6h",
+      "duration_ticks": 3110400,
+      "game_hours": 6.0,
+      "mean_deltas": {
+        "atv": 0.0,
+        "civilian": -1.6980392156862756,
+        "flying": 0.1098039215686275,
+        "on_map_all": -0.1764705882352935,
+        "police": 1.5215686274509799,
+        "road": -0.28627450980392055
+      },
+      "mean_percentage_changes": {
+        "atv": null,
+        "civilian": -6.039051603905165,
+        "flying": 4.6901172529313255,
+        "on_map_all": -0.5611672278338925,
+        "police": 45.700824499411056,
+        "road": -0.9835623821072452
+      },
+      "same_input": true
+    },
+    {
+      "baseline": "baseline_24h",
+      "candidate": "candidate_24h",
+      "duration_ticks": 12441600,
+      "game_hours": 24.0,
+      "mean_deltas": {
+        "atv": 0.0,
+        "civilian": -2.3953488372093013,
+        "flying": -0.10949612403100772,
+        "on_map_all": 1.1434108527131777,
+        "police": 3.5387596899224807,
+        "road": 1.252906976744189
+      },
+      "mean_percentage_changes": {
+        "atv": null,
+        "civilian": -9.261895841139,
+        "flying": -4.915180513266636,
+        "on_map_all": 4.10677618069815,
+        "police": 178.75673029858055,
+        "road": 4.89142770674133
+      },
+      "same_input": true
+    }
+  ],
+  "prefix_consistency": {
+    "baseline": {
+      "common_checkpoints": 260,
+      "density_and_stalls_identical": true
+    },
+    "candidate": {
+      "common_checkpoints": 260,
+      "density_and_stalls_identical": false
+    }
+  },
+  "receipt_root": "openapoc-traffic-observed (external local receipts; paths below are relative to this root)",
+  "schema_version": 2,
+  "stress_scenarios": [
+    {
+      "all_checkpoint_count": 261,
+      "all_checkpoint_max_long_stationary_cars": 0,
+      "all_checkpoints_with_long_stationary_cars": 0,
+      "checkpoint_count": 255,
+      "checkpoint_first_elapsed": 72000,
+      "checkpoint_last_elapsed": 3110400,
+      "checkpoints_with_long_stationary_cars": 0,
+      "density": {
+        "atv": {
+          "max": 0,
+          "mean": 0.0,
+          "min": 0
+        },
+        "civilian": {
+          "max": 32,
+          "mean": 25.419607843137253,
+          "min": 15
+        },
+        "flying": {
+          "max": 6,
+          "mean": 2.2627450980392156,
+          "min": 0
+        },
+        "on_map_all": {
+          "max": 40,
+          "mean": 33.023529411764706,
+          "min": 25
+        },
+        "police": {
+          "max": 16,
+          "mean": 7.603921568627451,
+          "min": 3
+        },
+        "road": {
+          "max": 37,
+          "mean": 30.76078431372549,
+          "min": 23
+        }
+      },
+      "final": {
+        "atv": 0,
+        "civilian": 22,
+        "clock": 247018037,
+        "elapsed": 3110400,
+        "flying": 2,
+        "ground_mission_bearing": 34,
+        "ground_moved_last_step": 25,
+        "ground_velocity_moving": 25,
+        "parked": 575,
+        "police": 14,
+        "road": 34,
+        "stationary_12000": 0
+      },
+      "final_elapsed": 3110400,
+      "final_events": {
+        "building_entries": 4992,
+        "civilian_entries": 4041,
+        "confirmed_target_arrivals": 4992,
+        "dead_exits": 109,
+        "entries": 4989,
+        "flyer_entries": 1133,
+        "ground_reversals": 1671,
+        "ground_tile_changes": 429952,
+        "newly_seen": 86,
+        "other_exits": 0,
+        "police_entries": 948,
+        "reversals": 1671,
+        "road_entries": 3856,
+        "successful_retirements": 0,
+        "tile_changes": 429952
+      },
+      "growth": {
+        "on_map_plus_parked_change": -23,
+        "on_map_plus_parked_final": 611,
+        "on_map_plus_parked_initial": 634,
+        "on_map_plus_parked_peak": 635,
+        "parked_change": 89,
+        "parked_final": 575,
+        "parked_initial": 486,
+        "parked_peak": 604
+      },
+      "initial": {
+        "atv": 0,
+        "civilian": 133,
+        "clock": 243907637,
+        "elapsed": 0,
+        "flying": 1,
+        "ground_mission_bearing": 147,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "parked": 486,
+        "police": 15,
+        "road": 147,
+        "stationary_12000": 0
+      },
+      "initial_clock": 243907637,
+      "label": "dense_baseline",
+      "max_long_stationary_cars_at_checkpoint": 0,
+      "observed_clock_delta": 3110400,
+      "path": "before-bench-sixhours/census.txt",
+      "receipt_sha256": "a54dabf074a7ad83197b659f99d788d71e48278454629532e44ab1490aea91c2",
+      "retirement_metric_note": "Zero is a structural baseline value: the baseline has no ambientTraffic flag and its older collector does not emit successful_retirements.",
+      "rng": [
+        6272015428809853994,
+        14980957758162900039
+      ],
+      "role": "baseline",
+      "save": "bench.save",
+      "source_version": "bce89743db239be164e07d86fb071320baed7d97",
+      "step": 6,
+      "successful_retirements_collected": false,
+      "verified_game_hours": 6.0,
+      "verified_ticks": 3110400,
+      "wall_seconds": 59.681543541,
+      "warmup_excluded_through": 60000
+    },
+    {
+      "all_checkpoint_count": 261,
+      "all_checkpoint_max_long_stationary_cars": 8,
+      "all_checkpoints_with_long_stationary_cars": 42,
+      "checkpoint_count": 255,
+      "checkpoint_first_elapsed": 72000,
+      "checkpoint_last_elapsed": 3110400,
+      "checkpoints_with_long_stationary_cars": 42,
+      "density": {
+        "atv": {
+          "max": 0,
+          "mean": 0.0,
+          "min": 0
+        },
+        "civilian": {
+          "max": 30,
+          "mean": 23.058823529411764,
+          "min": 16
+        },
+        "flying": {
+          "max": 6,
+          "mean": 2.152941176470588,
+          "min": 0
+        },
+        "on_map_all": {
+          "max": 37,
+          "mean": 32.9921568627451,
+          "min": 24
+        },
+        "police": {
+          "max": 16,
+          "mean": 9.933333333333334,
+          "min": 4
+        },
+        "road": {
+          "max": 36,
+          "mean": 30.83921568627451,
+          "min": 22
+        }
+      },
+      "final": {
+        "atv": 0,
+        "civilian": 22,
+        "clock": 247018037,
+        "elapsed": 3110400,
+        "flying": 3,
+        "ground_mission_bearing": 32,
+        "ground_moved_last_step": 31,
+        "ground_velocity_moving": 31,
+        "parked": 616,
+        "police": 13,
+        "road": 32,
+        "stationary_12000": 0
+      },
+      "final_elapsed": 3110400,
+      "final_events": {
+        "building_entries": 2977,
+        "civilian_entries": 2060,
+        "confirmed_target_arrivals": 2977,
+        "dead_exits": 135,
+        "entries": 2999,
+        "flyer_entries": 696,
+        "ground_distance": 346789.3647120092,
+        "ground_reversals": 6007,
+        "ground_tile_changes": 339317,
+        "newly_seen": 2126,
+        "other_exits": 0,
+        "police_entries": 939,
+        "road_entries": 2303,
+        "successful_retirements": 1974
+      },
+      "growth": {
+        "on_map_plus_parked_change": 17,
+        "on_map_plus_parked_final": 651,
+        "on_map_plus_parked_initial": 634,
+        "on_map_plus_parked_peak": 666,
+        "parked_change": 130,
+        "parked_final": 616,
+        "parked_initial": 486,
+        "parked_peak": 631
+      },
+      "initial": {
+        "atv": 0,
+        "civilian": 133,
+        "clock": 243907637,
+        "elapsed": 0,
+        "flying": 1,
+        "ground_mission_bearing": 147,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "parked": 486,
+        "police": 15,
+        "road": 147,
+        "stationary_12000": 0
+      },
+      "initial_clock": 243907637,
+      "label": "dense_candidate",
+      "max_long_stationary_cars_at_checkpoint": 8,
+      "observed_clock_delta": 3110400,
+      "path": "continuous-bench-sixhours/census.txt",
+      "receipt_sha256": "0b96dc18b421ee671682d4994120012a98a831245a6b58cf8fa374da3e088b8a",
+      "retirement_metric_note": "Observed dead ambient vehicles at their captured destination are counted as successful retirements, separately from dead_exits.",
+      "rng": [
+        6272015428809853994,
+        14980957758162900039
+      ],
+      "role": "candidate",
+      "save": "bench.save",
+      "source_version": "continuous outward-and-return ambient trips; no artificial Snooze; working tree before shipping",
+      "step": 6,
+      "successful_retirements_collected": true,
+      "verified_game_hours": 6.0,
+      "verified_ticks": 3110400,
+      "wall_seconds": 136.698285334,
+      "warmup_excluded_through": 60000
+    },
+    {
+      "all_checkpoint_count": 261,
+      "all_checkpoint_max_long_stationary_cars": 0,
+      "all_checkpoints_with_long_stationary_cars": 0,
+      "checkpoint_count": 255,
+      "checkpoint_first_elapsed": 72000,
+      "checkpoint_last_elapsed": 3110400,
+      "checkpoints_with_long_stationary_cars": 0,
+      "density": {
+        "atv": {
+          "max": 0,
+          "mean": 0.0,
+          "min": 0
+        },
+        "civilian": {
+          "max": 29,
+          "mean": 24.184313725490195,
+          "min": 16
+        },
+        "flying": {
+          "max": 7,
+          "mean": 2.223529411764706,
+          "min": 0
+        },
+        "on_map_all": {
+          "max": 37,
+          "mean": 32.95294117647059,
+          "min": 22
+        },
+        "police": {
+          "max": 15,
+          "mean": 8.768627450980393,
+          "min": 4
+        },
+        "road": {
+          "max": 36,
+          "mean": 30.729411764705883,
+          "min": 21
+        }
+      },
+      "final": {
+        "atv": 0,
+        "civilian": 25,
+        "clock": 321424593,
+        "elapsed": 3110400,
+        "flying": 6,
+        "ground_mission_bearing": 28,
+        "ground_moved_last_step": 28,
+        "ground_velocity_moving": 28,
+        "parked": 657,
+        "police": 9,
+        "road": 28,
+        "stationary_12000": 0
+      },
+      "final_elapsed": 3110400,
+      "final_events": {
+        "building_entries": 3218,
+        "civilian_entries": 2165,
+        "confirmed_target_arrivals": 3218,
+        "dead_exits": 89,
+        "entries": 3180,
+        "flyer_entries": 690,
+        "ground_distance": 374732.192950299,
+        "ground_reversals": 1638,
+        "ground_tile_changes": 367374,
+        "newly_seen": 2228,
+        "other_exits": 0,
+        "police_entries": 1015,
+        "road_entries": 2490,
+        "successful_retirements": 2113
+      },
+      "growth": {
+        "on_map_plus_parked_change": 26,
+        "on_map_plus_parked_final": 691,
+        "on_map_plus_parked_initial": 665,
+        "on_map_plus_parked_peak": 698,
+        "parked_change": 153,
+        "parked_final": 657,
+        "parked_initial": 504,
+        "parked_peak": 663
+      },
+      "initial": {
+        "atv": 0,
+        "civilian": 146,
+        "clock": 318314193,
+        "elapsed": 0,
+        "flying": 4,
+        "ground_mission_bearing": 157,
+        "ground_moved_last_step": 0,
+        "ground_velocity_moving": 0,
+        "parked": 504,
+        "police": 15,
+        "road": 157,
+        "stationary_12000": 0
+      },
+      "initial_clock": 318314193,
+      "label": "old2_candidate",
+      "max_long_stationary_cars_at_checkpoint": 0,
+      "observed_clock_delta": 3110400,
+      "path": "continuous-old2-sixhours/census.txt",
+      "receipt_sha256": "8bcabf73745085cf64aeccb0dc0dc607e2513b05d214b225e4657e6ed1359eab",
+      "retirement_metric_note": "Observed dead ambient vehicles at their captured destination are counted as successful retirements, separately from dead_exits.",
+      "rng": [
+        17203234966449033952,
+        10547877745788046462
+      ],
+      "role": "candidate",
+      "save": "victory.save",
+      "source_version": "continuous outward-and-return ambient trips; no artificial Snooze; working tree before shipping",
+      "step": 6,
+      "successful_retirements_collected": true,
+      "verified_game_hours": 6.0,
+      "verified_ticks": 3110400,
+      "wall_seconds": 136.6753225,
+      "warmup_excluded_through": 60000
+    }
+  ]
+}

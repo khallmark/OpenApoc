@@ -96,6 +96,21 @@ add_openapoc_test(test_ground_vehicle_path ARGS
 add_openapoc_test(test_ground_vehicle_traffic ARGS
 		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
 		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
+add_openapoc_test(test_ambient_traffic_lifecycle ARGS
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
+add_openapoc_test(test_ambient_traffic_migration ARGS
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
+add_openapoc_test(test_road_uturn_cache ARGS
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
+add_openapoc_test(test_road_uturn_recovery ARGS
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
+add_openapoc_test(test_road_junction_deadlock ARGS
+		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
+		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
 add_openapoc_test(test_psionics ARGS
 		${CMAKE_SOURCE_DIR}/data/mods/base/data/submods/org.openapoc.base/difficulty0
 		${CMAKE_SOURCE_DIR}/data/mods/base/base_gamestate)
@@ -140,6 +155,11 @@ add_executable(${TEST} ${TEST}.cpp)
 target_link_libraries(${TEST} OpenApoc_Library OpenApoc_Framework
 		OpenApoc_GameState)
 target_compile_definitions(${TEST} PRIVATE -DUNIT_TEST)
+
+# Manual population/traffic census needs a user-supplied city save, so is not a ctest.
+add_executable(traffic_census traffic_census.cpp)
+target_link_libraries(traffic_census OpenApoc_Library OpenApoc_Framework OpenApoc_GameState)
+target_compile_definitions(traffic_census PRIVATE -DUNIT_TEST)
 
 # test_city_dimension_gate requires args (same as test_serialize)
 set(TEST test_city_dimension_gate)

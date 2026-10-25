@@ -183,6 +183,9 @@ class Vehicle : public StateObject<Vehicle>,
 		Destroyed
 	};
 	VehicleStatus status = VehicleStatus::Operational;
+	// Generated civilian trips retire on arrival instead of accumulating parked vehicles.
+	// Purchased fleets and vehicles in older saves keep the default.
+	bool ambientTraffic = false;
 
 	// Adjusts position by altitude preference
 	Vec3<int> getPreferredPosition(Vec3<int> position) const;

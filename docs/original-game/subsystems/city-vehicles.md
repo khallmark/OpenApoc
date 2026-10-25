@@ -14,3 +14,11 @@ OpenApoc runtime:
 - Road vehicles drive UFO2P's two-lane, right-hand roads: a car is held up only by one going its way, or on a junction tile by one whose way across crosses its own (the EXE's conflict table), and a car stopped long enough on a straight turns round. ATVs keep UFO2P's kind-2 rules: one vehicle per tile, a short walk round a blocker and a 12-count wait (head-on pairs pass, a measured deviation). Civilian traffic is UFO2P's mix of eight vehicle types, sent in hourly-sized batches under the EXE's cap (`City::dispatchAmbientTraffic`). Road vehicles with no road left to their destination are removed, as UFO2P deactivates them. See [findings/ground-vehicle-occupancy.md](../findings/ground-vehicle-occupancy.md). Flyers have the block but not yet the response. Large-vehicle footprint and engagement tables ([issue 785](https://github.com/OpenApoc/OpenApoc/issues/785)) are still incomplete. [version01readme.txt](../../../tools/extractors/docs/version01readme.txt) warned that ordering ground vehicles can crash.
 
 Organisation park refill now checks funds and `purchase()` credits the seller. Surplus idle non-liner park vehicles sell at `currentPrice` ([issue 1053](https://github.com/OpenApoc/OpenApoc/issues/1053)).
+
+Civilian dispatch allocates temporary trips independently of those parks, as `FUN_00034860` does
+at VA `0x34a07` / ISO non-4 file `0x970ab`. Generated vehicles keep the outward and return
+journeys, retire after the queue finishes, and do not satisfy permanent fleet purchase quotas.
+Pending generated trips reserve traffic room and release it if their road entrance or landing
+pads are destroyed. The original exports prove allocation and building entry; retirement after
+a completed journey is an OpenApoc lifecycle choice. The [observed comparison](../../solutions/2026-10-07-civilian-traffic-replenishment.md)
+uses a real UI new-game save and resumes the saved RNG without modifying missions.

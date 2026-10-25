@@ -778,7 +778,8 @@ void Organisation::updateVehicleAgentPark(GameState &state)
 		int countVehicles = 0;
 		for (auto &v : state.vehicles)
 		{
-			if (v.second->owner.id == id && v.second->type == entry.first && !v.second->isDead())
+			if (v.second->owner.id == id && v.second->type == entry.first && !v.second->isDead() &&
+			    !v.second->ambientTraffic)
 			{
 				countVehicles++;
 			}
@@ -959,7 +960,8 @@ void Organisation::buyFromParkSpawnTable(GameState &state)
 		int owned = 0;
 		for (auto &v : state.vehicles)
 		{
-			if (v.second->owner.id == id && v.second->type == type && !v.second->isDead())
+			if (v.second->owner.id == id && v.second->type == type && !v.second->isDead() &&
+			    !v.second->ambientTraffic)
 			{
 				owned++;
 			}

@@ -587,6 +587,38 @@ const std::vector<UString> &City::ambientTrafficTypes()
 	return types;
 }
 
+bool City::hasVehicleAccess(const Building &building, const VehicleType &type) const
+{
+	if (!map)
+	{
+		return false;
+	}
+	if (type.type == VehicleType::Type::Road)
+	{
+		if (!map->tileIsValid(building.carEntranceLocation))
+		{
+			return false;
+		}
+		const auto &scenery = map->getTile(building.carEntranceLocation)->presentScenery;
+		return scenery && !scenery->destroyed &&
+		       scenery->type->road_type == SceneryTileType::RoadType::Terminal;
+	}
+	for (const auto &pad : building.landingPadLocations)
+	{
+		if (!map->tileIsValid(pad) || !map->tileIsValid(pad + Vec3<int>{0, 0, 1}) ||
+		    !map->tileIsValid(pad - Vec3<int>{0, 0, 1}))
+		{
+			continue;
+		}
+		const auto &scenery = map->getTile(pad)->presentScenery;
+		if (scenery && !scenery->destroyed && scenery->type->isLandingPad)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 int City::dispatchAmbientTraffic(GameState &state)
 {
 	// UFO2P FUN_00034860, run by FUN_0006d384 in the human city when its countdown runs out.
@@ -615,10 +647,12 @@ int City::dispatchAmbientTraffic(GameState &state)
 		{
 			playerVehicles++;
 		}
-		else if (veh->tileObject && veh->city.id == id)
+		else if (veh->city.id == id && (veh->tileObject || veh->ambientTraffic))
 		{
+			// Reserve room for traffic waiting to leave a building too. Otherwise a blocked exit
+			// can accumulate another batch at every dispatch even though the map is already full.
 			othersAbout++;
-			aliensAbout = aliensAbout || veh->owner == aliens;
+			aliensAbout = aliensAbout || (veh->tileObject && veh->owner == aliens);
 		}
 	}
 	const int room = (playerVehicles < 20 ? 35 : 55 - playerVehicles) - othersAbout;
@@ -628,53 +662,39 @@ int City::dispatchAmbientTraffic(GameState &state)
 	static const int rollToType[17] = {0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 3, 4, 5, 6, 7, 7, 7};
 	const auto &types = ambientTrafficTypes();
 	const GroundVehicleTileHelper roadHelper{*map, VehicleType::Type::Road};
-	int sent = 0, noneParked = 0, nowhereToGo = 0;
+	int sent = 0, noSource = 0, nowhereToGo = 0;
 	for (int i = 0; i < batch; i++)
 	{
 		const auto &typeId = types[rollToType[randBoundsInclusive(state.rng, 0, 16)]];
-		// The EXE spawns the vehicle at a random building, owned by the building's owner. Here a
-		// building's own parked one goes. While aliens are about, only an owner allied to them
-		// sends any (FUN_00091de4: relation > 74, 0x349ec).
-		std::vector<std::pair<StateRef<Building>, sp<Vehicle>>> sources;
+		const StateRef<VehicleType> trafficType{&state, typeId};
+		if (!trafficType)
+		{
+			noSource++;
+			continue;
+		}
+		const bool road = trafficType->type == VehicleType::Type::Road;
+		auto canUse = [&](const StateRef<Building> &bld)
+		{ return hasVehicleAccess(*bld, *trafficType); };
+		// FUN_00034860 allocates a fresh vehicle, not one bought by the building's owner.
+		// Depending on that owner's parked inventory left a fresh or depleted city with no traffic.
+		// While aliens are about, only an owner allied to them sends any (FUN_00091de4).
+		std::vector<StateRef<Building>> sources;
 		for (const auto &b : buildings)
 		{
 			if (!b || !b->owner || b->owner == player || b->owner == aliens ||
-			    (aliensAbout && b->owner->getRelationTo(aliens) <= 74))
+			    (aliensAbout && b->owner->getRelationTo(aliens) <= 74) || !canUse(b))
 			{
 				continue;
 			}
-			for (const auto &veh : b->currentVehicles)
-			{
-				if (veh && veh->type.id == typeId && veh->owner == b->owner &&
-				    veh->missions.empty() && !veh->isDead())
-				{
-					sources.emplace_back(b, veh.getSp());
-					break;
-				}
-			}
+			sources.push_back(b);
 		}
 		if (sources.empty())
 		{
-			noneParked++;
+			noSource++;
 			continue;
 		}
-		const auto &[source, veh] =
+		const auto source =
 		    sources[randBoundsExclusive(state.rng, 0, static_cast<int>(sources.size()))];
-		const bool road = veh->type->type == VehicleType::Type::Road;
-		auto canUse = [&](const StateRef<Building> &bld)
-		{
-			if (road)
-			{
-				return bld->carEntranceLocation.x >= 0 &&
-				       map->tileIsValid(bld->carEntranceLocation);
-			}
-			return !bld->landingPadLocations.empty();
-		};
-		if (!canUse(source))
-		{
-			nowhereToGo++;
-			continue;
-		}
 		// To another building, somewhere it can get to: a road car sent where no road goes is
 		// taken off the map when its route comes up empty.
 		StateRef<Building> dest;
@@ -703,21 +723,30 @@ int City::dispatchAmbientTraffic(GameState &state)
 			nowhereToGo++;
 			continue;
 		}
+		auto veh = placeVehicle(state, trafficType, source->owner, source);
+		if (!veh)
+		{
+			noSource++;
+			continue;
+		}
+		veh->ambientTraffic = true;
+		veh->homeBuilding = source;
 		veh->setMission(state, VehicleMission::gotoBuilding(state, *veh, dest, false));
-		// Home again afterwards if it went to another organisation's building.
+		// Keep the existing return journey: replacing it with one-way retirement reduced visible
+		// civilian traffic by a third in the six-hour comparison from the same new-game save.
 		if (dest->owner != veh->owner)
 		{
-			veh->addMission(state, VehicleMission::snooze(state, *veh, 10 * TICKS_PER_SECOND),
-			                true);
+			// An artificial stop inside the destination consumes a reserved traffic slot while
+			// hiding the car from the map. Continue the return leg as soon as the exit is free.
 			veh->addMission(state, VehicleMission::gotoBuilding(state, *veh, source), true);
 		}
 		LogInfo("Traffic: {0} {1} from {2} to {3}", veh->owner.id, veh->type.id, source.id,
 		        dest.id);
 		sent++;
 	}
-	LogInfo("Traffic batch at {0}:00: {1} wanted, room for {2}, sent {3} ({4} with none parked, "
+	LogInfo("Traffic batch at {0}:00: {1} wanted, room for {2}, sent {3} ({4} with no source, "
 	        "{5} with nowhere to go)",
-	        state.gameTime.getHours(), wanted, room, sent, noneParked, nowhereToGo);
+	        state.gameTime.getHours(), wanted, room, sent, noSource, nowhereToGo);
 	return sent;
 }
 

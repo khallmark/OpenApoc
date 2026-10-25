@@ -26,8 +26,8 @@
 #include "library/strings_format.h"
 #include <algorithm>
 #include <array>
-#include <limits>
 #include <glm/glm.hpp>
+#include <limits>
 
 namespace OpenApoc
 {
@@ -858,8 +858,7 @@ VehicleTargetHelper::adjustTargetToClosestFlying(GameState &state, Vehicle &v, V
 							// The scan walks outward from the midpoint and can step off the
 							// map, so bounds-check before the lookup - same guard the
 							// Sidestep branch below already applies.
-							if (!map.tileIsValid(x, y, z) ||
-							    !footprintFitsOnMap({x, y, z}))
+							if (!map.tileIsValid(x, y, z) || !footprintFitsOnMap({x, y, z}))
 							{
 								continue;
 							}
@@ -2966,6 +2965,28 @@ void VehicleMission::setFollowPath(GameState &state, Vehicle &v)
 bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> &destPos,
                                       float &destFacing [[maybe_unused]], int &turboTiles)
 {
+	if (v.type->type == VehicleType::Type::Road && type != MissionType::Land &&
+	    type != MissionType::TakeOff)
+	{
+		// Old recovery routes repeat their first branch node. Treat it as one road step so
+		// the following heading remains visible and movement retains its lane. Land/TakeOff
+		// deliberately repeat the entrance location to supply their physical entry/exit goal.
+		currentPlannedPath.erase(std::unique(currentPlannedPath.begin(), currentPlannedPath.end()),
+		                         currentPlannedPath.end());
+		if (v.tileObject)
+		{
+			const auto at = v.tileObject->getOwningTile()->position;
+			// Recovery routes saved before the branch guard can start A -> B -> A. The later
+			// shortcut would skip B, but its admission check can already be blocked forever.
+			// Skip only returns to the tile we still own, before checking the real next step.
+			while (currentPlannedPath.size() >= 3 && currentPlannedPath.front() == at &&
+			       *std::next(currentPlannedPath.begin(), 2) == at)
+			{
+				currentPlannedPath.erase(currentPlannedPath.begin(),
+				                         std::next(currentPlannedPath.begin(), 2));
+			}
+		}
+	}
 	if (blockedWaitTicks > 0 && v.tileObject && !(boxedIn && nextStepIsFree(v)))
 	{
 		// Waiting on other vehicles: hold position, in lane, until the wait runs out.
@@ -3142,8 +3163,9 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 			if (!planAroundVehicles(v, currentPlannedPath.back()))
 			{
 				// Boxed in: stay where we are, wait, then try again (0x3a21e-0x3a290). Unlike the
-				// EXE, keep the route and go as soon as its next tile comes free: a car that sat out
-				// the whole wait let the head-on car that backed away for it come straight back.
+				// EXE, keep the route and go as soon as its next tile comes free: a car that sat
+				// out the whole wait let the head-on car that backed away for it come straight
+				// back.
 				currentPlannedPath.push_front(tFrom->position);
 				blockedWaitTicks = BLOCKED_WAIT_TICKS;
 				boxedIn = true;
@@ -3183,10 +3205,14 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 				if (onRoad)
 				{
 					auto skipTo = tFrom->map.getTile(*it);
+					const int heading = roadHeading(tFrom->position, *it);
+					const auto onward = std::next(it);
+					const int exit =
+					    onward != currentPlannedPath.end() ? roadHeading(*it, *onward) : heading;
 					cantSkip = cantSkip ||
 					           !GroundVehicleTileHelper{tFrom->map, v.type->type}.canEnterTile(
 					               tFrom, skipTo) ||
-					           roadBlocker(v, tFrom, skipTo, roadHeading(tFrom->position, *it));
+					           roadBlocker(v, tFrom, skipTo, exit < 0 ? heading : exit);
 				}
 				else if (v.type->isGround())
 				{
@@ -3219,8 +3245,12 @@ bool VehicleMission::advanceAlongPath(GameState &state, Vehicle &v, Vec3<float> 
 		if (onRoad)
 		{
 			auto turboTo = tTo->map.getTile(*it);
+			const int heading = roadHeading(tTo->position, *it);
+			const auto onward = std::next(it);
+			const int exit =
+			    onward != currentPlannedPath.end() ? roadHeading(*it, *onward) : heading;
 			if (!GroundVehicleTileHelper{tFrom->map, v.type->type}.canEnterTile(tTo, turboTo) ||
-			    roadBlocker(v, tTo, turboTo, roadHeading(tTo->position, *it)))
+			    roadBlocker(v, tTo, turboTo, exit < 0 ? heading : exit))
 			{
 				break;
 			}
@@ -3456,9 +3486,12 @@ sp<Vehicle> VehicleMission::roadBlocker(const Vehicle &v, const Tile *from, Tile
 		}
 		else
 		{
-			theirIn = facingHeading(*other); // standing on it
 			theirOut = routeHeadingAfter(*other, at);
-			theirOut = theirOut < 0 ? theirIn : theirOut;
+			// A queue wait sets goalPosition to the current position. Its old approach facing
+			// must not turn a known departure back into a crossing turn: adjacent junctions
+			// would then hold opposite lanes forever. Classify it as leaving by its route.
+			theirOut = theirOut < 0 ? facingHeading(*other) : theirOut;
+			theirIn = theirOut;
 		}
 		if (theirIn < 0 || theirOut < 0)
 		{
@@ -3485,9 +3518,12 @@ bool VehicleMission::roadUTurn(Vehicle &v, Tile *from, int heading)
 	{
 		return false;
 	}
-	// Only on a straight: FUN_00032428 turns a car round on trajectories 2, 7, 8 and 0xd only.
+	// FUN_00032428 excludes terminal road records, then accepts straight trajectories 2, 7, 8
+	// and 0xd even across a junction. OpenApoc has no original trajectory field: use its
+	// planned heading and an opposite road connection, rather than requiring only two exits.
 	const int back = (heading + 2) % 4;
-	if (!(*c)[heading] || !(*c)[back] || (*c)[(heading + 1) % 4] || (*c)[(heading + 3) % 4])
+	if (from->presentScenery->type->road_type == SceneryTileType::RoadType::Terminal ||
+	    !(*c)[heading] || !(*c)[back])
 	{
 		return false;
 	}
@@ -3548,7 +3584,9 @@ bool VehicleMission::roadUTurn(Vehicle &v, Tile *from, int heading)
 	const auto *jc = roadConnections(*lastTile);
 	if (jc && isRoadJunction(*lastTile) && target != last && v.city)
 	{
-		const std::vector<Vec3<int>> *best = nullptr;
+		// Another candidate lookup can clear routeCache, so retain an owned copy of the winner.
+		std::vector<Vec3<int>> best;
+		bool foundBest = false;
 		Vec3<int> bestFirst;
 		for (int d = 0; d < 4; d++)
 		{
@@ -3564,19 +3602,31 @@ bool VehicleMission::roadUTurn(Vehicle &v, Tile *from, int heading)
 					continue;
 				}
 				const auto &route = v.city->findShortestPath(p, target, road);
-				if ((p == target || (!route.empty() && route.back() == target)) &&
-				    (!best || route.size() < best->size()))
+				const auto away = std::find_if(route.begin(), route.end(),
+				                               [p](const Vec3<int> &node) { return node != p; });
+				// Taking a branch and immediately returning to this junction is no detour: it
+				// can force a U-turn on its first bend and hold opposing traffic indefinitely.
+				if (away != route.end() && *away == last)
 				{
-					best = &route;
+					break;
+				}
+				if ((p == target || (!route.empty() && route.back() == target)) &&
+				    (!foundBest || route.size() < best.size()))
+				{
+					best = route;
+					foundBest = true;
 					bestFirst = p;
 				}
 				break;
 			}
 		}
-		if (best)
+		if (foundBest)
 		{
-			path.push_back(bestFirst);
-			path.insert(path.end(), best->begin(), best->end());
+			if (best.empty() || best.front() != bestFirst)
+			{
+				path.push_back(bestFirst);
+			}
+			path.insert(path.end(), best.begin(), best.end());
 		}
 	}
 	LogInfo("{0} turned round at {1}, stopped for {2} ticks", v.name, from->position,
@@ -3666,8 +3716,8 @@ bool VehicleMission::planAroundVehicles(Vehicle &v, Vec3<int> target)
 	const auto start = v.tileObject->getOwningTile()->position;
 	// Cardinal moves; a road may climb or drop a level on the way.
 	static const std::array<Vec3<int>, 12> moves = {
-	    Vec3<int>{1, 0, 0},  {-1, 0, 0},  {0, 1, 0},  {0, -1, 0},  {1, 0, 1},  {-1, 0, 1},
-	    Vec3<int>{0, 1, 1},  {0, -1, 1},  {1, 0, -1}, {-1, 0, -1}, {0, 1, -1}, {0, -1, -1}};
+	    Vec3<int>{1, 0, 0}, {-1, 0, 0}, {0, 1, 0},  {0, -1, 0},  {1, 0, 1},  {-1, 0, 1},
+	    Vec3<int>{0, 1, 1}, {0, -1, 1}, {1, 0, -1}, {-1, 0, -1}, {0, 1, -1}, {0, -1, -1}};
 	auto preferred = [&](Vec3<int> from)
 	{
 		std::array<Vec3<int>, 12> next;
