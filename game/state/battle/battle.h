@@ -9,6 +9,8 @@
 #include "game/state/stateobject.h"
 #include "library/sp.h"
 #include "library/vec.h"
+#include "library/xorshift.h"
+#include <functional>
 #include <list>
 #include <map>
 #include <set>
@@ -249,6 +251,11 @@ class Battle : public std::enable_shared_from_this<Battle>
 	bool tryDisableBuilding();
 	void refreshLeadershipBonus(StateRef<Organisation> org);
 	void spawnReinforcements(GameState &state);
+	// Draws up to `count` distinct tiles from `locations` and calls `spawnAt` on each, in draw
+	// order. Stops early when the tiles run out or `spawnAt` returns false.
+	static void spawnAtRandomLocations(Xorshift128Plus<uint32_t> &rng,
+	                                   std::set<Vec3<int>> locations, int count,
+	                                   const std::function<bool(Vec3<int>)> &spawnAt);
 
 	void handleProjectileHit(GameState &state, sp<Projectile> projectile, bool displayDoodad,
 	                         bool playSound, bool expired);

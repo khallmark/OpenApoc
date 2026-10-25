@@ -2184,16 +2184,28 @@ void Battle::spawnReinforcements(GameState &state)
 	{
 		return;
 	}
-	// FIXME: Proper spawning algorithm for reinforcements, for now spawn 4 randoms
-	for (int i = 0; i < 4; i++)
+	auto spawnAt = [&](Vec3<int> pos)
 	{
-		auto pos = pickRandom(state.rng, reinforcementLocations);
-		reinforcementLocations.erase(pos);
 		auto type = pickRandom(state.rng, locationOwner->guard_types_reinforcements);
-		auto u = state.current_battle->spawnUnit(state, locationOwner, type,
-		                                         {pos.x + 0.5f, pos.y + 0.5f, pos.z + 0.1f}, {0, 0},
-		                                         type->bodyType->getFirstAllowedState());
-		if (++countUnits >= MAX_UNITS_PER_SIDE)
+		state.current_battle->spawnUnit(state, locationOwner, type,
+		                                {pos.x + 0.5f, pos.y + 0.5f, pos.z + 0.1f}, {0, 0},
+		                                type->bodyType->getFirstAllowedState());
+		return ++countUnits < MAX_UNITS_PER_SIDE;
+	};
+	// FIXME: Proper spawning algorithm for reinforcements, for now spawn up to 4 randoms
+	spawnAtRandomLocations(state.rng, std::move(reinforcementLocations), 4, spawnAt);
+}
+
+void Battle::spawnAtRandomLocations(Xorshift128Plus<uint32_t> &rng, std::set<Vec3<int>> locations,
+                                    int count, const std::function<bool(Vec3<int>)> &spawnAt)
+{
+	// A map can offer fewer free spawn tiles than units wanted, and pickRandom throws on an
+	// empty set, so stop when the tiles run out.
+	for (int i = 0; i < count && !locations.empty(); i++)
+	{
+		auto pos = pickRandom(rng, locations);
+		locations.erase(pos);
+		if (!spawnAt(pos))
 		{
 			break;
 		}
